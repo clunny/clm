@@ -165,7 +165,7 @@ pub fn sync(
     // `regenerate-renames`: a branch that adds a rename is rebuilt on `origin/main`, not
     // rebased.
     if !ours && let Some(merge_base) = fresh.as_deref() {
-        match renames::regenerate(root, &onto, merge_base, &added)? {
+        match renames::regenerate(root, &place, &onto, merge_base, &added)? {
             renames::Outcome::Other => {}
             renames::Outcome::Left(lines) => return Ok(Report::left(lines)),
             renames::Outcome::Done => {

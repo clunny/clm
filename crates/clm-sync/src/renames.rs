@@ -1,13 +1,15 @@
 //! `regenerate-renames`: a branch that adds a rename is made one commit on `origin/main`
-//! holding what `clm rename` produces there, never rebased.
+//! holding what `clm rename` produces there, never rebased. Each revision is read as the CLM
+//! root's tree, as `rename/replay` reads one (`fingerprint-covers-the-clm-root`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use clm_git::Options;
 use clm_regenerate::{exists_at, git, io, run};
 
+use crate::root::{Root, object};
 use crate::{Error, names, succeeded, with_status};
 
 /// What the rename step found.
@@ -25,6 +27,7 @@ pub(crate) enum Outcome {
 /// merge base with `onto`, and then rebuilds it on `onto`.
 pub(crate) fn regenerate(
     root: &Path,
+    place: &Root,
     onto: &str,
     base: &str,
     added: &[(String, bool)],
@@ -32,9 +35,6 @@ pub(crate) fn regenerate(
     let [(id, _)] = added else {
         return Ok(Outcome::Other);
     };
-    // Read root-relative (`paths-under-the-root`), so the rebase of a branch in a
-    // subdirectory root gets past this test; the rename path itself still reads from the
-    // repository's top, which `regenerate-renames` states.
     let live = format!("changes/{id}/change.md");
     let path = if exists_at(root, "HEAD", &format!("./{live}"))? {
         live
@@ -43,7 +43,7 @@ pub(crate) fn regenerate(
     };
     let bytes = run(
         root,
-        &["cat-file", "blob", &crate::root::object("HEAD", &path)],
+        &["cat-file", "blob", &object("HEAD", &path)],
         Options::default(),
     )?;
     let source = String::from_utf8_lossy(&bytes).into_owned();
@@ -51,11 +51,12 @@ pub(crate) fn regenerate(
         return Ok(Outcome::Other);
     }
     if !clm_rename::replays(root, base, "HEAD")? {
-        let differing = match replayed(root, base, id, &source) {
-            Ok(tree) => differing(root, base, tree.path())?,
-            Err(Error::Refused(_)) => Vec::new(),
+        let replay = match replayed(root, place, base, id, &source) {
+            Ok(replay) => Some(replay),
+            Err(Error::Refused(_)) => None,
             Err(e) => return Err(e),
         };
+        let differing = differing(root, place, base, replay.as_ref().map(|r| r.dir.as_path()))?;
         let paths = if differing.is_empty() {
             vec![path]
         } else {
@@ -68,12 +69,12 @@ pub(crate) fn regenerate(
                 .collect(),
         ));
     }
-    let tree = match replayed(root, onto, id, &source) {
-        Ok(tree) => tree,
+    let replay = match replayed(root, place, onto, id, &source) {
+        Ok(replay) => replay,
         Err(Error::Refused(why)) => return Ok(Outcome::Left(vec![why])),
         Err(e) => return Err(e),
     };
-    commit(root, onto, base, id, tree.path())
+    commit(root, place, onto, base, id, &replay.dir)
 }
 
 /// Whether `source`'s frontmatter records at least one rename.
@@ -88,19 +89,28 @@ fn sets_renames(source: &str) -> bool {
         .is_some_and(|n| n > 0)
 }
 
-/// What `clm rename` produces from `rev`'s files with the change placed live, `proposed`.
-fn replayed(root: &Path, rev: &str, id: &str, source: &str) -> Result<tempfile::TempDir, Error> {
+/// A revision's tree extracted, with `rename` carried out in the CLM root's directory of it.
+struct Replay {
+    _tree: tempfile::TempDir,
+    /// The CLM root's directory in the extracted tree.
+    dir: PathBuf,
+}
+
+/// What `clm rename` produces from `rev`'s files with the change placed live, `proposed`,
+/// run in the root's directory of the extracted tree.
+fn replayed(root: &Path, place: &Root, rev: &str, id: &str, source: &str) -> Result<Replay, Error> {
     let tree = clm_git::extract_tree(root, rev)?;
-    let change = tree.path().join("changes").join(id).join("change.md");
-    if let Some(dir) = change.parent() {
-        fs::create_dir_all(dir).map_err(|e| io(dir, e))?;
+    let dir = tree.path().join(place.prefix());
+    let change = dir.join("changes").join(id).join("change.md");
+    if let Some(parent) = change.parent() {
+        fs::create_dir_all(parent).map_err(|e| io(parent, e))?;
     }
     fs::write(&change, with_status(source, "proposed")).map_err(|e| io(&change, e))?;
     // No repository of its own and no git command here, as `rename/replay` builds its tree:
     // `rename` reads a directory that is no repository as it reads the replay's, and a
     // `GIT_DIR` the environment sets never reaches the clone.
-    clm_rename::rename(tree.path(), id)?;
-    Ok(tree)
+    clm_rename::rename(&dir, id)?;
+    Ok(Replay { _tree: tree, dir })
 }
 
 /// The blob ID of each regular file under `dir`, by path relative to it.
@@ -138,22 +148,59 @@ fn tree_ids(root: &Path, dir: &Path) -> Result<BTreeMap<String, String>, Error> 
         .collect())
 }
 
-/// The blob ID of each regular file in `rev`'s tree.
-fn rev_ids(root: &Path, rev: &str) -> Result<BTreeMap<String, String>, Error> {
+/// A revision's entries, split at the CLM root.
+struct Listing {
+    /// The regular files under the root, by root-relative path: their blob IDs.
+    inside: BTreeMap<String, String>,
+    /// Every entry outside the root, by its path from the repository's top: its mode and
+    /// object ID.
+    outside: BTreeMap<String, (String, String)>,
+}
+
+/// `rev`'s tree, read as the CLM root's with what lies outside it apart.
+fn listing(root: &Path, place: &Root, rev: &str) -> Result<Listing, Error> {
     let out = run(
         root,
         &["ls-tree", "-r", "-z", "--full-tree", rev],
         Options::default(),
     )?;
-    Ok(String::from_utf8_lossy(&out)
-        .split('\0')
-        .filter_map(|entry| {
-            let (meta, path) = entry.split_once('\t')?;
-            let mut parts = meta.split(' ');
-            let (mode, kind, id) = (parts.next()?, parts.next()?, parts.next()?);
-            (kind == "blob" && mode.starts_with("100")).then(|| (path.to_string(), id.to_string()))
-        })
-        .collect())
+    let mut listing = Listing {
+        inside: BTreeMap::new(),
+        outside: BTreeMap::new(),
+    };
+    for entry in String::from_utf8_lossy(&out).split('\0') {
+        let Some((meta, path)) = entry.split_once('\t') else {
+            continue;
+        };
+        let mut parts = meta.split(' ');
+        let (Some(mode), Some(kind), Some(id)) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
+        match path.strip_prefix(place.prefix()) {
+            Some(rel) => {
+                if kind == "blob" && mode.starts_with("100") {
+                    listing.inside.insert(rel.to_string(), id.to_string());
+                }
+            }
+            None => {
+                listing
+                    .outside
+                    .insert(path.to_string(), (mode.to_string(), id.to_string()));
+            }
+        }
+    }
+    Ok(listing)
+}
+
+/// The paths outside the root where `a` and `b` differ, by path, mode or object ID, each
+/// from the repository's top.
+fn outside_differing(a: &Listing, b: &Listing) -> BTreeSet<String> {
+    a.outside
+        .keys()
+        .chain(b.outside.keys())
+        .filter(|p| a.outside.get(*p) != b.outside.get(*p))
+        .cloned()
+        .collect()
 }
 
 /// The files `HEAD` adds under `backlog/` over `base`: a session files defect reports on
@@ -168,71 +215,103 @@ fn added_backlog(
         .collect()
 }
 
-/// The paths where `HEAD` differs from what `rename` produced in `replay` from `base`,
-/// leaving out the backlog files `HEAD` adds, sorted.
-fn differing(root: &Path, base: &str, replay: &Path) -> Result<Vec<String>, Error> {
-    let head = rev_ids(root, "HEAD")?;
-    let kept = added_backlog(&head, &rev_ids(root, base)?);
-    let made = tree_ids(root, replay)?;
-    let paths: BTreeSet<&String> = head.keys().chain(made.keys()).collect();
-    Ok(paths
-        .into_iter()
-        .filter(|p| !kept.contains(*p) && head.get(*p) != made.get(*p))
-        .cloned()
-        .collect())
+/// The paths where `HEAD` differs from the replay of `base`, named relative to the root,
+/// sorted: under the root, where it differs from what `rename` produced in `replay` (none
+/// when `rename` refused), leaving out the backlog files `HEAD` adds; outside it, where it
+/// differs from `base`, which the replay holds there.
+fn differing(
+    root: &Path,
+    place: &Root,
+    base: &str,
+    replay: Option<&Path>,
+) -> Result<Vec<String>, Error> {
+    let head = listing(root, place, "HEAD")?;
+    let before = listing(root, place, base)?;
+    let mut paths: BTreeSet<String> = outside_differing(&head, &before)
+        .iter()
+        .map(|p| place.name(p))
+        .collect();
+    if let Some(replay) = replay {
+        let kept = added_backlog(&head.inside, &before.inside);
+        let made = tree_ids(root, replay)?;
+        paths.extend(
+            head.inside
+                .keys()
+                .chain(made.keys())
+                .filter(|p| !kept.contains(*p) && head.inside.get(*p) != made.get(*p))
+                .cloned(),
+        );
+    }
+    Ok(paths.into_iter().collect())
 }
 
-/// Makes `HEAD` one commit on `onto`, `Rename <id>`, holding `tree` (what `rename`
-/// produced from `onto`) and the backlog files the branch added over `base`, writing only
-/// the paths that change. An uncommitted edit to one of those paths stops it.
-fn commit(root: &Path, onto: &str, base: &str, id: &str, tree: &Path) -> Result<Outcome, Error> {
-    let head = rev_ids(root, "HEAD")?;
-    let added = added_backlog(&head, &rev_ids(root, base)?);
-    let mut made = tree_ids(root, tree)?;
+/// Makes `HEAD` one commit on `onto`, `Rename <id>`, holding under the root `dir` (what
+/// `rename` produced from `onto` in the root's directory) and the backlog files the branch
+/// added over `base`, and outside it `onto`'s entries, writing only the paths that change.
+/// An uncommitted edit to one of those paths stops it.
+fn commit(
+    root: &Path,
+    place: &Root,
+    onto: &str,
+    base: &str,
+    id: &str,
+    dir: &Path,
+) -> Result<Outcome, Error> {
+    let head = listing(root, place, "HEAD")?;
+    let target = listing(root, place, onto)?;
+    let added = added_backlog(&head.inside, &listing(root, place, base)?.inside);
+    let mut made = tree_ids(root, dir)?;
     let mut extra = Vec::new();
     for path in &added {
         if !made.contains_key(path) {
             let bytes = run(
                 root,
-                &["cat-file", "blob", &format!("HEAD:{path}")],
+                &["cat-file", "blob", &object("HEAD", path)],
                 Options::default(),
             )?;
-            let to = tree.join(path);
-            if let Some(dir) = to.parent() {
-                fs::create_dir_all(dir).map_err(|e| io(dir, e))?;
+            let to = dir.join(path);
+            if let Some(parent) = to.parent() {
+                fs::create_dir_all(parent).map_err(|e| io(parent, e))?;
             }
             fs::write(&to, bytes).map_err(|e| io(&to, e))?;
             extra.push(path.clone());
         }
     }
     if !extra.is_empty() {
-        made = tree_ids(root, tree)?;
+        made = tree_ids(root, dir)?;
     }
-    let before = rev_ids(root, onto)?;
     let all: BTreeSet<&String> = head
+        .inside
         .keys()
         .chain(made.keys())
-        .chain(before.keys())
+        .chain(target.inside.keys())
         .collect();
-    // Where `HEAD` isn't the result yet, and where the result isn't `onto`'s.
-    let off_head = |p: &&String| head.get(*p) != made.get(*p);
+    // Under the root: where `HEAD` isn't the result yet, and where the result isn't `onto`'s.
+    let off_head = |p: &&String| head.inside.get(*p) != made.get(*p);
     let touched: BTreeSet<&String> = all
         .iter()
         .copied()
-        .filter(|p| off_head(p) || before.get(*p) != made.get(*p))
+        .filter(|p| off_head(p) || target.inside.get(*p) != made.get(*p))
         .collect();
+    // Outside it the commit holds `onto`'s entries: where they aren't `HEAD`'s, named
+    // relative to the root.
+    let moved = outside_differing(&head, &target);
+    let outside: Vec<String> = moved.iter().map(|p| place.name(p)).collect();
     let parent = succeeded(root, &["rev-parse", "-q", "--verify", "HEAD^"])?;
     // Already one commit on `onto` holding the result: a second run adds nothing.
-    if !all.iter().any(off_head) && parent.as_deref() == Some(onto) {
+    if !all.iter().any(off_head) && outside.is_empty() && parent.as_deref() == Some(onto) {
         return Ok(Outcome::Done);
     }
     let edited: BTreeSet<String> =
         names(root, &["diff", "--name-only", "-z", "--no-renames", "HEAD"])?
-            .into_iter()
+            .iter()
+            .map(|p| place.name(p))
             .collect();
     let blocked: Vec<String> = touched
         .iter()
-        .filter(|p| edited.contains(**p))
+        .map(|p| p.as_str())
+        .chain(outside.iter().map(String::as_str))
+        .filter(|p| edited.contains(*p))
         .map(|p| format!("uncommitted {p}"))
         .collect();
     if !blocked.is_empty() {
@@ -241,18 +320,13 @@ fn commit(root: &Path, onto: &str, base: &str, id: &str, tree: &Path) -> Result<
     for path in &touched {
         let to = root.join(path);
         if made.contains_key(*path) {
-            if let Some(dir) = to.parent() {
-                fs::create_dir_all(dir).map_err(|e| io(dir, e))?;
+            if let Some(parent) = to.parent() {
+                fs::create_dir_all(parent).map_err(|e| io(parent, e))?;
             }
-            let from = tree.join(path);
+            let from = dir.join(path);
             fs::copy(&from, &to).map_err(|e| io(&from, e))?;
         } else if to.exists() {
-            fs::remove_file(&to).map_err(|e| io(&to, e))?;
-            for dir in to.ancestors().skip(1) {
-                if dir == root || fs::remove_dir(dir).is_err() {
-                    break;
-                }
-            }
+            remove(root, &to)?;
         }
     }
     git(root, &["reset", "-q", "--mixed", onto])?;
@@ -265,8 +339,43 @@ fn commit(root: &Path, onto: &str, base: &str, id: &str, tree: &Path) -> Result<
             env: &[],
         },
     )?;
+    // The index now holds `onto`'s entries outside the root: write each one that isn't
+    // `HEAD`'s into the working tree, and remove those `onto` lacks.
+    let (present, gone): (Vec<&String>, Vec<&String>) =
+        moved.iter().partition(|p| target.outside.contains_key(*p));
+    if !present.is_empty() {
+        let listing: String = present
+            .iter()
+            .map(|p| format!("{}\0", place.name(p)))
+            .collect();
+        run(
+            root,
+            &["checkout-index", "-f", "-z", "--stdin"],
+            Options {
+                stdin: Some(listing.as_bytes()),
+                env: &[],
+            },
+        )?;
+    }
+    for path in gone {
+        let to = root.join(place.name(path));
+        if fs::symlink_metadata(&to).is_ok() {
+            remove(root, &to)?;
+        }
+    }
     if !git(root, &["diff", "--cached", "--name-only"])?.is_empty() {
         git(root, &["commit", "-q", "-m", &format!("Rename {id}")])?;
     }
     Ok(Outcome::Done)
+}
+
+/// Removes the file `to` and each directory above it it leaves empty, short of `root`.
+fn remove(root: &Path, to: &Path) -> Result<(), Error> {
+    fs::remove_file(to).map_err(|e| io(to, e))?;
+    for dir in to.ancestors().skip(1) {
+        if dir == root || fs::remove_dir(dir).is_err() {
+            break;
+        }
+    }
+    Ok(())
 }
