@@ -30,7 +30,8 @@ Read from `crates/clm-sync/src/lib.rs` on 2026-11-19, not run. With the CLM root
 
 - `sync/paths-under-the-root` (added), with six scenarios in a root at `tool/`: an uncommitted edit under the root's `backlog/` refused as `uncommitted backlog/q.md`; an edit to a top-level `specs/notes.md` outside the root carried through; an edit outside the root that `main` changed refused as `uncommitted ../README.md`; a `specs/` conflict kept on `origin/main`'s side and regenerated; a conflict outside the root printed as `conflict ../README.md`; and a spec moved under `impl/a` reported as `changed specs/a/SPEC.md`.
 - `sync/extract-through-layer` (modified): each path the root's, given to `extract_paths` from the top as `<prefix><path>`, the graph loaded from the extraction's `<prefix>`, and the regenerate step's second extraction moved into the first under `<prefix>`.
-- `sync`'s Design: a **Paths** paragraph after the steps of `clm rebase`.
+- `sync`'s Design: a **Paths** paragraph after the steps of `clm rebase`, naming the `<rev>:./<path>` reads by which step 2 finds the changes the branch adds or applies (builder check), and `shared-plumbing-in-git` as where the path-naming function goes once a third crate needs it (audit).
+- `sync.regenerate`'s Design, **The tree**: the move of the second extraction into the first is under the root's `<prefix>`, as the reworded `extract-through-layer` and `clm-regenerate`'s code have it (audit). Design only; nothing to build.
 
 ## Constraints
 
@@ -42,7 +43,8 @@ Read from `crates/clm-sync/src/lib.rs` on 2026-11-19, not run. With the CLM root
 
 - A path outside the root is never under one of the root's trees, so it stops step 1 only as a staged change, on `impl/*`, or as a file `origin/main` changed; it is never handed back to git as a pathspec, since step 2 resolves only the root's `specs/` conflicts.
 - Step 1 compares the status entries with the set of files `origin/main` changed after both are named relative to the root, so the comparison reads one form.
-- The rename path (`regenerate-renames`, pending at the version `20261119-clm-rebase-regenerates-a` gives it) names a path outside the root the same way; the build shares one function between them, whichever requirement is built first.
+- The rename path (`regenerate-renames`, pending at the version `20261119-clm-rebase-regenerates-a` gives it) names a path outside the root the same way; the build shares one function between them, whichever requirement is built first. Its reads (`exists_at`, `cat-file`, `ls-tree --full-tree` in `renames.rs`) and its lines are `regenerate-renames`'s, so `paths-under-the-root` neither covers nor waits on them (builder check).
+- Step 1's untracked listing may drop `--full-name` instead of naming its output from the top; either meets the rule (builder check).
 
 ## What the requirements no longer state
 
