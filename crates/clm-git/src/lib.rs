@@ -495,6 +495,9 @@ pub struct Worktree {
     /// `None` when detached.
     pub branch: Option<String>,
     pub locked: bool,
+    /// Whether the lock is held: its reason names `pid <n>` and that process runs
+    /// (`held-lock`).
+    pub held: bool,
 }
 
 /// The remote every command fetches from and pushes to.
@@ -649,6 +652,7 @@ fn worktrees_waiting(root: &Path, wait: impl FnMut(Duration)) -> Result<Vec<Work
                 path: path.into(),
                 branch: None,
                 locked: false,
+                held: false,
             });
         } else if let Some(entry) = out.last_mut() {
             if let Some(branch) = field.strip_prefix("branch ") {
@@ -656,10 +660,51 @@ fn worktrees_waiting(root: &Path, wait: impl FnMut(Duration)) -> Result<Vec<Work
                 entry.branch = Some(branch.to_string());
             } else if field == "locked" || field.starts_with("locked ") {
                 entry.locked = true;
+                let reason = field.strip_prefix("locked ").unwrap_or("");
+                entry.held = lock_pid(reason).is_some_and(runs);
             }
         }
     }
     Ok(out)
+}
+
+/// A process ID, as the platform types it.
+#[cfg(unix)]
+type Pid = libc::pid_t;
+#[cfg(not(unix))]
+type Pid = u32;
+
+/// The process ID a lock's reason names (`held-lock`): the first `pid` at its start or after
+/// a character that is neither a letter nor a digit, followed by one space and decimal
+/// digits, when their value is above 0 and fits [`Pid`]. Claude Code writes
+/// `claude agent agent-<id> (pid <n> start <t>)`.
+fn lock_pid(reason: &str) -> Option<Pid> {
+    let (at, _) = reason.match_indices("pid ").find(|&(i, _)| {
+        let before = reason[..i].chars().next_back();
+        before.is_none_or(|c| !c.is_alphabetic() && !c.is_ascii_digit())
+            && reason[i + 4..].starts_with(|c: char| c.is_ascii_digit())
+    })?;
+    let digits = &reason[at + 4..];
+    let end = digits
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(digits.len());
+    digits[..end].parse::<Pid>().ok().filter(|&pid| pid > 0)
+}
+
+/// Whether a process with ID `pid` runs on this machine: a signal 0 is accepted, or refused
+/// for want of permission.
+#[cfg(unix)]
+fn runs(pid: Pid) -> bool {
+    // SAFETY: `kill` with signal 0 sends nothing; it only checks the process, and `pid` is
+    // above 0, so it names one process, never a group.
+    let accepted = unsafe { libc::kill(pid, 0) } == 0;
+    accepted || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+/// Where CLM can't tell whether a process runs, a lock naming one is held.
+#[cfg(not(unix))]
+fn runs(_pid: Pid) -> bool {
+    true
 }
 
 /// `rev`'s tree checked out into a temporary directory through a temporary index, leaving
@@ -896,5 +941,27 @@ mod tests {
             waits,
             [Duration::from_millis(100), Duration::from_millis(500)]
         );
+    }
+
+    #[test]
+    fn a_lock_reason_names_the_first_pid_standing_as_a_word() {
+        // req:vcs/held-lock@c8d3683a
+        assert_eq!(lock_pid("claude agent agent-1 (pid 42 start 1)"), Some(42));
+        assert_eq!(lock_pid("pid 7"), Some(7));
+        assert_eq!(lock_pid("x-pid 7"), Some(7));
+        assert_eq!(lock_pid("pid 7x"), Some(7));
+        assert_eq!(lock_pid("rapid 1 pid 3"), Some(3));
+        assert_eq!(lock_pid("pid x1 pid 3"), Some(3));
+        assert_eq!(lock_pid("pid 0 pid 3"), None);
+        assert_eq!(lock_pid("pid 5 pid 3"), Some(5));
+        assert_eq!(lock_pid("pid  5"), None);
+        assert_eq!(lock_pid("2pid 5"), None);
+        assert_eq!(lock_pid("épid 5"), None);
+        assert_eq!(lock_pid("²pid 5"), Some(5));
+        assert_eq!(lock_pid("rapid 1"), None);
+        assert_eq!(lock_pid("pid 0"), None);
+        assert_eq!(lock_pid("pid 99999999999999999999"), None);
+        assert_eq!(lock_pid(&format!("pid {}", Pid::MAX)), Some(Pid::MAX));
+        assert_eq!(lock_pid(""), None);
     }
 }

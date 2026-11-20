@@ -421,6 +421,7 @@ dependencies = [
 name = "clm-git"
 version = "0.26.0"
 dependencies = [
+ "libc",
  "tempfile",
 ]
 
