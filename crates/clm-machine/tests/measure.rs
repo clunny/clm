@@ -151,6 +151,22 @@ fn a_record_dated_in_the_future_is_due() {
 }
 
 #[test]
+fn a_record_dated_now_is_reused() {
+    // req:machine/build-measure@25e6eaf6
+    // Only a record dated after `now` is due: one dated `now` itself is reused.
+    let (dir, _holder, tree) = clone_with_build();
+    let record_path = common(dir.path()).join("clm/machine");
+    let t = clm_git::now();
+    let first = json(dir.path(), t);
+    let written = fs::read_to_string(&record_path).unwrap();
+    fs::remove_file(tree.join("three")).unwrap();
+    let again = json(dir.path(), t);
+    assert_eq!(again["disk"]["builds"], first["disk"]["builds"]);
+    assert!(again["disk"]["builds"][0]["bytes"].as_u64().unwrap() >= 3 * MIB);
+    assert_eq!(fs::read_to_string(&record_path).unwrap(), written);
+}
+
+#[test]
 fn a_record_that_cannot_be_read_counts_as_none() {
     // req:machine/build-measure@25e6eaf6
     let (dir, _holder, _tree) = clone_with_build();
