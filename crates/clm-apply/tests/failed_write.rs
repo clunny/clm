@@ -5,7 +5,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use clm_apply::apply;
+use clm_apply::{Journal, apply, apply_into};
 use clm_model::load;
 use tempfile::TempDir;
 
@@ -60,6 +60,67 @@ fn hash(root: &Path, id: &str, element: &str) -> String {
 #[test]
 fn a_later_write_fails() {
     // req:apply/failed-write@1e66cb47
+    let dir = two_designs();
+    let d = dir.path();
+    let before = snapshot(d);
+    read_only(&d.join("specs/b/SPEC.md"), true);
+    let refused = apply(d, "c").unwrap_err();
+    read_only(&d.join("specs/b/SPEC.md"), false);
+    let lines: Vec<String> = refused.iter().map(|v| v.to_string()).collect();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].starts_with("specs/b/SPEC.md: apply/atomic: ")
+            && lines[0].contains("write failed"),
+        "{lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains("not restored")),
+        "{lines:?}"
+    );
+    assert_eq!(snapshot(d), before);
+}
+
+#[test]
+fn apply_into_leaves_the_undo_to_its_caller() {
+    // req:apply/journal@e3e1076a
+    let dir = two_designs();
+    let d = dir.path();
+    let before = snapshot(d);
+    read_only(&d.join("specs/b/SPEC.md"), true);
+    let mut journal = Journal::new(d);
+    let refused = apply_into(d, "c", &mut journal).unwrap_err();
+    read_only(&d.join("specs/b/SPEC.md"), false);
+    assert!(refused[0].message.contains("write failed"), "{refused:?}");
+    // `a`'s file was written through the journal and is still written.
+    assert!(
+        fs::read_to_string(d.join("specs/a/SPEC.md"))
+            .unwrap()
+            .contains("New."),
+    );
+    assert!(journal.undo().is_empty());
+    assert_eq!(snapshot(d), before);
+
+    // And when nothing fails, it writes every file `apply` would.
+    let mut journal = Journal::new(d);
+    let ops = apply_into(d, "c", &mut journal).unwrap();
+    let paths: Vec<_> = ops
+        .iter()
+        .map(|op| op.path().display().to_string())
+        .collect();
+    assert_eq!(
+        paths,
+        ["specs/a/SPEC.md", "specs/b/SPEC.md", "changes/c/change.md"]
+    );
+    assert!(
+        fs::read_to_string(d.join("changes/c/change.md"))
+            .unwrap()
+            .contains("status: applied")
+    );
+}
+
+/// Components `a` and `b`, and a proposed change `c` with a valid delta modifying each one's
+/// Design, `a`'s written first.
+fn two_designs() -> TempDir {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -82,22 +143,7 @@ fn a_later_write_fails() {
     }
     let (graph, _) = load(d);
     assert_eq!(clm_apply::validate(&graph, &graph.changes["c"]), []);
-    let before = snapshot(d);
-    read_only(&d.join("specs/b/SPEC.md"), true);
-    let refused = apply(d, "c").unwrap_err();
-    read_only(&d.join("specs/b/SPEC.md"), false);
-    let lines: Vec<String> = refused.iter().map(|v| v.to_string()).collect();
-    assert_eq!(lines.len(), 1, "{lines:?}");
-    assert!(
-        lines[0].starts_with("specs/b/SPEC.md: apply/atomic: ")
-            && lines[0].contains("write failed"),
-        "{lines:?}"
-    );
-    assert!(
-        !lines.iter().any(|l| l.contains("not restored")),
-        "{lines:?}"
-    );
-    assert_eq!(snapshot(d), before);
+    dir
 }
 
 #[test]
