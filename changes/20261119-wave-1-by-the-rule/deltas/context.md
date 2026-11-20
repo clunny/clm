@@ -1,0 +1,155 @@
+---
+component: context
+base: { contract: "097b54325729c07e", design: "782504f86f98b6cf" }
+---
+
+## MODIFIED Contract
+`clm context <component>` deterministically prints the bundle an agent needs to work on a component: `ARCHITECTURE.md`, CLM's carried constraints in force in a project that isn't CLM's own (`carried-constraints`), the capabilities the component serves, the contract and design of every component among the ancestors from the root down to the component, the component's frontmatter, requirements and list of assets, and the contract of each component it depends on directly, through `depends_on`. `clm context <component> --hash` prints the bundle's content hash, so a caller can tell whether anything an agent working on the component would read has changed (`hash-based-staleness`). It exits 0 with the bundle or its hash, 1 with the graph's violations on standard output and no bundle, and 2 naming the component on standard error when there is no such component (`bundle-errors`).
+
+Crate `clm-context` offers the same to a caller that holds a graph (`bundle-components`): `bundle(graph, root, id)` is the bundle `clm context <id>` prints for the checkout at `root`, or nothing when the graph holds no such component; `hash(bundle)` is what `--hash` prints for it; `bundle_nodes(graph, id)` is the IDs of the components whose specs the bundle holds; and `served_capabilities(graph, component)` is the capability entries whose blocks it holds. `clm rebase` reads all four to report a spec that moved under a build and which files moved (`sync/spec-changed`). `bundle_from(graph, architecture, id)` gives the same bundle without a checkout, from the graph and the text of `ARCHITECTURE.md`, or none: the graph holds `CAPABILITIES.md`'s entries and the carried constraints in force (`bundle-from-text`). The crate builds for `wasm32-unknown-unknown` (`context-builds-for-wasm`), where it offers everything but the command's call.
+
+`clm-context` offers `clm context` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup, of which this command reads nothing, and a stream each for standard output and standard error, and returns the exit status. `Args` is the command's arguments, which `crates/clm`'s parser reads. `crates/clm` routes the command to the call and adds nothing to what it writes.
+
+## MODIFIED Design
+Crate `clm-context` with `bundle(graph, root, node_id) -> Option<String>`, built on the `model` graph. It reads `ARCHITECTURE.md` from `root` and calls `bundle_from(graph, architecture: Option<&str>, node_id) -> Option<String>`, which does the rest and touches no filesystem. The bundle is Markdown in this order:
+
+1. `# ARCHITECTURE.md`, then the file's text.
+2. `# CLM's constraints`, the carried entries in force, outside the source only (`bundle-carries-constraints`).
+3. `# Capabilities served`, then the block of each capability entry the target serves, verbatim (`served_capabilities`, `bundle-contents`). Architecture IDs among a rule's serves add nothing, since the whole of `ARCHITECTURE.md` is already there.
+4. `# Ancestors`, then for each component from the root `clm` down to the target, the target last: `## <id>: <title>`, `### Contract`, `### Design`. The target also gets `### Frontmatter`, its YAML in a fenced `yaml` code block, before its contract, and `### Requirements`, its requirement blocks, after its design, then `### Assets`, one line `- specs/<path>/assets/<asset> <hash>` per asset sorted by path, when it has any.
+5. `# Dependencies`, then for each component named in the target's `depends_on` that isn't among its ancestors, sorted by ID and each once: `## <id>: <title>` and `### Contract`.
+
+Every line of every part loses its trailing whitespace, and the parts are joined by a blank line. The command's call and its `Args` are compiled for native targets only, since the argument parser isn't built for wasm.
+
+## MODIFIED Requirements
+
+### Requirement: bundle-contents <!-- base: 1db0ecd68195ca85 -->
+`clm context <component>` SHALL print `ARCHITECTURE.md`, the block of each capability `<component>`'s requirements serve (each requirement's `#### Serves` block, else `<component>`'s `serves`; each once, in `CAPABILITIES.md`'s order), or every capability's block when `<component>` builds the capability tests (`model/capability-tests-component`), the contract and design of each component among the ancestors from the root to `<component>`, `<component>`'s frontmatter and requirements, the path and hash of each of `<component>`'s assets, and the contract of each component in `<component>`'s `depends_on` that isn't among its ancestors. The ancestors' section SHALL be headed `# Ancestors`. When the checkout has no `ARCHITECTURE.md`, the bundle SHALL hold no `# ARCHITECTURE.md` section; when `<component>` serves no capability, no `# Capabilities served` section; and when no dependency is left to print, no `# Dependencies` section. It SHALL NOT print any other component's design, requirements or assets, any asset's content, any capability none of `<component>`'s requirements serves (unless `<component>` builds the capability tests), or anything from `changes/`, `backlog/` or `docs/`.
+
+#### Scenario: dependency stays private
+- GIVEN component `a` depending on `b`, where `b` has design text `B-DESIGN`, requirement `b/y` and asset `bm.html`
+- WHEN `clm context a` runs
+- THEN the output contains `b`'s contract and `a`'s requirements, and contains none of `B-DESIGN`, `b/y` or `bm.html`
+
+#### Scenario: nested component sees its ancestors
+- GIVEN component `a.b` under `a` under root `clm`
+- WHEN `clm context a.b` runs
+- THEN the output contains the contracts and designs of `clm`, `a` and `a.b`, in that order
+
+#### Scenario: a nested component
+- GIVEN components `a` and `a.b`
+- WHEN `clm context a.b` runs
+- THEN its output holds the line `# Ancestors`, followed by `## clm: <title>`, then `a`'s and then `a.b`'s sections
+
+#### Scenario: assets listed
+- GIVEN component `a` with asset `mockups/m.html`
+- WHEN `clm context a` runs, and then again after `m.html` changes
+- THEN the output lists `specs/a/assets/mockups/m.html` with its hash but not its content, and `clm context a --hash` differs between the two runs
+
+#### Scenario: served capabilities
+- GIVEN `CAPABILITIES.md` with entries `a`, `b` and `c`, and component `n` with `serves: [capability/a, architecture/x]` and a requirement whose `#### Serves` block names `capability/b`
+- WHEN `clm context n` runs
+- THEN the output holds `a`'s and `b`'s blocks, in that order, after `ARCHITECTURE.md` and before the ancestors, and nothing of `c`
+
+#### Scenario: none served
+- GIVEN component `n` that serves no capability
+- WHEN `clm context n` runs
+- THEN the output has no `# Capabilities served` section
+
+#### Scenario: capability node
+- GIVEN `CAPABILITIES.md` with entries `a` and `b`, and the capability component `capability` with no `serves`
+- WHEN `clm context capability` runs
+- THEN the output holds `a`'s and `b`'s blocks, in that order, under `# Capabilities served`
+
+#### Scenario: root without a capability node
+- GIVEN `CAPABILITIES.md` with entries `a` and `b`, no `specs/capability/SPEC.md`, and root component `r` with `serves: [capability/a]`
+- WHEN `clm context r` runs
+- THEN the output holds `a`'s and `b`'s blocks, in that order, under `# Capabilities served`
+
+#### Scenario: overridden node default
+- GIVEN component `n` with `serves: [capability/a]` whose only requirement's `#### Serves` block names `capability/b`
+- WHEN `clm context n` runs
+- THEN the output holds `b`'s block and nothing of `a`
+
+#### Scenario: no architecture file
+- GIVEN a checkout with component `a` and no `ARCHITECTURE.md`
+- WHEN `clm context a` runs
+- THEN the output holds no line `# ARCHITECTURE.md`
+
+#### Needs
+- model/capability-tests-component
+
+### Requirement: bundle-errors <!-- base: fa9b5998999cf196 -->
+When `<component>` doesn't exist, `clm context` SHALL write the line ``clm context: no component `<component>` `` to standard error and nothing to standard output, and exit 2. When the spec graph has violations, it SHALL write each to standard output as the line `model/violation-line` gives for it, write nothing to standard error and no bundle, and exit 1, whether or not `<component>` exists.
+
+#### Scenario: unknown node
+- GIVEN no component `zz`
+- WHEN `clm context zz` runs
+- THEN it exits 2, standard error is the line ``clm context: no component `zz` `` and standard output is empty
+
+#### Scenario: invalid graph
+- GIVEN component `a`, and component `b` whose `depends_on` names a component that doesn't exist
+- WHEN `clm context a` runs
+- THEN it exits 1, standard output holds one line per violation, the `model/dependency-dag` one among them, and nothing of `a`'s contract, and standard error is empty
+
+### Requirement: bundle-carries-constraints <!-- base: ff31b1a3846cc069 -->
+When the graph isn't the source of the carried constraints (`model/carried-constraints`), `clm context <component>` SHALL print, after `ARCHITECTURE.md`'s text (or first, when the file is absent) and before `# Capabilities served`, a section `# CLM's constraints`: one line saying these are the constraints CLM carries to every project, from the `clm` that runs, and that `clm guide constraints` explains their tiers; then, for each carried entry in force, in the carried order, `### Constraint: <slug> (<tier>)`, its statement and, for a `replaceable` entry, a line `Guarantee: <text>`. A carried entry the project's `ARCHITECTURE.md` replaces SHALL NOT appear. In the source the section SHALL NOT be printed, since its `ARCHITECTURE.md` already holds the entries. The section's first line SHALL also say that names in backticks it doesn't list are CLM's own decisions and constraints, kept in CLM's repository.
+
+#### Scenario: a project
+- GIVEN a repository that isn't the source, whose `ARCHITECTURE.md` entry `x` replaces `expand-contract`, and component `a`
+- WHEN `clm context a` runs
+- THEN the output holds `# CLM's constraints` after `x`'s entry and before `# Ancestors`, holding `### Constraint: proven-by-tests (method)` and `### Constraint: yagni (default)` and no `expand-contract` heading
+
+#### Scenario: the source
+- GIVEN a repository whose `ARCHITECTURE.md` entry `a` holds `#### Carries` `- method`, and component `n`
+- WHEN `clm context n` runs
+- THEN the output holds no `# CLM's constraints`
+
+#### Needs
+- model/carried-constraints
+
+### Requirement: commands-in-crate <!-- base: 751a13b0ac38cd0b -->
+`clm-context` SHALL offer `clm context` as a call of its own that takes the command's arguments as the command line gives them, the repository root, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2.
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository with component `a` and no component `zz`
+- WHEN the call runs with the arguments `a`, then `a --hash`, then `zz`, each with two buffers
+- THEN the first returns 0 with `a`'s bundle in the output buffer and an empty error buffer, the second returns 0 with the bundle's hash and a line end in the output buffer, and the third returns 2 with an empty output buffer and ``clm context: no component `zz` `` in the error buffer
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN it is passed an option `clm context` doesn't have
+- THEN it returns 2 with the usage error, naming the option, in the error buffer and an empty output buffer, and the caller's process goes on
+
+## ADDED Requirements
+
+### Requirement: bundle-components
+`clm-context` SHALL offer, to a caller that holds a graph, what `clm context` prints and what the bundle is made of. `bundle(graph, root, id)` SHALL return the text `clm context <id>` prints for the checkout at `root`, and nothing when the graph holds no component `id`. `hash(bundle)` SHALL return the hash `clm context <id> --hash` prints for that bundle, without the line's end. `bundle_nodes(graph, id)` SHALL return the IDs of the components whose specs the bundle of `id` holds: its ancestors from the root down to `id` itself, then the components its `depends_on` names that aren't among them, in ascending order of their IDs as strings and each once; and an empty list when the graph holds no component `id`. `served_capabilities(graph, component)` SHALL return the capability entries whose blocks that component's bundle holds under `# Capabilities served` (`bundle-contents`), in the bundle's order, and none when the bundle has no such section.
+
+#### Scenario: ancestors then dependencies
+- GIVEN components `p`, `a` and `z`, and `p.b` under `p` with `depends_on: [p, z, a, z]`
+- WHEN `bundle_nodes` runs for `p.b`, and for `missing`, which names no component
+- THEN the first returns the root's ID, `p`, `p.b`, `a` and `z`, in that order, and the second returns an empty list
+
+#### Scenario: the calls give what the command prints
+- GIVEN a fixture repository with component `a`
+- WHEN `bundle` runs for `a`, `hash` runs on what it returns, and `clm context a` and `clm context a --hash` run
+- THEN `clm context a` prints exactly the text `bundle` returned, and `clm context a --hash` prints what `hash` returned followed by a line end
+
+#### Scenario: no such component
+- GIVEN a graph with no component `zz`
+- WHEN `bundle` runs for `zz`
+- THEN it returns nothing
+
+#### Scenario: the served entries
+- GIVEN `CAPABILITIES.md` with entries `a`, `b` and `c`, and component `n` whose requirements serve `capability/b` and `capability/a`
+- WHEN `served_capabilities` runs for `n`
+- THEN it returns the entries `capability/a` and `capability/b`, in that order
+
+#### Serves
+- capability/build-from-spec
+- architecture/hash-based-staleness
+
+## REMOVED Requirements
+
+### Requirement: says-component <!-- base: 28b438016bc11343 -->

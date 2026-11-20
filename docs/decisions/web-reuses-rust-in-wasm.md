@@ -7,7 +7,7 @@ status: accepted
 The `web` Worker is Rust (`workers-rs`) built for `wasm32-unknown-unknown`. It uses in-memory entry points that sit next to the existing disk- and git-based ones:
 - `clm_model::load_files` to parse repos;
 - `clm_check::markers_in` and `clm_check::report` for coverage;
-- `clm_orchestrator::queue_from_refs`, which uses `clm_context::bundle_from` to find stale plans, for the claim queue.
+- `clm_orchestrator::queue_from_refs` for the claim queue. (It no longer uses `clm_context::bundle_from`, which found stale plans while there were plans; nothing in the Worker uses `clm-context` today, as `20261119-wave-1-by-the-rule` found.)
 
 So the web app reports exactly what `clm` does, with no second parser to drift from it (`reuse-first`). Each crate builds for WebAssembly, `check` and `orchestrator` with their default features disabled, which leaves out the parts that need a filesystem, git or processes.
 
