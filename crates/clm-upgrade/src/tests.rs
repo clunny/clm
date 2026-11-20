@@ -222,18 +222,15 @@ fn a_project_upgraded_by_a_newer_clm_says_so() {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let env = [
+        ("GIT_CONFIG_GLOBAL", std::ffi::OsStr::new("/dev/null")),
+        ("GIT_CONFIG_NOSYSTEM", std::ffi::OsStr::new("1")),
+    ];
+    let options = clm_git::Options {
+        env: &env,
+        ..Default::default()
+    };
+    clm_git::run(dir, "git", args, options).unwrap();
 }
 
 // req:upgrade/require-current@d0593968

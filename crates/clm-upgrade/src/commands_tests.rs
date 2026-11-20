@@ -2,7 +2,6 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use tempfile::TempDir;
 
@@ -117,12 +116,7 @@ fn lists_up_to_date_and_refuses_too_new() {
 #[test]
 fn marks_a_skipped_required_migration() {
     let main = TempDir::new().unwrap();
-    let init = Command::new("git")
-        .args(["init", "-q"])
-        .current_dir(main.path())
-        .status()
-        .unwrap();
-    assert!(init.success());
+    clm_git::git(main.path(), &["init", "-q"]).unwrap();
     fs::write(main.path().join("clm.toml"), "").unwrap();
     let list = [required_r()];
     assert_eq!(
@@ -336,12 +330,7 @@ fn a_note_the_stamp_takes_is_shown_on_the_run_that_takes_it() {
 #[test]
 fn an_advised_migration_is_never_marked_skipped() {
     let main = TempDir::new().unwrap();
-    let init = Command::new("git")
-        .args(["init", "-q"])
-        .current_dir(main.path())
-        .status()
-        .unwrap();
-    assert!(init.success());
+    clm_git::git(main.path(), &["init", "-q"]).unwrap();
     fs::write(
         main.path().join("clm.local.toml"),
         "skip_migrations = [\"a\"]\n",
