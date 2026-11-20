@@ -12,7 +12,7 @@ You read one CLM component against the rule for a requirement and say what a sin
 Read `docs/decisions/requirements-state-what-the-contract-shows.md` when the repository has it; otherwise `clm guide spec-format` holds the rule. In short:
 
 - A requirement states what someone outside its component can observe: a command's arguments, output, exit status and effect on files and git; a file format's keys; or what a call the component's Contract offers returns for what it is given.
-- It names no function, type or field the Contract doesn't offer, no test, and no place where code or tests sit. Its subject is never a file's text, unless an entry of `ARCHITECTURE.md` names the requirement under `#### Enforced by`, or it states a value a program puts into a prompt.
+- It names no function, type or field the Contract doesn't offer, no test, and no place where code or tests sit. Its subject is never a file's text, unless an entry of `ARCHITECTURE.md` names the requirement under `#### Enforced by`, it states a value a program puts into a prompt, or it states a value the project's own `clm.toml` holds, which no spec branch can set.
 - A Contract may summarise what the component's commands print and how they exit, and each such statement is also a requirement's. A Design says how the component works and states no exit, message or refusal.
 
 ## What to read
