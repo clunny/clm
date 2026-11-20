@@ -30,7 +30,8 @@ resolves: [the-verify-tree-s-build-caches-grow-without-bound-and-take-the]
 ## Constraints and edge cases
 
 - **The cost.** Each pass now builds each job's target cold, where it was warm from the last pass; a pass's peak, its jobs' targets while it runs, is room the work uses and stays. Accepted: verifies are rare (`queue-drained`, every 20 lands here), and the pass already runs up to an hour.
-- **A tree that isn't whole.** Git run in a tree whose `.git` is gone finds the main worktree around it, and `git clean -ffdx` there would remove the clone's `.clm/`. The clean runs only when git finds its top at the tree itself, the test the checkout already makes before reusing it.
+- **A tree that isn't whole.** Git run in a tree whose `.git` is gone finds the main worktree around it, so a clean there would go through the main worktree's repository rather than the tree's. The clean runs only when git finds its top at the tree itself, the test the checkout already makes before reusing it.
+- **Every call that checked the tree out cleans**, a `verify not-due` whose `queue-drained` trigger checked the head out and a call ending in a refusal or an error included, so no path out of `clm verify` leaves the tree's ignored files behind; a clean of a tree nothing built in is a quick `git clean`.
 - **A killed call.** A `clm verify` killed with `SIGKILL` cleans nothing; the next call that checks the tree out cleans what it left, since the clean takes the whole tree. A stopped pass (`SIGTERM`) ends through verify's own handler, so its call still cleans.
 
 ## Open questions
