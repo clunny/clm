@@ -1244,7 +1244,7 @@ A `clm land` of a branch whose head `main` already holds, merged by a commit on 
 - architecture/git-is-truth
 
 ### Requirement: build-holds-own-files
-`clm land <branch>`, for a branch named `impl/<component>`, SHALL exit 1 when `gate/own-files`' `foreign_files` lists any file for its head against the fetched base and that component, printing for each `<file>: land/build-holds-own-files: owned by `<owner>`; impl/<component> changes its own files, the wiring and a capability test it serves. Build this in `<owner>`, or leave the requirement unbuilt and add a question item that blocks it`. It SHALL do so before it takes the land's lock, merges or runs any check, and it SHALL push and append nothing. `clm land --check-only`, in a checkout whose branch is `impl/<component>`, SHALL print the same lines for `HEAD` against the local `origin/main` and exit 1 before it runs the check command, so a build learns of it before its land. A branch with any other name, `impl/archive/<id>` included, and a detached `HEAD`, SHALL land or check as before.
+`clm land <branch>`, for a branch named `impl/<component>`, SHALL exit 1 when `gate/own-files`' `foreign_files` lists any file for its head against the fetched base and that component, printing for each `<file>: land/build-holds-own-files: owned by `<owner>`; impl/<component> changes its own files, the wiring and a capability test it serves. Build this in `<owner>`, or leave the requirement unbuilt and add a question item that blocks it`. For a file `foreign_files` lists with an empty owner, a file outside the CLM root (`gate/paths-under-the-root`), it SHALL print `<file>: land/build-holds-own-files: outside the CLM root, which no build of the root's components may change. Leave the requirement unbuilt and add a question item that blocks it` instead, naming no owner. It SHALL do so before it takes the land's lock, merges or runs any check, and it SHALL push and append nothing. `clm land --check-only`, in a checkout whose branch is `impl/<component>`, SHALL print the same lines for `HEAD` against the local `origin/main` and exit 1 before it runs the check command, so a build learns of it before its land. A branch with any other name, `impl/archive/<id>` included, and a detached `HEAD`, SHALL land or check as before.
 
 #### Scenario: another component's source
 - GIVEN a root with `wiring: []`, components `a` and `b`, and a branch `impl/a` that changes `crates/a/src/lib.rs` and `crates/b/src/lib.rs`, and a check command that records that it ran
@@ -1271,12 +1271,13 @@ A `clm land` of a branch whose head `main` already holds, merged by a commit on 
 - WHEN `clm land impl/a` runs
 - THEN it lands
 
+#### Scenario: a file outside the root
+- GIVEN a git repository whose CLM root is its directory `tool/`, with `wiring: []` and component `a` owning `crates/a/**`, a branch `impl/a` that changes `tool/crates/a/src/lib.rs` and `b` at the repository's top, and a check command that records that it ran
+- WHEN `clm land impl/a` runs in `tool/`
+- THEN it exits 1 printing `../b: land/build-holds-own-files: outside the CLM root, which no build of the root's components may change. Leave the requirement unbuilt and add a question item that blocks it`, with no `owned by` line, and the check command never ran
+
 #### Serves
 - architecture/path-ownership
-- capability/land-safely
-
-#### Needs
-- gate/own-files
 
 ### Requirement: landed-change-releases-claims
 After a successful push of a `spec/*` branch, `clm land` SHALL delete on `origin`, through `host`'s `branch delete` leased on the tip its last fetch read, `propose/<slug>`, once per slug, for each item that a change the head adds names in `from` (as `backlog/<slug>`) or `resolves`, a change the head adds being one of the land's `changes` with neither `changes/<id>/change.md` nor `changes/archive/<id>/change.md` at the merge base, reading each such change's `change.md` from the merged tree at `changes/<id>/change.md`, or `changes/archive/<id>/change.md` when that is absent, through `model`'s change frontmatter parser, and write `released propose/<slug>` to stderr for each claim it deleted. It SHALL skip a slug with no `origin/propose/<slug>` on the fetched refs, a `from` that doesn't start `backlog/`, and a `change.md` whose frontmatter doesn't parse; a delete that fails SHALL warn as `landed-branch-cleanup`'s does, and SHALL NOT fail the land. It SHALL release no other claim, and none after a land of a branch that isn't `spec/*`.
