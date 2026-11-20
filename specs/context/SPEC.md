@@ -16,15 +16,9 @@ Crate `clm-context` offers the same to a caller that holds a graph (`bundle-comp
 `clm-context` offers `clm context` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup, of which this command reads nothing, and a stream each for standard output and standard error, and returns the exit status. `Args` is the command's arguments, which `crates/clm`'s parser reads. `crates/clm` routes the command to the call and adds nothing to what it writes.
 
 ## Design
-Crate `clm-context` with `bundle(graph, root, node_id) -> Option<String>`, built on the `model` graph. It reads `ARCHITECTURE.md` from `root` and calls `bundle_from(graph, architecture: Option<&str>, node_id) -> Option<String>`, which does the rest and touches no filesystem. The bundle is Markdown in this order:
+Crate `clm-context` with `bundle(graph, root, node_id) -> Option<String>`, built on the `model` graph. It reads `ARCHITECTURE.md` from `root` and calls `bundle_from(graph, architecture: Option<&str>, node_id) -> Option<String>`, which does the rest and touches no filesystem. It gathers the bundle's parts in order (`bundle-deterministic`), each heading and each copied text a part of its own, and joins them once, so no part's own blank lines decide the spacing. Architecture IDs among a rule's serves add nothing to the served capabilities, since the whole of `ARCHITECTURE.md` is already there.
 
-1. `# ARCHITECTURE.md`, then the file's text.
-2. `# CLM's constraints`, the carried entries in force, outside the source only (`bundle-carries-constraints`).
-3. `# Capabilities served`, then the block of each capability entry the target serves, verbatim (`served_capabilities`, `bundle-contents`). Architecture IDs among a rule's serves add nothing, since the whole of `ARCHITECTURE.md` is already there.
-4. `# Ancestors`, then for each component from the root `clm` down to the target, the target last: `## <id>: <title>`, `### Contract`, `### Design`. The target also gets `### Frontmatter`, its YAML in a fenced `yaml` code block, before its contract, and `### Requirements`, its requirement blocks, after its design, then `### Assets`, one line `- specs/<path>/assets/<asset> <hash>` per asset sorted by path, when it has any.
-5. `# Dependencies`, then for each component named in the target's `depends_on` that isn't among its ancestors, sorted by ID and each once: `## <id>: <title>` and `### Contract`.
-
-Every line of every part loses its trailing whitespace, and the parts are joined by a blank line. The command's call and its `Args` are compiled for native targets only, since the argument parser isn't built for wasm.
+The command's call and its `Args` are compiled for native targets only, since the argument parser isn't built for wasm.
 
 ## Requirements
 
@@ -85,12 +79,17 @@ Every line of every part loses its trailing whitespace, and the parts are joined
 - model/capability-tests-component
 
 ### Requirement: bundle-deterministic
-`clm context` SHALL print byte-identical output for the same repo content, listing the ancestors from root to target and dependencies sorted by ID.
+`clm context` SHALL print byte-identical output for the same repo content, listing the ancestors from root to target and dependencies sorted by ID. The output SHALL be these parts in this order, each heading a line of its own, every part with the whitespace at the end of each of its lines and at its own end removed, one blank line between two parts, and one line break after the last: `# ARCHITECTURE.md` and the file's text, when the file exists; `# CLM's constraints` and its section (`bundle-carries-constraints`); `# Capabilities served` and each served block, when any is served; `# Ancestors`, then for each component from the root down to `<component>`, `## <id>: <title>`, `### Contract` and its Contract, `### Design` and its Design, with, for `<component>` alone, `### Frontmatter` and its frontmatter in a fenced `yaml` code block before `### Contract`, and after its Design `### Requirements` and each requirement block and, when it has assets, `### Assets` and one line `- specs/<component path>/assets/<asset path> <hash>` per asset, in the assets' path order; and `# Dependencies`, when a dependency is left that isn't an ancestor, then `## <id>: <title>`, `### Contract` and its Contract for each.
 
 #### Scenario: repeated runs
 - GIVEN component `a` depending on `c` and `b`
 - WHEN `clm context a` runs twice
 - THEN both outputs are identical and `b`'s contract comes before `c`'s
+
+#### Scenario: the layout
+- GIVEN component `a` whose Contract's lines end in spaces and whose assets are `mockups/m.html` and `b.png`
+- WHEN `clm context a` runs
+- THEN no line of the output ends in a space, the output ends with one line break, and it holds `### Assets`, a blank line, `- specs/a/assets/b.png <hash>` and then `- specs/a/assets/mockups/m.html <hash>`
 
 ### Requirement: bundle-hash
 `clm context <component> --hash` SHALL print the content hash of the bundle `clm context <component>` prints. The hash SHALL change when any text in the bundle changes, and SHALL NOT change when text outside it changes.
