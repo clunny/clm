@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [machine-report-states-total-zero-readings-the-code-judges-otherwise]
 ---
 
