@@ -27,11 +27,13 @@ Each read from the code on 2026-11-19, none run:
 
 ## Outcome
 
-- `rename/references` (modified): a list's items are values in flow or block style, a quoted value is rewritten keeping its quotes, no other key (`successor`) is rewritten, and a marker under `changes/archive/` or `docs/decisions/` is the one edit made there. Scenarios *a list in block style*, *a key that holds no reference*, *a marker in the archive*.
+- `rename/refusals` (modified): a component whose `depends_on` or `serves` value spans several lines and names a renamed ID is refused, naming the component and key, since its delta can't modify that value (`apply/frontmatter`). Scenario *a block-style list in a component*.
+- `rename/references` (modified): a list's items are values in flow style, and in a backlog item, which `rename` writes itself, in block style too, a quoted value is rewritten keeping its quotes, no other key (`successor`) is rewritten, and a marker under `changes/archive/` or `docs/decisions/` is the one edit made there. Scenarios *a list in block style*, *a key that holds no reference*, *a marker in the archive*.
 - `rename/term-swap` (modified): a heading and a block's ID lines are judged outside fenced code only; a fenced line starting with `#` is swapped and starts or ends no block. Scenario *a heading in fenced code*.
 - `rename/flag-rerecord` (modified): the value is found as the frontmatter parse reads it, quoted or bare, however spaced, and its quotes kept. Scenario *a quoted flag*.
 - `rename/other-deltas` (modified): never an element of a component the graph before the rename doesn't hold. Scenario *a component only the rename creates*.
 - `rename`'s Design: **What a reference is**, **Terms**, **Markers** and **Other changes' deltas** say the same.
+- `docs/decisions/rename-by-replay.md`: its **Scope** keeps archived changes and decisions as history but for a test marker in one of their non-Markdown files, which is rewritten (architecture audit).
 
 ## Constraints
 
@@ -42,6 +44,8 @@ Each read from the code on 2026-11-19, none run:
 
 - A quoted value in `depends_on` or `serves` is rewritten keeping its quotes, as a flag's is.
 - A fence opened inside a `#### Needs` block holds no ID line; the block's lines after the fence closes are still ID lines until the next heading outside fenced code.
+- No spec on `main` holds a block-style `depends_on` or `serves`, so the refusal costs nothing today; teaching `apply/frontmatter` multi-line values would be a larger change for no current case (`yagni`).
+- *a marker in the archive* passes against today's code: it settles the two requirements' contradiction in the text, not a code fault.
 - A marker in a Markdown file under `changes/archive/` isn't one the coverage counts, so it is left, as every Markdown marker is.
 
 ## What the requirements no longer state
@@ -50,3 +54,5 @@ Each read from the code on 2026-11-19, none run:
 - `rename/term-swap`: "It SHALL leave alone every heading, a line that starts with `#`" now leaves alone such a line only outside fenced code; a fenced one is swapped.
 
 ## Open questions
+
+None left. The builder check's findings were settled in the change: a block-style list in a component's frontmatter can't pass through a delta, so it is a refusal and the block-style scenario is a backlog item's; *a component only the rename creates* now gives `a` a Design the rename rewrites, so the test fails against today's code; *a marker in the archive* states what `clm-rename`'s own tests can observe, since `clm-check` depends on it through `clm-gate`; `flag-rerecord` names the line it edits. The architecture audit's finding (`rename-by-replay`'s **Scope**) is fixed by amending the decision.
