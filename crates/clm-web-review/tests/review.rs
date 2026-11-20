@@ -138,6 +138,7 @@ fn modified_requirement() {
 #[test]
 fn approval_state() {
     // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/fingerprint-from-trees@c44557f5
     let mut repo = spec_pr();
     let fingerprint = fingerprint(&repo);
     ledger(
