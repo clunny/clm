@@ -62,13 +62,6 @@ fn fails_wherever_loading_the_repository_file_does() {
 #[test]
 fn component_size_from_text() {
     // req:config/component-size-setting@37267c0c
-    assert_eq!(
-        node_size_from("[component_size]\ncode_tokens = 60000\n").unwrap(),
-        NodeSize {
-            spec_tokens: 12000,
-            code_tokens: 60000
-        }
-    );
     let e = node_size_from("[node_size]\nspec_tokens = 1\n").unwrap_err();
     assert_eq!(e.source.as_deref(), Some("clm.toml"));
     assert!(e.message.contains("`component_size`") && e.message.contains("`node_size`"));

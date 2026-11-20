@@ -104,7 +104,23 @@ fn a_command_called_in_a_test() {
     assert!(out.stdout.is_empty());
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(stderr.starts_with("clm config: "), "{stderr}");
-    assert!(stderr.ends_with('\n'), "{stderr}");
+    // The TOML parser's wording ends in a line break of its own, and the call adds one.
+    assert!(stderr.ends_with("\n\n"), "{stderr:?}");
+
+    // An error the parser doesn't word ends in the call's line break alone.
+    write(&root, "clm.toml", "");
+    let out = clm_in(
+        &root,
+        &["config", "get", "defects"],
+        &[("CLM_DEFECTS", "always".into())],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.starts_with("clm config: "), "{stderr}");
+    assert!(
+        stderr.ends_with('\n') && !stderr.ends_with("\n\n"),
+        "{stderr:?}"
+    );
 }
 
 #[test]
@@ -219,6 +235,7 @@ fn config_get_default_outside_a_repository() {
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(String::from_utf8(out.stdout).unwrap(), "ask\tdefault\n");
     let out = clm_config_get(dir.path(), "max_builds");
+    assert_eq!(out.status.code(), Some(0));
     assert_eq!(String::from_utf8(out.stdout).unwrap(), "3\tdefault\n");
     let out = clm_config_get(dir.path(), "autosync");
     assert_eq!(out.status.code(), Some(0));
@@ -526,6 +543,63 @@ fn config_get_rejects_a_variable_that_is_not_utf8() {
     );
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("CLM_DEFECTS"));
+    for (var, key, bytes) in [
+        ("CLM_AUTOSYNC", "autosync", &b"true\xff"[..]),
+        ("CLM_MAX_BUILDS", "max_builds", &b"2\xff"[..]),
+        ("CLM_WRITER", "writer", &b"bob\xff"[..]),
+    ] {
+        let out = clm_in(
+            dir.path(),
+            &["config", "get", key],
+            &[(var, std::ffi::OsStr::from_bytes(bytes).into())],
+        );
+        assert_eq!(out.status.code(), Some(1), "{var}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains(var), "{var}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_config_dir_that_is_not_utf8_names_the_replaced_directory() {
+    // req:config/invalid-settings@0edd866f
+    use std::os::unix::ffi::OsStrExt;
+    let dir = TempDir::new().unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let not_utf8 = |name: &[u8]| -> OsString {
+        let mut bytes = base.as_os_str().as_bytes().to_vec();
+        bytes.push(b'/');
+        bytes.extend_from_slice(name);
+        std::ffi::OsStr::from_bytes(&bytes).into()
+    };
+    let replaced = base.join("x\u{fffd}");
+    write(&replaced, "clm/config.toml", "defects = \"off\"\n");
+    write(
+        &replaced,
+        ".config/clm/config.toml",
+        "defects = \"backlog\"\n",
+    );
+    let get = |vars: &[(&str, OsString)]| {
+        let out = clm_in(dir.path(), &["config", "get", "defects"], vars);
+        assert_eq!(out.status.code(), Some(0), "{vars:?}");
+        String::from_utf8(out.stdout).unwrap()
+    };
+    // `XDG_CONFIG_HOME`, then `HOME` with `XDG_CONFIG_HOME` empty: each read as the replaced value.
+    assert_eq!(
+        get(&[("XDG_CONFIG_HOME", not_utf8(b"x\xff"))]),
+        format!("off\t{}\n", replaced.join("clm/config.toml").display())
+    );
+    assert_eq!(
+        get(&[("XDG_CONFIG_HOME", "".into()), ("HOME", not_utf8(b"x\xff"))]),
+        format!(
+            "backlog\t{}\n",
+            replaced.join(".config/clm/config.toml").display()
+        )
+    );
+    // A replaced directory that holds no file is skipped.
+    assert_eq!(
+        get(&[("XDG_CONFIG_HOME", not_utf8(b"y\xff"))]),
+        "ask\tdefault\n"
+    );
 }
 
 #[test]

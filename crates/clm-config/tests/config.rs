@@ -225,8 +225,12 @@ fn empty_variable_is_set_and_invalid() {
 #[test]
 fn unparseable_file() {
     // req:config/invalid-settings@0edd866f
-    let e = error(&Fixture::new(None, Some("defects = \n")), &[]);
-    assert!(e.contains("clm.toml"), "{e}");
+    let f = Fixture::new(None, Some("defects = \n"));
+    let e = f.load(&[]).unwrap_err();
+    assert_eq!(e.source, Some(f.repo_file().display().to_string()));
+    // It says why, and names no key at fault.
+    assert!(e.message.contains("TOML parse error"), "{}", e.message);
+    assert!(!e.message.contains("`defects`"), "{}", e.message);
 }
 
 #[test]
@@ -2449,7 +2453,18 @@ fn committed_env_reads_the_text_and_the_local_file_and_nothing_else() {
     // No other key of `clm.local.toml` is read, and one it can't read is none.
     let f = Fixture::new(None, None).local("max_builds = 0\nno_such_key = 1\n[env]\nB = \"2\"\n");
     let got = clm_config::committed_env(&f.root(), Some("[env]\nA = \"1\"\n"), "c:clm.toml");
-    assert_eq!(got.unwrap().len(), 2);
+    let got: Vec<_> = got
+        .unwrap()
+        .into_iter()
+        .map(|(n, s)| (n, s.value, s.layer))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("A".into(), "1".into(), Layer::File("c:clm.toml".into())),
+            ("B".into(), "2".into(), Layer::File(f.local_file())),
+        ]
+    );
     let f = Fixture::new(None, None);
     fs::create_dir(f.local_file()).unwrap();
     let got = clm_config::committed_env(&f.root(), Some("[env]\nA = \"1\"\n"), "c:clm.toml");
@@ -2478,4 +2493,37 @@ fn host_from_the_local_file() {
     let s = f.load(&[]).unwrap();
     assert_eq!(s.host.value, Host::None);
     assert_eq!(s.host.layer, Layer::File(f.local_file()));
+}
+
+#[test]
+fn verify_and_land_come_whole_from_the_local_file() {
+    // req:config/layers@815f52f6
+    let f = Fixture::new(
+        None,
+        Some(
+            "[land]\ncheck = \"a\"\ntarget_cap_gb = 4\n\
+             [verify]\ncheck = \"x\"\nmode = \"local\"\ntriggers = [\"queue-drained\"]\n",
+        ),
+    )
+    .local("[land]\ncheck = \"b\"\n[verify]\ncheck = \"y\"\nmode = \"local\"\n");
+    let s = f.load(&[]).unwrap();
+    assert_eq!(s.get("land").unwrap().0, "check=b");
+    assert_eq!(s.get("verify").unwrap().0, "mode=local,check=y");
+    assert_eq!(s.verify.layer, Layer::File(f.local_file()));
+}
+
+#[test]
+fn upgrade_keys_have_no_variable() {
+    // req:config/upgrade-settings@d1586c03
+    let s = Fixture::new(None, None)
+        .load(&[
+            ("CLM_UPGRADED", "x"),
+            ("CLM_DECLINED_MIGRATIONS", "x"),
+            ("CLM_SKIP_MIGRATIONS", "x"),
+        ])
+        .unwrap();
+    for key in ["upgraded", "declined_migrations", "skip_migrations"] {
+        let (value, layer) = s.get(key).unwrap();
+        assert_eq!((value.as_str(), layer), ("", &Layer::Default), "{key}");
+    }
 }
