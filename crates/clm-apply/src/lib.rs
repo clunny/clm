@@ -844,20 +844,29 @@ fn modify(
     check_requirements(node, delta, errs);
 
     let (fm, body) = split_frontmatter(&node.source)?;
+    // A frontmatter at fault still has the body judged: every reason, per delta (`atomic`).
     let fm = match &delta.modified_frontmatter {
-        Some(yaml) => match edit_frontmatter(fm, yaml)
-            .and_then(|fm| frontmatter_errors(declared, delta, &fm).map(|()| fm))
-        {
-            Ok(fm) => fm,
-            Err(msg) => {
-                errs.push(violation(&delta.path, "apply/frontmatter", msg));
-                return None;
+        Some(yaml) => match edit_frontmatter(fm, yaml) {
+            // The declared keys are judged only once every line is well formed.
+            Ok(fm) => match frontmatter_errors(declared, delta, &fm) {
+                Ok(()) => Some(fm),
+                Err(msg) => {
+                    errs.push(violation(&delta.path, "apply/frontmatter", msg));
+                    None
+                }
+            },
+            Err(msgs) => {
+                errs.extend(
+                    msgs.into_iter()
+                        .map(|msg| violation(&delta.path, "apply/frontmatter", msg)),
+                );
+                None
             }
         },
-        None => fm.to_string(),
+        None => Some(fm.to_string()),
     };
-    let body = edit_body(body, delta, errs, &node.id)?;
-    Some((node.path.clone(), format!("---\n{fm}\n---\n{body}")))
+    let body = edit_body(body, delta, errs, &node.id);
+    Some((node.path.clone(), format!("---\n{}\n---\n{}", fm?, body?)))
 }
 
 fn check_base(
@@ -882,9 +891,12 @@ fn check_base(
     errs.push(violation(&delta.path, "apply/stale-base", message));
 }
 
-/// Replaces (or appends) each top-level key line from `yaml`, leaving other lines untouched.
-fn edit_frontmatter(fm: &str, yaml: &str) -> Result<String, String> {
+/// Replaces (or appends) each top-level key line from `yaml`, leaving other lines untouched;
+/// or every line of `yaml` that isn't a one-line `key: value` and every key whose current
+/// value spans more than one line, each as a message of its own (`frontmatter`).
+fn edit_frontmatter(fm: &str, yaml: &str) -> Result<String, Vec<String>> {
     let mut lines: Vec<String> = fm.lines().map(String::from).collect();
+    let mut faults = Vec::new();
     for line in yaml
         .lines()
         .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
@@ -892,9 +904,10 @@ fn edit_frontmatter(fm: &str, yaml: &str) -> Result<String, String> {
         let key = match line.split_once(':') {
             Some((k, _)) if !k.is_empty() && !k.starts_with([' ', '\t', '-']) => k,
             _ => {
-                return Err(format!(
+                faults.push(format!(
                     "frontmatter values must be single-line `key: value`, got `{line}`"
                 ));
+                continue;
             }
         };
         let prefix = format!("{key}:");
@@ -904,16 +917,21 @@ fn edit_frontmatter(fm: &str, yaml: &str) -> Result<String, String> {
                     .get(i + 1)
                     .is_some_and(|n| n.starts_with([' ', '\t', '-']))
                 {
-                    return Err(format!(
+                    faults.push(format!(
                         "current `{key}` spans more than one line; make it single-line first"
                     ));
+                    continue;
                 }
                 lines[i] = line.to_string();
             }
             None => lines.push(line.to_string()),
         }
     }
-    Ok(lines.join("\n"))
+    if faults.is_empty() {
+        Ok(lines.join("\n"))
+    } else {
+        Err(faults)
+    }
 }
 
 /// `declared-frontmatter-keys`: the frontmatter `fm` that `delta` produces, checked as the

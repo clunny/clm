@@ -98,6 +98,41 @@ fn stale_delta_blocks_every_write() {
 }
 
 #[test]
+fn bad_frontmatter_and_a_missing_section() {
+    // req:apply/atomic@01fcf63b
+    let dir = repo(&[]);
+    let d = dir.path();
+    let text = read(d, "specs/a/SPEC.md").replace("## Design\nA design\nwith two lines.\n\n", "");
+    write(d, "specs/a/SPEC.md", &text);
+    let (fm, design) = (hash(d, "a", "frontmatter"), hash(d, "a", "design"));
+    write(
+        d,
+        "changes/c/deltas/a.md",
+        &format!(
+            "---\ncomponent: a\nbase: {{ frontmatter: \"{fm}\", design: \"{design}\" }}\n---\n## MODIFIED Frontmatter\n```yaml\n  - model\n: x\n```\n\n## MODIFIED Design\nNew design.\n"
+        ),
+    );
+    let before = snapshot(d, "");
+    let violations = apply(d, "c").unwrap_err();
+    let lines: Vec<String> = violations.iter().map(|v| v.to_string()).collect();
+    let count = |rule: &str, holds: &[&str]| {
+        lines
+            .iter()
+            .filter(|l| l.contains(rule) && holds.iter().all(|h| l.contains(h)))
+            .count()
+    };
+    assert_eq!(count("apply/frontmatter", &["  - model"]), 1, "{lines:#?}");
+    assert_eq!(count("apply/frontmatter", &[": x"]), 1, "{lines:#?}");
+    assert_eq!(
+        count("apply/sections", &["`a`", "## Design"]),
+        1,
+        "{lines:#?}"
+    );
+    assert_eq!(lines.len(), 3, "{lines:#?}");
+    assert_eq!(snapshot(d, ""), before);
+}
+
+#[test]
 fn stale_requirement_reports_both_hashes() {
     // req:apply/stale-base@f167d384
     let dir = repo(&[]);
@@ -540,6 +575,63 @@ fn multi_line_frontmatter_value_is_invalid() {
         violations[0].message.contains("spans more than one line"),
         "{violations:?}"
     );
+}
+
+#[test]
+fn a_list_item_in_the_delta_is_invalid() {
+    // req:apply/frontmatter@6693f644
+    let dir = repo(&[]);
+    let d = dir.path();
+    let base = hash(d, "a", "frontmatter");
+    write(
+        d,
+        "changes/c/deltas/a.md",
+        &format!(
+            "---\ncomponent: a\nbase: {{ frontmatter: \"{base}\" }}\n---\n## MODIFIED Frontmatter\n```yaml\ndepends_on:\n  - model\n```\n"
+        ),
+    );
+    let (graph, _) = load(d);
+    let violations = validate(&graph, &graph.changes["c"]);
+    assert_eq!(rules(&violations), ["apply/frontmatter"], "{violations:?}");
+    assert!(
+        violations[0].message.contains("`  - model`"),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn each_frontmatter_fault_is_its_own_violation() {
+    // req:apply/frontmatter@6693f644
+    let dir = repo(&[]);
+    let d = dir.path();
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &node_a(&["x"]).replace("depends_on: []", "depends_on:\n  - clm"),
+    );
+    let base = hash(d, "a", "frontmatter");
+    // Each kind of bad line, and a key whose current value spans more than one line.
+    write(
+        d,
+        "changes/c/deltas/a.md",
+        &format!(
+            "---\ncomponent: a\nbase: {{ frontmatter: \"{base}\" }}\n---\n## MODIFIED Frontmatter\n```yaml\n# a comment\n\nno colon\n: nothing before\n\tindented: x\n- item: y\ndepends_on: []\n title: z\n```\n"
+        ),
+    );
+    let (graph, _) = load(d);
+    let violations = validate(&graph, &graph.changes["c"]);
+    let text = messages(&violations);
+    assert_eq!(rules(&violations), ["apply/frontmatter"; 6], "{text}");
+    for (v, holds) in violations.iter().zip([
+        "`no colon`",
+        "`: nothing before`",
+        "`\tindented: x`",
+        "`- item: y`",
+        "`depends_on` spans more than one line",
+        "` title: z`",
+    ]) {
+        assert!(v.message.contains(holds), "{holds}: {text}");
+    }
 }
 
 fn create_delta(node: &str) -> String {
