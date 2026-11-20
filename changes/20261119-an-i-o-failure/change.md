@@ -41,9 +41,12 @@ No requirement states the first, second or fourth behaviour as the fix restores 
 ## Edge cases and workarounds
 
 - A path whose bytes can't be read before its op stops the apply there, as a failed write, since it could not be put back.
+- The file whose write was refused before it was opened already holds its old bytes: undo leaves it alone, so it is never named `not restored`.
+- `clm archive` checks the archive entry before the status, since a change both live and archived loads only as the archived one.
 - Putting back can fail too; such files are named, never left silent. Nothing retries.
 - The model loads a change both live and archived under one ID once, as the archived one. That a duplicate ID loads silently is the model's to judge; this change only keeps `archive` from being misled by it.
 
 ## Open questions
 
-None.
+- `rename/undo-on-failure` carries no `#### Serves` block, so it traces to `rename`'s `serves: [architecture/plain-terms]`, which is about names, not about leaving the tree as found (architecture audit, `traced-rules`). Left as is: `rename/refusals` and `rename/finish` trace the same way on `main`, and no capability or constraint names a command's integrity on a failed write; a wider fix of rename's traces is a separate change.
+- The failed-write tests make a write fail with a read-only file, which a run as root doesn't refuse; the tests of `clm-checkpoint` already rely on the same (builder check).

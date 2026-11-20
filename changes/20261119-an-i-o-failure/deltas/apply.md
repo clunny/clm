@@ -20,15 +20,15 @@ base: { contract: "1141b9acdf28fe85", design: "2470d6f123bac0c7" }
 ## MODIFIED Design
 Apply computes each new SPEC.md text in memory, starting from the current text. Sections and requirement blocks are replaced by their heading spans (outside code fences). A removed component's `SPEC.md` is removed after its assets, so a write that fails part way never leaves assets without a component.
 
-**Every reason, per delta.** A delta whose `## MODIFIED Frontmatter` is at fault still has its Contract, Design, requirements and assets judged: the frontmatter's violations are added to the rest, not a reason to stop, and each line at fault is its own violation (`atomic`, `frontmatter`). So one `clm apply` names everything a session must fix in the delta, never one fault per run.
+**Every reason, per delta.** A delta whose `## MODIFIED Frontmatter` is at fault still has its Contract, Design, requirements and assets judged: the frontmatter's violations are added to the rest, not a reason to stop, and each line at fault is its own violation (`atomic`, `frontmatter`). The declared-key check (`declared-frontmatter-keys`) judges the frontmatter only when every line of the delta's block is well formed, since a half-edited frontmatter has no keys to judge. So one `clm apply` names everything a session must fix in the delta, never one fault per run.
 
-**Undoing a failed write** (`failed-write`, `journal`). The files a valid change writes are many, and the filesystem offers no transaction across them, so `apply` keeps a `Journal`: before the first `FileOp` on a path it reads what the path holds, its bytes or nothing, and once an op fails it puts each touched path back in the reverse order: bytes are written back, creating the directories a removal dropped, and a file that wasn't there is removed, with each directory below `specs/`, `changes/` or `backlog/` its removal empties, as `FileOp::perform` drops one. A path whose read before the op fails stops the apply there, before that op, as a failed write. Putting back can itself fail: each file left changed is then named, so the session knows exactly what to restore by hand (`git restore` on a checkout), never a silent half-applied tree. `rename` wraps the apply in its own writes, so it passes its own journal through `apply_into` and undoes everything at once; the journal is the one record of what a run changed, not a second copy in each caller (`reuse-first`).
+**Undoing a failed write** (`failed-write`, `journal`). The files a valid change writes are many, and the filesystem offers no transaction across them, so `apply` keeps a `Journal`: before the first `FileOp` on a path it reads what the path holds, its bytes or nothing, and once an op fails it puts each touched path back in the reverse order: bytes are written back, creating the directories a removal dropped, and a file that wasn't there is removed, with each directory the journal's writes created that its removal leaves empty, so the journal records the directories a write creates. A path that already holds what it held before, such as the file whose write was refused before it opened, is left alone and never named as not restored. A path whose read before the op fails stops the apply there, before that op, as a failed write. Putting back can itself fail: each file left changed is then named, so the session knows exactly what to restore by hand (`git restore` on a checkout), never a silent half-applied tree. `rename` wraps the apply in its own writes, so it passes its own journal through `apply_into` and undoes everything at once; the journal is the one record of what a run changed, not a second copy in each caller (`reuse-first`).
 
 One function gives the backlog items `clm apply` deletes with a change (`answered-questions`, `promoted-item`). The apply and `resulting` both take them from it (`resulting-graph-call`), so the graph a change is checked against can't hold an item its apply deletes, and the apply builds the graph it checks through `resulting`.
 
 `validate` and `stale_bases` judge a recorded Contract, Design or requirement base through one function, so the two can't come to differ (`stale-elements`).
 
-**Archiving beside an entry.** `archive` asks whether `changes/<id>/` holds a change on disk, not only through the loaded graph: a change both live and in the archive under one ID loads once, as the archived one, and the graph alone would call the live directory missing (`archive-command`).
+**Archiving beside an entry.** `archive` asks whether `changes/<id>/change.md` exists on disk, and whether the archive entry exists, before it judges the status, not only through the loaded graph: a change both live and in the archive under one ID loads once, as the archived one, and the graph alone would call the live directory missing (`archive-command`).
 
 ## MODIFIED Requirements
 
@@ -74,7 +74,7 @@ A MODIFIED Frontmatter SHALL replace the line of each listed top-level key, appe
 - THEN it reports the delta under `apply/frontmatter`, its message holding that line
 
 ### Requirement: archive-command <!-- base: b3d8482abfba9863 -->
-`clm archive <change-id>` SHALL move `changes/<id>/` to `changes/archive/<id>/` when the change's status is `done` or `abandoned`, print `archived <id> -> changes/archive/<id>` and exit 0. It SHALL refuse, under `apply/archive-command`, exiting 1 with nothing moved, a change of any other status, an archive entry that already exists, and an ID that names no change outside the archive, as ``no unarchived change `<id>` ``. When `changes/<id>/` holds a change and `changes/archive/<id>/` exists, whatever that entry holds, a change of the same ID among it, the refusal SHALL name `changes/archive/<id>` as already existing, never as ``no unarchived change `<id>` ``.
+`clm archive <change-id>` SHALL move `changes/<id>/` to `changes/archive/<id>/` when the change's status is `done` or `abandoned`, print `archived <id> -> changes/archive/<id>` and exit 0. It SHALL refuse, under `apply/archive-command`, exiting 1 with nothing moved, a change of any other status, an archive entry that already exists, and an ID that names no change outside the archive, as ``no unarchived change `<id>` ``. When `changes/<id>/change.md` exists and `changes/archive/<id>/` exists, whatever that entry holds, a change of the same ID among it, the refusal SHALL name `changes/archive/<id>` as already existing, never as ``no unarchived change `<id>` ``.
 
 #### Scenario: archive a done change
 - GIVEN `changes/x/` with `status: done`
@@ -109,7 +109,7 @@ When a change is valid and a write or removal of one of its files fails, `clm ap
 #### Scenario: a later write fails
 - GIVEN a proposed change `c` with valid deltas for `a` and `b`, `a`'s `SPEC.md` written before `b`'s, and `b`'s `SPEC.md` that can't be written
 - WHEN `clm apply c` runs
-- THEN it exits 1, prints an `apply/atomic` line naming `b`'s `SPEC.md` and holding `write failed`, and `a`'s `SPEC.md`, `b`'s `SPEC.md` and `changes/c/change.md` hold what they held before
+- THEN it exits 1, prints an `apply/atomic` line naming `b`'s `SPEC.md` and holding `write failed` and no line holding `not restored`, and `a`'s `SPEC.md`, `b`'s `SPEC.md` and `changes/c/change.md` hold what they held before
 
 #### Scenario: a removed file comes back
 - GIVEN a proposed change `c` that removes component `a.b` and asset `old.png` of `a`, and a file after them that can't be written
@@ -117,12 +117,12 @@ When a change is valid and a write or removal of one of its files fails, `clm ap
 - THEN it exits 1, and `specs/a/b/SPEC.md` and `specs/a/assets/old.png` exist with their bytes before the run
 
 ### Requirement: journal
-A `Journal` on a root SHALL, before the first `FileOp` it performs on a path, remember that path's bytes, or that it held nothing, and SHALL perform no op on a path whose bytes it can't read, returning that failure. Its `undo()` SHALL put each path it touched back in the reverse order of first touch: writing back the bytes, with the directories they need, or removing a file it created together with each directory it created that the removal leaves empty. It SHALL return each path it couldn't put back with the error, and none when all are back. `apply_into(root, id, journal)` SHALL perform every file `apply` would through `journal`, and leave the undo to its caller.
+A `Journal` on a root SHALL, before the first `FileOp` it performs on a path, remember that path's bytes, or that it held nothing, and SHALL perform no op on a path whose bytes it can't read, returning that failure. Its `undo()` SHALL put each path it touched back in the reverse order of first touch: writing back the bytes, with the directories they need, or removing a file it created together with each directory its writes created that the removal leaves empty. A path that already holds what it held before SHALL be left as it is. It SHALL return each path it couldn't put back with the error, and none when all are back. `apply_into(root, id, journal)` SHALL perform every file `apply` would through `journal`, and leave the undo to its caller.
 
 #### Scenario: undo after writes and a removal
 - GIVEN a root holding `x/f` with bytes `1` and `y/g`, and a journal that writes `x/f` as `2`, writes the new file `z/new/h`, and removes `y/g`
 - WHEN `undo()` runs
-- THEN `x/f` holds `1`, `y/g` exists with its bytes, `z/new/` is gone, and it returns no path
+- THEN `x/f` holds `1`, `y/g` exists with its bytes, `z/` is gone, and it returns no path
 
 #### Scenario: one remembered state per path
 - GIVEN a journal that writes `x/f`, first held `1`, as `2` and then as `3`
