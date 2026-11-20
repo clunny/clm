@@ -65,8 +65,28 @@ pub fn validate(graph: &Graph, change: &Change) -> Vec<Violation> {
 }
 
 /// Applies change `id` in the repo at `root`, all or nothing. Returns the files written and
-/// removed.
+/// removed; when a write or removal fails, every file is put back as it was, and each it
+/// couldn't put back is named `not restored` among the violations (`failed-write`).
 pub fn apply(root: &Path, id: &str) -> Result<Vec<FileOp>, Vec<Violation>> {
+    let mut journal = Journal::new(root);
+    apply_into(root, id, &mut journal).map_err(|mut violations| {
+        violations.extend(
+            journal
+                .undo()
+                .into_iter()
+                .map(|(path, e)| violation(&path, "apply/atomic", format!("not restored: {e}"))),
+        );
+        violations
+    })
+}
+
+/// `apply`, performing its files through `journal` and putting none back when one fails:
+/// the caller undoes the journal (`journal`).
+pub fn apply_into(
+    root: &Path,
+    id: &str,
+    journal: &mut Journal,
+) -> Result<Vec<FileOp>, Vec<Violation>> {
     let (graph, violations) = clm_model::load(root);
     let Some(change) = graph.changes.get(id) else {
         let mut refused = vec![violation(
@@ -79,10 +99,85 @@ pub fn apply(root: &Path, id: &str) -> Result<Vec<FileOp>, Vec<Violation>> {
     };
     let ops = plan(&graph, change, violations)?;
     for op in &ops {
-        op.perform(root)
+        journal
+            .perform(op)
             .map_err(|e| vec![io_violation(op.path(), e)])?;
     }
     Ok(ops)
+}
+
+/// Performs `FileOp`s under a root, remembering what each path held before the first op on
+/// it, so that `undo` puts every path back (`journal`).
+#[derive(Debug)]
+pub struct Journal {
+    root: PathBuf,
+    /// Each path touched, in order of first touch, with its bytes before, or none.
+    before: Vec<(PathBuf, Option<Vec<u8>>)>,
+    /// The directories the journal's writes created, shallowest first.
+    created: Vec<PathBuf>,
+}
+
+impl Journal {
+    pub fn new(root: &Path) -> Journal {
+        Journal {
+            root: root.to_path_buf(),
+            before: Vec::new(),
+            created: Vec::new(),
+        }
+    }
+
+    /// Performs `op` under the root, first remembering what its path holds when no op has
+    /// touched it yet; a path it can't read gets no op, and the read's failure is returned.
+    pub fn perform(&mut self, op: &FileOp) -> std::io::Result<()> {
+        let rel = op.path();
+        if !self.before.iter().any(|(path, _)| path == rel) {
+            let was = match fs::read(self.root.join(rel)) {
+                Ok(bytes) => Some(bytes),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                Err(e) => return Err(e),
+            };
+            self.before.push((rel.to_path_buf(), was));
+        }
+        if let FileOp::Write(..) = op {
+            let missing: Vec<PathBuf> = rel
+                .ancestors()
+                .skip(1)
+                .filter(|dir| !dir.as_os_str().is_empty())
+                .take_while(|dir| !self.root.join(dir).exists())
+                .map(Path::to_path_buf)
+                .collect();
+            self.created.extend(missing.into_iter().rev());
+        }
+        op.perform(&self.root)
+    }
+
+    /// Puts each path touched back as it was, in the reverse order of first touch: its bytes,
+    /// with the directories they need, or its absence, dropping each directory the journal's
+    /// writes created that is left empty. A path already as it was is left alone. Returns
+    /// each path it couldn't put back, with why.
+    pub fn undo(self) -> Vec<(PathBuf, std::io::Error)> {
+        let mut not_back = Vec::new();
+        for (rel, was) in self.before.iter().rev() {
+            let full = self.root.join(rel);
+            let restored = match (fs::read(&full), was) {
+                (Ok(now), Some(was)) if now == *was => continue,
+                (Err(e), None) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                (_, Some(bytes)) => full
+                    .parent()
+                    .map_or(Ok(()), fs::create_dir_all)
+                    .and_then(|()| fs::write(&full, bytes)),
+                (_, None) => fs::remove_file(&full),
+            };
+            if let Err(e) = restored {
+                not_back.push((rel.clone(), e));
+            }
+        }
+        for dir in self.created.iter().rev() {
+            // Fails, and so stays, when it isn't empty.
+            let _ = fs::remove_dir(self.root.join(dir));
+        }
+        not_back
+    }
 }
 
 /// One file `apply` writes or removes, by repo-relative path.
