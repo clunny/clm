@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-gate-reads-changed-paths-relative-to-the-git-repository-s]
 ---
 
