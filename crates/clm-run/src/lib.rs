@@ -1285,7 +1285,9 @@ fn free(root: &Path, node: &str, branch: &str, holder: &Holder) -> Result<(), Er
 /// Before the place (`run-takes-place`): refuses a worktree on `branch` that holds
 /// uncommitted work, landed or not, and removes what an earlier build of the node left once
 /// it landed (`merged-claims-released`): a clean worktree on it, then the local branch. Both
-/// hold nothing `origin/main` lacks.
+/// hold nothing `origin/main` lacks. A landed worktree whose lock a running process holds
+/// (`vcs/held-lock`) may still be in use, so it is kept and the run refused
+/// (`a-held-lock-keeps-a-worktree`).
 fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
     let local = format!("refs/heads/{branch}");
     let holder = checked_out(root, node, branch)?;
@@ -1293,6 +1295,16 @@ fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
         && clm_git::is_ancestor(root, &local, &format!("{REMOTE}/main"))?;
     if landed {
         if let Some(h) = &holder {
+            if h.held {
+                return Err(Error::Refused(format!(
+                    "{} has the landed `{branch}` checked out and a running process holds \
+                     its lock, so it may still be in use; run `{node}` again once that \
+                     process has ended, or, when nothing works in it any more, run \
+                     `git worktree unlock {}` first",
+                    h.path.display(),
+                    h.path.display()
+                )));
+            }
             free(root, node, branch, h)?;
         }
         git(root, &["branch", "-q", "-D", branch])?;
@@ -1372,10 +1384,12 @@ fn prepare(root: &Path, node: &str, branch: &str, expiry_hours: u64) -> Result<b
     Ok(false)
 }
 
-/// A worktree that has a branch checked out, and whether it's the main checkout.
+/// A worktree that has a branch checked out, whether it's the main checkout, and whether a
+/// running process holds its lock (`vcs/held-lock`).
 struct Holder {
     path: PathBuf,
     main: bool,
+    held: bool,
 }
 
 /// The worktree that has `branch` checked out, if any.
@@ -1387,6 +1401,7 @@ fn holding(root: &Path, branch: &str) -> Result<Option<Holder>, Error> {
         .map(|(i, w)| Holder {
             path: w.path,
             main: i == 0,
+            held: w.held,
         }))
 }
 
