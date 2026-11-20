@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{Exemption, Graph, Node, Requirement, Violation};
 
-/// The phrases that mark a sentence as one that places a test, which a requirement may lose
-/// with no separate yes (`cuts-are-what-a-program-lists`). A constant, changed by a code PR.
+/// The phrases that, beside the word `test` or `tests`, mark a sentence as one that places a
+/// test, which a requirement may lose with no separate yes (`cuts-are-what-a-program-lists`). A constant, changed by a code PR.
 const PLACEMENT_PHRASES: [&str; 3] = ["SHALL sit", "sat in", "is left in"];
 
 /// What a spec branch cuts, each printing as its `gate/cut` line.
@@ -182,7 +182,7 @@ fn holds_word(text: &str, word: &str) -> Option<usize> {
 }
 
 /// The first placement phrase `sentence` holds, compared without regard to case.
-pub fn places_a_test(sentence: &str) -> Option<&'static str> {
+fn placement_phrase(sentence: &str) -> Option<&'static str> {
     let lower = sentence.to_lowercase();
     PLACEMENT_PHRASES
         .iter()
@@ -191,9 +191,19 @@ pub fn places_a_test(sentence: &str) -> Option<&'static str> {
         .map(|(_, p)| p)
 }
 
-/// The sentences of `statement` that state something: each holds the word `SHALL` and no
-/// placement phrase. A sentence ends at a `.`, `?` or `!` that whitespace or the end follows.
-pub fn stating_sentences(statement: &str) -> Vec<&str> {
+/// The first placement phrase of a sentence that places a test: one that holds a phrase and
+/// also the word `test` or `tests`, without regard to case; nothing for any other sentence.
+pub fn places_a_test(sentence: &str) -> Option<&'static str> {
+    let lower = sentence.to_lowercase();
+    if holds_word(&lower, "test").is_none() && holds_word(&lower, "tests").is_none() {
+        return None;
+    }
+    placement_phrase(sentence)
+}
+
+/// Every sentence of `statement` that isn't empty once trimmed, in order. A sentence ends at a
+/// `.`, `?` or `!` that whitespace or the statement's end follows.
+pub fn sentences(statement: &str) -> Vec<&str> {
     let mut sentences = Vec::new();
     let mut start = 0;
     for (at, c) in statement.char_indices() {
@@ -209,10 +219,26 @@ pub fn stating_sentences(statement: &str) -> Vec<&str> {
         }
     }
     sentences.push(statement[start..].trim());
+    sentences.retain(|s| !s.is_empty());
     sentences
+}
+
+/// The sentences of `statement` that state something: each holds the word `SHALL` and places
+/// no test.
+pub fn stating_sentences(statement: &str) -> Vec<&str> {
+    sentences(statement)
         .into_iter()
         .filter(|s| holds_word(s, "SHALL").is_some() && places_a_test(s).is_none())
         .collect()
+}
+
+/// How many sentences of `statement` stated something under rules versions 1 to 3: those
+/// holding `SHALL` and no placement phrase at all, whatever else they hold (`rules-version`).
+fn stated_before_v4(statement: &str) -> usize {
+    sentences(statement)
+        .into_iter()
+        .filter(|s| holds_word(s, "SHALL").is_some() && placement_phrase(s).is_none())
+        .count()
 }
 
 /// A requirement's statement, its text above its first `####` heading, and its scenarios in
@@ -385,6 +411,17 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
         .chain(shortened)
         .chain(tests)
         .collect()
+}
+
+/// Whether a requirement both graphs hold states fewer sentences at the head than at the
+/// base when counted as rules versions 1 to 3 counted them, every sentence holding a
+/// placement phrase left out (`rules-version`).
+pub(crate) fn shortened_before_v4(base: &Graph, head: &Graph) -> bool {
+    let now = requirements(head);
+    requirements(base).iter().any(|(id, (_, r))| {
+        now.get(id)
+            .is_some_and(|(_, h)| stated_before_v4(&outline(h).0) < stated_before_v4(&outline(r).0))
+    })
 }
 
 /// One side of a branch, its merge base or its head: the spec graph loaded there, the

@@ -1623,7 +1623,7 @@ fn policy_after(base: Option<&str>, edits: &[Edit], approved: bool) -> clm_gate:
 
 #[test]
 fn scenario_code_branch_weakens_the_policy() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(Some(POLICY), &[("clm.toml", Some(&weakened))], false);
     assert_eq!((out.kind, out.review), (Kind::Spec, true));
@@ -1644,7 +1644,7 @@ fn scenario_the_gate_agrees() {
 
 #[test]
 fn scenario_policy_set_where_it_was_unset() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let unset = "[land]\ncheck = \"a\"\n";
     let set = format!("approval = \"other\"\n{unset}");
     let out = policy_after(Some(unset), &[("clm.toml", Some(&set))], false);
@@ -1653,7 +1653,7 @@ fn scenario_policy_set_where_it_was_unset() {
 
 #[test]
 fn scenario_approved_policy_change() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(Some(POLICY), &[("clm.toml", Some(&weakened))], true);
     assert_eq!(
@@ -1666,7 +1666,7 @@ fn scenario_approved_policy_change() {
 
 #[test]
 fn scenario_policy_change_with_code() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(
         Some(POLICY),
@@ -1682,7 +1682,7 @@ fn scenario_policy_change_with_code() {
 
 #[test]
 fn scenario_other_setting_changed() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let edited = POLICY
         .replace("# who approves", "# who may approve")
         .replace("check = \"a\"", "check = \"b\"");
@@ -1704,7 +1704,7 @@ fn scenario_other_setting_changed() {
 
 #[test]
 fn scenario_unparseable_clm_toml() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let out = policy_after(
         Some(POLICY),
         &[("clm.toml", Some("approval = \"other\"\n[land\n"))],
@@ -1715,7 +1715,7 @@ fn scenario_unparseable_clm_toml() {
 
 #[test]
 fn editing_an_unparseable_clm_toml_is_a_spec_change() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let out = policy_after(
         Some("approval = \"other\"\n[land\n"),
         &[("clm.toml", Some("approval = \"any\"\n[land\n"))],
@@ -1726,14 +1726,14 @@ fn editing_an_unparseable_clm_toml_is_a_spec_change() {
 
 #[test]
 fn deleting_a_clm_toml_that_set_the_policy_is_a_spec_change() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let out = policy_after(Some(POLICY), &[("clm.toml", None)], false);
     assert_eq!(verdict(&out), (Kind::Spec, true, false));
 }
 
 #[test]
 fn adding_a_clm_toml_without_the_policy_is_code() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let out = policy_after(
         None,
         &[
@@ -1752,7 +1752,7 @@ fn adding_a_clm_toml_without_the_policy_is_code() {
 
 #[test]
 fn a_clm_toml_that_isnt_utf8_is_a_spec_change() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let dir = tier_repo(&[("clm.toml", POLICY)]);
     fs::write(
         dir.path().join("clm.toml"),
@@ -1765,7 +1765,7 @@ fn a_clm_toml_that_isnt_utf8_is_a_spec_change() {
 
 #[test]
 fn a_value_config_would_reject_is_compared_as_a_value() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let same = policy_after(
         Some("approval = 1\n"),
         &[
@@ -1812,7 +1812,7 @@ fn evaluate_at_reads_changes_and_the_policy_at_the_head() {
 
 #[test]
 fn a_nested_clm_toml_is_not_the_policy() {
-    // req:gate/approval-setting@c9f7ac40
+    // req:gate/approval-setting@937b3676
     let out = policy_after(
         None,
         &[("sub/clm.toml", Some("approval = \"any\"\n"))],

@@ -12,7 +12,7 @@ mod cuts;
 mod policy;
 
 pub use cuts::{
-    Cut, ListLine, Side, TestList, cuts, cuts_or_unloaded, list_lines, places_a_test,
+    Cut, ListLine, Side, TestList, cuts, cuts_or_unloaded, list_lines, places_a_test, sentences,
     stating_sentences, widened_exemptions,
 };
 
@@ -82,12 +82,13 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
 
 /// The version of the rules by which `evaluate_at` decides a branch's kind and whether it
 /// needs review (`rules-version`): 1 before `cuts` made a branch need review, 2 before a
-/// changed outcome did, 3 since.
-pub const RULES: u32 = 3;
+/// changed outcome did, 3 before a sentence holding a placement phrase and not the word
+/// `test` counted as stating, 4 before paths were read relative to the CLM root, 5 since.
+pub const RULES: u32 = 5;
 
 /// `evaluate_at` as the gate decided under the rules of version `rules` (`rules-version`):
-/// only the review, and with it `gate/approval`, depends on the version. `Err` for a version
-/// this gate doesn't know, as for git failing.
+/// the reading of paths and the review, and with it `gate/approval`, depend on the version.
+/// `Err` for a version this gate doesn't know, as for git failing.
 pub fn evaluate_by(
     repo: &Path,
     base: &str,
@@ -117,13 +118,15 @@ pub fn evaluate_by(
     .map_err(|e| e.to_string())?;
     let range = format!("{base}...{head}");
     let merge_base = clm_git::git(repo, &["merge-base", base, head]).map_err(|e| e.to_string())?;
+    let root = Root::of(repo, rules)?;
     let at = At {
         repo,
         merge_base: &merge_base,
         head,
+        root: &root,
     };
     violations.extend(up_to_date(&at, base, &here)?);
-    let changed = changed_files(repo, &range)?;
+    let changed = changed_files(repo, &root, &range)?;
     let entries: Vec<(char, &str)> = changed.iter().map(|(s, p)| (*s, p.as_str())).collect();
     let with_status = |s: char| -> BTreeSet<&str> {
         entries
@@ -139,12 +142,12 @@ pub fn evaluate_by(
             && added.contains(to)
             && status_only(
                 repo,
-                &[&format!("{merge_base}:{from}"), &format!("{head}:{to}")],
+                &[&at.object(&merge_base, from), &at.object(head, to)],
                 true,
             )?)
     };
     let resolved = if deleted.iter().any(|f| f.starts_with("backlog/")) {
-        let mut slugs = resolved_slugs(repo, &merge_base)?;
+        let mut slugs = resolved_slugs(&at)?;
         slugs.extend(fixed_bugs(&at, &entries, &deleted)?);
         slugs
     } else {
@@ -257,8 +260,11 @@ pub fn evaluate_by(
         // modifies, a status-only edit included, as the Worker passes them.
         let changes = change_frontmatters(&at, &entries, &new_archived)?;
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
-        let (listed, widened) = read_cuts(&at, &entries, &mut violations)?;
+        let (listed, widened, shortened_before_v4) = read_cuts(&at, &entries, &mut violations)?;
         cut = listed;
+        // Under versions 1 to 3 a shortened requirement counted every sentence holding a
+        // placement phrase as one that places a test.
+        let counted_before_v4 = |c: &Cut| !matches!(c, Cut::Shortened { .. });
         let added = added_exemptions(&at, &entries)?;
         // Read from the two graphs, or from the text when they don't load, under every
         // version, so the versions differ only by the cuts.
@@ -277,7 +283,17 @@ pub fn evaluate_by(
             None if rules == 2 => {
                 needs_review_of(&paths, setting_changed, &changes)
                     || widened
-                    || cut.iter().any(|c| !matches!(c, Cut::Outcome { .. }))
+                    || shortened_before_v4
+                    || cut
+                        .iter()
+                        .any(|c| counted_before_v4(c) && !matches!(c, Cut::Outcome { .. }))
+            }
+            // Version 3, before a sentence holding a phrase and no word `test` stated.
+            None if rules == 3 => {
+                needs_review_of(&paths, setting_changed, &changes)
+                    || widened
+                    || shortened_before_v4
+                    || cut.iter().any(counted_before_v4)
             }
             // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
             None => {
@@ -336,30 +352,32 @@ fn test_list(file: &str) -> Option<&str> {
 /// when the diff touches `specs/` or a `deleted-tests.txt`. Adds a `gate/deleted-tests`
 /// violation for each line a list gains that names no citing test at the head. When either
 /// side's specs don't load, the one cut says so and whether an exemption widened is `None`.
+/// The third value says whether a requirement states fewer sentences as rules versions 1
+/// to 3 counted them (`rules-version`), false when a side doesn't load.
 fn read_cuts(
     at: &At,
     entries: &[(char, &str)],
     violations: &mut Vec<Violation>,
-) -> Result<(Vec<Cut>, Option<bool>), String> {
+) -> Result<(Vec<Cut>, Option<bool>, bool), String> {
     let lists: Vec<&str> = entries
         .iter()
         .filter(|(status, file)| matches!(status, 'A' | 'M') && test_list(file).is_some())
         .map(|&(_, file)| file)
         .collect();
     if lists.is_empty() && !entries.iter().any(|(_, f)| f.starts_with(SPECS)) {
-        return Ok((Vec::new(), Some(false)));
+        return Ok((Vec::new(), Some(false), false));
     }
     let mut texts = Vec::new();
     for path in lists {
-        let head = text_if_any(at.repo, at.head, path)?.unwrap_or_default();
-        let mut base = text_if_any(at.repo, at.merge_base, path)?;
+        let head = text_if_any(at, at.head, path)?.unwrap_or_default();
+        let mut base = text_if_any(at, at.merge_base, path)?;
         // An archived list with no text of its own at the merge base takes the live one's.
         if base.is_none()
             && path.starts_with(ARCHIVE)
             && let Some(id) = test_list(path)
         {
             base = text_if_any(
-                at.repo,
+                at,
                 at.merge_base,
                 &format!("{CHANGES}{id}/deleted-tests.txt"),
             )?;
@@ -386,7 +404,7 @@ fn read_cuts(
                     let text = match files.get(&file) {
                         Some(text) => text,
                         None => {
-                            let text = text_if_any(at.repo, at.head, &file)?.unwrap_or_default();
+                            let text = text_if_any(at, at.head, &file)?.unwrap_or_default();
                             files.entry(file.clone()).or_insert(text)
                         }
                     };
@@ -404,8 +422,8 @@ fn read_cuts(
         }
     }
 
-    let (base, base_violations) = load_graph_at(at.repo, at.merge_base, true)?;
-    let (head, head_violations) = load_graph_at(at.repo, at.head, true)?;
+    let (base, base_violations) = load_graph_at(at, at.merge_base, true)?;
+    let (head, head_violations) = load_graph_at(at, at.head, true)?;
     let listed = cuts_or_unloaded(
         &Side {
             graph: &base,
@@ -421,18 +439,20 @@ fn read_cuts(
     );
     let loaded = !listed.iter().any(|c| matches!(c, Cut::Unloaded { .. }));
     let widened = loaded.then(|| !widened_exemptions(&base, &head).is_empty());
-    Ok((listed, widened))
+    let shortened_before_v4 = loaded && cuts::shortened_before_v4(&base, &head);
+    Ok((listed, widened, shortened_before_v4))
 }
 
-/// The text of `<rev>:<path>`, invalid UTF-8 replaced, or `None` when `rev` holds no such
-/// file; any other failure of git fails the gate.
-fn text_if_any(repo: &Path, rev: &str, path: &str) -> Result<Option<String>, String> {
-    match clm_git::git(repo, &["cat-file", "-e", &format!("{rev}:{path}")]) {
+/// The text of the root's file at `path` at `rev`, invalid UTF-8 replaced, or `None` when
+/// `rev` holds no such file; any other failure of git fails the gate.
+fn text_if_any(at: &At, rev: &str, path: &str) -> Result<Option<String>, String> {
+    let object = at.object(rev, path);
+    match clm_git::git(at.repo, &["cat-file", "-e", &object]) {
         Ok(_) => {}
         Err(clm_git::Error::Failed { .. }) => return Ok(None),
         Err(e) => return Err(e.to_string()),
     }
-    let bytes = show_bytes(repo, &format!("{rev}:{path}"))?;
+    let bytes = show_bytes(at.repo, &object)?;
     Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
 
@@ -455,8 +475,9 @@ pub fn files_outside_spec_paths(
     )
     .map_err(|e| e.to_string())?;
     let merge_base = clm_git::git(repo, &["merge-base", base, &head]).map_err(|e| e.to_string())?;
+    let root = Root::of(repo, RULES)?;
     let mut files = Vec::new();
-    for (status, path) in changed_files(repo, &format!("{base}...{head}"))? {
+    for (status, path) in changed_files(repo, &root, &format!("{base}...{head}"))? {
         if is_spec_path(&path) {
             continue;
         }
@@ -465,6 +486,7 @@ pub fn files_outside_spec_paths(
                 repo,
                 merge_base: &merge_base,
                 head: &head,
+                root: &root,
             };
             if policy_change(&at, status)? != PolicyChange::Other {
                 continue;
@@ -504,7 +526,7 @@ fn rename_change(
     let [path] = added.as_slice() else {
         return Ok(None);
     };
-    let Ok(text) = show(at.repo, &format!("{}:{path}", at.head)) else {
+    let Ok(text) = show(at.repo, &at.object(at.head, path)) else {
         return Ok(None);
     };
     Ok(renames_of(&text)
@@ -546,7 +568,7 @@ fn change_frontmatters(
         let listed = clm_git::git(at.repo, &["ls-tree", "--name-only", at.head, "--", &path])
             .map_err(|e| e.to_string())?;
         let fm = if !listed.is_empty() {
-            String::from_utf8(show_bytes(at.repo, &format!("{}:{path}", at.head))?)
+            String::from_utf8(show_bytes(at.repo, &at.object(at.head, &path))?)
                 .ok()
                 .and_then(|t| clm_model::parse_change_frontmatter(&t))
         } else {
@@ -572,7 +594,7 @@ fn undeclared_burdens(
         .filter(|&&(status, file)| {
             status == 'A'
                 && is_backlog_item(file)
-                && backlog_kind(at.repo, at.head, file) == Some(clm_model::BacklogKind::Human)
+                && backlog_kind(at, at.head, file) == Some(clm_model::BacklogKind::Human)
         })
         .map(|(_, file)| Violation {
             path: PathBuf::from(file),
@@ -636,7 +658,7 @@ fn added_exemptions(at: &At, entries: &[(char, &str)]) -> Result<Vec<AddedExempt
         }
         let now = exemptions_in(&String::from_utf8_lossy(&show_bytes(
             at.repo,
-            &format!("{}:{file}", at.head),
+            &at.object(at.head, file),
         )?));
         if now.is_empty() {
             continue;
@@ -646,7 +668,7 @@ fn added_exemptions(at: &At, entries: &[(char, &str)]) -> Result<Vec<AddedExempt
         } else {
             exemptions_in(&String::from_utf8_lossy(&show_bytes(
                 at.repo,
-                &format!("{}:{file}", at.merge_base),
+                &at.object(at.merge_base, file),
             )?))
         };
         for (rule, files, until) in now {
@@ -696,13 +718,74 @@ fn exemptions_name_their_items(
     Ok(out)
 }
 
+/// How the gate names the CLM root's files to git (`paths-under-the-root`): `prefix` is the
+/// root's place in its repository, as `git rev-parse --show-prefix` gives it, empty at the
+/// top, and `dot` says a file at a revision is read as `<rev>:./<path>`. Rules versions 1 to
+/// 4 read paths as `git diff` prints them and `<rev>:<path>`: no prefix, no dot.
+struct Root {
+    prefix: String,
+    dot: bool,
+}
+
+impl Root {
+    /// The reading of rules version `rules` for the CLM root at `repo`.
+    fn of(repo: &Path, rules: u32) -> Result<Root, String> {
+        if rules < 5 {
+            return Ok(Root {
+                prefix: String::new(),
+                dot: false,
+            });
+        }
+        let prefix =
+            clm_git::git(repo, &["rev-parse", "--show-prefix"]).map_err(|e| e.to_string())?;
+        Ok(Root { prefix, dot: true })
+    }
+
+    /// The object naming the file at `path`, relative to the root, at `rev`.
+    fn object(&self, rev: &str, path: &str) -> String {
+        if self.dot && !self.prefix.is_empty() {
+            format!("{rev}:./{path}")
+        } else {
+            format!("{rev}:{path}")
+        }
+    }
+
+    /// A path as `git diff` prints it, relative to the repository's top, named relative to
+    /// the root: under it, the prefix taken off; outside it, the shortest path from the root,
+    /// climbing out with `../`.
+    fn name_from_top(&self, path: &str) -> String {
+        if let Some(rest) = path.strip_prefix(self.prefix.as_str()) {
+            return rest.to_string();
+        }
+        let root: Vec<&str> = self.prefix.split('/').filter(|c| !c.is_empty()).collect();
+        let parts: Vec<&str> = path.split('/').collect();
+        let shared = root.iter().zip(&parts).take_while(|(a, b)| a == b).count();
+        let mut out = "../".repeat(root.len() - shared);
+        out.push_str(&parts[shared..].join("/"));
+        out
+    }
+}
+
+/// Whether a path, relative to the CLM root, names a file outside it.
+fn outside_root(path: &str) -> bool {
+    path.starts_with("../")
+}
+
 /// The repository and the two revisions the gate compares: the merge base and the head,
-/// which is read only as a revision (`gate/evaluate-at`).
+/// which is read only as a revision (`gate/evaluate-at`), and how it names the root's files.
 #[derive(Clone, Copy)]
 struct At<'a> {
     repo: &'a Path,
     merge_base: &'a str,
     head: &'a str,
+    root: &'a Root,
+}
+
+impl At<'_> {
+    /// The object naming the root's file at `path` at `rev`.
+    fn object(&self, rev: &str, path: &str) -> String {
+        self.root.object(rev, path)
+    }
 }
 
 /// Whether `head` is a build branch, `impl/<component>`, as `HEAD` names the checked-out one.
@@ -718,12 +801,20 @@ fn is_build_branch(repo: &Path, head: &str) -> bool {
     })
 }
 
-/// `(status, path)` for each file `git diff --name-status --no-renames <range>` lists.
-fn changed_files(repo: &Path, range: &str) -> Result<Vec<(char, String)>, String> {
+/// `(status, path)` for each file `git diff --name-status --no-renames <range>` lists, each
+/// path named as `root` reads it.
+fn changed_files(repo: &Path, root: &Root, range: &str) -> Result<Vec<(char, String)>, String> {
     // `-z` gives `<status>\0<path>\0` per file, with paths unquoted.
     let changed = clm_git::git(
         repo,
-        &["diff", "--name-status", "--no-renames", "-z", range],
+        &[
+            "diff",
+            "--name-status",
+            "--no-renames",
+            "--no-relative",
+            "-z",
+            range,
+        ],
     )
     .map_err(|e| e.to_string())?;
     let fields: Vec<&str> = changed.split('\0').collect();
@@ -731,7 +822,7 @@ fn changed_files(repo: &Path, range: &str) -> Result<Vec<(char, String)>, String
         .as_chunks::<2>()
         .0
         .iter()
-        .filter_map(|[st, path]| Some((st.chars().next()?, path.to_string())))
+        .filter_map(|[st, path]| Some((st.chars().next()?, root.name_from_top(path))))
         .collect())
 }
 
@@ -753,8 +844,8 @@ fn added_change<'a>(
 /// The value of `key` in the frontmatter of the backlog file at `<rev>:<file>`, read alone
 /// so that a key the model rejects can't hide it. `None` when the file isn't UTF-8, its
 /// frontmatter doesn't parse, or `key` is missing.
-fn backlog_key(repo: &Path, rev: &str, file: &str, key: &str) -> Option<serde_yaml::Value> {
-    let text = show(repo, &format!("{rev}:{file}"))
+fn backlog_key(at: &At, rev: &str, file: &str, key: &str) -> Option<serde_yaml::Value> {
+    let text = show(at.repo, &at.object(rev, file))
         .ok()?
         .replace("\r\n", "\n");
     let (fm, _) = clm_model::split_frontmatter(&text)?;
@@ -763,16 +854,16 @@ fn backlog_key(repo: &Path, rev: &str, file: &str, key: &str) -> Option<serde_ya
 }
 
 /// The backlog item's `kind` at `<rev>:<file>`, read as `backlog_key` reads keys.
-fn backlog_kind(repo: &Path, rev: &str, file: &str) -> Option<clm_model::BacklogKind> {
-    serde_yaml::from_value(backlog_key(repo, rev, file, "kind")?).ok()
+fn backlog_kind(at: &At, rev: &str, file: &str) -> Option<clm_model::BacklogKind> {
+    serde_yaml::from_value(backlog_key(at, rev, file, "kind")?).ok()
 }
 
 /// The components a backlog item names at `<rev>:<file>`, from its `components` or, when it
 /// sets that key instead, its `nodes` (`item-components`). Empty when it sets neither;
 /// `None` when it sets both, which the model rejects, or its value isn't a list of strings.
-fn backlog_components(repo: &Path, rev: &str, file: &str) -> Option<Vec<String>> {
-    let components = backlog_key(repo, rev, file, "components");
-    let nodes = backlog_key(repo, rev, file, "nodes");
+fn backlog_components(at: &At, rev: &str, file: &str) -> Option<Vec<String>> {
+    let components = backlog_key(at, rev, file, "components");
+    let nodes = backlog_key(at, rev, file, "nodes");
     match (components, nodes) {
         (Some(_), Some(_)) => None,
         (Some(serde_yaml::Value::Null), None) | (None, Some(serde_yaml::Value::Null)) => {
@@ -787,18 +878,21 @@ fn backlog_components(repo: &Path, rev: &str, file: &str) -> Option<Vec<String>>
 /// the node frontmatter keys they declare are accepted (`declared-keys-loaded`). Each file
 /// holds what a checkout of `rev` writes (`base-specs-as-checkout`); load violations are
 /// ignored (`clm check` reports them). A `rev` without `specs/` loads empty.
-fn load_specs_at(repo: &Path, rev: &str) -> Result<clm_model::Graph, String> {
-    Ok(load_graph_at(repo, rev, false)?.0)
+fn load_specs_at(at: &At, rev: &str) -> Result<clm_model::Graph, String> {
+    Ok(load_graph_at(at, rev, false)?.0)
 }
 
 /// Loads the graph at `rev` as `load_specs_at` does, with its load violations, and, when
 /// `layers`, with `ARCHITECTURE.md` and `CAPABILITIES.md` where they exist, so the rules'
-/// `serves` resolve and a graph that loads in a checkout loads here (`cuts`).
+/// `serves` resolve and a graph that loads in a checkout loads here (`cuts`). The files are
+/// the root's: `extract_paths` takes paths from the repository's top, so each is named with
+/// the root's prefix and the graph loaded from the prefix's directory of the extraction.
 fn load_graph_at(
-    repo: &Path,
+    at: &At,
     rev: &str,
     layers: bool,
 ) -> Result<(clm_model::Graph, Vec<Violation>), String> {
+    let repo = at.repo;
     let mut paths = Vec::new();
     let tops: &[&str] = if layers {
         &["specs", "ARCHITECTURE.md", "CAPABILITIES.md"]
@@ -807,7 +901,7 @@ fn load_graph_at(
     };
     for top in tops {
         // Only git's own refusal means "no such path"; a git that can't run fails the gate.
-        match clm_git::git(repo, &["cat-file", "-e", &format!("{rev}:{top}")]) {
+        match clm_git::git(repo, &["cat-file", "-e", &at.object(rev, top)]) {
             Ok(_) => paths.push(top.to_string()),
             Err(clm_git::Error::Failed { .. }) => {}
             Err(e) => return Err(e.to_string()),
@@ -829,9 +923,11 @@ fn load_graph_at(
             .filter(|f| live_change(f).is_some_and(|(_, rest)| rest == "change.md"))
             .map(str::to_string),
     );
+    let prefix = &at.root.prefix;
+    let paths: Vec<String> = paths.iter().map(|p| format!("{prefix}{p}")).collect();
     let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
     let tmp = clm_git::extract_paths(repo, rev, &paths).map_err(|e| e.to_string())?;
-    Ok(clm_model::load(tmp.path()))
+    Ok(clm_model::load(&tmp.path().join(prefix)))
 }
 
 /// The file at `<rev>:<path>` as committed: untrimmed, and an error unless it is UTF-8.
@@ -856,7 +952,8 @@ fn live_change(file: &str) -> Option<(&str, &str)> {
 /// `HEAD`, so a branch can't list a slug and delete its item in one go. This covers the
 /// changes the branch archives too: a clean archive move keeps `resolves`, and any other
 /// `change.md` added to the archive is itself a spec change.
-fn resolved_slugs(repo: &Path, merge_base: &str) -> Result<BTreeSet<String>, String> {
+fn resolved_slugs(at: &At) -> Result<BTreeSet<String>, String> {
+    let (repo, merge_base) = (at.repo, at.merge_base);
     let listed = clm_git::git(
         repo,
         &["ls-tree", "-r", "--name-only", merge_base, "--", CHANGES],
@@ -867,7 +964,7 @@ fn resolved_slugs(repo: &Path, merge_base: &str) -> Result<BTreeSet<String>, Str
         .lines()
         .filter(|f| live_change(f).is_some_and(|(_, rest)| rest == "change.md"))
     {
-        let text = show(repo, &format!("{merge_base}:{file}"))?;
+        let text = show(repo, &at.object(merge_base, file))?;
         if let Some(fm) = clm_model::parse_change_frontmatter(&text) {
             resolved.extend(fm.resolves);
         }
@@ -892,6 +989,7 @@ fn fixed_bugs(
         repo,
         merge_base,
         head,
+        ..
     } = *at;
     let trailers = clm_git::git(
         repo,
@@ -914,19 +1012,19 @@ fn fixed_bugs(
     if named.is_empty() {
         return Ok(fixed);
     }
-    let graph = load_specs_at(repo, merge_base)?;
+    let graph = load_specs_at(at, merge_base)?;
     // The text of each code file the branch changes, at the merge base and at `HEAD`, read
     // once and only when a node's `paths` don't settle it.
     let mut texts: Option<Vec<Vec<u8>>> = None;
     for slug in named {
         let file = format!("backlog/{slug}.md");
         if !matches!(
-            backlog_kind(repo, merge_base, &file),
+            backlog_kind(at, merge_base, &file),
             Some(clm_model::BacklogKind::Bug | clm_model::BacklogKind::Deferred)
         ) {
             continue;
         }
-        let Some(nodes) = backlog_components(repo, merge_base, &file) else {
+        let Some(nodes) = backlog_components(at, merge_base, &file) else {
             continue;
         };
         let nodes: Vec<&clm_model::Node> =
@@ -962,6 +1060,7 @@ fn paths_match(at: &At, nodes: &[&clm_model::Node]) -> Result<bool, String> {
         repo,
         merge_base,
         head,
+        root,
     } = *at;
     let globs: Vec<String> = nodes
         .iter()
@@ -975,6 +1074,7 @@ fn paths_match(at: &At, nodes: &[&clm_model::Node]) -> Result<bool, String> {
         "diff",
         "--name-only",
         "--no-renames",
+        "--no-relative",
         "-z",
         merge_base,
         head,
@@ -982,9 +1082,10 @@ fn paths_match(at: &At, nodes: &[&clm_model::Node]) -> Result<bool, String> {
     ];
     args.extend(globs.iter().map(String::as_str));
     let matched = clm_git::git(repo, &args).map_err(|e| e.to_string())?;
-    Ok(matched
-        .split('\0')
-        .any(|f| !f.is_empty() && !is_spec_path(f)))
+    Ok(matched.split('\0').any(|f| {
+        let f = root.name_from_top(f);
+        !f.is_empty() && !outside_root(&f) && !is_spec_path(&f)
+    }))
 }
 
 /// The bytes of each code file in `entries` at `merge_base` and at `HEAD`, where it exists.
@@ -995,15 +1096,20 @@ fn code_texts(at: &At, entries: &[(char, &str)]) -> Vec<Vec<u8>> {
         repo,
         merge_base,
         head,
+        ..
     } = *at;
     let mut objects = String::new();
-    for &(status, file) in entries.iter().filter(|(_, f)| !is_spec_path(f)) {
+    for &(status, file) in entries
+        .iter()
+        .filter(|(_, f)| !is_spec_path(f) && !outside_root(f))
+    {
         if file.contains('\n') {
             continue;
         }
         for (exists, rev) in [(status != 'A', merge_base), (status != 'D', head)] {
             if exists {
-                objects.push_str(&format!("{rev}:{file}\n"));
+                objects.push_str(&at.object(rev, file));
+                objects.push('\n');
             }
         }
     }
@@ -1049,9 +1155,10 @@ fn unnamed_resolves(at: &At, before: &str, file: &str, id: &str) -> Result<Vec<V
         repo,
         merge_base,
         head,
+        ..
     } = *at;
     let resolves_at = |rev: &str, path: &str| {
-        show(repo, &format!("{rev}:{path}"))
+        show(repo, &at.object(rev, path))
             .ok()
             .and_then(|text| clm_model::parse_change_frontmatter(&text))
             .map(|fm| fm.resolves)
@@ -1110,7 +1217,7 @@ enum PolicyChange {
 fn policy_change(at: &At, status: char) -> Result<PolicyChange, String> {
     let side = |exists: bool, rev: &str| -> Result<Option<Vec<u8>>, String> {
         exists
-            .then(|| show_bytes(at.repo, &format!("{rev}:{POLICY}")))
+            .then(|| show_bytes(at.repo, &at.object(rev, POLICY)))
             .transpose()
     };
     let before = side(status != 'A', at.merge_base)?;
@@ -1143,9 +1250,10 @@ fn blocks_only_added(at: &At, file: &str) -> Result<bool, String> {
         repo,
         merge_base,
         head,
+        ..
     } = *at;
     let parse = |rev: &str| -> Option<(serde_yaml::Mapping, BTreeSet<String>, String)> {
-        let text = show(repo, &format!("{rev}:{file}")).ok()?;
+        let text = show(repo, &at.object(rev, file)).ok()?;
         let text = text.replace("\r\n", "\n");
         let (fm, body) = clm_model::split_frontmatter(&text)?;
         let mut fm: serde_yaml::Mapping = serde_yaml::from_str(fm).ok()?;
@@ -1195,6 +1303,7 @@ fn up_to_date(at: &At, base: &str, here: &Path) -> Result<Vec<Violation>, String
         repo,
         merge_base,
         head,
+        root,
     } = *at;
     let mut violations = Vec::new();
     match clm_git::git(repo, &["merge-tree", "--write-tree", base, head]) {
@@ -1215,6 +1324,7 @@ fn up_to_date(at: &At, base: &str, here: &Path) -> Result<Vec<Violation>, String
                 "diff",
                 "--name-only",
                 "--no-renames",
+                "--no-relative",
                 "-z",
                 merge_base,
                 rev,
@@ -1226,7 +1336,7 @@ fn up_to_date(at: &At, base: &str, here: &Path) -> Result<Vec<Violation>, String
         Ok(names
             .split('\0')
             .filter(|p| !p.is_empty())
-            .map(str::to_string)
+            .map(|p| root.name_from_top(p))
             .collect())
     };
     let ours = specs_changed(head)?;
@@ -1270,7 +1380,14 @@ pub fn foreign_files(
     )
     .map_err(|e| e.to_string())?;
     let merge_base = clm_git::git(repo, &["merge-base", base, &head]).map_err(|e| e.to_string())?;
-    let graph = load_specs_at(repo, &merge_base)?;
+    let root = Root::of(repo, RULES)?;
+    let at = At {
+        repo,
+        merge_base: &merge_base,
+        head: &head,
+        root: &root,
+    };
+    let graph = load_specs_at(&at, &merge_base)?;
     let Some(wiring) = graph.wiring() else {
         return Ok(Vec::new());
     };
@@ -1286,7 +1403,15 @@ pub fn foreign_files(
         .filter(|s| s.starts_with("capability/"))
         .collect();
     let mut found = Vec::new();
-    for (status, file) in changed_files(repo, &format!("{merge_base}...{head}"))? {
+    for (status, file) in changed_files(repo, &root, &format!("{merge_base}...{head}"))? {
+        // No component's, whatever a component's `paths` match (`paths-under-the-root`).
+        if outside_root(&file) {
+            found.push(ForeignFile {
+                path: file,
+                owner: String::new(),
+            });
+            continue;
+        }
         if is_spec_path(&file) {
             continue;
         }
@@ -1297,7 +1422,7 @@ pub fn foreign_files(
             continue;
         }
         if status == 'M' {
-            let before = show_bytes(repo, &format!("{merge_base}:{file}")).unwrap_or_default();
+            let before = show_bytes(repo, &at.object(&merge_base, &file)).unwrap_or_default();
             let before = String::from_utf8_lossy(&before);
             if clm_coverage::marker_spans(&before)
                 .iter()
@@ -1311,7 +1436,9 @@ pub fn foreign_files(
             owner: owner.to_string(),
         });
     }
-    // `git diff` lists paths in byte order, so `found` is sorted by path.
+    // `git diff` lists paths from the repository's top, so a file named from the root with
+    // `../` may come out of order.
+    found.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(found)
 }
 
@@ -1347,7 +1474,35 @@ mod tests {
         );
         let merge_base = clm_git::git(d, &["rev-parse", "HEAD"]).unwrap();
         commit(d, &[("changes/x/change.md", &change("x"))]);
-        let slugs = resolved_slugs(d, &merge_base).unwrap();
+        let root = Root::of(d, RULES).unwrap();
+        let at = At {
+            repo: d,
+            merge_base: &merge_base,
+            head: "HEAD",
+            root: &root,
+        };
+        let slugs = resolved_slugs(&at).unwrap();
         assert_eq!(slugs, BTreeSet::from(["z".to_string()]));
+    }
+
+    #[test]
+    fn a_path_is_named_from_the_root() {
+        // req:gate/paths-under-the-root@6ac586a5
+        let root = Root {
+            prefix: "a/b/".into(),
+            dot: true,
+        };
+        assert_eq!(root.name_from_top("a/b/specs/x.md"), "specs/x.md");
+        assert_eq!(root.name_from_top("a/x"), "../x");
+        assert_eq!(root.name_from_top("b"), "../../b");
+        assert_eq!(root.name_from_top("c/d/e"), "../../c/d/e");
+        // a sibling whose name begins as the root's does is outside it
+        assert_eq!(root.name_from_top("a/bc/x"), "../bc/x");
+        assert_eq!(root.object("r", "../x"), "r:./../x");
+        let top = Root {
+            prefix: String::new(),
+            dot: true,
+        };
+        assert_eq!(top.name_from_top("specs/x.md"), "specs/x.md");
     }
 }
