@@ -13,12 +13,17 @@ resolves: [run-within-can-report-a-timeout-for-a-command-that-exited-in]
 
 ## Approaches
 
-- **Taken: return the command's own outcome with what the streams held by the limit.** The command has exited, so its exit status is known and every byte it wrote is in the pipe; only a stray process keeps the stream from ending. The call waits for the streams to close until the limit passes, as `run` would wait, then returns `Ok` or `Failed` as `run` would, from the chunks the readers sent by then and in a further 100 ms. The readers send what they read a chunk at a time, so the bytes are there without the stream's end.
+- **Taken: return the command's own outcome soon after it exits.** The command has exited, so its exit status is known and every byte it wrote is in the pipe; only a stray process keeps the stream from ending. The call waits for the streams to close for at most 100 ms after the command exits, then returns `Ok` or `Failed` as `run` would, from the chunks the readers sent by then. The readers send what they read a chunk at a time, so the bytes are there without the stream's end.
+- **Not taken: wait for the streams until the limit passes, as `run` would wait.** It keeps what the stray process writes later, but both callers pass what remains of a budget shared by several commands (`clm-guard`'s push check, 20 s, and its release lookup, 30 s): a query that exited at once would spend the rest of the budget waiting, and every query after it would then time out, so the push check would block the push as unanswered, the failure this change removes. The builder check found it.
 - **Not taken: accept the timed-out error and reword the requirement to say so.** It reports a command that succeeded as one that didn't, which every caller then treats as a failure of the command.
-- **Not taken: stop waiting for the streams as soon as the command exits.** It returns sooner, but drops anything the command's own children write after it exits and before the limit, which `run` would include; waiting until the limit keeps the call as close to `run` as the limit allows, and no caller has needed the shorter wait (`yagni`).
 
 ## Outcome
 
 - **`vcs`**: `bounded-runs` states what `run_within` returns for a command that exited in time while a process it started holds a pipe, with two scenarios, one for a success and one for a failure. The Design says how the readers make the bytes available without the stream's end.
 
-Edge cases the build knows it needs: the 100 ms after the limit for bytes still in a pipe's buffer, within the requirement's one second.
+Edge cases the build knows it needs: the 100 ms after the command exits for bytes still in a pipe's buffer, within the requirement's one second. The test `a_command_that_exits_but_leaves_the_pipes_open` in `crates/clm-git/tests/bounded.rs`, which asserts the timed-out error, is rewritten to the new scenario under its own name, so no citing test is lost.
+
+## Open questions
+
+- The `ssh` control master is the case known to hold a pipe; none of the guard's current queries starts `ssh`, so the bug was read from the code, not seen. The fix keeps `run_within` true to its requirement for any caller.
+
