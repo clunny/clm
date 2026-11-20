@@ -32,7 +32,7 @@ The plan `backlog/a-passing-check-proves-less-than-the-spec-claims` ends with ph
 
 ## What the requirements no longer state
 
-- `machine/machine-report`: that memory is "`unknown` for a reading whose total is 0, whose numbers are printed all the same". No reading the system gives reaches the judge with a total of 0. The code keeps its guard against dividing by zero and its test, which no requirement states.
+- `machine/machine-report`: that memory is "`unknown` for a reading whose total is 0, whose numbers are printed all the same". No reading the system gives reaches the judge with a total of 0. The code keeps its guard against dividing by zero, and `machine`'s Design says why no requirement states its outcome, so the build knows the first half of `a_memory_total_of_zero_is_unknown_and_printed` asserts nothing stated: it re-cites the test for its disk half, which the requirement states, and may rename it for that.
 - `machine/machine-report`: that "a disk whose total is 0" is `critical` whatever is free; it now says so of a disk whose total and free space are both 0.
 
 Neither is a sentence holding `SHALL`, and both were written on 2026-11-19 by wave 1.
