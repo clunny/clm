@@ -78,7 +78,7 @@ fn the_command_prints_what_it_did_and_exits_zero() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_refusal_exits_one_and_writes_nothing() {
     let dir = repo(
         "---\nstatus: proposed\nrenames:\n  - requirement: a/none\n    to: y\n---\n\n## Intent\nr\n",

@@ -472,7 +472,6 @@ fn rebase_element(
     if let Some(s) = section(name) {
         let range = s.heading + 1..s.end;
         if element == "frontmatter" {
-
             edit_lines(&mut lines, range, |t| edits.values(t, &REFERENCE_KEYS));
         } else {
             edit_lines(&mut lines, range, |t| edits.body(t, &plain));
@@ -625,8 +624,19 @@ fn plan(graph: &Graph, id: &str, renames: &[Rename]) -> Result<Plan, Failure> {
             }
         }
     }
+    let edits = Edits::new(ids, slugs, terms);
+    for node in graph.nodes.values() {
+        let fm = split_frontmatter(&node.source).map_or("", |(fm, _)| fm);
+        if let Some(key) = edits.spanning(fm, &REFERENCE_KEYS) {
+            return refuse(format!(
+                "component `{}`'s `{key}` spans more than one line and names a renamed ID, \
+                 which its delta can't modify (apply/frontmatter); write it on one line first",
+                node.id
+            ));
+        }
+    }
     Ok(Plan {
-        edits: Edits::new(ids, slugs, terms),
+        edits,
         components,
         requirements,
         renamed: renames.iter().map(pair).collect(),
@@ -663,9 +673,7 @@ fn generate(
     for node in graph.nodes.values() {
         let heads = headings(&plan, &node.id, "### Requirement:");
         let (fm, body) = split_frontmatter(&node.source).unwrap_or(("", &node.source));
-        let fm = plan
-            .edits
-            .values(fm, &REFERENCE_KEYS);
+        let fm = plan.edits.values(fm, &REFERENCE_KEYS);
         let source = format!("---\n{fm}\n---\n{}", plan.edits.body(body, &heads));
         let delta = match plan.components.get(&node.id) {
             Some(new_id) => {

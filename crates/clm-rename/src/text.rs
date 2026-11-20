@@ -98,6 +98,38 @@ impl Edits {
             .collect()
     }
 
+    /// The first of `keys` in frontmatter `text` whose value spans more than one line and
+    /// names a renamed ID, which a delta can't modify (`apply/frontmatter`).
+    pub(crate) fn spanning<'k>(&self, text: &str, keys: &[&'k str]) -> Option<&'k str> {
+        let mut at: Option<(&'k str, String, usize)> = None;
+        let mut found = None;
+        let mut close = |at: Option<(&'k str, String, usize)>| {
+            if let Some((key, value, lines)) = at
+                && lines > 1
+                && self.tokens(&value) != value
+            {
+                found = found.or(Some(key));
+            }
+        };
+        for line in text.lines() {
+            if line.starts_with([' ', '\t', '-']) {
+                if let Some((_, value, lines)) = &mut at {
+                    value.push_str(line);
+                    *lines += 1;
+                }
+                continue;
+            }
+            close(at.take());
+            if let Some((key, value)) = line.split_once(':')
+                && let Some(key) = keys.iter().find(|k| **k == key)
+            {
+                at = Some((key, value.to_string(), 1));
+            }
+        }
+        close(at);
+        found
+    }
+
     fn tokens(&self, value: &str) -> String {
         let id_char = |c: char| c.is_alphanumeric() || "_./-".contains(c);
         let mut out = String::new();

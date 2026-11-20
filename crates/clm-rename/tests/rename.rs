@@ -257,7 +257,103 @@ fn a_decision_with_the_slug_makes_it_ambiguous() {
 }
 
 #[test]
-// req:rename/component-rename@4e038ba9
+// req:rename/refusals@d7194f56
+fn a_block_style_list_in_a_component() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(d, "specs/c/SPEC.md", &node("", "d", &[("z", "Z SHALL.")]));
+    write(
+        d,
+        "specs/b/SPEC.md",
+        &node("depends_on:\n  - a\n  - c\n", "d", &[("w", "W SHALL.")]),
+    );
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - component: a\n    to: d\n", ""),
+    );
+    let before = snapshot(d);
+    let why = rename(d, "r").unwrap_err().to_string();
+    assert!(why.contains("`b`") && why.contains("`depends_on`"), "{why}");
+    assert_eq!(snapshot(d), before);
+}
+
+#[test]
+// req:rename/refusals@d7194f56
+fn a_directory_in_the_changes_deltas() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(d, "changes/r/deltas/a.md", "not a delta\n");
+    write(d, "changes/r/deltas/sub/z.md", "nor this\n");
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - requirement: a/x\n    to: y\n", ""),
+    );
+    let before = snapshot(d);
+    let failure = rename(d, "r").unwrap_err();
+    assert_eq!(failure.exit_code(), 1);
+    assert!(
+        failure.to_string().contains("changes/r/deltas/sub"),
+        "{failure}"
+    );
+    assert_eq!(snapshot(d), before);
+}
+
+#[test]
+// req:rename/refusals@d7194f56
+fn another_change_with_a_delta_for_a_descendant_refuses() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(d, "specs/a/c/SPEC.md", &node("", "d", &[("y", "Y SHALL.")]));
+    write(
+        d,
+        "changes/y/change.md",
+        "---\nstatus: approved\n---\n\n## Intent\nY.\n",
+    );
+    write(
+        d,
+        "changes/y/deltas/a.c.md",
+        "---\ncomponent: a.c\n---\n## ADDED Requirements\n### Requirement: more\nMore SHALL hold.\n\n#### Scenario: holds\n- ok\n",
+    );
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - component: a\n    to: b\n", ""),
+    );
+    let before = snapshot(d);
+    let why = rename(d, "r").unwrap_err().to_string();
+    assert!(why.contains("change `y`") && why.contains("`a.c`"), "{why}");
+    assert_eq!(snapshot(d), before);
+}
+
+/// Every file under `d` outside `.git`, with its bytes.
+fn snapshot(d: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+    let mut files = Vec::new();
+    let mut dirs = vec![d.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().is_some_and(|n| n == ".git") {
+                continue;
+            }
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                let bytes = fs::read(&path).unwrap();
+                files.push((path.strip_prefix(d).unwrap().to_path_buf(), bytes));
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+#[test]
+// req:rename/refusals@d7194f56
 fn a_component_and_its_own_rule_are_not_renamed_together() {
     let dir = repo();
     let d = dir.path();
@@ -584,7 +680,7 @@ fn a_heading_in_fenced_code() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_term_that_is_nowhere_refuses_and_writes_nothing() {
     let dir = terms_repo("grommet stub", "spare part");
     let d = dir.path();
@@ -894,7 +990,7 @@ fn the_report_is_in_record_order_and_sorted() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_change_that_is_not_proposed_is_refused() {
     let dir = repo();
     let d = dir.path();
@@ -910,7 +1006,7 @@ fn a_change_that_is_not_proposed_is_refused() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_target_that_exists_refuses_and_writes_nothing() {
     let dir = repo();
     let d = dir.path();
@@ -927,7 +1023,7 @@ fn a_target_that_exists_refuses_and_writes_nothing() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_move_the_model_rejects_names_its_rule_and_entry() {
     let dir = repo();
     let d = dir.path();
@@ -945,7 +1041,7 @@ fn a_move_the_model_rejects_names_its_rule_and_entry() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_loaded_change_with_a_violation_is_refused() {
     let dir = repo();
     let d = dir.path();
@@ -959,7 +1055,7 @@ fn a_loaded_change_with_a_violation_is_refused() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn the_archived_record_loads_and_keeps_its_renames() {
     let dir = repo();
     let d = dir.path();
@@ -977,7 +1073,7 @@ fn the_archived_record_loads_and_keeps_its_renames() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_change_without_renames_and_a_missing_name_refuse() {
     let dir = repo();
     let d = dir.path();
@@ -1030,7 +1126,7 @@ fn contested_by(delta: &str) -> (TempDir, String) {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn another_change_that_modifies_the_requirement_refuses() {
     let (dir, source) = contested_by(
         "---\ncomponent: a\n---\n## MODIFIED Requirements\n### Requirement: old <!-- base: BASE -->\nOld SHALL hold more.\n\n#### Scenario: holds\n- ok\n",
@@ -1044,7 +1140,7 @@ fn another_change_that_modifies_the_requirement_refuses() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn another_change_that_removes_the_requirement_refuses() {
     let (dir, _) = contested_by(
         "---\ncomponent: a\n---\n## REMOVED Requirements\n### Requirement: old <!-- base: BASE -->\n",
@@ -1054,7 +1150,7 @@ fn another_change_that_removes_the_requirement_refuses() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn another_change_with_a_delta_for_the_component_refuses() {
     let (dir, source) = contested();
     let d = dir.path();
@@ -1077,7 +1173,7 @@ fn another_change_with_a_delta_for_the_component_refuses() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn another_change_adding_a_requirement_to_the_node_does_not_refuse() {
     let (dir, _) = contested_by(
         "---\ncomponent: a\n---\n## ADDED Requirements\n### Requirement: more\nMore SHALL hold.\n\n#### Scenario: holds\n- ok\n",
@@ -1202,7 +1298,7 @@ fn other_requirements_markers_and_bare_markers_are_handled() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn an_archived_change_and_the_changes_own_old_deltas_do_not_refuse() {
     let (dir, _) = contested();
     let d = dir.path();
@@ -1227,7 +1323,7 @@ fn an_archived_change_and_the_changes_own_old_deltas_do_not_refuse() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn an_applied_change_does_not_refuse() {
     let (dir, _) = contested_by(
         "---\ncomponent: a\n---\n## REMOVED Requirements\n### Requirement: old <!-- base: BASE -->\n",
@@ -1242,7 +1338,7 @@ fn an_applied_change_does_not_refuse() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_missing_component_and_an_existing_requirement_refuse() {
     let dir = repo();
     let d = dir.path();
@@ -1455,7 +1551,10 @@ fn a_reference_in_fenced_code() {
     );
     rename(d, "r").unwrap();
     let e = read(d, "specs/e/SPEC.md");
-    assert!(e.contains("  ~~~\n  see `a/x`\n  ~~~\n\nsee `a/y`\n"), "{e}");
+    assert!(
+        e.contains("  ~~~\n  see `a/x`\n  ~~~\n\nsee `a/y`\n"),
+        "{e}"
+    );
 }
 
 #[test]
@@ -1522,7 +1621,7 @@ fn a_marker_in_the_archive() {
         "changes/archive/old/deltas/a.md",
         "---\ncomponent: a\n---\n## ADDED Requirements\n### Requirement: x\nX SHALL.\n\n#### Scenario: holds\n- ok\n",
     );
-    let test =|id: &str| format!("// {}{id}\n#[test]\nfn t() {{}} // a/x stays\n", "req:");
+    let test = |id: &str| format!("// {}{id}\n#[test]\nfn t() {{}} // a/x stays\n", "req:");
     write(d, "changes/archive/old/assets/a/t.rs", &test("a/x"));
     write(d, "docs/decisions/d.txt", "`a/x`\n");
     write(
@@ -1531,10 +1630,7 @@ fn a_marker_in_the_archive() {
         &change("  - requirement: a/x\n    to: y\n", ""),
     );
     rename(d, "r").unwrap();
-    assert_eq!(
-        read(d, "changes/archive/old/assets/a/t.rs"),
-        test("a/y")
-    );
+    assert_eq!(read(d, "changes/archive/old/assets/a/t.rs"), test("a/y"));
     assert_eq!(read(d, "docs/decisions/d.txt"), "`a/x`\n");
     let graph = clm_model::load(d).0;
     let scan = clm_coverage::scan(d);
