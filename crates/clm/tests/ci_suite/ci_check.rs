@@ -3324,6 +3324,31 @@ fn the_further_mutants_of_the_requirements_own_code_come_first() {
 }
 
 #[test]
+fn a_mutants_share_is_its_best_lines_capped_at_one_and_ties_keep_the_list_order() {
+    // req:ci/mutate-script@b6d5d850
+    let tree = share_tree(&["x"], 3);
+    // In list order: `low` (share 0.1); `span`, whose line 5 has 0.25 and line 6 has 1;
+    // `unrun`, whose line no test of the package runs (1); `even` (1); and `over`, whose line
+    // the block's tests run twice and the package's once (2, so 1).
+    tree.report(
+        "list",
+        "9 9 crates/clm-check/src/lib.rs:9:5: replace low with ()\n5 6 crates/clm-check/src/lib.rs:5:5: replace span with ()\n8 8 crates/clm-check/src/lib.rs:8:5: replace unrun with ()\n10 10 crates/clm-check/src/lib.rs:10:5: replace even with ()\n7 7 crates/clm-check/src/lib.rs:7:5: replace over with ()\n",
+    );
+    tree.report("lcov-run", "5\n6\n7 2\n8\n9\n10\n");
+    tree.report("lcov-run-all", "5 4\n6 1\n7 1\n9 10\n10 1\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 3"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    let named: Vec<&str> = ["low", "span", "unrun", "even", "over"]
+        .into_iter()
+        .filter(|m| tries[0].contains(&format!("replace {m} ")))
+        .collect();
+    assert_eq!(named, ["span", "unrun", "even"], "{}", tries[0]);
+}
+
+#[test]
 fn no_more_further_mutants_than_the_limit_runs_no_package() {
     // req:ci/mutate-script@b6d5d850
     let tree = share_tree(&["x"], 2);
