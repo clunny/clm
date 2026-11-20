@@ -318,6 +318,108 @@ fn reads_at_a_revision_name_the_roots_file() {
 }
 
 #[test]
+fn diff_relative_changes_nothing() {
+    // req:gate/paths-under-the-root@6ac586a5
+    // git's `diff.relative` would print paths from `tool/` and drop those outside it
+    let dir = repo("");
+    let d = dir.path();
+    git(d, &["config", "diff.relative", "true"]);
+    write(d, "tool/ARCHITECTURE.md", "invariants, more\n");
+    commit(d, "architecture");
+    let out = evaluate_at(&d.join("tool"), "main", "HEAD", false).unwrap();
+    assert_eq!((out.kind, out.review), (Kind::Spec, true));
+    write(d, "b", "changed\n");
+    commit(d, "and a file outside the root");
+    let out = evaluate_at(&d.join("tool"), "main", "HEAD", false).unwrap();
+    assert_eq!(out.kind, Kind::Mixed);
+}
+
+#[test]
+fn foreign_files_are_sorted_from_the_root() {
+    // req:gate/paths-under-the-root@6ac586a5
+    let dir = repo("wiring: [\"Cargo.lock\"]\n");
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    write(
+        d,
+        "tool/specs/b/SPEC.md",
+        &A.replace("title: A", "title: B")
+            .replace("crates/a/**", "crates/b/**"),
+    );
+    write(d, "tool/crates/b/src/lib.rs", "pub fn b() {}\n");
+    commit(d, "b");
+    git(d, &["checkout", "-q", "-B", "pr"]);
+    write(d, "tool/crates/b/src/lib.rs", "pub fn changed() {}\n");
+    write(d, "z", "after tool/ at the top\n");
+    commit(d, "h");
+    let found = foreign_files(&d.join("tool"), "main", "HEAD", "a").unwrap();
+    let found: Vec<(&str, &str)> = found
+        .iter()
+        .map(|f| (f.path.as_str(), f.owner.as_str()))
+        .collect();
+    assert_eq!(found, [("../z", ""), ("crates/b/src/lib.rs", "b")]);
+}
+
+#[test]
+fn a_marker_outside_the_root_earns_no_code_fix() {
+    // req:gate/paths-under-the-root@6ac586a5
+    let dir = repo("");
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    write(
+        d,
+        "tool/backlog/x.md",
+        "---\nkind: bug\ncomponents: [a]\n---\nBroken.\n",
+    );
+    write(d, "t.rs", concat!("// req", ":a/x@00000000\nfn t() {}\n"));
+    commit(d, "the bug");
+    git(d, &["checkout", "-q", "-B", "pr"]);
+    write(d, "t.rs", concat!("// req", ":a/x@00000000\nfn t() { }\n"));
+    remove(d, "tool/backlog/x.md");
+    commit(d, "fix it\n\nResolves: backlog/x");
+    let out = evaluate_at(&d.join("tool"), "main", "HEAD", false).unwrap();
+    assert_eq!(out.kind, Kind::Mixed);
+}
+
+#[test]
+fn changes_and_backlog_items_are_the_roots() {
+    // req:gate/paths-under-the-root@6ac586a5
+    let dir = repo("");
+    let d = dir.path();
+    // a human-task item the branch adds beside a change with no burdens
+    write(
+        d,
+        "tool/changes/c/change.md",
+        "---\nstatus: proposed\n---\n\n## Intent\nx\n",
+    );
+    write(
+        d,
+        "tool/backlog/h.md",
+        "---\nkind: human-task\n---\nMake a key.\n",
+    );
+    commit(d, "a human step");
+    let out = evaluate_at(&d.join("tool"), "main", "HEAD", false).unwrap();
+    let rules: Vec<&str> = out.violations.iter().map(|v| v.rule).collect();
+    assert!(rules.contains(&"gate/undeclared-burden"), "{rules:?}");
+
+    // an item a live change on main resolves, deleted by a build
+    git(d, &["checkout", "-q", "main"]);
+    write(
+        d,
+        "tool/changes/c/change.md",
+        "---\nstatus: applied\nresolves: [x]\n---\n\n## Intent\nx\n",
+    );
+    write(d, "tool/backlog/x.md", "---\nkind: idea\n---\nx\n");
+    commit(d, "resolves x");
+    git(d, &["checkout", "-q", "-B", "build"]);
+    write(d, "tool/crates/a/src/lib.rs", "pub fn built() {}\n");
+    remove(d, "tool/backlog/x.md");
+    commit(d, "build it");
+    let out = evaluate_at(&d.join("tool"), "main", "HEAD", false).unwrap();
+    assert_eq!(out.kind, Kind::Code, "{:?}", out.violations);
+}
+
+#[test]
 fn a_spec_changed_on_both_sides_is_named_from_the_root() {
     // req:gate/paths-under-the-root@6ac586a5
     let dir = repo("");

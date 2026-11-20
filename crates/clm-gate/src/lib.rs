@@ -743,7 +743,7 @@ impl Root {
 
     /// The object naming the file at `path`, relative to the root, at `rev`.
     fn object(&self, rev: &str, path: &str) -> String {
-        if self.dot {
+        if self.dot && !self.prefix.is_empty() {
             format!("{rev}:./{path}")
         } else {
             format!("{rev}:{path}")
@@ -807,7 +807,14 @@ fn changed_files(repo: &Path, root: &Root, range: &str) -> Result<Vec<(char, Str
     // `-z` gives `<status>\0<path>\0` per file, with paths unquoted.
     let changed = clm_git::git(
         repo,
-        &["diff", "--name-status", "--no-renames", "-z", range],
+        &[
+            "diff",
+            "--name-status",
+            "--no-renames",
+            "--no-relative",
+            "-z",
+            range,
+        ],
     )
     .map_err(|e| e.to_string())?;
     let fields: Vec<&str> = changed.split('\0').collect();
@@ -1067,6 +1074,7 @@ fn paths_match(at: &At, nodes: &[&clm_model::Node]) -> Result<bool, String> {
         "diff",
         "--name-only",
         "--no-renames",
+        "--no-relative",
         "-z",
         merge_base,
         head,
@@ -1091,7 +1099,10 @@ fn code_texts(at: &At, entries: &[(char, &str)]) -> Vec<Vec<u8>> {
         ..
     } = *at;
     let mut objects = String::new();
-    for &(status, file) in entries.iter().filter(|(_, f)| !is_spec_path(f)) {
+    for &(status, file) in entries
+        .iter()
+        .filter(|(_, f)| !is_spec_path(f) && !outside_root(f))
+    {
         if file.contains('\n') {
             continue;
         }
@@ -1313,6 +1324,7 @@ fn up_to_date(at: &At, base: &str, here: &Path) -> Result<Vec<Violation>, String
                 "diff",
                 "--name-only",
                 "--no-renames",
+                "--no-relative",
                 "-z",
                 merge_base,
                 rev,
@@ -1424,7 +1436,9 @@ pub fn foreign_files(
             owner: owner.to_string(),
         });
     }
-    // `git diff` lists paths in byte order, so `found` is sorted by path.
+    // `git diff` lists paths from the repository's top, so a file named from the root with
+    // `../` may come out of order.
+    found.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(found)
 }
 
