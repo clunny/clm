@@ -7,6 +7,3 @@ publish.workspace = true
 
 [dependencies]
 tempfile.workspace = true
-
-[dev-dependencies]
-toml.workspace = true
