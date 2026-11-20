@@ -129,7 +129,7 @@ fi
 
 `clm land` sets no toolchain variable itself, and leaves a `CARGO_TARGET_DIR` or `CARGO_INCREMENTAL` you set as it is.
 
-`clm verify` does the same for `[verify] check`, with a place of its own, `.clm/verify-build`, so the same lines in your script keep slow runs' build output out of the verify tree. Both places are bounded by `[land] target_cap_gb`: `clm verify` removes `.clm/verify-build` after a run that leaves it over the cap, as a land does `.clm/land`, and creates it again before each `[verify] check` and `[verify] mutate` it hands it to, so a command may write there before building anything.
+`clm verify` does the same for `[verify] check`, with a place of its own, `.clm/verify-build`, so the same lines in your script keep slow runs' build output out of the verify tree. Both places are bounded by `[land] target_cap_gb`: `clm verify` removes `.clm/verify-build` after a run that leaves it over the cap, as a land does `.clm/land`, and creates it again before each `[verify] check` and `[verify] mutate` it hands it to, so a command may write there before building anything. The verify tree itself keeps nothing between calls: once a `clm verify` is done with it, after the mutation pass, it removes every file there that git doesn't track, ignored ones included, so build output a script leaves in the tree instead of `$CLM_LAND_DIR` lasts only to the end of the call.
 
 ## Deployment is yours
 
