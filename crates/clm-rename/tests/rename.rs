@@ -213,7 +213,7 @@ fn references_repo() -> TempDir {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn references_across_the_repository() {
     let dir = references_repo();
     let d = dir.path();
@@ -228,7 +228,7 @@ fn references_across_the_repository() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn an_ambiguous_slug_stays() {
     let dir = references_repo();
     let d = dir.path();
@@ -243,7 +243,7 @@ fn an_ambiguous_slug_stays() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn a_decision_with_the_slug_makes_it_ambiguous() {
     let dir = references_repo();
     let d = dir.path();
@@ -318,7 +318,7 @@ fn a_capability_entry() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn a_components_bare_name_is_a_word() {
     let dir = repo();
     let d = dir.path();
@@ -348,7 +348,7 @@ fn a_components_bare_name_is_a_word() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn archived_changes_and_decisions_keep_their_names() {
     let dir = references_repo();
     let d = dir.path();
@@ -446,7 +446,7 @@ fn a_term_before_punctuation_and_a_following_dot_path() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn several_renames_apply_together() {
     let dir = repo();
     let d = dir.path();
@@ -1354,7 +1354,7 @@ fn component_repo(items: &[(&str, &str)]) -> TempDir {
 }
 
 #[test]
-// req:rename/component-key@82737665
+// req:rename/component-key@ad92e97c
 fn deltas_name_their_component() {
     let dir = component_repo(&[]);
     let d = dir.path();
@@ -1372,7 +1372,7 @@ fn deltas_name_their_component() {
 }
 
 #[test]
-// req:rename/component-key@82737665
+// req:rename/references@dd6cdde7
 fn items_by_the_components_key() {
     let dir = component_repo(&[("x", "components: [a.b]")]);
     let d = dir.path();
@@ -1437,4 +1437,109 @@ fn a_write_after_the_apply_fails() {
     assert!(d.join("backlog/q.md").exists());
     assert!(!d.join("changes/archive").exists());
     assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/x", &old));
+}
+
+#[test]
+// req:rename/references@dd6cdde7
+fn a_reference_in_fenced_code() {
+    let dir = references_repo();
+    let d = dir.path();
+    write(
+        d,
+        "specs/e/SPEC.md",
+        &node(
+            "",
+            "Example:\n\n  ~~~\n  see `a/x`\n  ~~~\n\nsee `a/x`",
+            &[("q", "Q SHALL.")],
+        ),
+    );
+    rename(d, "r").unwrap();
+    let e = read(d, "specs/e/SPEC.md");
+    assert!(e.contains("  ~~~\n  see `a/x`\n  ~~~\n\nsee `a/y`\n"), "{e}");
+}
+
+#[test]
+// req:rename/references@dd6cdde7
+fn a_list_in_block_style() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(d, "specs/c/SPEC.md", &node("", "d", &[("z", "Z SHALL.")]));
+    let item = "---\ntitle: T\nkind: idea\ncomponents:\n  - a\n  - c\nblocks:\n  - \"a/x\"\n---\n\nbody names a\n";
+    write(d, "backlog/x.md", item);
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - component: a\n    to: d\n", ""),
+    );
+    rename(d, "r").unwrap();
+    assert_eq!(
+        read(d, "backlog/x.md"),
+        item.replace("  - a\n", "  - d\n")
+            .replace("\"a/x\"", "\"d/x\"")
+    );
+    assert!(violations(d).is_empty(), "{:?}", violations(d));
+}
+
+#[test]
+// req:rename/references@dd6cdde7
+fn a_key_that_holds_no_reference() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(
+        d,
+        "specs/b/SPEC.md",
+        &node(
+            "successor: \"a\"\ndepends_on: [a]\n",
+            "d",
+            &[("z", "Z SHALL.")],
+        ),
+    );
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - component: a\n    to: d\n", ""),
+    );
+    rename(d, "r").unwrap();
+    let b = read(d, "specs/b/SPEC.md");
+    assert!(b.contains("successor: \"a\"\ndepends_on: [d]\n"), "{b}");
+}
+
+#[test]
+// req:rename/references@dd6cdde7
+fn a_marker_in_the_archive() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(
+        d,
+        "changes/archive/old/change.md",
+        "---\nstatus: done\n---\n\n## Intent\nOld.\n",
+    );
+    write(
+        d,
+        "changes/archive/old/deltas/a.md",
+        "---\ncomponent: a\n---\n## ADDED Requirements\n### Requirement: x\nX SHALL.\n\n#### Scenario: holds\n- ok\n",
+    );
+    let test =|id: &str| format!("// {}{id}\n#[test]\nfn t() {{}} // a/x stays\n", "req:");
+    write(d, "changes/archive/old/assets/a/t.rs", &test("a/x"));
+    write(d, "docs/decisions/d.txt", "`a/x`\n");
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - requirement: a/x\n    to: y\n", ""),
+    );
+    rename(d, "r").unwrap();
+    assert_eq!(
+        read(d, "changes/archive/old/assets/a/t.rs"),
+        test("a/y")
+    );
+    assert_eq!(read(d, "docs/decisions/d.txt"), "`a/x`\n");
+    let graph = clm_model::load(d).0;
+    let scan = clm_coverage::scan(d);
+    assert!(!scan.req.is_empty());
+    for marker in scan.req.iter().chain(&scan.outside) {
+        assert!(graph.requirement(&marker.id).is_some(), "{}", marker.id);
+    }
 }

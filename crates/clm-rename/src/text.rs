@@ -69,16 +69,31 @@ impl Edits {
         std::mem::take(&mut *self.seen.borrow_mut())
     }
 
-    /// A frontmatter or backlog value line, `key: value`, with each ID in the value of one of
-    /// `keys` renamed; any other line as it was. A recorded version (`id@8hex`) keeps its
-    /// version.
+    /// Frontmatter text with each ID in the value of one of `keys` renamed, whether the value
+    /// is on the key's line (`key: [a, b]`, quoted or bare) or, in block style, on the lines
+    /// below it that continue it (`  - a`); any other line as it was. A recorded version
+    /// (`id@8hex`) keeps its version.
     pub(crate) fn values(&self, text: &str, keys: &[&str]) -> String {
+        let mut within = false;
         text.split_inclusive('\n')
-            .map(|line| match line.split_once(':') {
-                Some((key, value)) if keys.contains(&key) => {
-                    format!("{key}:{}", self.tokens(value))
+            .map(|line| {
+                if line.starts_with([' ', '\t', '-']) {
+                    return if within {
+                        self.tokens(line)
+                    } else {
+                        line.to_string()
+                    };
                 }
-                _ => line.to_string(),
+                match line.split_once(':') {
+                    Some((key, value)) if keys.contains(&key) => {
+                        within = true;
+                        format!("{key}:{}", self.tokens(value))
+                    }
+                    _ => {
+                        within = false;
+                        line.to_string()
+                    }
+                }
             })
             .collect()
     }

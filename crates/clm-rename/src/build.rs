@@ -50,6 +50,10 @@ struct Held {
     frontmatter: BTreeMap<String, String>,
 }
 
+/// The component frontmatter keys whose values are references (`references`); no other key
+/// holds one, `successor` included.
+const REFERENCE_KEYS: [&str; 2] = ["depends_on", "serves"];
+
 fn refuse<T>(why: String) -> Result<T, Failure> {
     Err(Failure::Refused(why))
 }
@@ -468,8 +472,8 @@ fn rebase_element(
     if let Some(s) = section(name) {
         let range = s.heading + 1..s.end;
         if element == "frontmatter" {
-            let keys = ["depends_on", "serves", "successor"];
-            edit_lines(&mut lines, range, |t| edits.values(t, &keys));
+
+            edit_lines(&mut lines, range, |t| edits.values(t, &REFERENCE_KEYS));
         } else {
             edit_lines(&mut lines, range, |t| edits.body(t, &plain));
         }
@@ -661,7 +665,7 @@ fn generate(
         let (fm, body) = split_frontmatter(&node.source).unwrap_or(("", &node.source));
         let fm = plan
             .edits
-            .values(fm, &["depends_on", "serves", "successor"]);
+            .values(fm, &REFERENCE_KEYS);
         let source = format!("---\n{fm}\n---\n{}", plan.edits.body(body, &heads));
         let delta = match plan.components.get(&node.id) {
             Some(new_id) => {
