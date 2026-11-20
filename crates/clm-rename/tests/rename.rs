@@ -1428,6 +1428,27 @@ fn a_quoted_flag() {
     }
 }
 
+#[test]
+// req:rename/flag-rerecord@3f249b07
+fn a_quoted_flag_on_a_renamed_requirement() {
+    let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
+    let d = dir.path();
+    let old = version_of(d, "a/x");
+    let text = |id: &str, v: &str| {
+        flag(v).replace(
+            &format!("requirement: a/x@{v}"),
+            &format!("requirement:  '{id}@{v}' # flaky"),
+        )
+    };
+    write(d, "backlog/f.md", &text("a/x", &old));
+    git(d, &["init", "-q"]);
+    git(d, &["add", "-A"]);
+    clm_rename::rename(d, "r").unwrap();
+    let new = version_of(d, "a/y");
+    assert_ne!(new, old);
+    assert_eq!(read(d, "backlog/f.md"), text("a/y", &new));
+}
+
 fn component_repo(items: &[(&str, &str)]) -> TempDir {
     let dir = repo();
     let d = dir.path();

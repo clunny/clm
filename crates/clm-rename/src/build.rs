@@ -200,7 +200,13 @@ fn finish(root: &Path, id: &str, writes: &mut Writes) -> Result<(), Failure> {
     let change = Path::new("changes").join(id).join("change.md");
     let applied = fs::read_to_string(root.join(&change)).map_err(|e| io(&change, e))?;
     writes.put(&change, record::with_status(&applied, "done").as_bytes())?;
+    let archive = root.join("changes").join(clm_model::ARCHIVE_DIR);
+    let fresh = !archive.exists();
     clm_apply::archive(root, id).map(drop).map_err(|vs| {
+        // A failed move leaves the archive directory it made, empty; the undo takes it.
+        if fresh {
+            let _ = fs::remove_dir(&archive);
+        }
         let why: Vec<String> = vs.iter().map(|v| v.message.clone()).collect();
         Failure::Refused(why.join("\n"))
     })
@@ -335,7 +341,8 @@ fn rerecord(text: &str, old: &str, new: &str) -> Option<String> {
     }
     let end = 1 + lines[1..].iter().position(|l| l.trim_end() == "---")?;
     let (at, value) = (1..end).find_map(|n| Some((n, lines[n].strip_prefix("requirement:")?)))?;
-    let bare = value.trim();
+    // A YAML comment after the value is no part of it, and stays.
+    let bare = value.split(" #").next().unwrap_or(value).trim();
     let inner = ["\"", "'"]
         .iter()
         .find_map(|q| bare.strip_prefix(q)?.strip_suffix(q))
