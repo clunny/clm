@@ -214,6 +214,20 @@ fn a_memory_total_of_zero_is_unknown_and_printed() {
 }
 
 #[test]
+fn read_reports_whatever_the_files_hold() {
+    // req:machine/machine-report@53f8492b
+    let dir = repo();
+    let clm_dir = common::common(dir.path()).join("clm");
+    std::fs::create_dir_all(&clm_dir).unwrap();
+    std::fs::write(clm_dir.join("machine"), "peak lots\nbuild\n\u{0}\u{ff}").unwrap();
+    std::fs::write(clm_dir.join("machine-samples"), [0xffu8, 0xfe, b'\n', b'x']).unwrap();
+    let snapshot = clm_machine::read(dir.path(), 3, 4, clm_git::now());
+    assert_eq!(snapshot.report.disk.peak, None);
+    assert_eq!(snapshot.report.disk.free_places, 3);
+    assert!(!snapshot.history.is_empty());
+}
+
+#[test]
 fn read_reports_whatever_the_files_allow() {
     // req:machine/machine-report@53f8492b
     let dir = repo();
