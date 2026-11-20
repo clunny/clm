@@ -107,6 +107,9 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
         } else if b.starts_with(BUILD)
             && is_build_worktree(&wt.path)
             && !caller.starts_with(&wt.path)
+            // A run still working there, such as a build writing its report after its land,
+            // keeps its worktree and the branch checked out in it (`vcs/held-lock`).
+            && !wt.held
         {
             match clm_git::remove_worktree(root, &wt.path) {
                 Ok(()) => lines.push(format!("removed {}", wt.path.display())),
@@ -603,7 +606,7 @@ mod tests {
 
     #[test]
     fn agent_dirs_directly_in_claude_worktrees_are_builds() {
-        // req:orchestrator.checkpoint/checkpoint@3d2718a5
+        // req:orchestrator.checkpoint/checkpoint@9f671f32
         assert!(is_build_worktree(Path::new("/r/.claude/worktrees/agent-1")));
         assert!(!is_build_worktree(Path::new("/r/.claude/worktrees/p3")));
         assert!(!is_build_worktree(Path::new("/r/worktrees/agent-1")));
