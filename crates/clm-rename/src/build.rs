@@ -397,7 +397,10 @@ fn rebase_others(
         let mut deltas: Vec<&Delta> = change.deltas.iter().filter(|d| !d.create).collect();
         deltas.sort_by(|a, b| a.node.cmp(&b.node));
         for delta in deltas {
-            let Some(node) = graph.nodes.get(&delta.node) else {
+            // A component the graph before the rename didn't hold, such as a renamed one's
+            // new ID, had no base accepted before it, so none of it is the rename's to move.
+            let before = done.held.frontmatter.get(&delta.node);
+            let (Some(node), Some(_)) = (graph.nodes.get(&delta.node), before) else {
                 continue;
             };
             let current = clm_apply::hashes(node);
@@ -406,7 +409,6 @@ fn rebase_others(
                 .into_iter()
                 .filter(|(e, _)| !done.held.stale.contains(&(delta.path.clone(), e.clone())))
                 .collect();
-            let before = done.held.frontmatter.get(&delta.node);
             if let Some(base) = &delta.base.frontmatter
                 && before == Some(base)
                 && *base != node.hashes.frontmatter

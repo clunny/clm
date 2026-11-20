@@ -173,7 +173,7 @@ fn a_change_without_renames_is_no_replay() {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn a_rename_branch_that_rebased_another_delta() {
     let dir = TempDir::new().unwrap();
     let d = dir.path();

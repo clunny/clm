@@ -72,7 +72,7 @@ fn violations(d: &Path, id: &str) -> Vec<String> {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn a_reworded_contract_another_change_modifies() {
     let dir = repo(SPROCKET);
     let d = dir.path();
@@ -106,7 +106,7 @@ fn a_reworded_contract_another_change_modifies() {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn a_removed_requirement_keeps_its_removal() {
     let dir = repo(SPROCKET);
     let d = dir.path();
@@ -140,7 +140,7 @@ fn architecture(slugs: &[&str]) -> String {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn frontmatter_and_requirement_blocks_of_an_approved_change() {
     let spec = "---\ntitle: A\nstatus: specd\nowners: [\"@a\"]\nserves: [architecture/old]\n---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n\n### Requirement: x\nX SHALL print.\n\nSee `architecture/old`.\n\n#### Scenario: holds\n- ok\n";
     let dir = repo(spec);
@@ -176,7 +176,7 @@ fn frontmatter_and_requirement_blocks_of_an_approved_change() {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn a_stale_base_and_the_rest_of_the_change_stay() {
     let dir = repo(SPROCKET);
     let d = dir.path();
@@ -190,7 +190,7 @@ fn a_stale_base_and_the_rest_of_the_change_stay() {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn a_frontmatter_the_rename_left_alone_stays() {
     let dir = repo(SPROCKET);
     let d = dir.path();
@@ -205,7 +205,7 @@ fn a_frontmatter_the_rename_left_alone_stays() {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn several_changes_and_a_removal_print_in_order() {
     let dir = repo(SPROCKET);
     let d = dir.path();
@@ -245,7 +245,7 @@ fn several_changes_and_a_removal_print_in_order() {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn an_applied_change_is_not_rebased() {
     let dir = repo(SPROCKET);
     let d = dir.path();
@@ -257,4 +257,42 @@ fn an_applied_change_is_not_rebased() {
     write(d, "changes/r/change.md", &swap());
     assert_eq!(rename(d, "r"), ["renamed sprocket -> cogs"]);
     assert_eq!(read(d, "changes/y/deltas/a.md"), delta);
+}
+
+#[test]
+// req:rename/other-deltas@1f0dee44
+fn an_element_stale_before_the_rename() {
+    let dir = repo(&SPROCKET.replace("Read the file.", "Read the sprocket."));
+    let d = dir.path();
+    let delta = "---\ncomponent: a\nbase: { design: \"0000000000000000\" }\n---\n## MODIFIED Design\nRead the sprocket twice.\n";
+    plain_change(d, "y", "proposed", delta);
+    write(d, "changes/r/change.md", &swap());
+    let before = hash(d, "design");
+    assert_eq!(rename(d, "r"), ["renamed sprocket -> cogs"]);
+    assert_ne!(hash(d, "design"), before);
+    assert_eq!(read(d, "changes/y/deltas/a.md"), delta);
+}
+
+#[test]
+// req:rename/other-deltas@1f0dee44
+fn a_component_only_the_rename_creates() {
+    let dir = repo(&SPROCKET.replace("Read the file.", "See `a/x`."));
+    let d = dir.path();
+    let design = hash(d, "design");
+    let delta = format!(
+        "---\ncomponent: b\nbase: {{ design: \"{design}\" }}\n---\n## MODIFIED Design\nSee `a/x` twice.\n"
+    );
+    write(
+        d,
+        "changes/y/change.md",
+        "---\nstatus: proposed\n---\n\n## Intent\nEdit.\n",
+    );
+    write(d, "changes/y/deltas/b.md", &delta);
+    write(
+        d,
+        "changes/r/change.md",
+        &renaming("  - component: a\n    to: b\n"),
+    );
+    assert_eq!(rename(d, "r"), ["renamed a -> b"]);
+    assert_eq!(read(d, "changes/y/deltas/b.md"), delta);
 }
