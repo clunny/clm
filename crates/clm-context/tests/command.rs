@@ -284,20 +284,92 @@ fn dependencies_left_after_the_ancestors() {
     node(dir.path(), "a/n", "N", "a, b");
     let text = stdout(&clm_context(dir.path(), &["a.n"]));
     let deps = text.find("\n# Dependencies\n").expect(&text);
-    assert!(text[deps..].contains("## b: B\n\n### Contract\n\nB-CONTRACT"), "{text}");
+    assert!(
+        text[deps..].contains("## b: B\n\n### Contract\n\nB-CONTRACT"),
+        "{text}"
+    );
     assert!(!text[deps..].contains("## a: A"), "{text}");
     assert_eq!(text.matches("A-CONTRACT").count(), 1, "{text}");
 }
 
 #[test]
 fn identical_runs_and_sorted_dependencies() {
-    // req:context/bundle-deterministic@1efac81a
+    // req:context/bundle-deterministic@cb7fa43a
     let dir = repo();
     let first = stdout(&clm_context(dir.path(), &["a"]));
     let second = stdout(&clm_context(dir.path(), &["a"]));
     assert_eq!(first, second);
     assert!(first.find("B-CONTRACT").unwrap() < first.find("C-CONTRACT").unwrap());
     assert!(first.ends_with("\n") && !first.ends_with("\n\n"));
+}
+
+#[test]
+fn the_layout() {
+    // req:context/bundle-deterministic@cb7fa43a
+    // The source's `ARCHITECTURE.md` (an entry holds `#### Carries`), so no carried section;
+    // the root's Contract is empty, `a`'s Contract and requirement lines end in whitespace.
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    write(
+        root,
+        "ARCHITECTURE.md",
+        "## Constraints\n\n### Constraint: x\nIt SHALL x.\n\n#### Scenario: s\n- ok\n\n\
+         #### Carries\n- method\n",
+    );
+    write(
+        root,
+        "CAPABILITIES.md",
+        "## Capabilities\n\n### Capability: k\nCAP-K\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n",
+    );
+    write(
+        root,
+        "specs/SPEC.md",
+        "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\n\n## Design\nROOT-DESIGN\n",
+    );
+    write(
+        root,
+        "specs/a/SPEC.md",
+        "---\ntitle: A\nstatus: active\nowners: []\ndepends_on: [b]\nserves: [capability/k]\n---\n\n\
+         ## Contract\nA-CONTRACT  \nsecond line\t\n\n## Design\nA-DESIGN\n\n## Requirements\n\n\
+         ### Requirement: r\nIt SHALL r.   \n\n#### Scenario: s\n- ok\n",
+    );
+    write(
+        root,
+        "specs/b/SPEC.md",
+        "---\ntitle: B\nstatus: active\nowners: []\n---\n\n## Contract\nB-CONTRACT\n\n\
+         ## Design\nB-DESIGN\n",
+    );
+    write(root, "specs/a/assets/mockups/m.html", "M\n");
+    write(root, "specs/a/assets/b.png", "B\n");
+
+    let out = clm_context(root, &["a"]);
+    assert_eq!(out.status.code(), Some(0));
+    let text = stdout(&out);
+    assert!(
+        text.lines().all(|l| !l.ends_with([' ', '\t'])),
+        "a line ends in whitespace:\n{text}"
+    );
+    assert!(text.ends_with('\n'), "{text}");
+    let fence = "```";
+    let expected = format!(
+        "# ARCHITECTURE.md\n\n\
+         ## Constraints\n\n### Constraint: x\nIt SHALL x.\n\n#### Scenario: s\n- ok\n\n\
+         #### Carries\n- method\n\n\
+         # Capabilities served\n\n\
+         ### Capability: k\nCAP-K\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n\n\
+         # Ancestors\n\n\
+         ## clm: Root\n\n### Contract\n\n\n\n### Design\n\nROOT-DESIGN\n\n\
+         ## a: A\n\n### Frontmatter\n\n\
+         {fence}yaml\ntitle: A\nstatus: active\nowners: []\ndepends_on: [b]\n\
+         serves: [capability/k]\n{fence}\n\n\
+         ### Contract\n\nA-CONTRACT\nsecond line\n\n### Design\n\nA-DESIGN\n\n\
+         ### Requirements\n\n### Requirement: r\nIt SHALL r.\n\n#### Scenario: s\n- ok\n\n\
+         ### Assets\n\n- specs/a/assets/b.png {b}\n- specs/a/assets/mockups/m.html {m}\n\n\
+         # Dependencies\n\n## b: B\n\n### Contract\n\nB-CONTRACT\n",
+        b = clm_model::asset_hash(b"B\n"),
+        m = clm_model::asset_hash(b"M\n"),
+    );
+    assert_eq!(text, expected);
 }
 
 #[test]
@@ -322,29 +394,40 @@ fn hash_follows_the_bundle_only() {
 
 #[test]
 fn unknown_node_exits_2() {
-    // req:context/bundle-errors@fa9b5998
+    // req:context/bundle-errors@ef725bca
     let dir = repo();
     let out = clm_context(dir.path(), &["zz"]);
     assert_eq!(out.status.code(), Some(2));
-    assert!(String::from_utf8(out.stderr).unwrap().contains("`zz`"));
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "clm context: no component `zz`\n"
+    );
     assert!(out.stdout.is_empty());
 }
 
 #[test]
 fn invalid_graph_prints_violations_not_a_bundle() {
-    // req:context/bundle-errors@fa9b5998
+    // req:context/bundle-errors@ef725bca
     let dir = repo();
     node(dir.path(), "b", "B", "missing");
-    let out = clm_context(dir.path(), &["a"]);
-    let text = stdout(&out);
-    assert_eq!(out.status.code(), Some(1), "{text}");
-    assert!(text.contains("model/dependency-dag"), "{text}");
-    assert!(!text.contains("A-CONTRACT"), "{text}");
+    let (_, violations) = clm_model::load(dir.path());
+    let lines: String = violations.iter().map(|v| format!("{v}\n")).collect();
+    assert!(lines.contains("model/dependency-dag"), "{lines}");
+    // The same whether or not the component exists.
+    for id in ["a", "zz"] {
+        let out = clm_context(dir.path(), &[id]);
+        let text = stdout(&out);
+        assert_eq!(out.status.code(), Some(1), "{text}");
+        assert_eq!(text, lines);
+        assert!(!text.contains("A-CONTRACT"), "{text}");
+        assert!(out.stderr.is_empty(), "{:?}", String::from_utf8(out.stderr));
+    }
 }
 
 #[test]
 fn the_call_writes_what_the_command_prints() {
-    // req:context/commands-in-crate@751a13b0
+    // req:context/commands-in-crate@d15a10ad
+    // req:context/bundle-components@29ea8d19
     let dir = repo();
     let (graph, _) = clm_model::load(dir.path());
     let bundle = clm_context::bundle(&graph, dir.path(), "a").unwrap();
@@ -372,10 +455,7 @@ fn the_call_writes_what_the_command_prints() {
 
     node(dir.path(), "b", "B", "missing");
     let (_, violations) = clm_model::load(dir.path());
-    let lines: String = violations
-        .iter()
-        .map(|v| format!("{}: {}: {}\n", v.path.display(), v.rule, v.message))
-        .collect();
+    let lines: String = violations.iter().map(|v| format!("{v}\n")).collect();
     let out = run(&["a"]);
     assert_eq!(out.status.0, 1);
     assert_eq!(stdout(&out), lines);
@@ -383,8 +463,74 @@ fn the_call_writes_what_the_command_prints() {
 }
 
 #[test]
+fn bundle_gives_the_text_whatever_the_graph_violates() {
+    // req:context/bundle-components@29ea8d19
+    let dir = repo();
+    let (clean, _) = clm_model::load(dir.path());
+    let before = clm_context::bundle(&clean, dir.path(), "a").unwrap();
+
+    // `c` now depends on a component that doesn't exist: the command prints no bundle, but
+    // `bundle` still gives the text for the graph it is given.
+    node(dir.path(), "c", "C", "missing");
+    let (graph, violations) = clm_model::load(dir.path());
+    assert!(!violations.is_empty());
+    assert_eq!(clm_context(dir.path(), &["a"]).status.code(), Some(1));
+    let arch = fs::read_to_string(dir.path().join("ARCHITECTURE.md")).unwrap();
+    let text = clm_context::bundle(&graph, dir.path(), "a").unwrap();
+    assert_eq!(text, before);
+    assert_eq!(
+        Some(text),
+        clm_context::bundle_from(&graph, Some(&arch), "a")
+    );
+    assert_eq!(clm_context::bundle(&graph, dir.path(), "zz"), None);
+    assert_eq!(clm_context::bundle(&clean, dir.path(), "zz"), None);
+}
+
+#[test]
+fn help_writes_the_usage_to_the_output_stream() {
+    // req:context/commands-in-crate@d15a10ad
+    let dir = repo();
+    let out = call(dir.path(), &["--help".as_ref()]);
+    assert_eq!(out.status.0, 0);
+    assert!(out.stderr.is_empty());
+    let text = stdout(&out);
+    assert!(text.contains("Usage: clm context"), "{text}");
+}
+
+/// A stream every write to fails.
+struct Closed;
+
+impl std::io::Write for Closed {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::ErrorKind::BrokenPipe.into())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn a_stream_it_cant_write_returns_2() {
+    // req:context/commands-in-crate@d15a10ad
+    let dir = repo();
+    let run = |args: &[&str], out: &mut dyn std::io::Write, err: &mut dyn std::io::Write| {
+        let args: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+        clm_context::command(args, dir.path(), &|_| None, out, err)
+    };
+    let mut sink = Vec::new();
+    // The bundle, its hash and the usage go to a closed output stream.
+    assert_eq!(run(&["a"], &mut Closed, &mut sink), 2);
+    assert_eq!(run(&["a", "--hash"], &mut Closed, &mut sink), 2);
+    assert_eq!(run(&["--help"], &mut Closed, &mut sink), 2);
+    // The unknown component's line and the usage error go to a closed error stream.
+    assert_eq!(run(&["zz"], &mut sink, &mut Closed), 2);
+    assert_eq!(run(&["--no-such-option"], &mut sink, &mut Closed), 2);
+    assert!(sink.is_empty());
+}
+
+#[test]
 fn arguments_it_cant_parse_return_2() {
-    // req:context/commands-in-crate@751a13b0
+    // req:context/commands-in-crate@d15a10ad
     let dir = repo();
     let args: Vec<&std::ffi::OsStr> = ["a", "--no-such-option"]
         .iter()

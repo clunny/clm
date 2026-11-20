@@ -61,7 +61,7 @@ fn run(args: &Args, root: &Path, out: &mut dyn Write, err: &mut dyn Write) -> io
     let (graph, violations) = clm_model::load(root);
     if !violations.is_empty() {
         for v in &violations {
-            writeln!(out, "{}: {}: {}", v.path.display(), v.rule, v.message)?;
+            writeln!(out, "{v}")?;
         }
         return Ok(1);
     }
