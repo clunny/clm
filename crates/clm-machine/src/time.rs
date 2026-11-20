@@ -45,10 +45,15 @@ pub fn parse(text: &str) -> Option<u64> {
     };
     let (year, month, day) = (num(0, 4)?, num(5, 7)?, num(8, 10)?);
     let (hour, minute, second) = (num(11, 13)?, num(14, 16)?, num(17, 19)?);
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 || minute > 59 {
-        return None;
-    }
-    if second > 59 {
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days_in_month = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        1..=12 => 31,
+        _ => return None,
+    };
+    if !(1..=days_in_month).contains(&day) || hour > 23 || minute > 59 || second > 59 {
         return None;
     }
     let y = year - i64::from(month <= 2);
@@ -75,5 +80,28 @@ mod tests {
         }
         assert_eq!(parse("not a time"), None);
         assert_eq!(parse("2023-13-14T22:13:20Z"), None);
+    }
+
+    // req:machine/machine-history@c34a107b
+    #[test]
+    fn an_impossible_date_is_no_time() {
+        for text in [
+            "2026-02-31T10:00:00Z",
+            "2026-02-29T10:00:00Z",
+            "2100-02-29T10:00:00Z",
+            "2026-04-31T10:00:00Z",
+            "2026-11-31T10:00:00Z",
+            "2026-01-00T10:00:00Z",
+        ] {
+            assert_eq!(parse(text), None, "{text}");
+        }
+        for text in [
+            "2024-02-29T10:00:00Z",
+            "2000-02-29T10:00:00Z",
+            "2026-01-31T10:00:00Z",
+            "2026-04-30T10:00:00Z",
+        ] {
+            assert_eq!(parse(text).map(format).as_deref(), Some(text), "{text}");
+        }
     }
 }
