@@ -3,7 +3,7 @@ use std::process::Command;
 
 #[test]
 fn wasm_build() {
-    // req:config/component-size-from-text@37254aae
+    // req:config/component-size-setting@37267c0c
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     // A separate target dir, so the build doesn't wait on the outer `cargo test`'s lock.
     let out = Command::new(env!("CARGO"))
