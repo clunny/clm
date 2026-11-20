@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-fingerprint-covers-only-the-clm-root-s-subdirectory-and-the]
 ---
 
