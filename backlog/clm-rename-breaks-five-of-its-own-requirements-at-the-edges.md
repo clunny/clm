@@ -1,5 +1,5 @@
 ---
-title: "clm rename breaks five of its own requirements at the edges"
+title: "clm rename breaks its own requirements in six places at the edges"
 kind: bug
 components: [rename]
 origin: 20261119-wave-1-by-the-rule
