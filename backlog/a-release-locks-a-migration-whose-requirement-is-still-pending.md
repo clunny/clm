@@ -1,6 +1,6 @@
 ---
 title: "A release locks a migration whose requirement is still pending"
-kind: bug
+kind: deferred
 components: [ci, upgrade]
 origin: 20261120-wave-2-rest-by-the-rule
 ---
@@ -10,3 +10,5 @@ origin: 20261120-wave-2-rest-by-the-rule
 **The case that showed it.** `20261120-wave-2-rest-by-the-rule` adds a sentence to the note of `20261114-proof-is-real` (`upgrade/migration-markers-in-tests`), which no release has shipped. The change says in its Constraints that the requirement is built before the next release, which no build and no release script reads.
 
 **Until it is mended, the human holds it:** no release while `clm pending upgrade` or `clm pending init` lists a requirement of an unshipped migration. Wave 3 holds `ci`'s pass; whether the release refuses, or the lock leaves out a migration whose requirement is pending, is a design for then.
+
+**Deferred** (2026-11-21, the human): the human holds it until `ci`'s pass, wave 3 of phase 5 (`backlog/a-passing-check-proves-less-than-the-spec-claims.md`). Until then, `clm triage` lists it as `deferred` and the build loop drafts nothing for it.

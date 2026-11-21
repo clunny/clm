@@ -1,6 +1,6 @@
 ---
 title: "A request for changes made after an approval is read as cleared when the approver's clock runs ahead"
-kind: bug
+kind: deferred
 components: [ledger, land, land.approval, web.worker.review]
 origin: 20261120-wave-2-rest-by-the-rule
 ---
@@ -24,3 +24,5 @@ The same happens with any two of Bob's clones whose clocks differ, or with one c
 **Which requirements state the behaviour today.** `ledger/request-cleared` (an approval clears a request when its `at` is greater as a string, by the same person), `ledger/fold` and the Contract's `at` paragraph (records ordered by `at` as written, "so two records' times order as strings"), `land/changes-requested-holds` and `land.approval/request-refusal` (a request holds while `Fold::cleared` is false for it). Each states the comparison as it works; none says what happens when writers' clocks disagree.
 
 **Found by** wave 2 of phase 5, which states the fold's order as it is (`ledger/fold`, scenario "times out of order or equal") and changes nothing here: a fix is a design of how a request and an approval are ordered without trusting two clocks, and it spans `land.approval`, whose pass is wave 3.
+
+**Deferred** (2026-11-21, the human): taken up in wave 3 of phase 5, with `land` and `land.approval` (`backlog/a-passing-check-proves-less-than-the-spec-claims.md`). Until then, `clm triage` lists it as `deferred` and the build loop drafts nothing for it.
