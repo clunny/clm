@@ -196,7 +196,7 @@ The counting itself is `size_of(graph, files, markers, defaults)` (`size-of-list
 - GIVEN component `a` with no assets, and in turn each of these Contracts or Designs
 - WHEN `clm check` runs on each
 - THEN it reports `assets/<path>` for `a` exactly as listed:
-  - a block mentioning `` `assets/m.html` `` and then a lone backtick followed by assets/n.html with no backtick after it in the block: `m.html` only, since an unpaired backtick opens no span;
+  - a block mentioning `` `assets/m.html` `` and then a lone backtick followed by assets/n.html with no backtick after it in its block: `m.html` only, since an unpaired backtick opens no span;
   - a block holding a lone backtick, then a block mentioning `` `assets/m.html` ``, then a block holding an escaped backtick (`` \` ``) and `` `assets/n.html` ``: `m.html` and `n.html`, one line each;
   - a span `` `C:\` `` followed by `` `assets/m.html` ``: `m.html`;
   - a backslash followed by two backticks, then ` b `, then `` `assets/x.html` ``, then ` c` and two backticks, and in another block two backslashes directly before `` `assets/y.html` ``: `y.html` only, since the first backslash escapes one backtick and the second backtick pairs with the one before `assets/x.html`, while an escaped backslash escapes no backtick;
@@ -423,7 +423,7 @@ The violation's path SHALL be the first holder's file, `backlog/<slug>.md` or `c
 - WHEN `clm size --root <its root>` runs
 - THEN it exits 1 printing one line, which starts `<its root>: check/node-size: `:
   - a directory in no git repository holding `src/a/x.rs`;
-  - a git repository with a tracked `src/a/x.rs` that its user can't read
+  - a git repository with a tracked `src/a/x.rs` that the user running `clm size` can't read
 
 #### Serves
 - capability/know-health
