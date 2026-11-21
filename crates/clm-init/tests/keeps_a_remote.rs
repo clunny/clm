@@ -81,3 +81,29 @@ fn a_remote_already_there() {
     assert!(git(other.path(), &["remote"]).is_empty());
     assert!(!bare_path(other.path()).exists());
 }
+
+#[test]
+fn the_line_it_prints_and_a_failure() {
+    // req:init/init-keeps-a-remote@c652d628
+    let dir = repo();
+    let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
+    let line = format!(
+        "created remote origin at {}",
+        bare_path(dir.path()).display()
+    );
+    let lines: Vec<&str> = out.lines().collect();
+    let at = lines.iter().position(|l| *l == line).expect(&line);
+    let steps = lines
+        .iter()
+        .position(|l| *l == "Next steps (yours):")
+        .unwrap();
+    assert!(at < steps, "{out}");
+
+    // `clm` under the common git directory is a file: the remote can't be made.
+    let dir = repo();
+    std::fs::write(bare_path(dir.path()).parent().unwrap(), "x").unwrap();
+    let err = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap_err();
+    assert!(!err.is_empty());
+    assert!(git(dir.path(), &["remote"]).is_empty());
+    assert!(dir.path().join("clm.toml").is_file());
+}

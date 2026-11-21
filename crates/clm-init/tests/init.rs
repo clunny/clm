@@ -417,16 +417,60 @@ fn repeated_and_unknown_languages() {
     let hosts = fake_hosts();
     init(&dir, &["--lang", "rust", "--lang", "rust"], &hosts);
     assert_eq!(config(&dir, "detectors"), "rust-unused-dependencies");
+    assert_eq!(detectors(&dir), [rust_detector()]);
+
+    let (_tmp, dir) = repo();
+    init(&dir, &["--lang", "python", "--lang", "rust"], &hosts);
+    let python = (
+        "python-dead-code".to_owned(),
+        vec!["vulture".to_owned(), ".".to_owned()],
+        "pip install vulture".to_owned(),
+    );
+    assert_eq!(detectors(&dir), [python, rust_detector()]);
 
     let (_tmp, dir) = repo();
     let out = clm(&dir, &["init", "--lang", "cobol"], &path_with(&hosts));
     assert_eq!(out.status.code(), Some(1), "{out:?}");
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        err.contains("cobol") && err.contains("rust, typescript, python"),
-        "{err}"
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "clm init: unknown language `cobol`; known: rust, typescript, python\n"
     );
+    assert!(out.stdout.is_empty(), "{out:?}");
     assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "only .git");
+    // Compared exactly, case included.
+    let out = clm(&dir, &["init", "--lang", "Rust"], &path_with(&hosts));
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "only .git");
+}
+
+/// `rust`'s detector as `clm init` writes it: name, command and hint.
+fn rust_detector() -> (String, Vec<String>, String) {
+    (
+        "rust-unused-dependencies".to_owned(),
+        vec!["cargo-machete".to_owned()],
+        "cargo install --locked cargo-machete".to_owned(),
+    )
+}
+
+/// Each `[[detectors]]` table of `dir`'s `clm.toml`, in order, as (name, command, hint).
+fn detectors(dir: &Path) -> Vec<(String, Vec<String>, String)> {
+    let table: toml::Table = read(dir, "clm.toml").parse().unwrap();
+    table["detectors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| {
+            let command = d["command"].as_array().unwrap();
+            (
+                d["name"].as_str().unwrap().to_owned(),
+                command
+                    .iter()
+                    .map(|c| c.as_str().unwrap().to_owned())
+                    .collect(),
+                d["hint"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
 }
 
 /// Commits everything in `dir`.
@@ -829,7 +873,11 @@ fn check_permissions_outside_a_repository_and_with_other_options() {
     let plain = TempDir::new().unwrap();
     let out = check_permissions(plain.path());
     assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert!(String::from_utf8_lossy(&out.stderr).contains("not in a git repository"));
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).starts_with("clm init: not in a git repository: "),
+        "{out:?}"
+    );
     let (_tmp, dir) = repo();
     for other in [
         &["--lang", "rust"][..],
@@ -992,8 +1040,9 @@ fn not_a_repository() {
         common::call(&dir, &["init", "--lang", "rust"], &env, &vars)
     };
     assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("git"),
+        String::from_utf8_lossy(&out.stderr).starts_with("clm init: not in a git repository: "),
         "{out:?}"
     );
     assert_eq!(fs::read_dir(&dir).unwrap().count(), 0, "nothing written");
@@ -1187,14 +1236,37 @@ fn ignore_check_failure_leaves_the_file() {
     write(&dir, ".gitignore", "node_modules/\n");
     let hosts = fake_hosts();
     let out = clm(&dir, &["init"], &path_with(&hosts));
-    assert_ne!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
     let stderr = String::from_utf8_lossy(&out.stderr);
     // The command and git's own words.
     assert!(
-        stderr.contains("check-ignore") && stderr.contains("symbolic link"),
+        stderr.starts_with("clm init: ")
+            && stderr.contains("check-ignore")
+            && stderr.contains("symbolic link"),
         "{stderr}"
     );
     assert_eq!(read(&dir, ".gitignore"), "node_modules/\n");
+    // The files written before the failure stay written.
+    for file in [
+        "clm.toml",
+        "scripts/clm-check.sh",
+        "ARCHITECTURE.md",
+        "CAPABILITIES.md",
+    ] {
+        assert!(dir.join(file).is_file(), "{file}");
+    }
+
+    // A `.gitignore` that can't be read fails naming it.
+    let (_tmp, dir) = repo();
+    fs::create_dir(dir.join(".gitignore")).unwrap();
+    let out = clm(&dir, &["init"], &path_with(&hosts));
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).starts_with("clm init: .gitignore: "),
+        "{out:?}"
+    );
+    assert!(dir.join("clm.toml").is_file());
 }
 
 #[test]
@@ -1610,4 +1682,192 @@ fn empty_repository_every_language() {
         assert_eq!(script.status.code(), Some(0), "{script:?}");
     }
     assert_eq!(host_calls(&failing), "", "a stub ran");
+}
+
+#[test]
+fn what_it_lists() {
+    // req:init/init-files@86bfd1b0
+    let (_tmp, dir) = repo();
+    let out = init(&dir, &[], &fake_hosts());
+    let first: Vec<&str> = out.lines().take(9).collect();
+    assert_eq!(
+        first,
+        [
+            "wrote clm.toml",
+            "wrote scripts/clm-check.sh",
+            "wrote ARCHITECTURE.md",
+            "wrote CAPABILITIES.md",
+            "wrote .gitignore",
+            "wrote .claude/settings.json",
+            "wrote specs/SPEC.md",
+            "wrote AGENTS.md",
+            "wrote CLAUDE.md",
+        ],
+        "{out}"
+    );
+
+    let (_tmp, dir) = repo();
+    write(&dir, "CLAUDE.md", "# Ours\n");
+    let out = init(&dir, &[], &fake_hosts());
+    let lines: Vec<&str> = out.lines().collect();
+    let at = lines.iter().position(|l| *l == "kept CLAUDE.md").unwrap();
+    assert_eq!(
+        lines[at + 1],
+        "add `@AGENTS.md` to `CLAUDE.md` so Claude Code reads the same instructions",
+        "{out}"
+    );
+
+    // A line `@AGENTS.md`, white space after it aside, is the import: nothing to add.
+    let (_tmp, dir) = repo();
+    write(&dir, "CLAUDE.md", "# Ours\n@AGENTS.md \t\n");
+    let out = init(&dir, &[], &fake_hosts());
+    assert!(out.lines().any(|l| l == "kept CLAUDE.md"), "{out}");
+    assert!(!out.contains("add `@AGENTS.md`"), "{out}");
+}
+
+#[test]
+fn how_the_settings_file_is_written() {
+    // req:init/init-seeds-permissions@ccc79706
+    let (_tmp, dir) = repo();
+    let out = init(&dir, &[], &fake_hosts());
+    let text = read(&dir, ".claude/settings.json");
+    assert!(text.ends_with("}\n"), "{text}");
+    assert!(
+        text.starts_with("{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(clm apply)\""),
+        "{text}"
+    );
+    assert!(
+        out.lines().any(|l| l == "wrote .claude/settings.json"),
+        "{out}"
+    );
+
+    let (_tmp, dir) = repo();
+    write(&dir, ".claude/settings.json", "  \n");
+    let out = init(&dir, &[], &fake_hosts());
+    assert_eq!(allowed(&dir), rules());
+    assert!(
+        out.lines()
+            .any(|l| l == "added rules to .claude/settings.json"),
+        "{out}"
+    );
+
+    let (_tmp, dir) = repo();
+    let compact = serde_json::json!({"permissions": {"allow": rules()}}).to_string();
+    write(&dir, ".claude/settings.json", &compact);
+    let out = init(&dir, &[], &fake_hosts());
+    assert_eq!(read(&dir, ".claude/settings.json"), compact);
+    assert!(
+        out.lines().any(|l| l == "kept .claude/settings.json"),
+        "{out}"
+    );
+
+    let (_tmp, dir) = repo();
+    fs::create_dir_all(dir.join(".claude/settings.json")).unwrap();
+    let out = clm(&dir, &["init"], &path_with(&fake_hosts()));
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).starts_with("clm init: .claude/settings.json: "),
+        "{out:?}"
+    );
+}
+
+/// The step lines under `Next steps (yours):`, without their `- `, or none when `out` has no
+/// heading.
+fn step_lines(out: &str) -> Option<Vec<String>> {
+    let (before, steps) = out.split_once("Next steps (yours):\n")?;
+    assert!(
+        before.ends_with("\n\n"),
+        "a blank line before the heading: {out}"
+    );
+    Some(
+        steps
+            .lines()
+            .map(|l| {
+                l.strip_prefix("- ")
+                    .unwrap_or_else(|| panic!("{l}: {out}"))
+                    .to_owned()
+            })
+            .collect(),
+    )
+}
+
+#[test]
+fn what_is_already_done() {
+    // req:init/init-next-steps@1a95eded
+    let hosts = fake_hosts();
+    let push = "Commit these files and push them to `main` yourself; from then on every \
+                branch lands through `clm land`.";
+
+    // Set up, committed and pushed to a reachable `origin`: only the host's step.
+    let (tmp, dir) = repo();
+    init(&dir, &["--host", "git"], &hosts);
+    commit_all(&dir);
+    git(tmp.path(), &["init", "-q", "--bare", "origin.git"]);
+    origin(&dir, tmp.path().join("origin.git").to_str().unwrap());
+    git(&dir, &["push", "-q", "origin", "main"]);
+    let steps = step_lines(&init(&dir, &[], &hosts)).unwrap();
+    let git_steps = clm_host::setup_steps(clm_config::Host::Git);
+    assert_eq!(steps, git_steps);
+    assert_eq!(steps.len(), 1);
+    assert!(steps[0].contains("protects `main`"), "{steps:?}");
+
+    // A fresh one with no remote: the push alone.
+    let (_tmp, dir) = repo();
+    assert_eq!(step_lines(&init(&dir, &[], &hosts)).unwrap(), [push]);
+
+    // A fresh one on GitHub whose own `clm.toml` doesn't parse: the push, then GitHub's steps.
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    write(&dir, "clm.toml", "host = \n");
+    let mut expected = vec![push.to_owned()];
+    expected.extend(clm_host::setup_steps(clm_config::Host::Github));
+    assert_eq!(step_lines(&init(&dir, &[], &hosts)).unwrap(), expected);
+
+    // Set up and committed, its `origin` removed: the host's step and no push.
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://example.com/r.git");
+    init(&dir, &["--host", "git"], &hosts);
+    commit_all(&dir);
+    git(&dir, &["remote", "remove", "origin"]);
+    assert_eq!(step_lines(&init(&dir, &[], &hosts)).unwrap(), git_steps);
+
+    // Set up with no remote, committed and pushed to the `origin` it was given: no steps.
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &hosts);
+    commit_all(&dir);
+    git(&dir, &["push", "-q", "origin", "main"]);
+    let out = init(&dir, &[], &hosts);
+    assert_eq!(step_lines(&out), None, "{out}");
+    assert!(!out.contains("\n\n"), "{out}");
+}
+
+#[test]
+fn a_file_the_index_holds_but_the_disk_doesnt() {
+    // req:init/init-root-ownership@e3d39505
+    let (_tmp, dir) = repo();
+    write(&dir, "src/main.rs", "x\n");
+    write(&dir, "gone/x.rs", "x\n");
+    git(&dir, &["add", "-A"]);
+    fs::remove_file(dir.join("gone/x.rs")).unwrap();
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(spec_key(&dir, "outside"), r#"outside: ["src/**"]"#);
+}
+
+#[test]
+fn the_roots_title() {
+    // req:init/templates-say-new-words@8d1bce25
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(spec_key(&dir, "title"), r#"title: "shop""#);
+    assert!(!read(&dir, "specs/SPEC.md").contains("### Requirement:"));
+
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join("my \"app\"");
+    fs::create_dir(&dir).unwrap();
+    git(&dir, &["init", "-q", "-b", "main"]);
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(spec_key(&dir, "title"), r#"title: "my \"app\"""#);
+    let spec = read(&dir, "specs/SPEC.md");
+    assert!(!spec.contains("### Requirement:"), "{spec}");
+    assert_eq!(loaded(&dir).1, Vec::<String>::new());
 }

@@ -129,3 +129,26 @@ fn main_already_there() {
     let out = init(other.path(), &git_host(), &clm_config::process_env).unwrap();
     assert!(!out.contains("git branch -m"), "{out}");
 }
+
+#[test]
+fn what_it_cant_see() {
+    // req:init/init-names-missing-main@d5c16d43
+    // A detached `HEAD` on a repository with no `main`.
+    let dir = repo("master");
+    commit(dir.path());
+    git(dir.path(), &["switch", "-q", "--detach"]);
+    let out = init(dir.path(), &git_host(), &clm_config::process_env).unwrap();
+    assert!(!out.contains("git branch -m"), "{out}");
+
+    // A clone holding `origin/main` from an earlier fetch, whose `origin` is now gone.
+    let remote = repo("main");
+    commit(remote.path());
+    let dir = clone_of("master", remote.path());
+    git(dir.path(), &["fetch", "-q", "origin"]);
+    git(
+        dir.path(),
+        &["remote", "set-url", "origin", "/nowhere/at/all.git"],
+    );
+    let out = init(dir.path(), &git_host(), &clm_config::process_env).unwrap();
+    assert!(!out.contains("git branch -m"), "{out}");
+}
