@@ -16,7 +16,7 @@ fn commit(root: &Path, message: &str) {
 
 #[test]
 fn scenario_re_cited_across_commits_and_a_rename() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["x", "y"]));
@@ -42,7 +42,7 @@ fn scenario_re_cited_across_commits_and_a_rename() {
 
 #[test]
 fn scenario_what_doesnt_count() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["z"]));
@@ -83,7 +83,7 @@ fn scenario_what_doesnt_count() {
 
 #[test]
 fn no_commit_is_no_history() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     assert_eq!(clm_health::churn(d).unwrap(), None);
@@ -97,7 +97,7 @@ fn no_commit_is_no_history() {
 
 #[test]
 fn a_path_git_quotes_is_skipped() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["x"]));
@@ -116,7 +116,7 @@ fn a_path_git_quotes_is_skipped() {
 
 #[test]
 fn paths_with_spaces_and_a_users_prefixes() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     // A user's configured prefixes don't change what is read, nor does hiding the
@@ -139,7 +139,7 @@ fn paths_with_spaces_and_a_users_prefixes() {
 
 #[test]
 fn a_marker_outside_a_test_counts() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"src/**\"]", &["x"]));

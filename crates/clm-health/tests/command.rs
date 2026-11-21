@@ -87,7 +87,7 @@ fn repo() -> TempDir {
 
 #[test]
 fn scenario_a_command_called_in_a_test() {
-    // req:check.health/commands-in-crate@9f679611
+    // req:check.health/commands-in-crate@bb8aa7f2
     let dir = repo();
     write(dir.path(), "specs/a/SPEC.md", &common::spec("[]", &["x"]));
     let out = clm_health(dir.path());
@@ -140,7 +140,7 @@ fn scenario_a_command_called_in_a_test() {
 
 #[test]
 fn scenario_arguments_it_cant_parse() {
-    // req:check.health/commands-in-crate@9f679611
+    // req:check.health/commands-in-crate@bb8aa7f2
     let dir = repo();
     let out = call_health(dir.path(), &["--bogus"], Ok(common::settings(12000, 40000)));
     assert_eq!(out.status, 2, "{out:?}");
@@ -170,7 +170,7 @@ fn scenario_arguments_it_cant_parse() {
 
 #[test]
 fn scenario_a_clean_repository() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let out = clm_health(&root);
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -187,7 +187,7 @@ fn scenario_a_clean_repository() {
 
 #[test]
 fn scenario_findings_dont_fail_it() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let dir = repo();
     let d = dir.path();
     write(
@@ -212,7 +212,7 @@ fn scenario_findings_dont_fail_it() {
 
 #[test]
 fn scenario_settings_cant_be_loaded() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let dir = repo();
     write(dir.path(), "clm.toml", "[health]\nreconsider = 0\n");
     // What `crates/clm` passes when `config` rejects that file.
@@ -233,7 +233,7 @@ fn scenario_settings_cant_be_loaded() {
 
 #[test]
 fn a_missing_root_spec_exits_1_naming_it() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let dir = TempDir::new().unwrap();
     let out = clm_health(dir.path());
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -281,7 +281,7 @@ fn clm_workaround(root: &Path, requirement: &str, title: &str, body: &str) -> Ou
 
 #[test]
 fn workaround_writes_the_flag_from_stdin_and_commits_nothing() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let dir = repo();
     let d = dir.path();
     write(
@@ -356,7 +356,7 @@ const CROWDED: &str = "clm workaround: warning: 3 unsettled workarounds on capab
 
 #[test]
 fn third_flag_exits_3() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let dir = TempDir::new().unwrap();
     let root = served_repo(dir.path());
     for _ in 0..2 {
@@ -374,7 +374,7 @@ fn third_flag_exits_3() {
 
 #[test]
 fn second_flag_exits_0() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let dir = TempDir::new().unwrap();
     let root = served_repo(dir.path());
     assert_eq!(flag_x(&root).status, 0);
@@ -385,7 +385,7 @@ fn second_flag_exits_0() {
 
 #[test]
 fn settled_flags_not_counted() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let dir = TempDir::new().unwrap();
     let root = served_repo(dir.path());
     for _ in 0..2 {
@@ -406,7 +406,7 @@ fn settled_flags_not_counted() {
 
 #[test]
 fn settled_slug_never_reused() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let dir = TempDir::new().unwrap();
     let root = served_repo(dir.path());
     for _ in 0..2 {
@@ -431,7 +431,7 @@ fn settled_slug_never_reused() {
 
 #[test]
 fn workaround_flag_from_settings() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let dir = TempDir::new().unwrap();
     let root = served_repo(dir.path());
     // `crates/clm` passes `[effort] workaround_flag = 2` from `clm.toml`.
@@ -445,7 +445,7 @@ fn workaround_flag_from_settings() {
 
 #[test]
 fn workarounds_not_counted_when_settings_fail() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let dir = TempDir::new().unwrap();
     let root = served_repo(dir.path());
     // What `crates/clm` passes when `config` rejects `[effort] workaround_flag = 0`.
@@ -482,4 +482,115 @@ fn in_test(s: &str) -> String {
     } else {
         format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
     }
+}
+
+/// A directory that isn't a git repository, holding the root spec and component `a` with
+/// requirements `x` and `y`, neither serving a capability.
+fn plain_dir() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    write(
+        dir.path(),
+        "specs/SPEC.md",
+        "---\ntitle: R\nstatus: active\nowners: []\n---\n",
+    );
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        &common::spec("[]", &["x", "y"]),
+    );
+    let inside = Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(
+        !inside.status.success(),
+        "the temporary directory is in a git work tree"
+    );
+    dir
+}
+
+#[test]
+fn scenario_nothing_to_count() {
+    // req:check.health/workaround-command@36affded
+    let dir = plain_dir();
+    let out = call_workaround(dir.path(), "a/y", "x", "b\n", Ok(3));
+    assert_eq!(out.status, 0, "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "backlog/workaround-a-y-1.md\n"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let warning = "clm workaround: warning: the workarounds weren't counted: ";
+    assert!(
+        stderr.starts_with(warning)
+            && stderr.len() > warning.len() + 1
+            && stderr.lines().count() == 1,
+        "{stderr}"
+    );
+    assert!(dir.path().join("backlog/workaround-a-y-1.md").is_file());
+}
+
+/// A stream whose every read and write fails.
+struct Broken;
+
+impl std::io::Read for Broken {
+    fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("stdin is gone"))
+    }
+}
+
+impl std::io::Write for Broken {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("stdout is gone"))
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn scenario_the_body_cant_be_read_or_written() {
+    // req:check.health/workaround-command@36affded
+    let run = |root: &Path, stdin: &mut dyn std::io::Read, out: &mut dyn std::io::Write| {
+        let mut stderr = Vec::new();
+        let status = clm_health::workaround_command(
+            ["a/x", "--title", "x"],
+            root,
+            Ok(3),
+            stdin,
+            &|_| None,
+            out,
+            &mut stderr,
+        );
+        (status, String::from_utf8(stderr).unwrap())
+    };
+
+    // A standard input whose read fails: nothing written.
+    let dir = repo();
+    write(dir.path(), "specs/a/SPEC.md", &common::spec("[]", &["x"]));
+    let mut stdout = Vec::new();
+    let (status, stderr) = run(dir.path(), &mut Broken, &mut stdout);
+    assert_eq!(status, 1, "{stderr}");
+    assert_eq!(stderr, "clm workaround: reading the body: stdin is gone\n");
+    assert!(stdout.is_empty());
+    assert!(!dir.path().join("backlog").exists(), "a flag was written");
+
+    // A file named `backlog` where the directory would be.
+    write(dir.path(), "backlog", "");
+    let (status, stderr) = run(dir.path(), &mut "b\n".as_bytes(), &mut stdout);
+    assert_eq!(status, 1, "{stderr}");
+    assert!(stderr.starts_with("clm workaround: backlog: "), "{stderr}");
+    assert!(
+        stderr.len() > "clm workaround: backlog: \n".len(),
+        "{stderr}"
+    );
+    assert!(stdout.is_empty());
+
+    // An output stream that refuses writes: the flag stays written.
+    fs::remove_file(dir.path().join("backlog")).unwrap();
+    let (status, stderr) = run(dir.path(), &mut "b\n".as_bytes(), &mut Broken);
+    assert_eq!(status, 1, "{stderr}");
+    assert_eq!(stderr, "clm workaround: stdout is gone\n");
+    assert!(dir.path().join("backlog/workaround-a-x-1.md").is_file());
 }

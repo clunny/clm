@@ -49,7 +49,7 @@ fn report(root: &Path) -> String {
 
 #[test]
 fn scenario_slow_steps() {
-    // req:check.health/land-time-signal@ba4f73a6
+    // req:check.health/land-time-signal@1837fa40
     let (dir, root) = clone();
     for c in ["c1", "c2", "c3"] {
         land(
@@ -82,7 +82,7 @@ fn scenario_slow_steps() {
 
 #[test]
 fn only_the_five_costliest_steps_and_the_three_commonest_paths() {
-    // req:check.health/land-time-signal@ba4f73a6
+    // req:check.health/land-time-signal@1837fa40
     let (dir, root) = clone();
     let steps = (1..=6)
         .map(|i| {
@@ -104,7 +104,7 @@ fn only_the_five_costliest_steps_and_the_three_commonest_paths() {
 
 #[test]
 fn the_target_is_not_over_and_the_median_is_the_lower_middle() {
-    // req:check.health/land-time-signal@ba4f73a6
+    // req:check.health/land-time-signal@1837fa40
     let (dir, root) = clone();
     land(&root, dir.path(), "c1", vec![step("s", 60, &["z", "a"])]);
     land(&root, dir.path(), "c2", vec![step("s", 61, &["z"])]);
@@ -121,7 +121,7 @@ fn the_target_is_not_over_and_the_median_is_the_lower_middle() {
 
 #[test]
 fn steps_tied_on_total_go_by_name() {
-    // req:check.health/land-time-signal@ba4f73a6
+    // req:check.health/land-time-signal@1837fa40
     let (dir, root) = clone();
     land(
         &root,
@@ -137,7 +137,7 @@ fn steps_tied_on_total_go_by_name() {
 
 #[test]
 fn scenario_no_timings() {
-    // req:check.health/land-time-signal@ba4f73a6
+    // req:check.health/land-time-signal@1837fa40
     let (_dir, root) = clone();
     let out = report(&root);
     assert_eq!(

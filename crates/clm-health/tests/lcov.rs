@@ -11,7 +11,7 @@ fn with_lcov(lcov: &str) -> clm_health::Settings {
 
 #[test]
 fn scenario_a_run_of_unexercised_lines() {
-    // req:check.health/unexercised-code@2c85f1a2
+    // req:check.health/unexercised-code@3b36e1e7
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", &["x"]));
@@ -38,7 +38,7 @@ fn scenario_a_run_of_unexercised_lines() {
 
 #[test]
 fn scenario_no_file() {
-    // req:check.health/unexercised-code@2c85f1a2
+    // req:check.health/unexercised-code@3b36e1e7
     let dir = repo();
     let out = report_with(dir.path(), &with_lcov("cov.info"));
     assert_eq!(
@@ -50,7 +50,7 @@ fn scenario_no_file() {
 
 #[test]
 fn no_lcov_file_configured() {
-    // req:check.health/unexercised-code@2c85f1a2
+    // req:check.health/unexercised-code@3b36e1e7
     let dir = repo();
     let out = report_with(dir.path(), &settings(12000, 40000));
     assert_eq!(

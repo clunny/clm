@@ -8,7 +8,7 @@ const DAY: u64 = 86_400;
 
 #[test]
 fn scenario_lapsed_claim() {
-    // req:check.health/state-signals@1f6b7a1b
+    // req:check.health/state-signals@baf22711
     let origin = TempDir::new().unwrap();
     git(origin.path(), &["init", "-q", "--bare"]);
     let dir = repo();
@@ -41,7 +41,7 @@ fn scenario_lapsed_claim() {
 
 #[test]
 fn a_merged_claim_never_lapses() {
-    // req:check.health/state-signals@1f6b7a1b
+    // req:check.health/state-signals@baf22711
     let origin = TempDir::new().unwrap();
     git(origin.path(), &["init", "-q", "--bare"]);
     let dir = repo();
@@ -63,7 +63,7 @@ fn a_merged_claim_never_lapses() {
 
 #[test]
 fn without_an_origin_nothing_is_listed() {
-    // req:check.health/state-signals@1f6b7a1b
+    // req:check.health/state-signals@baf22711
     let dir = repo();
     let out = report(dir.path());
     assert_eq!(
@@ -91,7 +91,7 @@ fn change(root: &std::path::Path, id: &str, status: &str, added: &[&str]) {
 
 #[test]
 fn scenario_stalled_change() {
-    // req:check.health/state-signals@1f6b7a1b
+    // req:check.health/state-signals@baf22711
     let dir = repo();
     let d = dir.path();
     write(
@@ -125,7 +125,7 @@ fn scenario_stalled_change() {
 
 #[test]
 fn scenario_unanswered_question() {
-    // req:check.health/state-signals@1f6b7a1b
+    // req:check.health/state-signals@baf22711
     let dir = repo();
     let d = dir.path();
     let item = |kind: &str| format!("---\ntitle: T\nkind: {kind}\n---\nWhat?\n");
@@ -149,7 +149,7 @@ fn scenario_unanswered_question() {
 
 #[test]
 fn a_stale_human_task_is_reported() {
-    // req:check.health/state-signals@1f6b7a1b
+    // req:check.health/state-signals@baf22711
     let dir = repo();
     let d = dir.path();
     commit_ago(d, "root", 50 * DAY);
@@ -172,7 +172,7 @@ fn a_stale_human_task_is_reported() {
 
 #[test]
 fn an_item_in_a_repository_without_commits_is_untracked() {
-    // req:check.health/state-signals@1f6b7a1b
+    // req:check.health/state-signals@baf22711
     let dir = repo();
     let d = dir.path();
     write(

@@ -32,7 +32,7 @@ const SIGNALS: [&str; 24] = [
 
 #[test]
 fn every_signal_prints_its_summary_in_the_table_order() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let dir = repo();
     let out = report(dir.path());
     let summaries: Vec<&str> = out
@@ -46,7 +46,7 @@ fn every_signal_prints_its_summary_in_the_table_order() {
 
 #[test]
 fn model_violations_are_findings_under_check() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"src/**\"]", &["x"]));
@@ -67,7 +67,7 @@ fn model_violations_are_findings_under_check() {
 
 #[test]
 fn a_missing_root_spec_is_refused() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let dir = tempfile::TempDir::new().unwrap();
     git(dir.path(), &["init", "-q"]);
     let e = clm_health::report(dir.path(), &settings(1, 1), 4).unwrap_err();
@@ -77,8 +77,8 @@ fn a_missing_root_spec_is_refused() {
 
 #[test]
 fn scenario_pending_and_oversized() {
-    // req:check.health/state-signals@1f6b7a1b
-    // req:check.health/says-component@15cdb4fa
+    // req:check.health/state-signals@baf22711
+    // req:check.health/says-component@d7dedc6a
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[]", &["x"]));
@@ -108,7 +108,7 @@ fn scenario_pending_and_oversized() {
 
 #[test]
 fn a_violation_the_model_reports_is_a_finding_under_check() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let dir = repo();
     write(dir.path(), "specs/a/SPEC.md", "no frontmatter\n");
     let out = report(dir.path());
@@ -120,7 +120,7 @@ fn a_violation_the_model_reports_is_a_finding_under_check() {
 
 #[test]
 fn a_git_failure_is_exit_2() {
-    // req:check.health/health-report@a5dd24b1
+    // req:check.health/health-report@d9222477
     let dir = tempfile::TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", common::ROOT);
     let e = clm_health::report(dir.path(), &settings(1, 1), 4).unwrap_err();
@@ -129,7 +129,7 @@ fn a_git_failure_is_exit_2() {
 
 #[test]
 fn scenario_the_budgets_by_their_name() {
-    // req:check.health/component-size-field@7cb5ae48
+    // req:check.health/component-size-field@ad908dc1
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[]", &["x"]));
