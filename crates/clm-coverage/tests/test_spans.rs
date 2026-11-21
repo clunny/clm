@@ -648,3 +648,16 @@ const z = 1;
         ]
     );
 }
+
+#[test]
+fn scenario_a_test_in_a_block_comment() {
+    // req:check.coverage/test-spans@056ed909
+    let text = "/*\nit('a', () => {});\n*/\nit('b', () => {});\n";
+    assert_eq!(
+        spans("a.test.ts", text),
+        [
+            ("a".to_string(), false, 1, 2),
+            ("b".to_string(), false, 3, 4),
+        ]
+    );
+}

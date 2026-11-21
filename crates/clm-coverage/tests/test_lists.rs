@@ -67,6 +67,38 @@ fn scenario_uncounted() {
 }
 
 #[test]
+fn scenario_an_entry_outside_a_test() {
+    // req:check.coverage/test-lists@c55fd5ec
+    let dir = repo(&[]);
+    write(
+        dir.path(),
+        "ARCHITECTURE.md",
+        "## Constraints\n\n### Constraint: e\nIt SHALL hold.\n\n#### Scenario: s\n- ok\n\n#### Untested\nA judgement.\n",
+    );
+    let g = graph(dir.path());
+    assert!(g.requirement("architecture/e").is_some());
+    let text = format!("fn a() {{}}\n// {REQ}:architecture/e\n// {REQ}:a/x\n");
+    let outside = markers_outside_tests(std::path::Path::new("src/lib.rs"), &text);
+    assert_eq!(outside.len(), 2);
+    let shown: Vec<_> = uncounted(&g, &outside)
+        .iter()
+        .map(|u| {
+            (
+                u.id.clone(),
+                u.markers
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        shown,
+        [("a/x".to_string(), vec!["src/lib.rs:3".to_string()])]
+    );
+}
+
+#[test]
 fn uncounted_lists_each_marker_of_an_id() {
     // req:check.coverage/test-lists@16d255e1
     let dir = repo(&[]);

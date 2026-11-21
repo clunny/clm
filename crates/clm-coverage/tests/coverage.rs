@@ -273,7 +273,7 @@ fn scenario_same_as_checkout() {
 fn markers_in_carries_versions() {
     // req:check.coverage/markers-from-files@f29b72b7
     let text = in_test(&format!(
-        "// {REQ}a/x@0123abcd {REQ}a/y {REQ}a/z@xyz {REQ}a/w@0123abcd9 {REQ}a/v@0123ABCD\n"
+        "// {REQ}a/x@0123abcd {REQ}a/y {REQ}a/z@xyz {REQ}a/w@0123abcd9 {REQ}a/v@0123ABCD {REQ}a/u@0123abcdg\n"
     ));
     let found = clm_coverage::markers_in(Path::new("t.rs"), &text);
     let seen: Vec<(&str, Option<&str>)> = found
@@ -287,7 +287,8 @@ fn markers_in_carries_versions() {
             ("a/y", None),
             ("a/z", None),
             ("a/w", None),
-            ("a/v", None)
+            ("a/v", None),
+            ("a/u", Some("0123abcd"))
         ]
     );
 }

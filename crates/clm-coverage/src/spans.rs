@@ -444,13 +444,16 @@ fn script_tests(lines: &[&str]) -> Vec<TestSpan> {
             }
         })
         .collect();
-    // Each call, by the line (0-based) it starts on; its last line is found below.
+    // Each call, by the line (0-based) it starts on; its last line is found below. A
+    // call's first lines never reach back onto the line of the call before it.
+    let mut floor = 0;
     let mut calls: Vec<(usize, TestSpan)> = lines
         .iter()
         .enumerate()
         .filter_map(|(at, line)| {
             let (group, args) = script_call(line)?;
-            let first = first_above(at, 0, |i| comment[i]) + 1;
+            let first = first_above(at, floor, |i| comment[i]) + 1;
+            floor = at + 1;
             let name = script_name(args);
             let span = TestSpan {
                 name,

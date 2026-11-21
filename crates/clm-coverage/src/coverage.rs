@@ -308,29 +308,41 @@ pub struct Scan {
     pub remove_by: Vec<Marker>,
 }
 
-/// Markers in every non-Markdown file git would track (all files outside hidden dirs and
-/// `target/` when `root` isn't a git work tree).
+/// Markers in every non-Markdown file `read_files` gives (`markers-from-files`).
 #[cfg(feature = "checkout")]
 pub fn scan(root: &Path) -> Scan {
+    let mut scan = Scan {
+        req: Vec::new(),
+        outside: Vec::new(),
+        remove_by: Vec::new(),
+    };
+    for (rel, text) in read_files(root) {
+        scan_text(&rel, &text, &mut scan);
+    }
+    scan
+}
+
+/// Every file git would track in `root` (every file under it outside a `.git` or `target`
+/// directory when it isn't a git work tree), each once, as its path relative to `root` and
+/// its text, sorted by path: those `scan` reads, Markdown included. A file that can't be
+/// read, or whose bytes or path aren't UTF-8, is left out (`markers-from-files`).
+#[cfg(feature = "checkout")]
+pub fn read_files(root: &Path) -> Vec<(PathBuf, String)> {
     let mut files = git_files(root).unwrap_or_else(|| {
         let mut files = Vec::new();
         walk(root, root, &mut files);
         files
     });
     files.sort();
-
-    let mut scan = Scan {
-        req: Vec::new(),
-        outside: Vec::new(),
-        remove_by: Vec::new(),
-    };
-    for rel in files {
-        let Ok(text) = fs::read_to_string(root.join(&rel)) else {
-            continue; // unreadable or not UTF-8: not a test source
-        };
-        scan_text(&rel, &text, &mut scan);
-    }
-    scan
+    files.dedup(); // a file in conflict is listed once per merge stage
+    files
+        .into_iter()
+        .filter(|rel| rel.to_str().is_some())
+        .filter_map(|rel| {
+            let text = fs::read_to_string(root.join(&rel)).ok()?;
+            Some((rel, text))
+        })
+        .collect()
 }
 
 /// The `req:<id>[@<version>]` markers in one file, `path` repo-relative: what `scan` finds
@@ -418,26 +430,33 @@ fn git_files(root: &Path) -> Option<Vec<PathBuf>> {
     Some(
         out.split(|b| *b == 0)
             .filter(|s| !s.is_empty())
-            .map(|s| PathBuf::from(String::from_utf8_lossy(s).into_owned()))
+            .filter_map(|s| std::str::from_utf8(s).ok().map(PathBuf::from))
             .filter(|p| root.join(p).is_file())
             .collect(),
     )
 }
 
+/// The files under `dir`, outside any directory named `.git` or `target`, as paths
+/// relative to `root`. A link is never followed into a directory, so a cycle of links
+/// ends; a link to a file is listed, and read through.
 #[cfg(feature = "checkout")]
 fn walk(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
         let path = entry.path();
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if path.is_dir() {
-            if !name.starts_with('.') && name != "target" {
+        if kind.is_dir() {
+            let name = entry.file_name();
+            if name != ".git" && name != "target" {
                 walk(root, &path, out);
             }
-        } else if let Ok(rel) = path.strip_prefix(root) {
+        } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
+            && let Ok(rel) = path.strip_prefix(root)
+        {
             out.push(rel.to_path_buf());
         }
     }
