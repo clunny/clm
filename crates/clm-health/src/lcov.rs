@@ -10,10 +10,13 @@ use crate::{Section, finding};
 
 const SIGNAL: &str = "unexercised";
 
-/// Each file's execution count per line, by path relative to `root` when it is absolute
-/// under it. Lines other than `SF:`, `DA:` and `end_of_record` are skipped.
+/// Each file's execution count per line, the records' counts for a line added and saturating,
+/// by path relative to `root`: an absolute path under `root`, made absolute or with its links
+/// resolved, with the root taken off, and any other path as written. Lines other than `SF:`,
+/// `DA:` and `end_of_record` are skipped.
 fn parse(root: &Path, text: &str) -> BTreeMap<String, BTreeMap<u64, u64>> {
-    let roots = [Some(root.to_path_buf()), root.canonicalize().ok()];
+    // Both roots are absolute, so a relative path never starts with either.
+    let roots = [std::path::absolute(root).ok(), root.canonicalize().ok()];
     let relative = |p: &str| {
         roots
             .iter()
@@ -36,7 +39,8 @@ fn parse(root: &Path, text: &str) -> BTreeMap<String, BTreeMap<u64, u64>> {
             ) else {
                 continue;
             };
-            *files.entry(f.clone()).or_default().entry(n).or_default() += count;
+            let sum = files.entry(f.clone()).or_default().entry(n).or_default();
+            *sum = sum.saturating_add(count);
         }
     }
     files

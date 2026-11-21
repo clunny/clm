@@ -108,7 +108,7 @@ const REQ_X: &str = "\n### Requirement: x\nx.\n\n#### Scenario: s\n- on 2026-10-
 
 #[test]
 fn scenario_history_in_a_design() {
-    // req:check.health/spec-bloat-signals@6a8806e4
+    // req:check.health/spec-bloat-signals@28d7c6ab
     let dir = repo();
     let d = dir.path();
     // Line 11 is `## Design`, so its third line is 14.
@@ -128,7 +128,7 @@ fn scenario_history_in_a_design() {
 
 #[test]
 fn scenario_a_present_condition() {
-    // req:check.health/spec-bloat-signals@6a8806e4
+    // req:check.health/spec-bloat-signals@28d7c6ab
     let dir = repo();
     let d = dir.path();
     let design = "Design.\n\nA local branch that no longer contains its remote tip is kept\n";
@@ -143,7 +143,7 @@ fn scenario_a_present_condition() {
 
 #[test]
 fn scenario_a_passive_used_to() {
-    // req:check.health/spec-bloat-signals@6a8806e4
+    // req:check.health/spec-bloat-signals@28d7c6ab
     let dir = repo();
     let d = dir.path();
     let design = "Design.\n\nThe claim ref is used to hold the session's place\n";
@@ -157,8 +157,8 @@ fn scenario_a_passive_used_to() {
 }
 
 #[test]
-fn history_phrases_match_whole_words_in_any_case() {
-    // req:check.health/spec-bloat-signals@6a8806e4
+fn scenario_a_phrase_in_any_case() {
+    // req:check.health/spec-bloat-signals@28d7c6ab
     let dir = repo();
     let d = dir.path();
     let contract = "It Previously ran.\nThe refused run stays.\nToday's build.\n\n";
@@ -184,8 +184,8 @@ fn bytes(fill: char, bytes: usize) -> String {
 
 #[test]
 fn scenario_design_heavier_than_the_rest() {
-    // req:check.health/spec-bloat-signals@6a8806e4
-    // req:check.health/says-component@15cdb4fa
+    // req:check.health/spec-bloat-signals@28d7c6ab
+    // req:check.health/says-component@d7dedc6a
     let dir = repo();
     let d = dir.path();
     let (head, tail) = ("\n### Requirement: x\n", "\n#### Scenario: s\n- ok\n");
@@ -204,9 +204,56 @@ fn scenario_design_heavier_than_the_rest() {
 }
 
 #[test]
+fn scenario_nothing_to_weigh() {
+    // req:check.health/spec-bloat-signals@28d7c6ab
+    let dir = repo();
+    let d = dir.path();
+    let a = node(" \n\t\n", &bytes('d', 2000), "");
+    write(d, "specs/a/SPEC.md", &a);
+    let out = report(d);
+    assert_eq!(
+        section(&out, "design-heavy"),
+        ["health/design-heavy: 0 components"],
+        "{out}"
+    );
+}
+
+#[test]
+fn scenario_over_on_both_counts() {
+    // req:check.health/spec-bloat-signals@28d7c6ab
+    let dir = repo();
+    let d = dir.path();
+    let size = spec("[\"src/a/**\"]", &["x"]).len();
+    for (n, code) in [("a", 1000), ("b", 1200), ("c", 1100), ("d", 8000)] {
+        let mut text = spec(&format!("[\"src/{n}/**\"]"), &["x"]);
+        if n == "d" {
+            // Eight times the size of each of the others, its statement padded.
+            let pad = "y".repeat(7 * size);
+            text = text.replacen("\nx.\n", &format!("\nx.{pad}\n"), 1);
+            assert_eq!(text.len(), 8 * size);
+        }
+        write(d, &format!("specs/{n}/SPEC.md"), &text);
+        write(d, &format!("src/{n}/code.txt"), &"x".repeat(code));
+    }
+    git(d, &["add", "-A"]);
+    let out = report(d);
+    let lines = section(&out, "outlier-size");
+    assert_eq!(lines.len(), 3, "{out}");
+    assert_eq!(lines[0], "health/outlier-size: 1 components", "{out}");
+    assert!(
+        lines[1].starts_with("specs/d/SPEC.md: health/outlier-size: code 2000 tokens"),
+        "{out}"
+    );
+    assert!(
+        lines[2].starts_with("specs/d/SPEC.md: health/outlier-size: spec "),
+        "{out}"
+    );
+}
+
+#[test]
 fn scenario_outlier() {
-    // req:check.health/spec-bloat-signals@6a8806e4
-    // req:check.health/says-component@15cdb4fa
+    // req:check.health/spec-bloat-signals@28d7c6ab
+    // req:check.health/says-component@d7dedc6a
     let dir = repo();
     let d = dir.path();
     for (n, size) in [("a", 1000), ("b", 1200), ("c", 1100), ("d", 8000)] {
@@ -231,8 +278,8 @@ fn scenario_outlier() {
 
 #[test]
 fn fewer_than_three_nodes_give_no_median() {
-    // req:check.health/spec-bloat-signals@6a8806e4
-    // req:check.health/says-component@15cdb4fa
+    // req:check.health/spec-bloat-signals@28d7c6ab
+    // req:check.health/says-component@d7dedc6a
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[]", &["x"]));

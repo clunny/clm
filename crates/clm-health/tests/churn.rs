@@ -16,7 +16,7 @@ fn commit(root: &Path, message: &str) {
 
 #[test]
 fn scenario_re_cited_across_commits_and_a_rename() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["x", "y"]));
@@ -42,7 +42,7 @@ fn scenario_re_cited_across_commits_and_a_rename() {
 
 #[test]
 fn scenario_what_doesnt_count() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["z"]));
@@ -83,7 +83,7 @@ fn scenario_what_doesnt_count() {
 
 #[test]
 fn no_commit_is_no_history() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     assert_eq!(clm_health::churn(d).unwrap(), None);
@@ -96,12 +96,15 @@ fn no_commit_is_no_history() {
 }
 
 #[test]
-fn a_path_git_quotes_is_skipped() {
-    // req:check.health/churn-signal@497eb239
+fn a_path_git_quotes_counts() {
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["x"]));
     write(d, "tests/a\"b.rs", &cite("a/x", "@11111111"));
+    write(d, "tests/tab\there.rs", &cite("a/x", "@33333333"));
+    write(d, "tests/back\\slash.md", &cite("a/x", "@44444444"));
+    write(d, "tests/ctl\u{1}.rs", &cite("a/x", "@55555555"));
     write(d, "tests/ok.rs", &cite("a/x", "@22222222"));
     commit(d, "one");
     let churn = clm_health::churn(d).unwrap().unwrap();
@@ -109,14 +112,84 @@ fn a_path_git_quotes_is_skipped() {
         churn,
         [Churn {
             id: "a/x".into(),
-            versions: vec!["22222222".into()],
+            versions: ["11111111", "22222222", "33333333", "55555555"]
+                .map(String::from)
+                .into(),
         }]
     );
 }
 
 #[test]
+fn scenario_no_history() {
+    // req:check.health/churn-signal@06a1b9c3
+    let dir = repo();
+    assert_eq!(clm_health::churn(dir.path()).unwrap(), None);
+    let plain = tempfile::TempDir::new().unwrap();
+    let inside = std::process::Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .current_dir(plain.path())
+        .output()
+        .unwrap();
+    assert!(
+        !inside.status.success(),
+        "the directory is in a git work tree"
+    );
+    assert!(
+        matches!(
+            clm_health::churn(plain.path()),
+            Err(clm_health::Failure::Git(_))
+        ),
+        "{:?}",
+        clm_health::churn(plain.path())
+    );
+}
+
+#[test]
+fn scenario_the_patchs_shape() {
+    // req:check.health/churn-signal@06a1b9c3
+    let dir = repo();
+    let d = dir.path();
+    for (key, value) in [
+        ("diff.noprefix", "true"),
+        ("diff.dstPrefix", "new/"),
+        ("log.showRoot", "false"),
+        ("color.ui", "always"),
+        ("core.quotePath", "true"),
+        ("diff.srcPrefix", "old/"),
+        ("diff.mnemonicPrefix", "true"),
+    ] {
+        git(d, &["config", key, value]);
+    }
+    write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["x"]));
+    write(d, "tests/my test.rs", &cite("a/x", "@11111111"));
+    write(d, "tests/a\"b.rs", &cite("a/x", "@22222222"));
+    write(d, "tests/é.rs", &cite("a/x", "@33333333"));
+    write(d, "docs/my notes.md", &cite("a/x", "@44444444"));
+    commit(d, "root");
+    let churn = clm_health::churn(d).unwrap().unwrap();
+    assert_eq!(
+        churn,
+        [Churn {
+            id: "a/x".into(),
+            versions: ["11111111", "22222222", "33333333"]
+                .map(String::from)
+                .into(),
+        }]
+    );
+    let out = report(d);
+    assert_eq!(
+        section(&out, "churn"),
+        [
+            "health/churn: 1 requirements",
+            "specs/a/SPEC.md: health/churn: a/x cited at 3 versions",
+        ],
+        "{out}"
+    );
+}
+
+#[test]
 fn paths_with_spaces_and_a_users_prefixes() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     // A user's configured prefixes don't change what is read, nor does hiding the
@@ -139,7 +212,7 @@ fn paths_with_spaces_and_a_users_prefixes() {
 
 #[test]
 fn a_marker_outside_a_test_counts() {
-    // req:check.health/churn-signal@497eb239
+    // req:check.health/churn-signal@06a1b9c3
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"src/**\"]", &["x"]));

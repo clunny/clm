@@ -52,24 +52,20 @@ pub fn churn(root: &Path) -> Result<Option<Vec<Churn>>, Failure> {
     }
     let log = clm_git::run(root, "git", &LOG, clm_git::Options::default())?;
     let mut cited: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    let mut path: Option<&Path> = None;
+    let mut path: Option<String> = None;
     let mut after_minus = false;
     let log = String::from_utf8_lossy(&log);
     for line in log.lines() {
         let header = after_minus && line.starts_with("+++ ");
         after_minus = line.starts_with("--- ");
         if header {
-            // `+++ /dev/null` names no file, nor does a path git still quotes. Git ends
-            // the header of a path holding a space with a tab.
-            path = line
-                .strip_prefix("+++ b/")
-                .map(|p| Path::new(p.strip_suffix('\t').unwrap_or(p)));
+            path = header_path(&line["+++ ".len()..]);
             continue;
         }
-        let (Some(text), Some(file)) = (line.strip_prefix('+'), path) else {
+        let (Some(text), Some(file)) = (line.strip_prefix('+'), &path) else {
             continue;
         };
-        if file.extension().is_some_and(|e| e == "md") {
+        if Path::new(file).extension().is_some_and(|e| e == "md") {
             continue;
         }
         for m in clm_coverage::marker_spans(text) {
@@ -88,6 +84,55 @@ pub fn churn(root: &Path) -> Result<Option<Vec<Churn>>, Failure> {
             })
             .collect(),
     ))
+}
+
+/// The file a `+++ ` header names, from the text after `+++ `: `b/<path>`, with the tab git
+/// ends a path holding a space with taken off, or `"b/<path>"` as git quotes it, unquoted.
+/// `/dev/null`, a deleted file, names none.
+fn header_path(name: &str) -> Option<String> {
+    let name = match name.strip_prefix('"') {
+        Some(quoted) => unquote(quoted)?,
+        None => name.strip_suffix('\t').unwrap_or(name).to_string(),
+    };
+    name.strip_prefix("b/").map(str::to_string)
+}
+
+/// The text of a path git quoted, from after its opening `"`: its C-style escapes and octal
+/// bytes read back, up to the closing `"`. `None` when it isn't closed or an escape is unknown.
+fn unquote(quoted: &str) -> Option<String> {
+    let mut bytes = Vec::new();
+    let mut rest = quoted.bytes();
+    loop {
+        match rest.next()? {
+            b'"' => return Some(String::from_utf8_lossy(&bytes).into_owned()),
+            b'\\' => {
+                let byte = match rest.next()? {
+                    b'a' => 0x07,
+                    b'b' => 0x08,
+                    b't' => b'\t',
+                    b'n' => b'\n',
+                    b'v' => 0x0b,
+                    b'f' => 0x0c,
+                    b'r' => b'\r',
+                    b'"' => b'"',
+                    b'\\' => b'\\',
+                    d @ b'0'..=b'3' => {
+                        let mut value = u32::from(d - b'0');
+                        for _ in 0..2 {
+                            match rest.next()? {
+                                o @ b'0'..=b'7' => value = value * 8 + u32::from(o - b'0'),
+                                _ => return None,
+                            }
+                        }
+                        value as u8
+                    }
+                    _ => return None,
+                };
+                bytes.push(byte);
+            }
+            b => bytes.push(b),
+        }
+    }
 }
 
 /// Each requirement the graph holds that the history cites at three or more versions.

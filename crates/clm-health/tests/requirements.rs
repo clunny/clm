@@ -38,7 +38,7 @@ fn archived(root: &std::path::Path, id: &str, slugs: &[&str]) {
 
 #[test]
 fn scenario_workaround_and_rewrites() {
-    // req:check.health/requirement-signals@55b8d0c4
+    // req:check.health/requirement-signals@2b4df135
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[]", &["x", "y"]));
@@ -67,12 +67,12 @@ fn scenario_workaround_and_rewrites() {
 
 #[test]
 fn scenario_scenarios_and_exceptions() {
-    // req:check.health/requirement-signals@55b8d0c4
+    // req:check.health/requirement-signals@2b4df135
     let dir = repo();
     let d = dir.path();
     let a = "---\ntitle: N\nstatus: active\nowners: []\npaths: []\n---\n\n## Requirements\n\n\
 ### Requirement: x\nx.\n\n#### Scenario: 1\n- ok\n\n#### Scenario: 2\n- ok\n\n#### Scenario: 3\n- ok\n\n\
-### Requirement: y\nIt reads it, unless the file is missing, except on Windows; an exception.\n\n\
+### Requirement: y\nIt reads it, Unless the file is missing, EXCEPT on Windows; an exception.\n\n\
 #### Scenario: s\n- unless this, unless that\n";
     write(d, "specs/a/SPEC.md", a);
     let tight = clm_health::Settings {
@@ -197,7 +197,7 @@ fn a_score_counts_scenarios_and_exceptions_once_flagged() {
 #[test]
 fn scenario_library_returns_the_item() {
     // req:check.health/reconsider-score@3d4ea3d7
-    // req:check.health/says-component@15cdb4fa
+    // req:check.health/says-component@d7dedc6a
     let dir = scored();
     let d = dir.path();
     let (graph, _) = clm_model::load(d);

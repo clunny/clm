@@ -77,18 +77,15 @@ pub fn workaround(
 
 /// Each capability `requirement` serves (and `CAPABILITIES.md` holds) whose unsettled workaround
 /// flags number `threshold` or more, with the count, in serves order (`workaround-command`).
-/// `Git` when the ledger can't be read.
+/// `Git` when the ledger can't be read, whether or not the requirement serves a capability.
 pub(crate) fn crowded(
     root: &Path,
     requirement: &str,
     threshold: u64,
 ) -> Result<Vec<(String, usize)>, Failure> {
+    let fold = clm_ledger::fold(root).map_err(|e| Failure::Git(e.to_string()))?;
     let (graph, _) = clm_model::load(root);
     let capabilities = clm_effort::capabilities_of(&graph, requirement);
-    if capabilities.is_empty() {
-        return Ok(Vec::new());
-    }
-    let fold = clm_ledger::fold(root).map_err(|e| Failure::Git(e.to_string()))?;
     Ok(capabilities
         .into_iter()
         .map(|c| (c.to_string(), clm_effort::unsettled(&graph, &fold, c).len()))

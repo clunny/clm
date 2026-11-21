@@ -16,7 +16,7 @@ fn node_a() -> (tempfile::TempDir, String) {
 
 #[test]
 fn scenario_first_flag() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let (dir, version) = node_a();
     let d = dir.path();
     let body = "The scenario needs a fixed date, so the test fakes the clock.\n";
@@ -41,7 +41,7 @@ fn scenario_first_flag() {
 
 #[test]
 fn scenario_second_flag() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let (dir, _) = node_a();
     let d = dir.path();
     clm_health::workaround(d, "a/x", "Faked the clock", "one\n").unwrap();
@@ -54,7 +54,7 @@ fn scenario_second_flag() {
 
 #[test]
 fn a_title_with_quotes_reads_back() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let (dir, _) = node_a();
     let d = dir.path();
     clm_health::workaround(d, "a/x", "Said \"no\": then: yes", "b\n").unwrap();
@@ -68,7 +68,7 @@ fn a_title_with_quotes_reads_back() {
 
 #[test]
 fn scenario_no_such_requirement() {
-    // req:check.health/workaround-command@d9c5203d
+    // req:check.health/workaround-command@36affded
     let (dir, _) = node_a();
     let d = dir.path();
     for id in ["a/ghost", "ghost", "b/x"] {
