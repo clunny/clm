@@ -63,23 +63,29 @@ pub fn apply_in(
     supersedes: &[(&str, &str)],
     root: &Path,
 ) -> Result<String, String> {
+    check_clm_toml(root)?;
     let pending = pending_or_refuse(list, supersedes, root)?;
     let mut out = String::new();
     let mut failures = String::new();
     for m in &pending {
-        match &m.kind {
-            Kind::Apply(run, _) => match run(root) {
-                Ok(()) => out.push_str(&format!("applied {}\n", m.id)),
-                Err(e) => failures.push_str(&format!("migration `{}` failed: {e}\n", m.id)),
-            },
-            Kind::Note(n) => {
-                let Some(new) = n.new else { continue };
-                let path = root.join(n.file);
-                if fs::read_to_string(&path).is_ok_and(|text| n.old.contains(&text.as_str())) {
-                    fs::write(&path, new).map_err(|e| format!("can't write {}: {e}", n.file))?;
-                    out.push_str(&format!("applied {}\n", m.id));
+        let result = match &m.kind {
+            Kind::Apply(run, _) => run(root).map(|()| true),
+            Kind::Note(n) => match n.new {
+                Some(new)
+                    if fs::read_to_string(root.join(n.file))
+                        .is_ok_and(|text| n.old.contains(&text.as_str())) =>
+                {
+                    fs::write(root.join(n.file), new)
+                        .map(|()| true)
+                        .map_err(|e| format!("can't write {}: {e}", n.file))
                 }
-            }
+                _ => Ok(false),
+            },
+        };
+        match result {
+            Ok(true) => out.push_str(&format!("applied {}\n", m.id)),
+            Ok(false) => {}
+            Err(e) => failures.push_str(&format!("migration `{}` failed: {e}\n", m.id)),
         }
     }
     if !failures.is_empty() {
@@ -97,9 +103,23 @@ pub fn apply_in(
         }
     }
     if let Some(latest) = latest_in(list) {
-        set_key(root, "upgraded", &quote(latest))?;
+        set_key(root, "upgraded", &quote(latest)).map_err(|e| format!("{out}{e}"))?;
     }
     Ok(out)
+}
+
+/// Refuses a `clm.toml` that exists and can't be read as UTF-8 text or doesn't parse as TOML,
+/// so nothing runs on settings `--apply` couldn't stamp. A missing one is fine.
+fn check_clm_toml(root: &Path) -> Result<(), String> {
+    let bytes = match fs::read(root.join("clm.toml")) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("can't read clm.toml: {e}")),
+    };
+    let text = String::from_utf8(bytes).map_err(|_| "clm.toml isn't UTF-8 text".to_string())?;
+    text.parse::<toml::Table>()
+        .map(|_| ())
+        .map_err(|e| format!("clm.toml doesn't parse as TOML: {e}"))
 }
 
 /// `clm upgrade --note <id>`: the migration's note.
@@ -157,10 +177,12 @@ fn quote(s: &str) -> String {
 /// Sets top-level `key` in `clm.toml` to the TOML `value`, writing only when that changes it.
 fn set_key(root: &Path, key: &str, value: &str) -> Result<(), String> {
     let path = root.join("clm.toml");
-    let Ok(text) = fs::read_to_string(&path) else {
-        return Ok(());
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("can't read clm.toml: {e}")),
     };
-    let new = set_top_level(&text, key, value);
+    let new = set_top_level(&text, key, value)?;
     if new != text {
         fs::write(&path, new).map_err(|e| format!("can't write clm.toml: {e}"))?;
     }
@@ -171,39 +193,82 @@ fn is_header(line: &str) -> bool {
     line.trim_start().starts_with('[')
 }
 
-fn bracket_depth(line: &str) -> i32 {
-    line.chars().fold(0, |depth, c| match c {
-        '[' => depth + 1,
-        ']' => depth - 1,
-        _ => depth,
-    })
+/// The byte spans of the values that set top-level `key`, however its key is written: one for a
+/// plain or quoted key, one per leaf for a dotted one (`key.part = ...`). A header table of that
+/// name sets nothing at the top level and gives none.
+fn value_spans(doc: &toml_edit::Table, key: &str) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    if let Some(item) = doc.get(key) {
+        leaves(item, &mut out);
+    }
+    out
 }
 
-/// `text` with the top-level `key = value` line replaced (with the lines of a multi-line array it
-/// began), or else added above the first table header's lead-in (its directly preceding comment
-/// lines and the blank lines above them), or at the end when there is none. Every other line is
-/// left as it is.
-pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> String {
+/// The spans of the values a top-level item sets, following dotted keys.
+fn leaves(item: &toml_edit::Item, out: &mut Vec<std::ops::Range<usize>>) {
+    match item {
+        toml_edit::Item::Table(t) if t.is_dotted() => {
+            for (_, child) in t.iter() {
+                leaves(child, out);
+            }
+        }
+        toml_edit::Item::Value(v) => out.extend(v.span()),
+        _ => {}
+    }
+}
+
+/// `text` with the lines that set top-level `key` replaced by one line `key = value`, where the
+/// first of them was; or else that line added above the first table header's lead-in (its
+/// directly preceding comment lines and the blank lines above them), or at the end when there is
+/// none. Every other line is left as it is. The lines are found from the parse, so a bracket in a
+/// comment or a string ends nothing. Fails, naming `clm.toml`, when `text` isn't TOML.
+pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> Result<String, String> {
+    let new = edit_top_level(text, key, value)?;
+    // A table of the same name (`[key]`, `[key.part]`) can't be replaced line by line; refuse
+    // rather than write a clm.toml that no longer parses.
+    toml_edit::ImDocument::parse(new.as_str()).map_err(|_| {
+        format!("can't set `{key}` in clm.toml: a table of that name is in the way; fix it by hand")
+    })?;
+    Ok(new)
+}
+
+fn edit_top_level(text: &str, key: &str, value: &str) -> Result<String, String> {
+    let doc = toml_edit::ImDocument::parse(text)
+        .map_err(|e| format!("clm.toml doesn't parse as TOML: {e}"))?;
     let new_line = format!("{key} = {value}\n");
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
-    let first_header = lines.iter().position(|l| is_header(l));
-    let top = &lines[..first_header.unwrap_or(lines.len())];
-    let existing = top.iter().position(|line| {
-        let trimmed = line.trim_start();
-        trimmed.starts_with(key) && trimmed[key.len()..].trim_start().starts_with('=')
-    });
-    if let Some(i) = existing {
-        let mut end = i + 1;
-        let mut depth = bracket_depth(lines[i]);
-        while depth > 0 && end < lines.len() {
-            depth += bracket_depth(lines[end]);
-            end += 1;
-        }
-        return [&lines[..i], &[new_line.as_str()], &lines[end..]]
-            .concat()
-            .concat();
+    let line_of = |at: usize| text[..at].matches('\n').count();
+    let mut taken = vec![false; lines.len()];
+    for span in value_spans(doc.as_table(), key) {
+        // A key and its value start on one line; the value may run on over several.
+        let last = line_of(span.end.saturating_sub(1).max(span.start));
+        taken[line_of(span.start)..=last].fill(true);
     }
-    match first_header {
+    if let Some(first) = taken.iter().position(|t| *t) {
+        let mut out = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i == first {
+                out.push_str(&new_line);
+            }
+            if !taken[i] {
+                out.push_str(line);
+            }
+        }
+        return Ok(out);
+    }
+    // A line a top-level value runs on over, such as one of a multi-line array or string, is no
+    // header whatever it starts with.
+    let mut inside = vec![false; lines.len()];
+    let mut spans = Vec::new();
+    for (_, item) in doc.as_table().iter() {
+        leaves(item, &mut spans);
+    }
+    for span in spans {
+        let last = line_of(span.end.saturating_sub(1).max(span.start));
+        inside[line_of(span.start) + 1..=last].fill(true);
+    }
+    let first_header = (0..lines.len()).find(|&i| !inside[i] && is_header(lines[i]));
+    Ok(match first_header {
         Some(header) => {
             // The header's lead-in: the comment lines directly above it, then the blank lines
             // above those.
@@ -225,5 +290,5 @@ pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> String {
         }
         None if text.is_empty() || text.ends_with('\n') => format!("{text}{new_line}"),
         None => format!("{text}\n{new_line}"),
-    }
+    })
 }

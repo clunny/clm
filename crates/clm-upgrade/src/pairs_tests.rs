@@ -44,7 +44,7 @@ fn ids(found: &[&Migration]) -> Vec<&'static str> {
     found.iter().map(|m| m.id).collect()
 }
 
-// req:upgrade/superseded-notes@e41a6e66
+// req:upgrade/superseded-notes@bcf36436
 #[test]
 fn only_the_pairs_the_caller_gives_supersede() {
     let dir = tempfile::TempDir::new().unwrap();

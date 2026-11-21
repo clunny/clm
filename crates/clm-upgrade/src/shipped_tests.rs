@@ -164,7 +164,7 @@ fn with_script(text: &str) -> TempDir {
     dir
 }
 
-// req:upgrade/migration-check-script-from-root@46e5be99
+// req:upgrade/migration-check-script-from-root@dea547db
 #[test]
 fn an_unedited_check_script_is_rewritten_to_run_from_the_root() {
     assert!(!OLD_SCRIPT.contains("BASH_SOURCE"));
@@ -178,7 +178,7 @@ fn an_unedited_check_script_is_rewritten_to_run_from_the_root() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-check-script-from-root@46e5be99
+// req:upgrade/migration-check-script-from-root@dea547db
 #[test]
 fn an_edited_check_script_is_left_and_noted() {
     let edited = format!("{OLD_SCRIPT}echo mine\n");
@@ -192,7 +192,7 @@ fn an_edited_check_script_is_left_and_noted() {
     assert!(!out.contains("applied"), "{out}");
 }
 
-// req:upgrade/migration-check-script-from-root@46e5be99
+// req:upgrade/migration-check-script-from-root@dea547db
 #[test]
 fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -203,7 +203,7 @@ fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-check-script-from-root@46e5be99
+// req:upgrade/migration-check-script-from-root@dea547db
 #[test]
 fn the_check_script_note_says_what_changed_for_every_language() {
     let dir = with_script(&format!("{OLD_SCRIPT}echo mine\n"));
@@ -215,7 +215,7 @@ fn the_check_script_note_says_what_changed_for_every_language() {
 const RULES_ID: &str = "20261107-projects-set-up-before";
 const RULES_NOTE: &str = "Unattended sessions need clm's allow rules in .claude/settings.json";
 
-// req:upgrade/migration-unattended-allow-rules@49231d4a
+// req:upgrade/migration-unattended-allow-rules@5312371e
 #[test]
 fn a_project_without_settings_is_offered_the_rules_and_nothing_is_written() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -231,7 +231,7 @@ fn a_project_without_settings_is_offered_the_rules_and_nothing_is_written() {
     assert!(!dir.path().join(".claude").exists());
 }
 
-// req:upgrade/migration-unattended-allow-rules@49231d4a
+// req:upgrade/migration-unattended-allow-rules@5312371e
 #[test]
 fn a_project_lacking_only_the_newest_rules_keeps_its_settings() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -247,7 +247,7 @@ fn a_project_lacking_only_the_newest_rules_keeps_its_settings() {
     assert_eq!(before, after);
 }
 
-// req:upgrade/migration-unattended-allow-rules@49231d4a
+// req:upgrade/migration-unattended-allow-rules@5312371e
 #[test]
 fn each_subcommand_needs_both_its_bare_and_its_argument_rule() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -262,7 +262,7 @@ fn each_subcommand_needs_both_its_bare_and_its_argument_rule() {
     }
 }
 
-// req:upgrade/migration-unattended-allow-rules@49231d4a
+// req:upgrade/migration-unattended-allow-rules@5312371e
 #[test]
 fn the_rules_may_be_split_across_the_two_settings_files() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -274,7 +274,7 @@ fn the_rules_may_be_split_across_the_two_settings_files() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-unattended-allow-rules@49231d4a
+// req:upgrade/migration-unattended-allow-rules@5312371e
 #[test]
 fn the_older_rule_form_does_not_count() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -287,7 +287,7 @@ fn the_older_rule_form_does_not_count() {
     assert!(list(dir.path()).unwrap().contains(RULES_ID));
 }
 
-// req:upgrade/migration-unattended-allow-rules@49231d4a
+// req:upgrade/migration-unattended-allow-rules@5312371e
 #[test]
 fn a_settings_file_that_is_not_the_expected_json_allows_nothing() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -301,7 +301,7 @@ fn a_settings_file_that_is_not_the_expected_json_allows_nothing() {
     assert!(list(dir.path()).unwrap().contains(RULES_ID));
 }
 
-// req:upgrade/migration-unattended-allow-rules@49231d4a
+// req:upgrade/migration-unattended-allow-rules@5312371e
 #[test]
 fn a_declined_rules_migration_is_not_listed() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -316,7 +316,7 @@ fn a_declined_rules_migration_is_not_listed() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-unattended-allow-rules@49231d4a
+// req:upgrade/migration-unattended-allow-rules@5312371e
 #[test]
 fn the_rules_note_lists_the_rules_and_the_ways_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -351,7 +351,7 @@ fn rules_without_setup() -> Vec<String> {
         .collect()
 }
 
-// req:upgrade/migration-setup-allow-rules@7a85824e
+// req:upgrade/migration-setup-allow-rules@05642634
 #[test]
 fn a_project_lacking_the_setup_rules_is_offered_them_and_keeps_its_settings() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -370,7 +370,7 @@ fn a_project_lacking_the_setup_rules_is_offered_them_and_keeps_its_settings() {
     assert_eq!(before, after);
 }
 
-// req:upgrade/migration-setup-allow-rules@7a85824e
+// req:upgrade/migration-setup-allow-rules@05642634
 #[test]
 fn each_setup_rule_is_needed_and_the_two_files_are_read_together() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -393,7 +393,7 @@ fn each_setup_rule_is_needed_and_the_two_files_are_read_together() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-setup-allow-rules@7a85824e
+// req:upgrade/migration-setup-allow-rules@05642634
 #[test]
 fn a_declined_setup_rules_migration_is_not_listed() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -406,7 +406,7 @@ fn a_declined_setup_rules_migration_is_not_listed() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-setup-allow-rules@7a85824e
+// req:upgrade/migration-setup-allow-rules@05642634
 #[test]
 fn the_setup_note_lists_the_rules_and_the_ways_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -436,7 +436,7 @@ fn rules_without_build() -> Vec<String> {
         .collect()
 }
 
-// req:upgrade/migration-build-allow-rules@1c2d0022
+// req:upgrade/migration-build-allow-rules@c5701d73
 #[test]
 fn a_project_lacking_the_build_rules_is_offered_them_and_keeps_its_settings() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -454,7 +454,7 @@ fn a_project_lacking_the_build_rules_is_offered_them_and_keeps_its_settings() {
     assert_eq!(before, after);
 }
 
-// req:upgrade/migration-build-allow-rules@1c2d0022
+// req:upgrade/migration-build-allow-rules@c5701d73
 #[test]
 fn each_build_rule_is_needed_and_the_two_files_are_read_together() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -477,7 +477,7 @@ fn each_build_rule_is_needed_and_the_two_files_are_read_together() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-build-allow-rules@1c2d0022
+// req:upgrade/migration-build-allow-rules@c5701d73
 #[test]
 fn a_settings_file_that_is_not_the_expected_json_allows_no_build_rule() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -491,7 +491,7 @@ fn a_settings_file_that_is_not_the_expected_json_allows_no_build_rule() {
     assert!(list(dir.path()).unwrap().contains(BUILD_ID));
 }
 
-// req:upgrade/migration-build-allow-rules@1c2d0022
+// req:upgrade/migration-build-allow-rules@c5701d73
 #[test]
 fn a_declined_build_rules_migration_is_not_listed() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -504,7 +504,7 @@ fn a_declined_build_rules_migration_is_not_listed() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-build-allow-rules@1c2d0022
+// req:upgrade/migration-build-allow-rules@c5701d73
 #[test]
 fn the_build_note_lists_the_rules_and_the_ways_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -533,7 +533,7 @@ fn read_toml(dir: &TempDir) -> String {
     fs::read_to_string(dir.path().join("clm.toml")).unwrap()
 }
 
-// req:upgrade/migration-offer-verify@04857c46
+// req:upgrade/migration-offer-verify@4d36d2ea
 #[test]
 fn an_older_project_is_offered_the_commented_verify_section() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -572,7 +572,7 @@ fn an_older_project_is_offered_the_commented_verify_section() {
     assert_eq!(read_toml(&dir), before);
 }
 
-// req:upgrade/migration-offer-verify@04857c46
+// req:upgrade/migration-offer-verify@4d36d2ea
 #[test]
 fn a_clm_toml_without_a_final_newline_gets_one_blank_line() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -592,7 +592,7 @@ fn a_clm_toml_without_a_final_newline_gets_one_blank_line() {
     );
 }
 
-// req:upgrade/migration-offer-verify@04857c46
+// req:upgrade/migration-offer-verify@4d36d2ea
 #[test]
 fn the_verify_migration_is_done_once_set_or_commented_or_without_a_clm_toml() {
     for line in ["# [verify]", "[verify]", "  # [verify]  "] {
@@ -615,7 +615,7 @@ fn the_verify_migration_is_done_once_set_or_commented_or_without_a_clm_toml() {
     assert!(list(dir.path()).unwrap().contains(VERIFY_ID));
 }
 
-// req:upgrade/migration-tests-overlap@69dca72c
+// req:upgrade/migration-tests-overlap@a6e7f47e
 #[test]
 fn a_project_stamped_before_the_lift_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -643,7 +643,7 @@ fn a_project_stamped_before_the_lift_is_told_and_then_up_to_date() {
     assert_eq!(apply(dir.path()).unwrap(), "");
 }
 
-// req:upgrade/migration-tests-overlap@69dca72c
+// req:upgrade/migration-tests-overlap@a6e7f47e
 #[test]
 fn a_never_stamped_or_unparseable_project_is_told_but_a_missing_one_is_not() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -655,7 +655,7 @@ fn a_never_stamped_or_unparseable_project_is_told_but_a_missing_one_is_not() {
     assert!(!list(dir.path()).unwrap().contains(OVERLAP_ID));
 }
 
-// req:upgrade/migration-tests-overlap@69dca72c
+// req:upgrade/migration-tests-overlap@a6e7f47e
 #[test]
 fn a_project_stamped_with_the_migration_itself_is_done() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -667,7 +667,7 @@ fn a_project_stamped_with_the_migration_itself_is_done() {
     assert!(!list(dir.path()).unwrap().contains(OVERLAP_ID));
 }
 
-// req:upgrade/migration-tests-overlap@69dca72c
+// req:upgrade/migration-tests-overlap@a6e7f47e
 #[test]
 fn the_overlap_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -693,7 +693,7 @@ const LAND_DIR_ID: &str = "20261108-toolchain-neutral-land-builds";
 const LAND_DIR_LINE: &str =
     "advised note Lands hand your check CLM_LAND_DIR and re-check only the overlap";
 
-// req:upgrade/migration-land-dir@3295cbd6
+// req:upgrade/migration-land-dir@12a58239
 #[test]
 fn a_project_stamped_before_the_land_dir_note_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -723,7 +723,7 @@ fn a_project_stamped_before_the_land_dir_note_is_told_and_then_up_to_date() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-land-dir@3295cbd6
+// req:upgrade/migration-land-dir@12a58239
 #[test]
 fn the_land_dir_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -744,7 +744,7 @@ fn the_land_dir_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_othe
     assert!(!list(dir.path()).unwrap().contains(LAND_DIR_ID));
 }
 
-// req:upgrade/migration-land-dir@3295cbd6
+// req:upgrade/migration-land-dir@12a58239
 #[test]
 fn the_land_dir_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -766,12 +766,18 @@ const STARTER_ID: &str = "20261109-land-still-sets-cargo";
 const OLD_RUST_SCRIPT: &str = include_str!("migrations/20261109-land-still-sets-cargo/old.sh");
 const NEW_RUST_SCRIPT: &str = include_str!("migrations/20261109-land-still-sets-cargo/new.sh");
 
-// req:upgrade/migration-starter-land-dir@131020e2
+// req:upgrade/migration-starter-land-dir@a1db4d29
 #[test]
 fn an_unedited_v0_23_script_is_rewritten_with_the_land_dir_lines() {
     assert_eq!(OLD_RUST_SCRIPT, NEW_SCRIPT);
     let dir = with_script(OLD_RUST_SCRIPT);
-    assert!(list(dir.path()).unwrap().contains(STARTER_ID));
+    let listed = list(dir.path()).unwrap();
+    assert!(
+        listed.contains(&format!(
+            "{STARTER_ID} advised note Lands no longer set CARGO_TARGET_DIR: point cargo at CLM_LAND_DIR in your check\n"
+        )),
+        "{listed}"
+    );
     let out = apply(dir.path()).unwrap();
     assert!(out.contains(&format!("applied {STARTER_ID}\n")), "{out}");
     let text = fs::read_to_string(dir.path().join("scripts/clm-check.sh")).unwrap();
@@ -779,7 +785,7 @@ fn an_unedited_v0_23_script_is_rewritten_with_the_land_dir_lines() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-starter-land-dir@131020e2
+// req:upgrade/migration-starter-land-dir@a1db4d29
 #[test]
 fn an_unedited_v0_14_script_is_rewritten_by_both_migrations() {
     let dir = with_script(OLD_SCRIPT);
@@ -789,7 +795,7 @@ fn an_unedited_v0_14_script_is_rewritten_by_both_migrations() {
     assert_eq!(text, NEW_RUST_SCRIPT);
 }
 
-// req:upgrade/migration-starter-land-dir@131020e2
+// req:upgrade/migration-starter-land-dir@a1db4d29
 #[test]
 fn an_edited_v0_23_script_is_left_and_noted() {
     let edited = format!("{OLD_RUST_SCRIPT}echo mine\n");
@@ -802,7 +808,7 @@ fn an_edited_v0_23_script_is_left_and_noted() {
     assert!(out.contains(&format!("note {STARTER_ID}\n")), "{out}");
 }
 
-// req:upgrade/migration-starter-land-dir@131020e2
+// req:upgrade/migration-starter-land-dir@a1db4d29
 #[test]
 fn the_starter_migration_is_done_without_a_script_a_land_dir_or_cargo() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -814,7 +820,7 @@ fn the_starter_migration_is_done_without_a_script_a_land_dir_or_cargo() {
     assert!(!list(dir.path()).unwrap().contains(STARTER_ID));
 }
 
-// req:upgrade/migration-starter-land-dir@131020e2
+// req:upgrade/migration-starter-land-dir@a1db4d29
 #[test]
 fn the_starter_note_names_what_a_project_needs_to_know() {
     let dir = with_script(&format!("{OLD_RUST_SCRIPT}echo mine\n"));
@@ -839,7 +845,7 @@ const BUILD_SETUP_ID: &str = "20261109-a-build-s-tests";
 const BUILD_SETUP_LINE: &str =
     "advised note Builds run your tests in a fresh worktree: declare [build] setup";
 
-// req:upgrade/migration-build-setup@4fdbe90b
+// req:upgrade/migration-build-setup@01f08125
 #[test]
 fn a_project_stamped_before_the_build_setup_note_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -858,7 +864,7 @@ fn a_project_stamped_before_the_build_setup_note_is_told_and_then_up_to_date() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-build-setup@4fdbe90b
+// req:upgrade/migration-build-setup@01f08125
 #[test]
 fn the_build_setup_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -879,7 +885,7 @@ fn the_build_setup_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_o
     assert!(!list(dir.path()).unwrap().contains(BUILD_SETUP_ID));
 }
 
-// req:upgrade/migration-build-setup@4fdbe90b
+// req:upgrade/migration-build-setup@01f08125
 #[test]
 fn the_build_setup_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -916,7 +922,7 @@ fn read(dir: &TempDir, name: &str) -> String {
     fs::read_to_string(dir.path().join(name)).unwrap()
 }
 
-// req:upgrade/migration-agents-md@75947c8b
+// req:upgrade/migration-agents-md@d072e13a
 #[test]
 fn an_unedited_claude_md_moves_to_agents_md_as_init_writes_it() {
     let dir = unstamped(NEW_ARCHITECTURE, OLD_CLAUDE);
@@ -932,17 +938,24 @@ fn an_unedited_claude_md_moves_to_agents_md_as_init_writes_it() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-agents-md@75947c8b
+// req:upgrade/migration-agents-md@d072e13a
 #[test]
 fn an_edited_claude_md_moves_whole() {
     let edited = format!("{OLD_CLAUDE}\nMy own rule.\n");
     let dir = unstamped(NEW_ARCHITECTURE, &edited);
+    let listed = list(dir.path()).unwrap();
+    assert!(
+        listed.contains(&format!(
+            "{AGENTS_ID} advised apply Move CLAUDE.md's instructions to AGENTS.md, which every agent harness reads\n"
+        )),
+        "{listed}"
+    );
     apply(dir.path()).unwrap();
     assert_eq!(read(&dir, "AGENTS.md"), edited);
     assert_eq!(read(&dir, "CLAUDE.md"), "@AGENTS.md\n");
 }
 
-// req:upgrade/migration-agents-md@75947c8b
+// req:upgrade/migration-agents-md@d072e13a
 #[test]
 fn both_files_keep_every_line_and_gain_the_import_first() {
     let dir = unstamped(NEW_ARCHITECTURE, "# Ours\n");
@@ -953,7 +966,7 @@ fn both_files_keep_every_line_and_gain_the_import_first() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-agents-md@75947c8b
+// req:upgrade/migration-agents-md@d072e13a
 #[test]
 fn the_agents_md_migration_is_advised_and_done_once_moved_or_without_claude_md() {
     let dir = unstamped(NEW_ARCHITECTURE, "# Ours\n");
@@ -968,7 +981,7 @@ fn the_agents_md_migration_is_advised_and_done_once_moved_or_without_claude_md()
     assert!(!list(dir.path()).unwrap().contains(AGENTS_ID));
 }
 
-// req:upgrade/migration-agents-md@75947c8b
+// req:upgrade/migration-agents-md@d072e13a
 #[test]
 fn a_claude_md_that_imports_agents_md_has_nothing_pending() {
     let dir = project(NEW_ARCHITECTURE, "# Ours\n@AGENTS.md\n");

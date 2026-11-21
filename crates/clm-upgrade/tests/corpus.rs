@@ -129,7 +129,7 @@ fn the_script_fails_and_writes_nothing_when_the_check_fails() {
     assert!(!dir.path().join("v9.9.9.tar.gz").exists());
 }
 
-// req:upgrade/migration-list@b7ed6123
+// req:upgrade/migration-list@255078e6
 #[test]
 fn a_fresh_project_has_every_migration_done() {
     let clm = built_clm();
@@ -149,18 +149,17 @@ fn a_fresh_project_has_every_migration_done() {
         .status()
         .unwrap();
     assert!(status.success());
-    // A note a later done migration supersedes is left out of `pending`, though its own
-    // `done` stays false.
+    // The note `20261112-agents-md` supersedes is the one whose own `done` stays false, and
+    // `pending_in` leaves it out.
+    let not_done: Vec<&str> = clm_upgrade::migrations()
+        .iter()
+        .filter(|m| !(m.done)(&root))
+        .map(|m| m.id)
+        .collect();
+    assert_eq!(not_done, ["20261105-clm-upgrade-2"]);
     let pending =
         clm_upgrade::pending_in(clm_upgrade::migrations(), clm_upgrade::supersedes(), &root)
             .unwrap();
-    for m in clm_upgrade::migrations() {
-        assert!(
-            (m.done)(&root) || !pending.iter().any(|p| p.id == m.id),
-            "{} is not done on a fresh project",
-            m.id
-        );
-    }
     assert!(
         pending.is_empty(),
         "pending on a fresh project: {pending:?}"

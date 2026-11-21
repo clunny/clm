@@ -32,7 +32,7 @@ fn ids_of(pending: &[&Migration]) -> Vec<&'static str> {
     pending.iter().map(|m| m.id).collect()
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn a_migration_the_crate_does_not_hold_is_judged_like_any_other() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -43,7 +43,7 @@ fn a_migration_the_crate_does_not_hold_is_judged_like_any_other() {
     assert!(own.is_empty(), "{:?}", ids_of(&own));
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 // req:upgrade/migration-markers-in-tests@25966374
 #[test]
 fn a_stamp_naming_a_migration_the_crate_does_not_hold_leaves_the_four_notes_out() {
