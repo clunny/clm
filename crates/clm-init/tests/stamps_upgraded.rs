@@ -31,20 +31,22 @@ fn upgraded(dir: &Path) -> Option<String> {
 
 #[test]
 fn new_repository_is_stamped_with_the_newest_migration() {
-    // req:init/init-stamps-upgraded@e2f11c8e
+    // req:init/init-stamps-upgraded@85857e23
     let dir = repo();
     init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     let list = clm_init::migrations();
     assert_eq!(
         upgraded(dir.path()).as_deref(),
-        clm_upgrade::latest_in(&list),
+        Some(list.last().expect("the binary holds migrations").id),
         "upgraded must be the last migration of clm-init's migrations()"
     );
+    let listing = clm_upgrade::list_in(&list, &clm_init::supersedes(), dir.path());
+    assert_eq!(listing.as_deref(), Ok("up to date\n"));
 }
 
 #[test]
 fn kept_clm_toml_is_not_stamped() {
-    // req:init/init-stamps-upgraded@e2f11c8e
+    // req:init/init-stamps-upgraded@85857e23
     let dir = repo();
     fs::write(dir.path().join("clm.toml"), "approval = \"any\"\n").unwrap();
     init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
