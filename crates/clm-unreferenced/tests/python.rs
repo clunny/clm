@@ -6,7 +6,7 @@ use common::{TAIL, lines, names, repo};
 
 #[test]
 fn scenario_names_an_init_exposes() {
-    // req:check.unreferenced/python-packages@3f15962f
+    // req:check.unreferenced/python-packages@e87199f9
     let dir = repo(&[
         (
             "packages/core/src/acme_core/__init__.py",
@@ -49,7 +49,7 @@ fn scenario_names_an_init_exposes() {
 
 #[test]
 fn scenario_all_and_star_imports() {
-    // req:check.unreferenced/python-packages@3f15962f
+    // req:check.unreferenced/python-packages@e87199f9
     let dir = repo(&[
         (
             "acme_core/__init__.py",
@@ -72,7 +72,7 @@ fn scenario_all_and_star_imports() {
 
 #[test]
 fn scenario_packages_scripts_and_test_files() {
-    // req:check.unreferenced/python-packages@3f15962f
+    // req:check.unreferenced/python-packages@e87199f9
     let dir = repo(&[
         ("src/acme_core/__init__.py", "def f(): ...\ndef k(): ...\n"),
         ("src/acme_core/tests/test_f.py", "f()\n"),
@@ -87,7 +87,7 @@ fn scenario_packages_scripts_and_test_files() {
 
 #[test]
 fn bindings_through_compound_statements_targets_and_absolute_imports() {
-    // req:check.unreferenced/python-packages@3f15962f
+    // req:check.unreferenced/python-packages@e87199f9
     let dir = repo(&[
         (
             "p/__init__.py",
@@ -120,7 +120,7 @@ fn bindings_through_compound_statements_targets_and_absolute_imports() {
 
 #[test]
 fn star_import_cycles_end() {
-    // req:check.unreferenced/python-packages@3f15962f
+    // req:check.unreferenced/python-packages@e87199f9
     let dir = repo(&[
         ("p/__init__.py", "from .a import *\n"),
         ("p/a.py", "from .b import *\ndef fa(): ...\n"),
@@ -131,7 +131,7 @@ fn star_import_cycles_end() {
 
 #[test]
 fn broken_pyproject_is_an_error_naming_it() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[("svc/pyproject.toml", "[project\n")]);
     let err = clm_unreferenced::scan(dir.path(), &[], &[]).unwrap_err();
     assert!(err.starts_with("svc/pyproject.toml: "), "{err}");
@@ -140,7 +140,7 @@ fn broken_pyproject_is_an_error_naming_it() {
 
 #[test]
 fn scenario_used_from_another_package_a_test_an_entry_point_and_a_notebook() {
-    // req:check.unreferenced/python-uses@4c45195c
+    // req:check.unreferenced/python-uses@e342f876
     let dir = repo(&[
         (
             "packages/core/src/acme_core/__init__.py",
@@ -167,7 +167,7 @@ fn scenario_used_from_another_package_a_test_an_entry_point_and_a_notebook() {
 
 #[test]
 fn every_entry_point_table_counts() {
-    // req:check.unreferenced/python-uses@4c45195c
+    // req:check.unreferenced/python-uses@e342f876
     let dir = repo(&[
         (
             "p/__init__.py",
@@ -190,7 +190,7 @@ fn every_entry_point_table_counts() {
 
 #[test]
 fn scenario_types_reached_through_used_items() {
-    // req:check.unreferenced/python-uses@4c45195c
+    // req:check.unreferenced/python-uses@e342f876
     let dir = repo(&[
         (
             "acme_core/__init__.py",
@@ -218,7 +218,7 @@ fn scenario_types_reached_through_used_items() {
 
 #[test]
 fn relative_imports_stay_within_the_package() {
-    // req:check.unreferenced/python-packages@3f15962f
+    // req:check.unreferenced/python-packages@e87199f9
     let dir = repo(&[
         (
             "src/a/__init__.py",
@@ -240,7 +240,7 @@ fn relative_imports_stay_within_the_package() {
 
 #[test]
 fn all_forms_and_star_apis_by_their_own_rules() {
-    // req:check.unreferenced/python-packages@3f15962f
+    // req:check.unreferenced/python-packages@e87199f9
     let dir = repo(&[
         (
             "p/__init__.py",
@@ -267,7 +267,7 @@ fn all_forms_and_star_apis_by_their_own_rules() {
 
 #[test]
 fn renamed_imports_and_variable_annotations_carry() {
-    // req:check.unreferenced/python-uses@4c45195c
+    // req:check.unreferenced/python-uses@e342f876
     let dir = repo(&[
         (
             "p/__init__.py",
@@ -284,8 +284,8 @@ fn renamed_imports_and_variable_annotations_carry() {
 
 #[test]
 fn pyi_files_count_and_untracked_files_do_not() {
-    // req:check.unreferenced/python-uses@4c45195c
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/python-uses@e342f876
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         (
             "p/__init__.py",

@@ -52,21 +52,8 @@ impl Status {
 fn clm(dir: &Path, args: &[&str]) -> Out {
     let (name, rest) = args.split_first().unwrap();
     assert_eq!(*name, "unreferenced");
-    // The binary ran with git's own config isolated; the call's `git` inherits this process's
-    // environment, so the test sets it here. Safe: the tests run one per process
-    // (`ci/nextest-runner`), and every call sets the same values.
-    unsafe {
-        std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
-        std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
-    }
-    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let status = clm_unreferenced::command(
-        rest.iter().copied(),
-        dir,
-        &|key| std::env::var(key).ok(),
-        &mut stdout,
-        &mut stderr,
-    );
+    let mut stdout = Vec::new();
+    let (status, stderr) = call(dir, rest, &|key| std::env::var(key).ok(), &mut stdout);
     Out {
         status: Status(status),
         stdout,
@@ -79,7 +66,8 @@ const TAIL: &str = "is public but nothing outside its library uses it";
 
 #[test]
 fn a_command_called_in_a_test() {
-    // req:check.unreferenced/commands-in-crate@215013cd
+    // req:check.unreferenced/commands-in-crate@01c980d6
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -113,7 +101,7 @@ fn a_command_called_in_a_test() {
 
 #[test]
 fn arguments_it_cannot_parse() {
-    // req:check.unreferenced/commands-in-crate@215013cd
+    // req:check.unreferenced/commands-in-crate@01c980d6
     let dir = repo(&[("README.md", "# none\n")]);
     let out = clm(dir.path(), &["unreferenced", "--bogus"]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
@@ -128,7 +116,7 @@ fn arguments_it_cannot_parse() {
 
 #[test]
 fn scenario_findings() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let lib = format!(
         "mod x;\n\npub fn f() {{}}\n{}pub fn z() {{}}\n",
         "\n".repeat(6)
@@ -151,7 +139,7 @@ fn scenario_findings() {
 
 #[test]
 fn scenario_clean_or_no_rust() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let used = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -176,13 +164,13 @@ fn scenario_clean_or_no_rust() {
     for dir in [&used, &packages_used, &nothing] {
         let out = clm(dir.path(), &["unreferenced"]);
         assert_eq!(out.status.code(), Some(0), "{out:?}");
-        assert!(out.stdout.is_empty(), "{out:?}");
+        assert!(out.stdout.is_empty() && out.stderr.is_empty(), "{out:?}");
     }
 }
 
 #[test]
 fn scenario_broken_manifest() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     for (path, text) in [
         ("crates/a/Cargo.toml", "[package\n"),
         ("web/package.json", "{\"name\": \n"),
@@ -199,7 +187,7 @@ fn scenario_broken_manifest() {
 
 #[test]
 fn package_findings_are_worded_for_packages() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -222,7 +210,7 @@ fn package_findings_are_worded_for_packages() {
 
 #[test]
 fn scenario_allowed_package_and_item() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         ("packages/core/package.json", r#"{"name": "@acme/core"}"#),
         (
@@ -253,7 +241,7 @@ fn scenario_allowed_package_and_item() {
 
 #[test]
 fn one_name_for_a_crate_and_a_package_skips_both() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         (
             "crates/acme/Cargo.toml",
@@ -279,8 +267,8 @@ fn one_name_for_a_crate_and_a_package_skips_both() {
 
 #[test]
 fn root_option_names_the_repository() {
-    // req:check.unreferenced/report@849ec044
-    // req:check.unreferenced/commands-in-crate@215013cd
+    // req:check.unreferenced/report@1a2b2341
+    // req:check.unreferenced/commands-in-crate@01c980d6
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -294,7 +282,7 @@ fn root_option_names_the_repository() {
 
 #[test]
 fn scenario_allowed_item_and_crate() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\npub fn g() {}\n"),
@@ -317,7 +305,7 @@ fn scenario_allowed_item_and_crate() {
 
 #[test]
 fn scenario_stale_entries() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn used() {}\n"),
@@ -350,7 +338,7 @@ fn scenario_stale_entries() {
 
 #[test]
 fn scenario_entry_given_as_an_argument() {
-    // req:check.unreferenced/entry-attributes@69e092f6
+    // req:check.unreferenced/entry-attributes@df16589f
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         (
@@ -371,8 +359,8 @@ fn scenario_entry_given_as_an_argument() {
 
 #[test]
 fn scenario_stale_entry() {
-    // req:check.unreferenced/entry-attributes@69e092f6
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/entry-attributes@df16589f
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -398,7 +386,7 @@ fn scenario_stale_entry() {
 
 #[test]
 fn stale_entries_follow_in_the_order_given() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -424,7 +412,7 @@ fn stale_entries_follow_in_the_order_given() {
 
 #[test]
 fn runs_no_cargo_npm_node_or_python() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     use std::os::unix::fs::PermissionsExt;
     let dir = repo(&[
         ("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n"),
@@ -457,4 +445,205 @@ fn runs_no_cargo_npm_node_or_python() {
     let out = clm(dir.path(), &["unreferenced"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(!ran.exists(), "ran {:?}", fs::read_to_string(&ran));
+}
+
+/// The call run with `dir` as the root, `args` after the command's name, and `env` as its
+/// environment lookup, writing to `out` and to a buffer for the error stream.
+fn call(
+    dir: &Path,
+    args: &[&str],
+    env: &dyn Fn(&str) -> Option<String>,
+    out: &mut dyn std::io::Write,
+) -> (u8, Vec<u8>) {
+    // The binary ran with git's own config isolated; the call's `git` inherits this process's
+    // environment, so the test sets it here. Safe: the tests run one per process
+    // (`ci/nextest-runner`), and every call sets the same values.
+    unsafe {
+        std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
+        std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
+    }
+    let mut err = Vec::new();
+    let status = clm_unreferenced::command(args.iter().copied(), dir, env, out, &mut err);
+    (status, err)
+}
+
+const HELP_FIRST_LINE: &str = "List the public items of the workspace's Rust libraries and TypeScript and Python packages that nothing outside their own library or package uses; exit 1 when it lists any";
+
+#[test]
+fn help_asked_of_the_call() {
+    // req:check.unreferenced/commands-in-crate@01c980d6
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    for flag in ["--help", "-h"] {
+        let mut out = Vec::new();
+        let (status, err) = call(dir.path(), &[flag], &|_| None, &mut out);
+        assert_eq!(status, 0, "{flag}");
+        assert!(err.is_empty(), "{flag}: {}", String::from_utf8_lossy(&err));
+        let out = String::from_utf8(out).unwrap();
+        let mut lines = out.lines();
+        assert_eq!(lines.next(), Some(HELP_FIRST_LINE), "{flag}: {out}");
+        assert_eq!(lines.next(), Some(""), "{flag}: {out}");
+        assert_eq!(
+            lines.next(),
+            Some("Usage: clm unreferenced [OPTIONS]"),
+            "{flag}: {out}"
+        );
+        // Then its options.
+        for option in ["--allow <ALLOW>", "--entry <ENTRY>", "--root <ROOT>"] {
+            assert!(out.contains(option), "{flag}: {out}");
+        }
+    }
+}
+
+/// A stream whose every write fails.
+struct Refusing;
+
+impl std::io::Write for Refusing {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("refused"))
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("refused"))
+    }
+}
+
+#[test]
+fn a_stream_that_refuses_writes() {
+    // req:check.unreferenced/commands-in-crate@01c980d6
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    // The scan itself succeeds, so the 2 comes from the refused write alone.
+    let mut out = Vec::new();
+    assert_eq!(call(dir.path(), &[], &|_| None, &mut out).0, 1);
+    let (status, err) = call(dir.path(), &[], &|_| None, &mut Refusing);
+    assert_eq!(status, 2);
+    assert!(err.is_empty(), "{}", String::from_utf8_lossy(&err));
+    let (status, _) = call(dir.path(), &["--help"], &|_| None, &mut Refusing);
+    assert_eq!(status, 2);
+}
+
+#[test]
+fn an_environment_it_does_not_read() {
+    // req:check.unreferenced/commands-in-crate@01c980d6
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    let mut out = Vec::new();
+    let (status, err) = call(
+        dir.path(),
+        &[],
+        &|key| panic!("the call read {key} from the environment"),
+        &mut out,
+    );
+    assert_eq!(status, 1, "{}", String::from_utf8_lossy(&err));
+    assert_eq!(
+        String::from_utf8(out).unwrap(),
+        format!("crates/a/src/lib.rs:1: a::f {TAIL}\n")
+    );
+    // The caller's process goes on.
+}
+
+#[test]
+fn scenario_odd_manifests_and_unreadable_files() {
+    // req:check.unreferenced/report@1a2b2341
+    // req:check.unreferenced/public-items@32359404
+    use std::os::unix::fs::PermissionsExt;
+    // A `[package]` without a string `name`.
+    for manifest in [
+        "[package]\nversion = \"0.1.0\"\n",
+        "[package]\nname = 1\nversion = \"0.1.0\"\n",
+    ] {
+        let dir = repo(&[("crates/a/Cargo.toml", manifest)]);
+        let out = clm(dir.path(), &["unreferenced"]);
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        assert_eq!(
+            String::from_utf8(out.stderr).unwrap(),
+            "clm unreferenced: crates/a/Cargo.toml: [package] has no name\n"
+        );
+    }
+
+    // No `[package]` table, a `package` key that isn't one, and a nameless `package.json`.
+    let dir = repo(&[
+        ("Cargo.toml", "[workspace]\n"),
+        ("crates/b/Cargo.toml", "package = 1\n"),
+        ("package.json", r#"{"private": true}"#),
+    ]);
+    let out = clm(dir.path(), &["unreferenced"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty() && out.stderr.is_empty(), "{out:?}");
+
+    // A `[lib] name` that isn't a string leaves the package's name.
+    let dir = repo(&[
+        (
+            "crates/a/Cargo.toml",
+            "[package]\nname = \"a-b\"\nversion = \"0.1.0\"\n\n[lib]\nname = 1\n",
+        ),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    let out = clm(dir.path(), &["unreferenced"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        format!("crates/a/src/lib.rs:1: a_b::f {TAIL}\n")
+    );
+
+    // A tracked source the process can't read.
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    let lib = dir.path().join("crates/a/src/lib.rs");
+    fs::set_permissions(&lib, fs::Permissions::from_mode(0o000)).unwrap();
+    // Running as root reads it anyway, and then there is no unreadable file to show.
+    if fs::read(&lib).is_err() {
+        let out = clm(dir.path(), &["unreferenced"]);
+        fs::set_permissions(&lib, fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(
+            stderr.starts_with("clm unreferenced: crates/a/src/lib.rs: "),
+            "{stderr}"
+        );
+        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    }
+
+    // A tracked file it doesn't read is no error, however unreadable.
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+        ("README.md", "# a\n"),
+    ]);
+    let readme = dir.path().join("README.md");
+    fs::set_permissions(&readme, fs::Permissions::from_mode(0o000)).unwrap();
+    let out = clm(dir.path(), &["unreferenced"]);
+    fs::set_permissions(&readme, fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stderr.is_empty(), "{out:?}");
+
+    // `--root` naming a directory in no git repository.
+    let outside = TempDir::new().unwrap();
+    let elsewhere = repo(&[("README.md", "# none\n")]);
+    let root = outside.path().to_str().unwrap();
+    // git looks no further up than the directory itself, whatever repository holds the
+    // temporary directory. Safe: the tests run one per process (`ci/nextest-runner`).
+    let above = outside.path().parent().unwrap();
+    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", above) };
+    let out = clm(elsewhere.path(), &["unreferenced", "--root", root]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    // The error `vcs/tracked-files` returns: the command git ran, then git's standard error.
+    assert!(
+        stderr.starts_with("clm unreferenced: git ls-files -z --cached --deduplicate: "),
+        "{stderr}"
+    );
+    assert!(stderr.contains("not a git repository"), "{stderr}");
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
 }
