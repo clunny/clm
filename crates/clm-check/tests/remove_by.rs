@@ -77,15 +77,19 @@ fn marker_for_abandoned_change_fails() {
 #[test]
 fn marker_for_archived_change_fails() {
     // req:check/remove-by-markers@de70fd9f
-    let dir = repo(DROP_OLD);
-    change(dir.path(), "changes/archive/20261023-drop-old", "done");
-    assert_eq!(
-        found(dir.path()),
-        [(
-            "src/old.rs:4".to_string(),
-            "marker names 20261023-drop-old, which is archived".to_string()
-        )]
-    );
+    // Archived is archived whatever the status, a live one's included.
+    for status in ["done", "applied"] {
+        let dir = repo(DROP_OLD);
+        change(dir.path(), "changes/archive/20261023-drop-old", status);
+        assert_eq!(
+            found(dir.path()),
+            [(
+                "src/old.rs:4".to_string(),
+                "marker names 20261023-drop-old, which is archived".to_string()
+            )],
+            "{status}"
+        );
+    }
 }
 
 #[test]
