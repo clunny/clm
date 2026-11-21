@@ -86,8 +86,14 @@ fn doc_only_without_default_features() {
 }
 
 #[test]
+fn effort_choice_without_default_features() {
+    // req:ledger/effort-records@828c1a9a
+    test_without_default_features("effort_choice");
+}
+
+#[test]
 fn cleared_without_default_features() {
-    // req:ledger/request-cleared@0fe654c6
+    // req:ledger/request-cleared@3e4c06c9
     test_without_default_features("cleared");
 }
 

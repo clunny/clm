@@ -4,7 +4,7 @@ use common::{commit, repo, sh};
 
 #[test]
 fn doc_only_difference() {
-    // req:ledger/code-key@9217c035
+    // req:ledger/code-key@767c0300
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     repo(root, "T");

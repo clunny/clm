@@ -27,7 +27,7 @@ fn lines(text: &str) -> Vec<serde_json::Value> {
 
 #[test]
 fn first_record() {
-    // req:ledger/append@d894aff0
+    // req:ledger/append@bd683cb9
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let head = sh(&clone, &["rev-parse", "HEAD"]);
@@ -43,9 +43,16 @@ fn first_record() {
     assert_eq!(r["change"], "x");
     assert_eq!(r["writer"], out.record.writer.as_str());
     assert!(r["writer"].as_str().unwrap().starts_with("ann/"));
+    // `YYYY-MM-DDTHH:MM:SS.mmmZ`, in UTC.
     let at = r["at"].as_str().unwrap();
+    let mut form = at.bytes().zip("dddd-dd-ddTdd:dd:dd.dddZ".bytes());
     assert!(
-        at.len() == 24 && at.ends_with('Z') && at.as_bytes()[10] == b'T',
+        at.len() == 24
+            && form.all(|(c, f)| if f == b'd' {
+                c.is_ascii_digit()
+            } else {
+                c == f
+            }),
         "{at}"
     );
     let id = r["id"].as_str().unwrap();
@@ -67,7 +74,7 @@ fn first_record() {
 
 #[test]
 fn second_record() {
-    // req:ledger/append@d894aff0
+    // req:ledger/append@bd683cb9
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let env = env(dir.path(), &[]);
@@ -86,7 +93,7 @@ fn second_record() {
 
 #[test]
 fn offline() {
-    // req:ledger/append@d894aff0
+    // req:ledger/append@bd683cb9
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let nowhere = dir.path().join("nowhere.git");
@@ -104,14 +111,17 @@ fn offline() {
 
 #[test]
 fn a_clone_with_an_email_keeps_it() {
-    // req:ledger/append@d894aff0
+    // req:ledger/append@bd683cb9
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let out = clm_ledger::append(&clone, approved("f"), &env(dir.path(), &[])).unwrap();
     let branch = format!("clm/ledger/{}", out.record.writer);
     assert_eq!(
-        sh(&clone, &["log", "-1", "--format=%ae|%ce", &branch]),
-        "t@example.com|t@example.com"
+        sh(
+            &clone,
+            &["log", "-1", "--format=%an <%ae>|%cn <%ce>", &branch]
+        ),
+        "ann <t@example.com>|ann <t@example.com>"
     );
 }
 
@@ -140,7 +150,7 @@ fn push_refused() {
 
 #[test]
 fn no_host_pushes_to_its_own_remote() {
-    // req:ledger/append@d894aff0
+    // req:ledger/append@bd683cb9
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     std::fs::write(clone.join("clm.toml"), "host = \"none\"\n").unwrap();
@@ -155,7 +165,7 @@ fn no_host_pushes_to_its_own_remote() {
 
 #[test]
 fn concurrent_appends_keep_every_record() {
-    // req:ledger/append@d894aff0
+    // req:ledger/append@bd683cb9
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     std::fs::write(clone.join("clm.toml"), "host = \"none\"\n").unwrap();
@@ -200,7 +210,7 @@ fn effort(session: &str, branch: &str) -> Body {
 
 #[test]
 fn append_all_one_commit() {
-    // req:ledger/append-all@86b61f21
+    // req:ledger/append-all@5f4b17e0
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let env = env(dir.path(), &[]);
@@ -240,7 +250,7 @@ fn append_all_one_commit() {
 
 #[test]
 fn effort_id_is_stable() {
-    // req:ledger/append-all@86b61f21
+    // req:ledger/append-all@5f4b17e0
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let env = env(dir.path(), &[]);

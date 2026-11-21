@@ -166,6 +166,7 @@ fn civil(days: i64) -> (i64, u32, u32) {
 mod tests {
     #[test]
     fn civil_dates() {
+        // req:ledger/append@bd683cb9
         assert_eq!(super::civil(0), (1970, 1, 1));
         assert_eq!(super::civil(19_723), (2024, 1, 1));
         assert_eq!(super::civil(19_782), (2024, 2, 29));

@@ -1,12 +1,12 @@
 //! The fold over records already read (`ledger/fold`, `ledger/ledger-builds-for-wasm`).
 
-use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
+use crate::record::sorted_text;
 use crate::{Body, LandKind, Recheck, Record, TimedStep};
 
 /// A `landed` record that carries its check's times (`landed-times`).
@@ -45,7 +45,7 @@ pub struct Fold {
     pub comments: BTreeMap<String, Vec<Record>>,
     /// `changes_requested` by branch.
     pub change_requests: BTreeMap<String, Vec<Record>>,
-    /// `effort` by `id`: for each, the record with the latest `at`, whoever wrote it.
+    /// `effort` by `id`: for each, the latest count, whoever wrote it (`choose`).
     pub efforts: BTreeMap<String, Record>,
     /// `decided` by capability.
     pub decisions: BTreeMap<String, Vec<Record>>,
@@ -142,14 +142,13 @@ pub fn person(writer: &str) -> &str {
     writer.split('/').next().unwrap_or_default()
 }
 
-/// The fold over `(ledger, records.jsonl text)` pairs, a record read twice counting once by
-/// `id`, except an `effort` one, whose repeated `id` is a later count: the latest `at` wins.
-/// A line that doesn't parse is skipped with a warning; a blank one, or a `reviewed` one (a
-/// kind gone with yes/no review, `yes-no-review`), silently.
+/// The fold over `(ledger, records.jsonl text)` pairs, holding one line of those sharing an
+/// `id` (`choose`). A line that doesn't parse is skipped with a warning; a blank one, or a
+/// `reviewed` one (a kind gone with yes/no review, `yes-no-review`), silently.
 pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
     let mut fold = Fold::default();
-    // Where each `id`'s record is in `fold.records`.
-    let mut position = BTreeMap::new();
+    // Every line read, by `id`.
+    let mut read: BTreeMap<String, Vec<Read>> = BTreeMap::new();
     for (ledger, text) in sources {
         for (n, line) in text.lines().enumerate() {
             let line = line.trim();
@@ -168,26 +167,21 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
                 }
             });
             match parsed {
-                Ok((record, object)) => match fold.lines.entry(record.id.clone()) {
-                    Entry::Vacant(slot) => {
-                        slot.insert(object);
-                        position.insert(record.id.clone(), fold.records.len());
-                        fold.records.push(record);
-                    }
-                    Entry::Occupied(mut slot) => {
-                        let held = &mut fold.records[position[&record.id]];
-                        if later_effort(&record, &object, held, slot.get()) {
-                            slot.insert(object);
-                            *held = record;
-                        }
-                    }
-                },
+                Ok((record, object)) => read
+                    .entry(record.id.clone())
+                    .or_default()
+                    .push((record, object)),
                 Err(e) => fold.warnings.push(format!(
                     "{ledger} line {}: skipped, not a record: {e}",
                     n + 1
                 )),
             }
         }
+    }
+    for (id, lines) in read {
+        let (record, line) = choose(lines);
+        fold.lines.insert(id, line);
+        fold.records.push(record);
     }
     fold.records
         .sort_by(|a, b| (&a.at, &a.id).cmp(&(&b.at, &b.id)));
@@ -259,23 +253,35 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
     fold
 }
 
-/// Whether `record`, read as `line`, is an `effort` count that supersedes `held`, another
-/// one read as `held_line`: by `at`, then writer, then the line's text, so every read order
-/// folds alike. A record of another kind never replaces or is replaced.
-fn later_effort(
-    record: &Record,
-    line: &Map<String, Value>,
-    held: &Record,
-    held_line: &Map<String, Value>,
-) -> bool {
-    let efforts =
-        matches!(record.body, Body::Effort { .. }) && matches!(held.body, Body::Effort { .. });
-    let text = |line: &Map<String, Value>| serde_json::to_string(line).unwrap_or_default();
-    efforts
-        && (&record.at, &record.writer)
-            .cmp(&(&held.at, &held.writer))
-            .then_with(|| text(line).cmp(&text(held_line)))
-            .is_gt()
+/// A record as read, and its line's JSON object.
+type Read = (Record, Map<String, Value>);
+
+/// The one line the fold holds of the (non-empty) `lines` sharing an `id`, in the order of
+/// `at`, then writer, then sorted text (`effort-records`): the greatest when every one is an
+/// `effort` count, the latest count winning; otherwise the least, so a later line reusing a
+/// record's `id` never displaces it. Equal lines are one record, and no order of reading or
+/// of a line's keys changes the choice.
+fn choose(lines: Vec<Read>) -> Read {
+    let efforts = lines
+        .iter()
+        .all(|(record, _)| matches!(record.body, Body::Effort { .. }));
+    let mut keyed: Vec<_> = lines
+        .into_iter()
+        .map(|(record, line)| {
+            let text = sorted_text(&line);
+            (record, line, text)
+        })
+        .collect();
+    keyed.sort_by(|(a, _, a_text), (b, _, b_text)| {
+        (&a.at, &a.writer, a_text).cmp(&(&b.at, &b.writer, b_text))
+    });
+    let (record, line, _) = if efforts {
+        keyed.pop()
+    } else {
+        keyed.into_iter().next()
+    }
+    .expect("an id is read from at least one line");
+    (record, line)
 }
 
 /// `clm ledger show`'s lines: one per record in `at` order, its kind first, then what it
@@ -421,7 +427,7 @@ fn origin(url: &str) -> String {
 mod tests {
     #[test]
     fn origin_of_an_endpoint() {
-        // req:ledger/subscription-records@e4cb2df2
+        // req:ledger/subscription-records@94d71184
         for (url, want) in [
             ("https://push.example/s/2", "https://push.example"),
             ("https://push.example", "https://push.example"),

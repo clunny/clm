@@ -29,7 +29,7 @@ fn landed(commit: &str) -> Body {
 
 #[test]
 fn two_writers() {
-    // req:ledger/fold@134ea7aa
+    // req:ledger/fold@44978b52
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     let b = clone_with_origin(dir.path(), "b", "B");
@@ -49,7 +49,7 @@ fn two_writers() {
 
 #[test]
 fn local_ahead() {
-    // req:ledger/fold@134ea7aa
+    // req:ledger/fold@44978b52
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     let home = dir.path();
@@ -73,7 +73,7 @@ fn local_ahead() {
 
 #[test]
 fn bad_line() {
-    // req:ledger/fold@134ea7aa
+    // req:ledger/fold@44978b52
     let dir = tempfile::tempdir().unwrap();
     let reader = clone_with_origin(dir.path(), "reader", "R");
     let good = |id: &str, fp: &str| {
@@ -110,9 +110,114 @@ fn bad_line() {
     );
 }
 
+/// Commits `files` alone, a tree of their own, in `hand` and stores it as `refs` in `into`.
+fn ledger_ref(hand: &std::path::Path, files: &[(&str, &str)], into: &std::path::Path, refs: &str) {
+    sh(hand, &["rm", "-rq", "--cached", "--ignore-unmatch", "."]);
+    for (path, text) in files {
+        std::fs::write(hand.join(path), text).unwrap();
+        sh(hand, &["add", path]);
+    }
+    sh(hand, &["commit", "-q", "--allow-empty", "-m", "ledger"]);
+    let tip = sh(hand, &["rev-parse", "HEAD"]);
+    sh(
+        into,
+        &[
+            "fetch",
+            "-q",
+            hand.to_str().unwrap(),
+            &format!("{tip}:{refs}"),
+        ],
+    );
+}
+
+#[test]
+fn odd_lines() {
+    // req:ledger/fold@44978b52
+    let dir = tempfile::tempdir().unwrap();
+    let reader = clone_with_origin(dir.path(), "reader", "R");
+    let clone = "1a2b3c4d";
+    std::fs::create_dir_all(reader.join(".git/clm")).unwrap();
+    std::fs::write(reader.join(".git/clm/writer"), format!("{clone}\n")).unwrap();
+    let hand = dir.path().join("hand");
+    std::fs::create_dir_all(&hand).unwrap();
+    repo(&hand, "H");
+    let approved = |fp: &str| {
+        format!(
+            r#"{{"id":"{fp}","kind":"approved","writer":"x/1","at":"2026-01-01T00:00:00.000Z","fingerprint":"{fp}","branch":"b","change":null"#
+        )
+    };
+    let x = [
+        r#"{"id":"1","kind":"nope","writer":"x/1","at":"2026-01-01T00:00:00.000Z"}"#.to_string(),
+        r#"{"id":"2","kind":"commented","writer":"x/1","at":"2026-01-01T00:00:00.000Z","branch":"b","fingerprint":"f","text":"t"}"#.to_string(),
+        "[1,2]".to_string(),
+        String::new(),
+        approved("f") + r#","x":1}"#,
+    ]
+    .join("\n");
+    let origin = dir.path().join("origin.git");
+    ledger_ref(
+        &hand,
+        &[("records.jsonl", &x)],
+        &origin,
+        "refs/heads/clm/ledger/x/1",
+    );
+    ledger_ref(
+        &hand,
+        &[("other.txt", "x\n")],
+        &origin,
+        "refs/heads/clm/ledger/y/2",
+    );
+    sh(&reader, &["fetch", "-q", "origin"]);
+    let old = format!("refs/heads/clm/ledger/old/{clone}");
+    ledger_ref(
+        &hand,
+        &[("records.jsonl", &(approved("g") + "}"))],
+        &reader,
+        &old,
+    );
+
+    let fold = clm_ledger::fold(&reader).unwrap();
+    let approvals: Vec<&str> = fold.approvals.keys().map(String::as_str).collect();
+    assert_eq!(approvals, ["f", "g"], "{fold:?}");
+    assert_eq!(fold.lines["f"]["x"], 1);
+    let w = &fold.warnings;
+    assert_eq!(w.len(), 4, "{w:?}");
+    let missing = "origin/clm/ledger/y/2: skipped, no records.jsonl: ";
+    assert!(
+        w.iter()
+            .any(|l| l.starts_with(missing) && l.len() > missing.len()),
+        "git's message: {w:?}"
+    );
+    for n in 1..=3 {
+        let start = format!("origin/clm/ledger/x/1 line {n}: skipped, not a record: ");
+        assert!(w.iter().any(|l| l.starts_with(&start)), "{start}: {w:?}");
+    }
+}
+
+#[test]
+fn times_out_of_order_or_equal() {
+    // req:ledger/fold@44978b52
+    let line = |id: &str, at: &str| {
+        format!(
+            r#"{{"id":"{id}","kind":"approved","writer":"x/1","at":"{at}","fingerprint":"f{id}","branch":"b","change":null}}"#
+        )
+    };
+    let a = [
+        line("2", "2026-01-02T00:00:00.000Z"),
+        line("3", "2026-01-01T00:00:00.000Z"),
+    ]
+    .join("\n");
+    let b = line("1", "2026-01-02T00:00:00.000Z");
+    for sources in [[("a", a.as_str()), ("b", &b)], [("b", &b), ("a", &a)]] {
+        let fold = clm_ledger::fold_records(&sources);
+        let ids: Vec<&str> = fold.records.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, ["3", "1", "2"]);
+    }
+}
+
 #[test]
 fn fold_records_counts_a_duplicate_id_once_and_skips_blank_lines() {
-    // req:ledger/fold@134ea7aa
+    // req:ledger/fold@44978b52
     let line = r#"{"id":"1","kind":"approved","writer":"x/1","at":"2026-01-01T00:00:00.000Z","fingerprint":"r","branch":"spec/x","change":null}"#;
     let text = format!("{line}\n\n{line}\r\n");
     let fold = clm_ledger::fold_records(&[("one", &text), ("two", line)]);
@@ -172,7 +277,7 @@ fn landed_record_written_before_the_code_key() {
 
 #[test]
 fn subscriptions_ended_in_another_order() {
-    // req:ledger/subscription-records@e4cb2df2
+    // req:ledger/subscription-records@94d71184
     // The end comes first, in the file and in time, and still ends `s1`.
     let text = [
         r#"{"id":"u1","kind":"unsubscribed","writer":"alice/web","at":"2026-01-01T00:00:00.000Z","subscription":"s1"}"#,
@@ -348,7 +453,7 @@ fn landed_writes_review() {
 
 #[test]
 fn reviewed_lines_skipped_quietly() {
-    // req:ledger/fold@134ea7aa
+    // req:ledger/fold@44978b52
     let reviewed = r#"{"id":"2","writer":"a/1","at":"2026-01-01T00:00:01.000Z","kind":"reviewed","fingerprint":"r"}"#;
     let approved = |id: &str, f: &str| {
         format!(
@@ -371,7 +476,7 @@ fn effort_line(at: &str, writer: &str, output: u64) -> String {
 
 #[test]
 fn effort_round_trips() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     let line = effort_line("2026-01-01T00:00:00.000Z", "x/1", 5);
     let fold = clm_ledger::fold_records(&[("one", &line)]);
     assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
@@ -403,7 +508,7 @@ fn effort_round_trips() {
 
 #[test]
 fn effort_latest_at_wins() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     let early = effort_line("2026-01-01T00:00:00.000Z", "a/1", 5);
     let late = effort_line("2026-01-02T00:00:00.000Z", "b/2", 50);
     for sources in [
@@ -497,7 +602,7 @@ fn bad_rating_skipped() {
 
 #[test]
 fn effort_tie_folds_alike_in_either_order() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     let at = "2026-01-01T00:00:00.000Z";
     let (a, b) = (effort_line(at, "a/1", 5), effort_line(at, "b/2", 50));
     for sources in [
@@ -512,7 +617,7 @@ fn effort_tie_folds_alike_in_either_order() {
 
 #[test]
 fn effort_never_replaces_another_kind() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     let approved = r#"{"id":"e","kind":"approved","writer":"x/1","at":"2026-01-01T00:00:00.000Z","fingerprint":"f","branch":"spec/x","change":null}"#;
     let effort = effort_line("2026-01-02T00:00:00.000Z", "y/2", 5);
     let fold = clm_ledger::fold_records(&[("a", approved), ("b", &effort)]);
@@ -523,7 +628,7 @@ fn effort_never_replaces_another_kind() {
 
 #[test]
 fn huge_effort_shown_without_overflow() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     let line = effort_line("2026-01-01T00:00:00.000Z", "x/1", u64::MAX);
     let fold = clm_ledger::fold_records(&[("a", &line)]);
     let shown = clm_ledger::show(&fold);
@@ -531,5 +636,44 @@ fn huge_effort_shown_without_overflow() {
     assert!(
         shown[0].contains(&format!(" {} 120s ", u64::MAX)),
         "{shown:?}"
+    );
+}
+
+#[test]
+fn show_a_check() {
+    // req:ledger/show@6e2fd27f
+    let line = r#"{"id":"1","kind":"checked","writer":"x/1","at":"2026-01-01T00:00:00.000Z","code_key":"k","command":"check"}"#;
+    let fold = clm_ledger::fold_records(&[("origin/clm/ledger/x/1", line)]);
+    assert_eq!(
+        clm_ledger::show(&fold),
+        ["checked k x/1 2026-01-01T00:00:00.000Z"]
+    );
+}
+
+#[test]
+fn show_odd_endpoints() {
+    // req:ledger/subscription-records@94d71184
+    let subscribed = |id: &str, endpoint: &str| {
+        format!(
+            r#"{{"id":"{id}","kind":"subscribed","writer":"alice/web","at":"2026-01-01T00:00:00.000Z","endpoint":"{endpoint}","p256dh":"p","auth":"a"}}"#
+        )
+    };
+    let text = [
+        subscribed("s1", "https://push.example:8443/s?x=1"),
+        subscribed("s2", "https://user:token@push.example/s/1"),
+        subscribed("s3", "not a url"),
+        subscribed("s4", "foo?x=https://a/b"),
+    ]
+    .join("\n");
+    let fold = clm_ledger::fold_records(&[("origin/clm/ledger/alice/web", &text)]);
+    let at = "alice/web 2026-01-01T00:00:00.000Z";
+    assert_eq!(
+        clm_ledger::show(&fold),
+        [
+            format!("subscribed s1 https://push.example:8443 {at}"),
+            format!("subscribed s2 https://push.example {at}"),
+            format!("subscribed s3 - {at}"),
+            format!("subscribed s4 - {at}"),
+        ]
     );
 }

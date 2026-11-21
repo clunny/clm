@@ -74,7 +74,7 @@ fn with_vars<R>(vars: &[(&str, Option<&std::ffi::OsStr>)], run: impl FnOnce() ->
 
 #[test]
 fn scenario_a_command_called_in_a_test() {
-    // req:ledger/commands-in-crate@b9042545
+    // req:ledger/commands-in-crate@61f9b60a
     // `clm ledger verify` on a `main` with an unrecorded land: its line on the output buffer,
     // nothing on the error buffer, and 1, as the command prints and exits.
     let dir = tempfile::tempdir().unwrap();
@@ -91,7 +91,7 @@ fn scenario_a_command_called_in_a_test() {
 
 #[test]
 fn the_root_option_overrides_the_root_it_is_given() {
-    // req:ledger/commands-in-crate@b9042545
+    // req:ledger/commands-in-crate@61f9b60a
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);
@@ -123,6 +123,77 @@ fn the_root_option_overrides_the_root_it_is_given() {
             .unwrap()
             .contains("ledger/unrecorded-land")
     );
+}
+
+#[test]
+fn scenario_what_it_prints_where() {
+    // req:ledger/commands-in-crate@61f9b60a
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let env = env(root, alices(root));
+    let first = append(root, approved("f"), &env).unwrap();
+    let branch = format!("clm/ledger/{}", first.record.writer);
+    append_line(root, &branch, "not json");
+    let (code, out, err) = clm(root, root, &["ledger", "show"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(
+        out,
+        format!(
+            "approved f spec/x {} {}\n",
+            first.record.writer, first.record.at
+        )
+    );
+    let warning = format!("warning: {branch} line 2: skipped, not a record: ");
+    assert_eq!(err.lines().count(), 1, "{err}");
+    assert!(err.starts_with(&warning), "{err}");
+    let (code, out, err) = clm(root, root, &["ledger", "verify", "--since", "nowhere"]);
+    assert_eq!((code, out.as_str()), (Some(2), ""), "{err}");
+    assert!(err.starts_with("clm ledger: "), "{err}");
+    assert!(err.contains("nowhere"), "git's message: {err}");
+}
+
+#[test]
+fn scenario_help() {
+    // req:ledger/commands-in-crate@61f9b60a
+    for (args, description, usage) in [
+        (
+            &["--help"][..],
+            "The ledger of approvals, checks and lands: print it, audit `main` against it, or \
+             prune your own superseded records",
+            "Usage: clm ledger <COMMAND>",
+        ),
+        (
+            &["compact", "--help"][..],
+            "Rewrite your own ledger without approvals of landed diffs and checks older than \
+             the newest land, push it, and print how many records went",
+            "Usage: clm ledger compact [OPTIONS]",
+        ),
+        (
+            &["verify", "--help"][..],
+            "Report each commit on `main` no `landed` record names, merge or not, and each \
+             land no `checked` record covers; exit 1 when there is one. Doesn't fetch",
+            "Usage: clm ledger verify [OPTIONS]",
+        ),
+        (
+            &["show", "--help"][..],
+            "Print every record, one per line in time order. Doesn't fetch",
+            "Usage: clm ledger show [OPTIONS]",
+        ),
+    ] {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = clm_ledger::ledger_command(
+            args.iter().copied(),
+            Path::new("."),
+            &|_| None,
+            &mut out,
+            &mut err,
+        );
+        let out = String::from_utf8(out).unwrap();
+        assert_eq!(code, 0, "{args:?}");
+        assert!(err.is_empty(), "{args:?}");
+        let lines: Vec<&str> = out.lines().take(3).collect();
+        assert_eq!(lines, [description, "", usage], "{args:?}:\n{out}");
+    }
 }
 
 /// The diff's fingerprint against `base` in `dir`, which `clm fingerprint` prints, from the
@@ -230,7 +301,7 @@ fn at_now() -> String {
 
 #[test]
 fn compact_prunes_a_landed_approval_and_older_checks() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -257,11 +328,12 @@ fn compact_prunes_a_landed_approval_and_older_checks() {
 #[cfg(unix)]
 #[test]
 fn compact_warns_when_origin_refuses_the_push() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let mine = append(&a, approved("f"), &env(home, &[])).unwrap();
+    append(&a, checked("k"), &env(home, &[])).unwrap();
     tick();
     append(&a, landed("c", "f", Some("m")), &env(home, &[])).unwrap();
     let origin = home.join("origin.git");
@@ -274,18 +346,20 @@ fn compact_warns_when_origin_refuses_the_push() {
     }
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
-    assert_eq!(out.trim(), "removed 1");
+    assert_eq!(out.trim(), "removed 2");
     let branch = format!("clm/ledger/{}", mine.record.writer);
-    assert!(
-        err.contains(&format!("isn't on origin yet: git push origin {branch}")),
-        "{err}"
+    assert_eq!(
+        err,
+        format!("warning: the compacted ledger isn't on origin yet: git push origin {branch}\n")
     );
-    assert!(!records(&a, &branch).contains("\"approved\""));
+    let text = records(&a, &branch);
+    assert!(!text.contains("\"approved\""), "{text}");
+    assert!(!text.contains("\"checked\""), "{text}");
 }
 
 #[test]
 fn compact_keeps_an_open_approval() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -304,7 +378,7 @@ fn compact_keeps_an_open_approval() {
 
 #[test]
 fn compact_keeps_lands_and_newer_checks() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -354,8 +428,28 @@ fn append_line(dir: &Path, branch: &str, line: &str) {
 }
 
 #[test]
+fn compact_keeps_a_line_it_cannot_parse() {
+    // req:ledger/compact@59996cc0
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let a = clone_with_origin(home, "a", "A");
+    let env = env(home, &[]);
+    let mine = append(&a, approved("f"), &env).unwrap();
+    let branch = format!("clm/ledger/{}", mine.record.writer);
+    append_line(&a, &branch, "not json");
+    tick();
+    append(&a, landed("c", "f", Some("m")), &env).unwrap();
+    let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
+    assert_eq!(code, Some(0), "{out}{err}");
+    assert_eq!(out.trim(), "removed 1");
+    let text = records(&a, &branch);
+    assert!(text.lines().any(|l| l == "not json"), "{text}");
+    assert!(!text.contains(r#""kind":"approved""#), "{text}");
+}
+
+#[test]
 fn compact_drops_reviewed_lines() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -374,7 +468,7 @@ fn compact_drops_reviewed_lines() {
 
 #[test]
 fn compact_keeps_a_lands_check() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     // `checked k`, then the land naming `k`.
@@ -393,7 +487,7 @@ fn compact_keeps_a_lands_check() {
 
 #[test]
 fn compact_keeps_an_older_lands_check() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0", "Merge b1"]);
     let env = env(dir.path(), &[]);
@@ -416,7 +510,7 @@ fn compact_keeps_an_older_lands_check() {
 
 #[test]
 fn compact_keeps_every_check_when_a_lands_key_is_unknown() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     // A land without `code_key` whose commit isn't in this clone: its key can't be
     // computed, so no check is dropped, though the landed approval still is.
     let dir = tempfile::tempdir().unwrap();
@@ -431,7 +525,12 @@ fn compact_keeps_every_check_when_a_lands_key_is_unknown() {
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 1");
-    assert!(err.contains("warning") && err.contains(missing), "{err}");
+    // This repository has no `origin`, so the push's warning follows.
+    let warning = format!(
+        "warning: kept every `checked` record: landed {missing} isn't in this clone, so its \
+         code key can't be computed; fetch it and compact again"
+    );
+    assert_eq!(err.lines().next(), Some(warning.as_str()), "{err}");
     let fold = clm_ledger::fold(dir.path()).unwrap();
     assert!(fold.checks.contains_key("old"), "{fold:?}");
     assert!(fold.approvals.is_empty(), "{fold:?}");
@@ -506,7 +605,7 @@ fn record_land(dir: &Path, commit: &str) {
 
 #[test]
 fn verify_clean_history() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     // The first land written before `landed` records named their code key: its key is
@@ -522,7 +621,7 @@ fn verify_clean_history() {
 
 #[test]
 fn verify_reads_the_recorded_key() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
@@ -534,7 +633,7 @@ fn verify_reads_the_recorded_key() {
 
 #[test]
 fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0"]);
     let vars = env(dir.path(), &[]);
@@ -558,7 +657,7 @@ fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
 
 #[test]
 fn verify_reports_a_push_behind_clms_back() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);
@@ -579,7 +678,7 @@ fn verify_reports_a_push_behind_clms_back() {
 
 #[test]
 fn verify_starts_from_the_first_land() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     // Merges from before the ledger existed aren't reported.
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
@@ -590,7 +689,7 @@ fn verify_starts_from_the_first_land() {
 
 #[test]
 fn verify_reports_a_direct_push() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     record_land(dir.path(), &merges[0]);
@@ -612,7 +711,7 @@ fn verify_reports_a_direct_push() {
 
 #[test]
 fn verify_exempts_releases() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     // A release merge, and a version bump that fast-forwarded onto `main`.
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Release v0.9.0"]);
@@ -623,8 +722,73 @@ fn verify_exempts_releases() {
 }
 
 #[test]
+fn verify_where_the_audit_starts() {
+    // req:ledger/verify@9fb2cb6b
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let merges = history(root, &["Merge m0", "Merge m1"]);
+    let (m0, m1) = (&merges[0], &merges[1]);
+    let vars = env(root, &[]);
+    append(root, landed(m1, "f", Some("k")), &vars).unwrap();
+    let (code, out, err) = clm(root, root, &["ledger", "verify"]);
+    assert_eq!(code, Some(1), "{err}");
+    assert_eq!(
+        out,
+        format!(
+            "main: ledger/unchecked-land: landed {m1}: no `checked` record names its code key k\n"
+        )
+    );
+    assert!(!out.contains(m0.as_str()), "{out}");
+    append(root, checked("k"), &vars).unwrap();
+    let p = commit(root, &[("src/hotfix.rs", "x\n")], "hotfix");
+    let (code, out, err) = clm(root, root, &["ledger", "verify"]);
+    assert_eq!(code, Some(1), "{err}");
+    assert_eq!(
+        out,
+        format!(
+            "main: ledger/unrecorded-land: commit {p} (hotfix) has no `landed` record: it is on \
+             main without `clm land`\n"
+        )
+    );
+    // A `main` whose ledger's only `landed` record names a commit not on its chain.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    history(root, &["Merge m0"]);
+    let vars = env(root, &[]);
+    append(root, checked("k"), &vars).unwrap();
+    let elsewhere = "0123456789abcdef0123456789abcdef01234567";
+    append(root, landed(elsewhere, "f", Some("k")), &vars).unwrap();
+    let (code, out, err) = clm(root, root, &["ledger", "verify"]);
+    assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
+}
+
+#[cfg(unix)]
+#[test]
+fn verify_an_audit_that_cannot_run() {
+    // req:ledger/verify@9fb2cb6b
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let s = signed_main(root, "Christopher Lunny");
+    let land = hard_land(root, &s.merge, &s.fingerprint);
+    append_signed(root, "christopher-lunny", &s.christopher, "clm-land", land);
+    let git = common::git_alone();
+    let mut vars = isolated(root).to_vec();
+    vars.push(("PATH", Some(git.path().as_os_str())));
+    let found = with_vars(&vars, || clm_ledger::on_main(root));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].path, Path::new("main"), "{found:?}");
+    assert_eq!(found[0].rule, "ledger/verify", "{found:?}");
+    assert!(
+        found[0]
+            .message
+            .starts_with("can't audit main against the ledger: "),
+        "{found:?}"
+    );
+}
+
+#[test]
 fn verify_findings_offered_to_the_check_on_main_only() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     let vars = isolated(dir.path());
@@ -645,7 +809,7 @@ fn verify_findings_offered_to_the_check_on_main_only() {
 
 #[test]
 fn verify_reports_a_land_no_check_names() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);
@@ -665,7 +829,7 @@ fn verify_reports_a_land_no_check_names() {
 
 #[test]
 fn show_lists_the_fold_in_time_order() {
-    // req:ledger/show@803f9c27
+    // req:ledger/show@6e2fd27f
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "T");
     std::fs::write(dir.path().join("clm.toml"), "host = \"none\"\n").unwrap();
@@ -687,7 +851,7 @@ fn show_lists_the_fold_in_time_order() {
 
 #[test]
 fn show_prints_whether_a_land_needed_review() {
-    // req:ledger/show@803f9c27
+    // req:ledger/show@6e2fd27f
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "T");
     std::fs::write(dir.path().join("clm.toml"), "host = \"none\"\n").unwrap();
@@ -714,7 +878,7 @@ fn show_prints_whether_a_land_needed_review() {
 
 #[test]
 fn show_sorts_across_ledgers() {
-    // req:ledger/show@803f9c27
+    // req:ledger/show@6e2fd27f
     // Writer `b`'s record is older, though its ledger is read after `a`'s.
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -842,7 +1006,7 @@ fn hard_land(dir: &Path, commit: &str, fingerprint: &str) -> Body {
 
 #[test]
 fn verify_signed_and_approved_by_another() {
-    // req:ledger/verify-signed-lands@09eefb14
+    // req:ledger/verify-signed-lands@68f42380
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signed_main(root, "Christopher Lunny");
@@ -861,7 +1025,7 @@ fn verify_signed_and_approved_by_another() {
 
 #[test]
 fn verify_judges_a_land_by_any_signed_record() {
-    // req:ledger/verify-signed-lands@09eefb14
+    // req:ledger/verify-signed-lands@68f42380
     // A retried land left an unsigned record beside the signed one.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -882,7 +1046,7 @@ fn verify_judges_a_land_by_any_signed_record() {
 
 #[test]
 fn verify_approval_in_anothers_name() {
-    // req:ledger/verify-signed-lands@09eefb14
+    // req:ledger/verify-signed-lands@68f42380
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signed_main(root, "Christopher Lunny");
@@ -898,16 +1062,20 @@ fn verify_approval_in_anothers_name() {
     );
     let (code, out, _) = clm(root, root, &["ledger", "verify"]);
     assert_eq!(code, Some(1), "{out}");
-    assert_eq!(out.lines().count(), 1, "{out}");
-    assert!(
-        out.contains("ledger/unapproved-land") && out.contains(&s.merge),
-        "{out}"
+    assert_eq!(
+        out,
+        format!(
+            "main: ledger/unapproved-land: landed {}: it needed review, but no `approved` \
+             record for its fingerprint {} is signed by its writer and by someone other than \
+             the lander and the authors\n",
+            s.merge, s.fingerprint
+        )
     );
 }
 
 #[test]
 fn verify_author_name_changed() {
-    // req:ledger/verify-signed-lands@09eefb14
+    // req:ledger/verify-signed-lands@68f42380
     // The branch's commits name `Zed`, but the one approval is the lander's own.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -932,7 +1100,7 @@ fn verify_author_name_changed() {
 
 #[test]
 fn verify_an_authors_approval_counts_only_under_any() {
-    // req:ledger/verify-signed-lands@09eefb14
+    // req:ledger/verify-signed-lands@68f42380
     // Another person lands, but the approval is by the branch's author.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -965,7 +1133,7 @@ fn verify_an_authors_approval_counts_only_under_any() {
 
 #[test]
 fn verify_unsigned_land() {
-    // req:ledger/verify-signed-lands@09eefb14
+    // req:ledger/verify-signed-lands@68f42380
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signed_main(root, "Christopher Lunny");
@@ -980,16 +1148,19 @@ fn verify_unsigned_land() {
     );
     let (code, out, _) = clm(root, root, &["ledger", "verify"]);
     assert_eq!(code, Some(1), "{out}");
-    assert_eq!(out.lines().count(), 1, "{out}");
-    assert!(
-        out.contains("ledger/unsigned-land") && out.contains(&s.merge),
-        "{out}"
+    assert_eq!(
+        out,
+        format!(
+            "main: ledger/unsigned-land: landed {}: no `landed` record naming it is signed by \
+             its writer\n",
+            s.merge
+        )
     );
 }
 
 #[test]
 fn verify_approval_for_another_diff() {
-    // req:ledger/verify-signed-lands@09eefb14
+    // req:ledger/verify-signed-lands@68f42380
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signed_main(root, "Christopher Lunny");
@@ -999,18 +1170,120 @@ fn verify_approval_for_another_diff() {
     append_signed(root, "dana", &s.dana, "clm-approve", approved(&other));
     let (code, out, _) = clm(root, root, &["ledger", "verify"]);
     assert_eq!(code, Some(1), "{out}");
+    assert_eq!(
+        out,
+        format!(
+            "main: ledger/unapproved-land: landed {}: its `landed` record names fingerprint \
+             {other}, but its parents give {}, so any approval was for another diff\n",
+            s.merge, s.fingerprint
+        )
+    );
+}
+
+/// `signed_main`'s merge landed, signed and approved by another.
+fn land_signed_main(root: &Path, s: &SignedMain) {
+    let land = hard_land(root, &s.merge, &s.fingerprint);
+    append_signed(root, "christopher-lunny", &s.christopher, "clm-land", land);
+    append_signed(
+        root,
+        "dana",
+        &s.dana,
+        "clm-approve",
+        approved(&s.fingerprint),
+    );
+}
+
+/// A land of `commit` of `kind` that needed review, as `hard_land` gives it.
+fn hard_land_of(root: &Path, commit: &str, fingerprint: &str, kind: LandKind) -> Body {
+    let mut land = hard_land(root, commit, fingerprint);
+    if let Body::Landed { kind: k, .. } = &mut land {
+        *k = kind;
+    }
+    land
+}
+
+#[test]
+fn verify_lands_no_approval_can_clear() {
+    // req:ledger/verify-signed-lands@68f42380
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let s = signed_main(root, "Christopher Lunny");
+    land_signed_main(root, &s);
+    // `p`: one parent.
+    let p = commit(root, &[("specs/p.md", "p\n")], "p");
+    let land = hard_land(root, &p, "f");
+    append_signed(root, "christopher-lunny", &s.christopher, "clm-land", land);
+    // `u`: a branch that shares no history with `main`.
+    sh(root, &["switch", "-q", "--orphan", "u"]);
+    commit(root, &[("u.txt", "u\n")], "unrelated");
+    sh(root, &["switch", "-q", "main"]);
+    let args = ["merge", "-q", "--no-ff", "--allow-unrelated-histories"];
+    sh(root, &[&args[..], &["-m", "Merge u", "u"]].concat());
+    let u = sh(root, &["rev-parse", "HEAD"]);
+    let land = hard_land(root, &u, "f");
+    append_signed(root, "christopher-lunny", &s.christopher, "clm-land", land);
+    // `c`: a `code` land whose record says `review`, with no approval.
+    let (c, c_diff) = merge_branch(root, "c", "Christopher Lunny");
+    let land = hard_land_of(root, &c, &c_diff, LandKind::Code);
+    append_signed(root, "christopher-lunny", &s.christopher, "clm-land", land);
+    let (code, out, err) = clm(root, root, &["ledger", "verify"]);
+    assert_eq!(code, Some(1), "{out}{err}");
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 3, "{out}");
+    assert_eq!(
+        lines[0],
+        format!(
+            "main: ledger/unapproved-land: landed {p}: it needed review, but isn't a merge, so \
+             no diff was approved"
+        )
+    );
+    assert_eq!(
+        lines[1],
+        format!(
+            "main: ledger/unapproved-land: landed {u}: its parents share no history, so no diff \
+             was approved"
+        )
+    );
+    // Audited for its approval, as a land that needed review.
+    let c_line = format!(
+        "main: ledger/unapproved-land: landed {c}: it needed review, but no `approved` record \
+         for its fingerprint {c_diff} is signed by its writer"
+    );
+    assert!(lines[2].starts_with(&c_line), "{out}");
+
+    // A `clm.toml` that doesn't parse in `c`'s first parent, and a counted approval of `c`.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let s = signed_main(root, "Christopher Lunny");
+    land_signed_main(root, &s);
+    let broken = commit(root, &[("clm.toml", "not [toml\n")], "broken settings");
+    // The branch mends the file, so the clone's own settings read again once it merges.
+    sh(root, &["switch", "-q", "-c", "c"]);
+    let settings = "host = \"none\"\napproval = \"other\"\n";
+    commit(
+        root,
+        &[("clm.toml", settings), ("specs/c.md", "c\n")],
+        "work",
+    );
+    let diff = fingerprint(root, "main");
+    sh(root, &["switch", "-q", "main"]);
+    sh(root, &["merge", "-q", "--no-ff", "-m", "Merge c", "c"]);
+    let c = sh(root, &["rev-parse", "HEAD"]);
+    let land = hard_land_of(root, &c, &diff, LandKind::Code);
+    append_signed(root, "christopher-lunny", &s.christopher, "clm-land", land);
+    append_signed(root, "dana", &s.dana, "clm-approve", approved(&diff));
+    let (code, _, err) = clm(root, root, &["ledger", "verify"]);
+    assert_eq!(code, Some(2), "{err}");
+    let start = format!("clm ledger: {broken}:clm.toml: ");
     assert!(
-        out.contains("ledger/unapproved-land")
-            && out.contains(&s.merge)
-            && out.contains(&other)
-            && out.contains(&s.fingerprint),
-        "{out}"
+        err.starts_with(&start) && err.len() > start.len() + 1,
+        "{err}"
     );
 }
 
 #[test]
 fn compact_keeps_a_signed_lands_approval() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signed_main(root, "Christopher Lunny");
@@ -1044,7 +1317,7 @@ fn compact_keeps_a_signed_lands_approval() {
 
 #[test]
 fn compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     // Whether its first parent is signed can't be told, so the approval stays.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1070,12 +1343,19 @@ fn compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched() {
     let (code, out, err) = clm(root, root, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 0");
-    assert!(err.contains("warning") && err.contains(missing), "{err}");
+    assert_eq!(
+        err,
+        format!(
+            "warning: kept the approval of f: landed {missing} isn't in this clone, so \
+             whether `clm ledger verify` reads it can't be told; fetch it and compact again\n"
+        )
+    );
+    assert!(clm_ledger::fold(root).unwrap().approvals.contains_key("f"));
 }
 
 #[test]
 fn verify_before_the_switch() {
-    // req:ledger/verify-signed-lands@09eefb14
+    // req:ledger/verify-signed-lands@68f42380
     // Unsigned lands that needed review, the last of which adds `docs/allowed_signers`.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1111,7 +1391,7 @@ fn subscribed(endpoint: &str) -> Body {
 
 #[test]
 fn show_prints_a_subscription_without_its_keys() {
-    // req:ledger/subscription-records@e4cb2df2
+    // req:ledger/subscription-records@94d71184
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     repo(root, "T");
@@ -1142,7 +1422,7 @@ fn show_prints_a_subscription_without_its_keys() {
 
 #[test]
 fn compact_keeps_subscription_records() {
-    // req:ledger/subscription-records@e4cb2df2
+    // req:ledger/subscription-records@94d71184
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -1264,7 +1544,7 @@ fn requirement_added(dir: &Path) -> (String, String) {
 
 #[test]
 fn review_recorded_as_none() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1275,11 +1555,12 @@ fn review_recorded_as_none() {
     assert_eq!(code, Some(1), "{out}{err}");
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines.len(), 2, "{out}");
-    assert!(
-        lines[0].contains("ledger/understated-land")
-            && lines[0].contains(&merge)
-            && lines[0].contains("recorded spec, the gate gives spec review"),
-        "{out}"
+    assert_eq!(
+        lines[0],
+        format!(
+            "main: ledger/understated-land: landed {merge}: recorded spec, the gate gives spec \
+             review"
+        )
     );
     assert!(
         lines[1].contains("ledger/unapproved-land") && lines[1].contains(&merge),
@@ -1289,7 +1570,7 @@ fn review_recorded_as_none() {
 
 #[test]
 fn review_spec_recorded_as_code() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1305,18 +1586,18 @@ fn review_spec_recorded_as_code() {
     );
     let (code, out, err) = clm(root, root, &["ledger", "verify", "--review"]);
     assert_eq!(code, Some(1), "{out}{err}");
-    assert_eq!(out.lines().count(), 1, "{out}");
-    assert!(
-        out.contains("ledger/understated-land")
-            && out.contains(&merge)
-            && out.contains("recorded code, the gate gives spec review"),
-        "{out}"
+    assert_eq!(
+        out,
+        format!(
+            "main: ledger/understated-land: landed {merge}: recorded code, the gate gives spec \
+             review\n"
+        )
     );
 }
 
 #[test]
 fn review_honest_and_over_stated_lands() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1350,7 +1631,7 @@ fn review_honest_and_over_stated_lands() {
 
 #[test]
 fn review_highest_signed_record_is_the_recorded_one() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     // Two signed records name the land, `code` and `spec review`: the higher one is recorded.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1373,7 +1654,7 @@ fn review_highest_signed_record_is_the_recorded_one() {
 
 #[test]
 fn review_not_recomputed_without_the_flag() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1386,7 +1667,7 @@ fn review_not_recomputed_without_the_flag() {
 
 #[test]
 fn review_before_the_switch() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let _keys = signed_main_with_specs(root, false);
@@ -1399,7 +1680,7 @@ fn review_before_the_switch() {
 
 #[test]
 fn review_ranks_code_with_spec() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     // A backlog-only diff, `spec` to the gate, recorded as a code land: no finding.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1414,7 +1695,7 @@ fn review_ranks_code_with_spec() {
 
 #[test]
 fn review_unsigned_land_is_not_recomputed() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     // On a signed `main`, an unsigned record understating a diff that needs review is only
     // unsigned.
     let dir = tempfile::tempdir().unwrap();
@@ -1476,7 +1757,7 @@ fn found(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
 
 #[test]
 fn review_a_removal_before_the_rule() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1489,7 +1770,7 @@ fn review_a_removal_before_the_rule() {
 
 #[test]
 fn review_a_removal_under_the_rule() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1514,7 +1795,7 @@ fn review_a_removal_under_the_rule() {
 
 #[test]
 fn review_the_highest_whole_trailer_counts() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     // Of these trailers only `  1 ` is, trimmed, a whole number of at least 1: version 1.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1544,7 +1825,7 @@ fn review_the_highest_whole_trailer_counts() {
 
 #[test]
 fn review_a_lower_trailer_after_a_higher_one() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1566,7 +1847,7 @@ fn review_a_lower_trailer_after_a_higher_one() {
 
 #[test]
 fn review_a_floor_counts_only_a_signed_land() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     // An earlier land no signed record names raises no floor: it is only unsigned.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1601,7 +1882,7 @@ fn rules_newer_than_this_clm(root: &Path, christopher: &Path) -> (String, u32) {
 
 #[test]
 fn review_rules_newer_than_this_clm() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1620,7 +1901,7 @@ fn review_rules_newer_than_this_clm() {
 
 #[test]
 fn review_a_land_after_rules_newer_than_this_clm() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1640,7 +1921,7 @@ fn review_a_land_after_rules_newer_than_this_clm() {
 
 #[test]
 fn review_a_capped_floor_still_rates_later_lands() {
-    // req:ledger/verify-recomputes-review@42a503d9
+    // req:ledger/verify-recomputes-review@730d0917
     // After a land under rules newer than this clm the floor is `RULES`: a later removal is
     // rated under `RULES`, not reported as unrated.
     let dir = tempfile::tempdir().unwrap();
@@ -1691,7 +1972,7 @@ fn unreadable_change(dir: &Path) -> (String, String, &'static str) {
 
 #[test]
 fn review_unrated_land() {
-    // req:ledger/verify-unrated-land@48a0dc74
+    // req:ledger/verify-unrated-land@c1f0cb74
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1723,7 +2004,7 @@ fn review_unrated_land() {
 
 #[test]
 fn review_unrated_land_judged_by_its_record() {
-    // req:ledger/verify-unrated-land@48a0dc74
+    // req:ledger/verify-unrated-land@c1f0cb74
     // Recorded as needing review, with no approval: judged by that record, the gate error
     // aside.
     let dir = tempfile::tempdir().unwrap();
@@ -1747,7 +2028,7 @@ fn review_unrated_land_judged_by_its_record() {
 
 #[test]
 fn review_unrated_land_without_the_flag() {
-    // req:ledger/verify-unrated-land@48a0dc74
+    // req:ledger/verify-unrated-land@c1f0cb74
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1998,7 +2279,7 @@ fn decided(capability: &str) -> Body {
 
 #[test]
 fn show_effort_and_decided() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     // req:ledger/decision-records@9ca8cb93
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -2021,7 +2302,7 @@ fn show_effort_and_decided() {
 
 #[test]
 fn compact_drops_superseded_effort() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     // req:ledger/decision-records@9ca8cb93
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -2131,7 +2412,7 @@ fn by_hand_trailer_shut_in_a_signed_repository() {
 
 #[test]
 fn compact_settles_an_effort_tie() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     // Two of the caller's own counts with one `id` and one `at`: one goes, whichever it is.
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -2141,6 +2422,30 @@ fn compact_settles_an_effort_tie() {
     let branch = format!("clm/ledger/{}", first.record.writer);
     let line = records(&a, &branch).replace(r#""output":5"#, r#""output":6"#);
     append_line(&a, &branch, &line);
+    let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
+    assert_eq!(code, Some(0), "{out}{err}");
+    assert_eq!(out.trim(), "removed 1");
+    let text = records(&a, &branch);
+    assert_eq!(text.matches(r#""kind":"effort""#).count(), 1, "{text}");
+    // The one the fold keeps: the greater sorted text, `output` 6.
+    assert!(text.contains(r#""output":6"#), "{text}");
+}
+
+#[test]
+fn compact_keeps_one_of_equal_effort_lines() {
+    // req:ledger/effort-records@828c1a9a
+    // The same count twice, the second with its keys in another order: one record, one line.
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let a = clone_with_origin(home, "a", "A");
+    let env = env(home, &[]);
+    let first = append(&a, effort(5), &env).unwrap();
+    let branch = format!("clm/ledger/{}", first.record.writer);
+    let line: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(records(&a, &branch).trim()).unwrap();
+    let reordered: serde_json::Map<String, serde_json::Value> = line.into_iter().rev().collect();
+    let reordered = serde_json::Value::Object(reordered).to_string();
+    append_line(&a, &branch, &reordered);
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 1");
@@ -2249,7 +2554,7 @@ fn compact_keeps_the_basis_of_a_composed_check() {
 
 #[test]
 fn compact_still_prunes_a_check_no_land_or_basis_names() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);

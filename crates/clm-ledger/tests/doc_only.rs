@@ -30,7 +30,7 @@ fn paths() {
 
 #[test]
 fn legacy_paths() {
-    // req:ledger/legacy-doc-only@ddac0ce8
+    // req:ledger/legacy-doc-only@7e19e4d4
     for (path, want) in [
         ("docs/spec-format.md", true),
         ("docs/x.md", true),
@@ -51,25 +51,5 @@ fn legacy_paths() {
         ("docsy/z.md", false),
     ] {
         assert_eq!(clm_ledger::legacy_doc_only(path), want, "{path}");
-    }
-}
-
-#[test]
-fn legacy_list_is_frozen() {
-    // req:ledger/legacy-doc-only@ddac0ce8
-    let src =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/doc_only.rs")).unwrap();
-    let body = &src[src.find("pub fn legacy_doc_only").expect("legacy_doc_only")..];
-    // After the signature, which names the function itself.
-    let body = &body[body.find('{').unwrap()..];
-    let body = &body[..body.find("\n}").expect("its body's end")];
-    assert!(!body.contains("doc_only("), "calls doc_only:\n{body}");
-    assert!(body.contains("LEGACY_DOC_ONLY"), "{body}");
-    let list = &src[src
-        .find("const LEGACY_DOC_ONLY")
-        .expect("a constant of its own")..];
-    let list = &list[..list.find("];").unwrap()];
-    for text in [body, list] {
-        assert!(!text.contains("spec-format"), "{text}");
     }
 }

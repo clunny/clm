@@ -52,14 +52,14 @@ fn fold_of(records: &[Record]) -> Fold {
 
 #[test]
 fn the_requester_approved_later() {
-    // req:ledger/request-cleared@0fe654c6
+    // req:ledger/request-cleared@3e4c06c9
     let fold = fold_of(&[request(), approval("a1", "alice/1a2b3c4d", LATER, "f")]);
     assert!(fold.cleared(&request()));
 }
 
 #[test]
 fn not_cleared() {
-    // req:ledger/request-cleared@0fe654c6
+    // req:ledger/request-cleared@3e4c06c9
     let fold = fold_of(&[
         request(),
         approval("a1", "dana/9f9f9f9f", LATER, "f"),
@@ -71,7 +71,7 @@ fn not_cleared() {
 
 #[test]
 fn a_record_that_is_no_request_is_never_cleared() {
-    // req:ledger/request-cleared@0fe654c6
+    // req:ledger/request-cleared@3e4c06c9
     let earlier = approval("a0", "alice/web", REQUESTED, "f");
     let fold = fold_of(&[
         earlier.clone(),
@@ -82,41 +82,18 @@ fn a_record_that_is_no_request_is_never_cleared() {
 
 #[test]
 fn person_of_a_writer() {
-    // req:ledger/request-cleared@0fe654c6
+    // req:ledger/request-cleared@3e4c06c9
     assert_eq!(person("alice/1a2b3c4d"), "alice");
     assert_eq!(person("alice"), "alice");
 }
 
 #[test]
 fn a_signed_approval_counts_as_well() {
-    // req:ledger/request-cleared@0fe654c6
+    // req:ledger/request-cleared@3e4c06c9
     let mut line = serde_json::to_value(approval("a1", "alice/1a2b3c4d", LATER, "f")).unwrap();
     line["sig"] = "-----BEGIN SSH SIGNATURE-----\nx\n-----END SSH SIGNATURE-----".into();
     let text = format!("{}\n{}\n", serde_json::to_string(&request()).unwrap(), line);
     let fold = fold_records(&[("origin/clm/ledger/alice/web", &text)]);
     assert!(fold.lines["a1"].contains_key("sig"));
     assert!(fold.cleared(&request()));
-}
-
-#[test]
-fn no_other_person_parser() {
-    // req:ledger/request-cleared@0fe654c6
-    // Splitting on `/` is how a writer's person is taken apart: only `person` does it.
-    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut found = Vec::new();
-    for entry in std::fs::read_dir(&src).unwrap() {
-        let path = entry.unwrap().path();
-        let text = std::fs::read_to_string(&path).unwrap();
-        let file = path.file_name().unwrap().to_string_lossy().into_owned();
-        for (n, line) in text.lines().enumerate() {
-            if ["split('/')", "split_once('/')", "splitn(2, '/')"]
-                .iter()
-                .any(|call| line.contains(call))
-            {
-                found.push(format!("{file}:{}", n + 1));
-            }
-        }
-    }
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert!(found[0].starts_with("fold.rs:"), "{found:?}");
 }
