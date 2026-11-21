@@ -7,7 +7,7 @@
 /// have one. A backslash escapes one backtick outside a span, never inside one. Fenced
 /// code blocks hold none; headings, list items and indented code are not told apart from
 /// paragraphs.
-pub(crate) fn code_spans(text: &str) -> impl Iterator<Item = (usize, &str)> {
+pub fn code_spans(text: &str) -> impl Iterator<Item = (usize, &str)> {
     paragraphs(text).into_iter().flat_map(|(start, para)| {
         let bytes = para.as_bytes();
         let mut spans = Vec::new();

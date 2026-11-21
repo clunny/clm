@@ -44,7 +44,7 @@ fn found(root: &Path) -> Vec<String> {
     found
 }
 
-// req:check/asset-references@3f70faba
+// req:check/asset-references@34955e8f
 #[test]
 fn missing_mockup_is_reported() {
     let dir = repo("See `assets/m.html`, and again `assets/m.html`.");
@@ -56,16 +56,18 @@ fn missing_mockup_is_reported() {
     );
 }
 
-// req:check/asset-references@3f70faba
+// req:check/asset-references@34955e8f
 #[test]
 fn contract_mention_is_reported_once_with_design() {
-    let dir = node("## Contract\n\nSee `assets/m.html`.\n\n## Design\n\nAlso `assets/m.html`.");
+    let dir = node(
+        "## Contract\n\nSee `assets/m.html`.\n\n## Design\n\nAlso `assets/m.html`, and `assets/m.html` again.",
+    );
     let found = found(dir.path());
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("`assets/m.html`"), "{found:?}");
 }
 
-// req:check/asset-references@3f70faba
+// req:check/asset-references@34955e8f
 #[test]
 fn present_asset_passes() {
     let dir = repo("See `assets/mockups/m.html`.");
@@ -73,7 +75,7 @@ fn present_asset_passes() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/asset-references@3f70faba
+// req:check/asset-references@34955e8f
 #[test]
 fn placeholders_and_directories_pass() {
     let dir = node(
@@ -82,7 +84,7 @@ fn placeholders_and_directories_pass() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/asset-references@3f70faba
+// req:check/asset-references@34955e8f
 #[test]
 fn scenario_examples_pass() {
     let dir = node(
@@ -91,7 +93,7 @@ fn scenario_examples_pass() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/asset-references@3f70faba
+// req:check/asset-references@34955e8f
 #[test]
 fn requirement_text_and_frontmatter_pass() {
     let dir = TempDir::new().unwrap();
@@ -104,7 +106,7 @@ fn requirement_text_and_frontmatter_pass() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/asset-references@3f70faba
+// req:check/asset-references@34955e8f
 #[test]
 fn fenced_code_is_not_a_code_span() {
     let dir = repo(
@@ -115,6 +117,7 @@ fn fenced_code_is_not_a_code_span() {
     assert!(found[0].contains("`assets/m.html`"), "{found:?}");
 }
 
+// req:check/asset-references@34955e8f
 #[test]
 fn stray_backticks_do_not_pair_across_paragraphs() {
     let dir =
@@ -125,6 +128,7 @@ fn stray_backticks_do_not_pair_across_paragraphs() {
     assert!(found[1].contains("`assets/n.html`"), "{found:?}");
 }
 
+// req:check/asset-references@34955e8f
 #[test]
 fn backslash_does_not_escape_inside_a_span() {
     let dir = repo("Use `C:\\` then see `assets/m.html`.");
@@ -133,6 +137,7 @@ fn backslash_does_not_escape_inside_a_span() {
     assert!(found[0].contains("`assets/m.html`"), "{found:?}");
 }
 
+// req:check/asset-references@34955e8f
 #[test]
 fn backslash_escapes_one_backtick_of_a_run() {
     let dir = repo("a \\`` b `assets/x.html` c``.\n\nAnd \\\\`assets/y.html`.");
@@ -141,6 +146,7 @@ fn backslash_escapes_one_backtick_of_a_run() {
     assert!(found[0].contains("`assets/y.html`"), "{found:?}");
 }
 
+// req:check/asset-references@34955e8f
 #[test]
 fn shorter_fence_does_not_close_a_longer_one() {
     let dir = repo(
@@ -151,6 +157,7 @@ fn shorter_fence_does_not_close_a_longer_one() {
     assert!(found[0].contains("`assets/m.html`"), "{found:?}");
 }
 
+// req:check/asset-references@34955e8f
 #[test]
 fn span_padding_is_one_space_each_side() {
     let dir = repo("`` assets/m.html `` and ` assets/n.html`.");
@@ -159,13 +166,14 @@ fn span_padding_is_one_space_each_side() {
     assert!(found[0].contains("`assets/m.html`"), "{found:?}");
 }
 
+// req:check/asset-references@34955e8f
 #[test]
 fn only_spans_starting_with_assets_count() {
     let dir = repo("Not `x/assets/m.html`, `assets` or assets/m.html without backticks.");
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/says-component@8d7d2aad
+// req:check/asset-references@34955e8f
 #[test]
 fn asset_that_isnt_there_says_component() {
     let dir = repo("See `assets/mockups/m.html`.");
@@ -175,4 +183,27 @@ fn asset_that_isnt_there_says_component() {
         found[0].contains("component `a` mentions `assets/mockups/m.html`"),
         "{found:?}"
     );
+}
+
+// req:check/asset-references@34955e8f
+#[test]
+fn an_unpaired_backtick_after_a_span_opens_none() {
+    let dir = repo("See `assets/m.html` and then ` assets/n.html with no backtick after it.");
+    assert_eq!(
+        found(dir.path()),
+        [
+            "specs/a/SPEC.md: check/asset-references: component `a` mentions `assets/m.html`, which isn't in specs/a/assets/"
+        ]
+    );
+}
+
+// req:check/asset-references@34955e8f
+#[test]
+fn code_spans_gives_each_span_and_where_its_text_starts() {
+    let text = "a `x` b\\`y`\n\n`` z `` ` w\n```\n`f`\n```\n";
+    let spans: Vec<(usize, &str)> = clm_check::code_spans(text).collect();
+    assert_eq!(spans, [(3, "x"), (16, "z")]);
+    for (at, span) in spans {
+        assert_eq!(&text[at..at + span.len()], span);
+    }
 }

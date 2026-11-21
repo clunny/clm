@@ -192,17 +192,23 @@ fn marker_dangles_again_once_the_removing_change_is_archived() {
 
 #[test]
 fn finished_changes_must_be_archived_and_only_they() {
-    // req:check/archive-done@8c5d478b
-    let dir = repo("abandoned");
-    fs::rename(
-        dir.path().join("changes/archive/c"),
-        dir.path().join("changes/c"),
-    )
-    .unwrap();
-    let found = rules(dir.path());
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert_eq!(found[0].1, "check/archive-done");
-    assert!(found[0].2.contains("clm archive c"), "{found:?}");
+    // req:check/archive-done@09f5a69f
+    let line = |v: &(String, &str, String)| format!("{}: {}: {}", v.0, v.1, v.2);
+    for status in ["done", "abandoned"] {
+        let dir = repo(status);
+        fs::rename(
+            dir.path().join("changes/archive/c"),
+            dir.path().join("changes/c"),
+        )
+        .unwrap();
+        let found: Vec<String> = rules(dir.path()).iter().map(line).collect();
+        assert_eq!(
+            found,
+            [format!(
+                "changes/c/change.md: check/archive-done: change `c` is {status}; run `clm archive c`"
+            )]
+        );
+    }
 
     let dir = repo("applied");
     fs::create_dir_all(dir.path().join("changes/archive")).unwrap();
@@ -211,9 +217,13 @@ fn finished_changes_must_be_archived_and_only_they() {
         dir.path().join("changes/archive/c"),
     )
     .unwrap();
-    let found = rules(dir.path());
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert_eq!(found[0].1, "check/archive-done");
+    let found: Vec<String> = rules(dir.path()).iter().map(line).collect();
+    assert_eq!(
+        found,
+        [
+            "changes/archive/c/change.md: check/archive-done: archived change `c` is applied; only done or abandoned changes belong in the archive"
+        ]
+    );
 }
 
 #[test]
