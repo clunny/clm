@@ -26,12 +26,15 @@ pub enum Selection {
 }
 
 /// The selection for `changed`, given `files`, each scanned file with the requirement IDs its
-/// `req:` markers cite (none for a file without one), and the `[affected] all` globs.
-/// Doc-only paths (`ledger`'s `doc_only`) are left out of `changed` first.
+/// `req:` markers cite (none for a file without one), `unread`, the listed files the scan
+/// couldn't read as UTF-8, which only an exemption selects, since an owner or a citation
+/// selects by the text, and the `[affected] all` globs. Doc-only paths (`ledger`'s
+/// `doc_only`) are left out of `changed` first.
 pub fn select(
     graph: &Graph,
     changed: &[Changed],
     files: &BTreeMap<String, Vec<String>>,
+    unread: &[String],
     all: &[String],
 ) -> Selection {
     let mut changed: Vec<&Changed> = changed
@@ -68,6 +71,14 @@ pub fn select(
         if hit || (!nodes.is_empty() && exempt_from_undeclared_imports(graph, path)) {
             selected.insert(path.clone());
         }
+    }
+    if !nodes.is_empty() {
+        selected.extend(
+            unread
+                .iter()
+                .filter(|path| exempt_from_undeclared_imports(graph, path))
+                .cloned(),
+        );
     }
     Selection::Nodes {
         nodes: nodes.into_iter().collect(),

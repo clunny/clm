@@ -2,8 +2,18 @@
 
 use std::collections::BTreeMap;
 
-use clm_affected::{Changed, Selection, select};
+use clm_affected::{Changed, Selection};
 use clm_model::Graph;
+
+/// `clm_affected::select` with no file the scan couldn't read.
+fn select(
+    graph: &Graph,
+    changed: &[Changed],
+    files: &BTreeMap<String, Vec<String>>,
+    all: &[String],
+) -> Selection {
+    clm_affected::select(graph, changed, files, &[], all)
+}
 
 /// A node's `SPEC.md`: `paths` and `depends_on` as YAML lists.
 fn spec(paths: &str, depends_on: &str) -> Vec<u8> {
@@ -78,7 +88,7 @@ fn a_dependant_alone_affects_no_dependency() {
 
 #[test]
 fn cited_owned_and_changed_files() {
-    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/affected-files@72f3baff
     let files_scanned = scanned(&[
         ("crates/a/src/lib.rs", &[]),
         ("crates/a/src/util.rs", &[]),
@@ -107,7 +117,7 @@ fn cited_owned_and_changed_files() {
 
 #[test]
 fn a_marker_naming_a_removed_requirement_selects_by_its_node() {
-    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/affected-files@72f3baff
     let s = select(
         &graph(),
         &changed(&["crates/b/src/lib.rs"]),
@@ -119,7 +129,7 @@ fn a_marker_naming_a_removed_requirement_selects_by_its_node() {
 
 #[test]
 fn a_deleted_file_affects_its_owner_without_a_file_line() {
-    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/affected-files@72f3baff
     let gone = Changed {
         path: "crates/a/src/old.rs".into(),
         exists: false,
@@ -180,7 +190,7 @@ fn doc_only_paths_beside_code_select_what_the_code_does() {
 
 #[test]
 fn a_file_an_exemption_names_is_selected_whenever_a_component_is_affected() {
-    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/affected-files@72f3baff
     let doc = |paths: &str, extra: &str| {
         format!("---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: []\n{extra}---\n")
             .into_bytes()
@@ -221,5 +231,47 @@ fn a_file_an_exemption_names_is_selected_whenever_a_component_is_affected() {
         ]
     );
     let none = select(&graph, &changed(&[]), &scan, &[]);
+    assert_eq!(files(&none), Vec::<&str>::new());
+}
+
+#[test]
+fn a_file_that_isnt_utf8_is_selected_by_its_exemption_alone() {
+    // req:check.affected/affected-files@72f3baff
+    let doc = |paths: &str, depends_on: &str, extra: &str| {
+        format!("---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: {depends_on}\n{extra}---\n")
+            .into_bytes()
+    };
+    let exempt = "exemptions:\n  - rule: undeclared-imports\n    files: [\"crates/feat/tests/t.py\"]\n    until: backlog/x\n";
+    let specs: clm_model::Files = [
+        ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "[]", "")),
+        ("specs/app/SPEC.md", doc("[\"crates/app/**\"]", "[]", "")),
+        (
+            "specs/feat/SPEC.md",
+            doc("[\"crates/feat/**\"]", "[app]", exempt),
+        ),
+    ]
+    .into_iter()
+    .map(|(p, t)| (p.into(), t))
+    .collect();
+    let (graph, violations) = clm_model::load_files(&specs);
+    assert!(violations.is_empty(), "{violations:?}");
+    let unread = [
+        "crates/feat/tests/t.py".to_string(),
+        // Its owner is affected, but no exemption names it: owner and citation need the text.
+        "crates/feat/tests/u.py".to_string(),
+    ];
+    let s = clm_affected::select(
+        &graph,
+        &changed(&["crates/app/src/lib.rs"]),
+        &BTreeMap::new(),
+        &unread,
+        &[],
+    );
+    assert_eq!(nodes(&s), ["app", "feat"]);
+    assert_eq!(
+        files(&s),
+        ["crates/app/src/lib.rs", "crates/feat/tests/t.py"]
+    );
+    let none = clm_affected::select(&graph, &changed(&[]), &BTreeMap::new(), &unread, &[]);
     assert_eq!(files(&none), Vec::<&str>::new());
 }
