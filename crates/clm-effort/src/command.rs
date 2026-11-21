@@ -167,23 +167,42 @@ enum DecisionArg {
     Accept,
 }
 
-/// The parsers of each command alone: its own arguments, without its name.
+// The parsers of each command alone: its own arguments, without its name. Each carries the
+// command's description as its `about` and its full name as `bin_name`, so its help and its
+// subcommands' `Usage:` lines read as `clm` prints them (`commands-in-crate`).
 #[derive(Parser)]
-#[command(name = "clm effort", no_binary_name = true)]
+#[command(
+    name = "clm effort",
+    bin_name = "clm effort",
+    no_binary_name = true,
+    about = "The work Claude Code sessions spent, recorded in the ledger"
+)]
 struct EffortLine {
     #[command(flatten)]
     args: EffortArgs,
 }
 
 #[derive(Parser)]
-#[command(name = "clm capabilities", no_binary_name = true)]
+#[command(
+    name = "clm capabilities",
+    bin_name = "clm capabilities",
+    no_binary_name = true,
+    about = "What each capability costs, from the ledger's effort records and git: the list, or \
+             one capability's page"
+)]
 struct CapabilitiesLine {
     #[command(flatten)]
     args: CapabilitiesArgs,
 }
 
 #[derive(Parser)]
-#[command(name = "clm architecture", no_binary_name = true)]
+#[command(
+    name = "clm architecture",
+    bin_name = "clm architecture",
+    no_binary_name = true,
+    about = "What each architectural constraint costs and whether its enforcing rules are \
+             built: the list, or one constraint's page"
+)]
 struct ArchitectureLine {
     #[command(flatten)]
     args: ArchitectureArgs,

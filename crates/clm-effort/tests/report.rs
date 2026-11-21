@@ -119,7 +119,7 @@ fn dollars(report: &Report, slug: &str) -> f64 {
 
 #[test]
 fn impl_branch_cost_goes_to_its_capabilities() {
-    // req:effort/attribution@fb0ae2bb
+    // req:effort/attribution@2d51e080
     let report = run(&graph(&[]), &fold(&[effort("e1", "impl/a", 1)]));
     assert_eq!(dollars(&report, "p"), 3.0);
     assert_eq!(dollars(&report, "q"), 1.0);
@@ -128,7 +128,7 @@ fn impl_branch_cost_goes_to_its_capabilities() {
 
 #[test]
 fn spec_branch_splits_over_delta_nodes() {
-    // req:effort/attribution@fb0ae2bb
+    // req:effort/attribution@2d51e080
     // $2 to `a` (p 1.5, q 0.5) and $2 to `b` (q 2).
     let report = run(&graph(&[]), &fold(&[effort("e1", "spec/c", 1)]));
     assert_eq!(dollars(&report, "p"), 1.5);
@@ -142,7 +142,7 @@ fn spec_branch_splits_over_delta_nodes() {
 
 #[test]
 fn main_and_unknown_are_unattributed() {
-    // req:effort/attribution@fb0ae2bb
+    // req:effort/attribution@2d51e080
     let lines = [
         effort("e1", "main", 1),
         effort("e2", "propose/x", 1),
@@ -157,7 +157,7 @@ fn main_and_unknown_are_unattributed() {
 
 #[test]
 fn architecture_only_rules() {
-    // req:effort/attribution@fb0ae2bb
+    // req:effort/attribution@2d51e080
     let report = run(&graph(&[]), &fold(&[effort("e1", "impl/r", 1)]));
     assert_eq!(report.architecture_only.dollars, 4.0);
     assert_eq!(report.unattributed.dollars, 0.0);
@@ -165,7 +165,7 @@ fn architecture_only_rules() {
 
 #[test]
 fn ranked_by_cost() {
-    // req:effort/attribution@fb0ae2bb
+    // req:effort/attribution@2d51e080
     let slugs =
         |r: &Report| -> Vec<String> { r.capabilities.iter().map(|c| c.slug.clone()).collect() };
     let none = run(&graph(&[]), &fold(&[]));
@@ -176,7 +176,7 @@ fn ranked_by_cost() {
 
 #[test]
 fn approvals_count_whole() {
-    // req:effort/attribution@fb0ae2bb
+    // req:effort/attribution@2d51e080
     let approved = serde_json::json!({
         "id": "a1", "kind": "approved", "writer": "ann/1", "at": "2026-10-30T00:00:00.000Z",
         "fingerprint": "f", "branch": "spec/c", "change": "c",
@@ -190,7 +190,7 @@ fn approvals_count_whole() {
 
 #[test]
 fn overlap_names_other_capabilities() {
-    // req:effort/attribution@fb0ae2bb
+    // req:effort/attribution@2d51e080
     let report = run(&graph(&[]), &fold(&[]));
     let p = &report.capabilities[0];
     assert_eq!(p.rules, ["a/x", "a/y"]);
@@ -260,7 +260,7 @@ fn flag_on_two_capabilities() {
 
 #[test]
 fn list_text_lines() {
-    // req:effort/capabilities-list@be270c03
+    // req:effort/capabilities-list@69c2cf88
     let (graph, fold) = flagged();
     let report = run(&graph, &fold);
     assert_eq!(
@@ -277,7 +277,7 @@ fn list_text_lines() {
 
 #[test]
 fn page_text_sections() {
-    // req:effort/capability-page@dd387c2f
+    // req:effort/capability-page@b58d5e60
     let (graph, fold) = flagged();
     let text = BTreeMap::from([("fr".to_string(), "It needed a fake.".to_string())]);
     let report = report(&Inputs {
@@ -365,7 +365,7 @@ fn flag(settled: bool) -> Flag {
 
 #[test]
 fn architecture_list_lines() {
-    // req:effort/architecture-list@a45a68a0
+    // req:effort/architecture-list@ca3bf29e
     let mut e = constraint("e", &[("a/x", true), ("a/y", false)], None);
     e.flags = vec![flag(false)];
     e.flagged = true;
@@ -383,9 +383,43 @@ fn architecture_list_lines() {
     );
 }
 
+/// Entry `e` enforced by `a/x` and `a/y`, from `architecture` run with `current` `None`.
+fn currency_unknown() -> Constraint {
+    let graph = graph(&[("ARCHITECTURE.md", ENFORCED)]);
+    let fold = fold(&[]);
+    let inputs = Inputs {
+        graph: &graph,
+        fold: &fold,
+        history: None,
+        flag_text: &BTreeMap::new(),
+    };
+    let list = architecture(&inputs, None);
+    constraint_of(&list, "e").clone()
+}
+
+#[test]
+fn currency_unknown_in_the_list() {
+    // req:effort/architecture-list@ca3bf29e
+    let e = currency_unknown();
+    let lines = architecture_text(&[e]);
+    assert!(
+        lines[0].starts_with("architecture 1 · 0 held · 0 ⚑"),
+        "{lines:?}"
+    );
+    assert!(lines[1].starts_with("  e  held 0/2  "), "{lines:?}");
+}
+
+#[test]
+fn currency_unknown_on_the_page() {
+    // req:effort/architecture-page@c58defe7
+    let page = constraint_text(&currency_unknown());
+    let held = page.iter().position(|l| l == "is it held?").unwrap();
+    assert_eq!(page[held + 1..held + 3], ["  unknown a/x", "  unknown a/y"]);
+}
+
 #[test]
 fn architecture_page_sections() {
-    // req:effort/architecture-page@8bc35522
+    // req:effort/architecture-page@c58defe7
     let enforced = [("a/x", true), ("a/y", false)];
     let mut e = constraint("e", &enforced, Some("Partly judgement."));
     e.nodes = vec!["a".into()];
@@ -469,7 +503,7 @@ fn slugs(list: &[Constraint]) -> Vec<&str> {
 
 #[test]
 fn architecture_splits_a_rule_over_the_entries_naming_it() {
-    // req:effort/architecture-report@0e43b5f8
+    // req:effort/architecture-report@f3359e2a
     let list = architecture_of(&fold(&[effort("e1", "impl/a", 1)]), None);
     assert_eq!(constraint_of(&list, "e").spend.dollars, 3.0);
     assert_eq!(constraint_of(&list, "f").spend.dollars, 1.0);
@@ -482,7 +516,7 @@ fn architecture_splits_a_rule_over_the_entries_naming_it() {
 
 #[test]
 fn architecture_ranks_by_dollars_then_file_order() {
-    // req:effort/architecture-report@0e43b5f8
+    // req:effort/architecture-report@f3359e2a
     // `f` comes first in the file but `e` costs more; `g` and `h` tie at nothing.
     let first_f = "## Constraints\n\n### Constraint: f\nGit SHALL hold f.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- a/x\n\n### Constraint: g\nGit SHALL hold g.\n\n#### Scenario: s\n- ok\n\n#### Untested\nOne.\n\n### Constraint: h\nGit SHALL hold h.\n\n#### Scenario: s\n- ok\n\n#### Untested\nTwo.\n\n### Constraint: e\nGit SHALL hold e.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- a/x\n- a/y\n";
     let list = architecture_in(first_f, &fold(&[effort("e1", "impl/a", 1)]), None);
@@ -493,7 +527,7 @@ fn architecture_ranks_by_dollars_then_file_order() {
 
 #[test]
 fn architecture_overlap_counts_shared_rules() {
-    // req:effort/architecture-report@0e43b5f8
+    // req:effort/architecture-report@f3359e2a
     let list = architecture_of(&fold(&[]), None);
     let e = constraint_of(&list, "e");
     assert_eq!(e.overlap.only, 1);
@@ -507,7 +541,7 @@ fn architecture_overlap_counts_shared_rules() {
 
 #[test]
 fn architecture_says_whether_it_is_held() {
-    // req:effort/architecture-report@0e43b5f8
+    // req:effort/architecture-report@f3359e2a
     let current: BTreeSet<String> = ["a/x".to_string()].into();
     let list = architecture_of(&fold(&[]), Some(&current));
     let e = constraint_of(&list, "e");
@@ -534,7 +568,7 @@ fn architecture_says_whether_it_is_held() {
 
 #[test]
 fn architecture_counts_changes_approvals_and_burdens() {
-    // req:effort/architecture-report@0e43b5f8
+    // req:effort/architecture-report@f3359e2a
     let approved = |id: &str, branch: &str| {
         serde_json::json!({
             "id": id, "kind": "approved", "writer": "ann/1", "at": "2026-10-30T00:00:00.000Z",
@@ -554,7 +588,7 @@ fn architecture_counts_changes_approvals_and_burdens() {
 
 #[test]
 fn capabilities_report_ignores_the_architecture_entries() {
-    // req:effort/architecture-report@0e43b5f8
+    // req:effort/architecture-report@f3359e2a
     let fold = fold(&[effort("e1", "impl/a", 1)]);
     let plain = run(&graph(&[]), &fold);
     let enforced = run(&graph(&[("ARCHITECTURE.md", ENFORCED)]), &fold);
@@ -563,7 +597,7 @@ fn capabilities_report_ignores_the_architecture_entries() {
 
 #[test]
 fn architecture_flags_and_decisions() {
-    // req:effort/architecture-report@0e43b5f8
+    // req:effort/architecture-report@f3359e2a
     let item = "---\ntitle: Y is hard\nkind: friction\ncomponents: [a]\nrequirement: a/y@00000000\n---\n\nIt needed a fake.\n";
     let graph = graph(&[("ARCHITECTURE.md", ENFORCED), ("backlog/fr.md", item)]);
     let decided = serde_json::json!({
@@ -604,6 +638,75 @@ fn architecture_flags_and_decisions() {
     );
     let e = constraint_of(&list, "e");
     assert!(!e.flags[0].settled && e.flagged);
+}
+
+#[test]
+fn architecture_gives_nothing_for_a_rule_not_built_yet() {
+    // req:effort/architecture-report@f3359e2a
+    // A live change adds `a/new` and `n/new`; neither component holds it yet, and `n` holds
+    // no rules at all.
+    let new = "---\ncomponent: {node}\n---\n## ADDED Requirements\n\n### Requirement: new\nIt SHALL.\n\n#### Scenario: s\n- ok\n";
+    let enforced = "## Constraints\n\n### Constraint: h\nGit SHALL hold h.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- a/new\n- n/new\n";
+    let graph = graph(&[
+        ("ARCHITECTURE.md", enforced),
+        (
+            "specs/n/SPEC.md",
+            "---\ntitle: N\nstatus: unbuilt\nowners: []\nserves: [capability/p]\n---\n\n## Contract\nc\n",
+        ),
+        (
+            "changes/k/change.md",
+            "---\nstatus: proposed\n---\n\nIntent.\n",
+        ),
+        ("changes/k/deltas/a.md", &new.replace("{node}", "a")),
+        ("changes/k/deltas/n.md", &new.replace("{node}", "n")),
+    ]);
+    assert!(graph.nodes["n"].requirements.is_empty());
+    assert!(graph.requirement("a/new").is_none());
+    let approved = serde_json::json!({
+        "id": "a1", "kind": "approved", "writer": "ann/1", "at": "2026-10-30T00:00:00.000Z",
+        "fingerprint": "f", "branch": "impl/a", "change": null,
+    })
+    .to_string();
+    let fold = fold(&[
+        effort("e1", "impl/a", 1),
+        effort("e2", "impl/n", 1),
+        approved,
+    ]);
+    let list = architecture(
+        &Inputs {
+            graph: &graph,
+            fold: &fold,
+            history: None,
+            flag_text: &BTreeMap::new(),
+        },
+        None,
+    );
+    let h = constraint_of(&list, "h");
+    assert_eq!(h.spend, Spend::default());
+    assert!(h.spend.dollars.is_finite());
+    assert_eq!(h.approvals, 0);
+}
+
+#[test]
+fn a_capability_that_isnt_there() {
+    // req:effort/attribution@2d51e080
+    let graph = graph(&[(
+        "specs/n/SPEC.md",
+        &spec("capability/gone", &[&req("x", &[])]),
+    )]);
+    assert!(clm_effort::capabilities_of(&graph, "n/x").is_empty());
+    // Half a million Opus input tokens: $2.
+    let line = serde_json::json!({
+        "id": "e1", "kind": "effort", "writer": "ann/1", "at": "2026-10-30T00:00:00.000Z",
+        "branch": "impl/n", "session": "e1",
+        "models": {"claude-opus-5-5": {"input": 500_000, "output": 0, "cache_read": 0, "cache_write": 0}},
+        "active_seconds": 0,
+    })
+    .to_string();
+    let report = run(&graph, &fold(&[line]));
+    assert_eq!(report.architecture_only.dollars, 2.0);
+    assert_eq!(report.unattributed.dollars, 0.0);
+    assert_eq!(dollars(&report, "p") + dollars(&report, "q"), 0.0);
 }
 
 #[test]

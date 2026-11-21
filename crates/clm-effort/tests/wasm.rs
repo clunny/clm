@@ -29,7 +29,7 @@ fn cargo(args: &[&str]) -> Output {
 
 #[test]
 fn effort_builds_for_wasm() {
-    // req:effort/effort-builds-for-wasm@48a17dd6
+    // req:effort/effort-builds-for-wasm@285a0c51
     // A separate target dir, so the build doesn't wait on the outer `cargo test`'s lock.
     let dir = workspace().join("target/wasm-test");
     let out = cargo(&["build", "--target-dir", dir.to_str().unwrap()]);
@@ -42,7 +42,7 @@ fn effort_builds_for_wasm() {
 
 #[test]
 fn effort_wasm_build_leaves_out_git() {
-    // req:effort/effort-builds-for-wasm@48a17dd6
+    // req:effort/effort-builds-for-wasm@285a0c51
     let out = cargo(&["tree", "-e", "normal", "--prefix", "none"]);
     assert!(
         out.status.success(),

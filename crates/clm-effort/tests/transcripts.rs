@@ -85,7 +85,7 @@ const OPUS: &str = "claude-opus-5-5";
 
 #[test]
 fn repeated_message_counted_once() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let line = entry("s1", "impl/a", &f.cwd, 0, "m1", OPUS, (10, 5));
     write(&f.transcripts, &f.cwd, "s1.jsonl", &[line.clone(), line]);
@@ -107,7 +107,7 @@ fn repeated_message_counted_once() {
 
 #[test]
 fn sessions_split_by_branch() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     write(
         &f.transcripts,
@@ -139,7 +139,7 @@ fn sessions_split_by_branch() {
 
 #[test]
 fn subagent_file_joins_its_session() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     write(
         &f.transcripts,
@@ -168,7 +168,7 @@ fn subagent_file_joins_its_session() {
 
 #[test]
 fn synthetic_model_skipped() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     write(
         &f.transcripts,
@@ -192,7 +192,7 @@ fn synthetic_model_skipped() {
 
 #[test]
 fn active_time_leaves_out_long_gaps() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let lines: Vec<String> = [0, 60, 120, 1000]
         .iter()
@@ -212,7 +212,7 @@ fn active_time_leaves_out_long_gaps() {
 
 #[test]
 fn other_cwd_not_counted() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     // `/x/clm-wt`'s directory name starts with `/x/clm`'s, so it is read, but its entries
     // aren't under the counted directory.
     let f = fixture();
@@ -234,7 +234,7 @@ fn other_cwd_not_counted() {
 
 #[test]
 fn bad_lines_warned_once() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let good = entry("s1", "impl/a", &f.cwd, 0, "m1", OPUS, (10, 5));
     write(
@@ -256,7 +256,7 @@ fn bad_lines_warned_once() {
 
 #[test]
 fn missing_dir_warns() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let (work, warnings) = clm_effort::sessions(
         &f.transcripts,
@@ -285,7 +285,7 @@ fn with_usage(cwd: &Path, secs: u64, id: &str, usage: serde_json::Value) -> Stri
 
 #[test]
 fn usage_fields_mapped() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let usage = serde_json::json!({
         "input_tokens": 1,
@@ -314,7 +314,7 @@ fn usage_fields_mapped() {
 
 #[test]
 fn repeated_message_takes_the_largest_counts() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     // A response's first content-block line may carry a count still streaming.
     let f = fixture();
     let early = serde_json::json!({"input_tokens": 10, "output_tokens": 12});
@@ -340,7 +340,7 @@ fn repeated_message_takes_the_largest_counts() {
 
 #[test]
 fn a_gap_of_600_seconds_is_active() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let lines = [
         entry("s1", "impl/a", &f.cwd, 0, "m1", OPUS, (1, 1)),
@@ -359,7 +359,7 @@ fn a_gap_of_600_seconds_is_active() {
 
 #[test]
 fn a_line_that_isnt_utf8_is_skipped_alone() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let good = entry("s1", "impl/a", &f.cwd, 0, "m1", OPUS, (10, 5));
     let path = f.transcripts.join(encoded(&f.cwd)).join("s1.jsonl");
@@ -428,7 +428,7 @@ fn subagent(f: &Fixture, worktree: &Path) {
 
 #[test]
 fn subagent_in_a_worktree_counts_for_its_branch() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let (worktree, counted) = with_worktree(&f, Some("impl/a"));
     // The session runs in the main checkout, on `main`; its subagent in the worktree.
@@ -445,7 +445,7 @@ fn subagent_in_a_worktree_counts_for_its_branch() {
 
 #[test]
 fn subagent_in_a_detached_worktree_counts_nothing() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let (worktree, counted) = with_worktree(&f, None);
     subagent(&f, &worktree);
@@ -455,7 +455,7 @@ fn subagent_in_a_detached_worktree_counts_nothing() {
 
 #[test]
 fn pinned_subagent_whose_worktree_is_gone() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let (worktree, _) = with_worktree(&f, Some("impl/a"));
     subagent(&f, &worktree);
@@ -466,7 +466,7 @@ fn pinned_subagent_whose_worktree_is_gone() {
 
 #[test]
 fn pinned_subagent_in_a_reused_worktree() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let (worktree, counted) = with_worktree(&f, Some("impl/b"));
     subagent(&f, &worktree);
@@ -479,7 +479,7 @@ fn pinned_subagent_in_a_reused_worktree() {
 
 #[test]
 fn pinned_subagent_under_a_branch_filter() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     // No line names `impl/a`, and the worktree that had it checked out is gone.
     let f = fixture();
     let (worktree, _) = with_worktree(&f, Some("impl/a"));
@@ -496,7 +496,7 @@ fn pinned_subagent_under_a_branch_filter() {
 
 #[test]
 fn pinned_subagent_outside_every_counted_directory_counts_nothing() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     // A pinned entry still counts only when its `cwd` is under a counted directory.
     let f = fixture();
     let away = f.cwd.with_file_name("away");
@@ -508,7 +508,7 @@ fn pinned_subagent_outside_every_counted_directory_counts_nothing() {
 
 #[test]
 fn unpinned_subagent_whose_worktree_is_gone() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let (worktree, _) = with_worktree(&f, Some("impl/a"));
     subagent(&f, &worktree);
@@ -518,7 +518,7 @@ fn unpinned_subagent_whose_worktree_is_gone() {
 
 #[test]
 fn subagent_in_the_main_checkout_keeps_its_branch() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     // The main checkout holds the worktree, but isn't a linked worktree itself.
     let f = fixture();
     let (_, counted) = with_worktree(&f, Some("impl/a"));
@@ -534,7 +534,7 @@ fn subagent_in_the_main_checkout_keeps_its_branch() {
 
 #[test]
 fn own_entries_in_a_worktree_keep_their_branch() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let f = fixture();
     let (worktree, counted) = with_worktree(&f, Some("impl/a"));
     write(
@@ -545,4 +545,212 @@ fn own_entries_in_a_worktree_keep_their_branch() {
     );
     let (work, _) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), None);
     assert_eq!(by_branch(&work), [("spec/x", "s1", 7)], "{work:?}");
+}
+
+/// `lines`, raw bytes each, written to `<transcripts>/<encoded cwd>/<file>`.
+fn write_bytes(transcripts: &Path, cwd: &Path, file: &str, lines: &[&[u8]]) {
+    let path = transcripts.join(encoded(cwd)).join(file);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, lines.join(&b'\n')).unwrap();
+}
+
+#[test]
+fn how_counts_are_read() {
+    // req:effort/transcripts@50c1e34f
+    let f = fixture();
+    let early = serde_json::json!({"input_tokens": 10, "output_tokens": 12});
+    let late = serde_json::json!({"input_tokens": 10, "output_tokens": 850});
+    // No `message.id`, and an `output_tokens` that isn't written as an integer.
+    let no_id = serde_json::json!({
+        "sessionId": "s1", "gitBranch": "impl/a", "cwd": f.cwd, "timestamp": ts(0),
+        "message": {"model": OPUS, "usage": {"input_tokens": 5, "output_tokens": "7"}},
+    })
+    .to_string();
+    let no_message = serde_json::json!({
+        "sessionId": "s1", "gitBranch": "impl/a", "cwd": f.cwd, "timestamp": ts(60),
+    })
+    .to_string();
+    write(
+        &f.transcripts,
+        &f.cwd,
+        "s1.jsonl",
+        &[
+            with_usage(&f.cwd, 0, "m1", early),
+            with_usage(&f.cwd, 0, "m1", late),
+            no_id.clone(),
+            no_id,
+            no_message,
+        ],
+    );
+    let (work, warnings) = clm_effort::sessions(
+        &f.transcripts,
+        &[(f.cwd.clone(), Unlinked)],
+        &pins(&[]),
+        None,
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(work.len(), 1, "{work:?}");
+    let u = work[0].models[OPUS];
+    assert_eq!((u.input, u.output), (20, 850));
+    assert_eq!(work[0].active_seconds, 60);
+}
+
+/// An entry of session `sid` on `impl/a` with `timestamp` as written, a response of its own
+/// with `input_tokens` 1, or with no `message` when `id` is `None`.
+fn at(cwd: &Path, sid: &str, timestamp: &str, id: Option<&str>) -> String {
+    let mut entry = serde_json::json!({
+        "sessionId": sid, "gitBranch": "impl/a", "cwd": cwd, "timestamp": timestamp,
+    });
+    if let Some(id) = id {
+        entry["message"] =
+            serde_json::json!({"id": id, "model": OPUS, "usage": {"input_tokens": 1}});
+    }
+    entry.to_string()
+}
+
+#[test]
+fn timestamps() {
+    // req:effort/transcripts@50c1e34f
+    let f = fixture();
+    let s1 = [
+        "2026-10-30T00:02:00Z",
+        "2026-10-30T00:00:00.000Z",
+        "2026-10-30T02:01:00.5+02:00",
+        "yesterday",
+        "2026-10-30T0:03:00Z",
+        "+2026-10-30T00:04:00Z",
+        "2026-10-30T00:05:00.Z",
+        "2026-10-30T00:05:75Z",
+    ];
+    let s3 = [
+        "2027-01-01T00:01:00Z",
+        "2026-13-01T00:00:00Z",
+        "2026-12-31T24:02:00Z",
+    ];
+    let mut lines: Vec<String> = s1
+        .iter()
+        .enumerate()
+        .map(|(n, t)| at(&f.cwd, "s1", t, Some(&format!("a{n}"))))
+        .collect();
+    lines.push(at(&f.cwd, "s2", "yesterday", None));
+    lines.extend(
+        s3.iter()
+            .enumerate()
+            .map(|(n, t)| at(&f.cwd, "s3", t, Some(&format!("c{n}")))),
+    );
+    write(&f.transcripts, &f.cwd, "s.jsonl", &lines);
+    let (work, warnings) = clm_effort::sessions(
+        &f.transcripts,
+        &[(f.cwd.clone(), Unlinked)],
+        &pins(&[]),
+        None,
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let got: Vec<(&str, u64, u64)> = work
+        .iter()
+        .map(|w| (w.session.as_str(), w.models[OPUS].input, w.active_seconds))
+        .collect();
+    assert_eq!(got, [("s1", 8, 120), ("s3", 3, 0)], "{work:?}");
+}
+
+#[test]
+fn lines_that_count_nothing() {
+    // req:effort/transcripts@50c1e34f
+    let f = fixture();
+    let one = entry("s1", "impl/a", &f.cwd, 0, "m1", OPUS, (10, 5));
+    let no_branch = serde_json::json!({
+        "sessionId": "s1", "cwd": f.cwd, "timestamp": ts(5),
+        "message": {"id": "m2", "model": OPUS, "usage": {"input_tokens": 99}},
+    })
+    .to_string();
+    write_bytes(
+        &f.transcripts,
+        &f.cwd,
+        "s1.jsonl",
+        &[
+            one.as_bytes(),
+            b"",
+            b"{not json",
+            b"{\"half\": \"\xc3",
+            b"[1]",
+            no_branch.as_bytes(),
+            b"{\"gitBranch\": \"impl/b\"",
+            b"{\"gitBranch\": \"impl/b\", \"half\": \"\xc3",
+        ],
+    );
+    // A file that can't be read: a link to nothing.
+    let dir = f.transcripts.join(encoded(&f.cwd));
+    std::os::unix::fs::symlink(dir.join("nowhere"), dir.join("y.jsonl")).unwrap();
+    let counted = [(f.cwd.clone(), Unlinked)];
+    let (work, warnings) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), None);
+    assert_eq!(by_branch(&work), [("impl/a", "s1", 10)], "{work:?}");
+    assert_eq!(warnings, ["skipped 4 transcript lines that aren't JSON"]);
+    let (work, warnings) =
+        clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), Some("impl/b"));
+    assert!(work.is_empty(), "{work:?}");
+    assert_eq!(warnings, ["skipped 2 transcript lines that aren't JSON"]);
+}
+
+#[test]
+fn names_json_escapes_are_read_whole() {
+    // req:effort/transcripts@50c1e34f
+    // A branch whose name holds a control character is written escaped, so no line holds
+    // its raw text: every line is read. A worktree path holding one has every unpinned
+    // subagent line read.
+    let f = fixture();
+    let tab = "impl/a\tb";
+    write(
+        &f.transcripts,
+        &f.cwd,
+        "s1.jsonl",
+        &[entry("s1", tab, &f.cwd, 0, "m1", OPUS, (4, 1))],
+    );
+    let counted = [(f.cwd.clone(), Unlinked)];
+    let (work, _) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), Some(tab));
+    assert_eq!(by_branch(&work), [(tab, "s1", 4)], "{work:?}");
+
+    let worktree = f.cwd.join(".claude").join("worktrees").join("a\u{1}b");
+    let counted = vec![
+        (f.cwd.clone(), Unlinked),
+        (worktree.clone(), Branch("impl/c".into())),
+    ];
+    subagent(&f, &worktree);
+    let (work, _) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), Some("impl/c"));
+    assert_eq!(by_branch(&work), [("impl/c", "s1/agent-x", 10)], "{work:?}");
+
+    // `"` and `\` are escaped as well; an entry with no `timestamp` keeps its tokens.
+    for name in ["impl/a\"b", "impl/a\\b"] {
+        let f = fixture();
+        let mut line = serde_json::from_str::<serde_json::Value>(&entry(
+            "s1",
+            name,
+            &f.cwd,
+            0,
+            "m1",
+            OPUS,
+            (4, 1),
+        ))
+        .unwrap();
+        line.as_object_mut().unwrap().remove("timestamp");
+        write(&f.transcripts, &f.cwd, "s1.jsonl", &[line.to_string()]);
+        let counted = [(f.cwd.clone(), Unlinked)];
+        let (work, _) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), Some(name));
+        assert_eq!(by_branch(&work), [(name, "s1", 4)], "{work:?}");
+        assert_eq!(work[0].active_seconds, 0);
+    }
+    for dir in ["a\"b", "a\\b"] {
+        let f = fixture();
+        let worktree = f.cwd.join(".claude").join("worktrees").join(dir);
+        let counted = vec![
+            (f.cwd.clone(), Unlinked),
+            (worktree.clone(), Branch("impl/c".into())),
+        ];
+        subagent(&f, &worktree);
+        let (work, _) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), Some("impl/c"));
+        assert_eq!(
+            by_branch(&work),
+            [("impl/c", "s1/agent-x", 10)],
+            "{dir} {work:?}"
+        );
+    }
 }

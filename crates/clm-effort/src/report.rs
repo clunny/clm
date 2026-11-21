@@ -440,12 +440,21 @@ pub fn architecture(inputs: &Inputs, current: Option<&BTreeSet<String>>) -> Vec<
     for rule in entries.iter().flat_map(|e| &e.enforced_by) {
         *naming.entry(rule).or_default() += 1;
     }
-    // What each rule of a node is worth of the node's cost.
-    let part = |rule: &str| -> Option<(String, f64)> {
+    // The component holding `rule`, which a rule a live change only adds has none of yet.
+    let holder = |rule: &str| -> Option<&str> {
         let (node, _) = rule.split_once('/')?;
+        let (id, held) = graph.nodes.get_key_value(node)?;
+        held.requirements
+            .iter()
+            .any(|r| r.id == rule)
+            .then_some(id.as_str())
+    };
+    // What each rule of a node is worth of the node's cost.
+    let part = |rule: &str| -> Option<(&str, f64)> {
+        let node = holder(rule)?;
         let rules = graph.nodes.get(node)?.requirements.len();
         let weight = 1.0 / rules as f64 / naming.get(rule).copied()? as f64;
-        Some((node.to_string(), weight))
+        Some((node, weight))
     };
     let efforts: Vec<(Spend, Vec<(&str, f64)>)> = fold
         .efforts
@@ -475,13 +484,16 @@ pub fn architecture(inputs: &Inputs, current: Option<&BTreeSet<String>>) -> Vec<
                 .iter()
                 .filter_map(|r| r.split_once('/').map(|(n, _)| n))
                 .collect();
+            // The components that hold one of its enforcing rules, whose approvals count.
+            let holders: BTreeSet<&str> =
+                entry.enforced_by.iter().filter_map(|r| holder(r)).collect();
             let mut spend = Spend::default();
             for rule in &entry.enforced_by {
                 let Some((node, weight)) = part(rule) else {
                     continue;
                 };
                 for (work, targets) in &efforts {
-                    if let Some((_, share)) = targets.iter().find(|(n, _)| *n == node.as_str()) {
+                    if let Some((_, share)) = targets.iter().find(|(n, _)| *n == node) {
                         spend.add(work, share * weight);
                     }
                 }
@@ -523,7 +535,7 @@ pub fn architecture(inputs: &Inputs, current: Option<&BTreeSet<String>>) -> Vec<
                 nodes: nodes.iter().map(|n| n.to_string()).collect(),
                 spend,
                 changes,
-                approvals: approved.iter().filter(|a| !a.is_disjoint(&nodes)).count(),
+                approvals: approved.iter().filter(|a| !a.is_disjoint(&holders)).count(),
                 flags_settled: settled.len(),
                 burdens,
                 flags,
@@ -686,6 +698,7 @@ mod tests {
 
     #[test]
     fn dates() {
+        // req:effort/history@a4b7b012
         assert_eq!(date(0), "1970-01-01");
         assert_eq!(date(1_793_318_400), "2026-10-30");
         assert_eq!(date(951_782_400), "2000-02-29");
