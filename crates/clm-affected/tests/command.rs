@@ -1616,21 +1616,34 @@ fn a_changed_path_that_is_no_file() {
 /// `crates/a/**` with only `crates/a/src/lib.rs`, and `d` owning `crates/d/**` with
 /// `crates/d/tests/t.rs` and `crates/d/tests/t.py`, which isn't UTF-8, both exempt from
 /// `undeclared-imports`, no component depending on another; switched to a branch `work`.
-fn exempt_bytes_repo() -> TempDir {
+/// With `more`, `d` also holds, and exempts, `crates/d/tests/l.py`, a link to `t.py`, and
+/// `crates/d/tests/n.md`, Markdown that isn't UTF-8.
+fn exempt_bytes_repo(more: bool) -> TempDir {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     git(root, &["init", "-q", "-b", "main"]);
     write(root, "clm.toml", "");
     write(root, "specs/SPEC.md", &spec("[\"clm.toml\"]", "[]"));
     write(root, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", "[]"));
+    let extra = if more {
+        ", \"crates/d/tests/l.py\", \"crates/d/tests/n.md\""
+    } else {
+        ""
+    };
     write(
         root,
         "specs/d/SPEC.md",
-        "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"crates/d/**\"]\ndepends_on: []\nexemptions:\n  - rule: undeclared-imports\n    files: [\"crates/d/tests/t.rs\", \"crates/d/tests/t.py\"]\n    until: backlog/x\n---\n",
+        &format!(
+            "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"crates/d/**\"]\ndepends_on: []\nexemptions:\n  - rule: undeclared-imports\n    files: [\"crates/d/tests/t.rs\", \"crates/d/tests/t.py\"{extra}]\n    until: backlog/x\n---\n"
+        ),
     );
     write(root, "crates/a/src/lib.rs", "fn f() {}\n");
     write(root, "crates/d/tests/t.rs", "fn t() {}\n");
     fs::write(root.join("crates/d/tests/t.py"), b"x = '\xff\xfe'\n").unwrap();
+    if more {
+        std::os::unix::fs::symlink("t.py", root.join("crates/d/tests/l.py")).unwrap();
+        fs::write(root.join("crates/d/tests/n.md"), b"# \xff\xfe\n").unwrap();
+    }
     commit_all(root, "start");
     git(root, &["switch", "-q", "-c", "work"]);
     dir
@@ -1639,7 +1652,8 @@ fn exempt_bytes_repo() -> TempDir {
 #[test]
 fn an_exempt_file_whatever_its_bytes() {
     // req:check.affected/affected-files@72f3baff
-    let dir = exempt_bytes_repo();
+    // req:check.affected/why-chain@6518d01f
+    let dir = exempt_bytes_repo(false);
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
     commit_all(root, "a");
@@ -1661,7 +1675,9 @@ fn an_exempt_file_whatever_its_bytes() {
 fn an_exempt_file_whatever_its_bytes_on_both_sides() {
     // req:check.affected/affected-files@72f3baff
     // req:check.affected/overlap-selection@8fd7fe1a
-    let dir = exempt_bytes_repo();
+    // With a committed link to the file, and exempt Markdown that isn't UTF-8, which imports
+    // nothing and so is never selected.
+    let dir = exempt_bytes_repo(true);
     let root = dir.path();
     git(root, &["switch", "-q", "-c", "x", "main"]);
     touch(root, "crates/a/src/lib.rs");
@@ -1675,6 +1691,14 @@ fn an_exempt_file_whatever_its_bytes_on_both_sides() {
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(
         stdout(&out),
-        "node a\nfile crates/a/src/lib.rs\nfile crates/d/tests/t.py\nfile crates/d/tests/t.rs\n"
+        "node a\nfile crates/a/src/lib.rs\nfile crates/d/tests/l.py\nfile crates/d/tests/t.py\nfile crates/d/tests/t.rs\n"
+    );
+    // The same files in a checkout, with nothing changed but what `y` commits.
+    git(root, &["checkout", "-q", "--", "crates/d/tests/t.py"]);
+    let out = clm_affected_args(root, &["--base", "main"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node a\nfile crates/a/src/lib.rs\nfile crates/a/src/new.rs\nfile crates/d/tests/l.py\nfile crates/d/tests/t.py\nfile crates/d/tests/t.rs\n"
     );
 }
