@@ -245,7 +245,7 @@ For any checkout, `report` over the union of `markers_in` applied to each tracke
 - THEN `a/y`'s `waits_on` is `[b/z]` and `capability/c`'s is `[w/x]`, and each `blocked_by` is empty
 
 #### Scenario: every component
-- GIVEN component `a` holding `a/x`, `a/y` and `a/z`, component `a.b` holding `a.b/p`, and component `b` with status `specd` holding `b/q`, each uncited
+- GIVEN component `a` holding `a/x`, `a/y` and `a/z`, component `a.b` holding `a.b/p`, and component `b` with status `unbuilt` holding `b/q`, each uncited
 - WHEN `clm pending` runs
 - THEN it prints the lines of `a/x`, `a/y`, `a/z`, `a.b/p` and `b/q`, in that order
 
