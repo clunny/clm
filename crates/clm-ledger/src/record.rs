@@ -15,6 +15,14 @@ pub fn signed_message(line: &Map<String, Value>) -> String {
     out
 }
 
+/// A line's *sorted text*: written as `signed_message` writes it, but with `sig`, so two
+/// lines' texts compare alike whatever order their keys were read in (`effort-records`).
+pub(crate) fn sorted_text(line: &Map<String, Value>) -> String {
+    let mut out = String::new();
+    write_object(line, None, &mut out);
+    out
+}
+
 fn write_object(object: &Map<String, Value>, without: Option<&str>, out: &mut String) {
     let mut keys: Vec<&String> = object
         .keys()

@@ -1998,7 +1998,7 @@ fn decided(capability: &str) -> Body {
 
 #[test]
 fn show_effort_and_decided() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     // req:ledger/decision-records@9ca8cb93
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -2021,7 +2021,7 @@ fn show_effort_and_decided() {
 
 #[test]
 fn compact_drops_superseded_effort() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     // req:ledger/decision-records@9ca8cb93
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -2131,7 +2131,7 @@ fn by_hand_trailer_shut_in_a_signed_repository() {
 
 #[test]
 fn compact_settles_an_effort_tie() {
-    // req:ledger/effort-records@2bee0a30
+    // req:ledger/effort-records@828c1a9a
     // Two of the caller's own counts with one `id` and one `at`: one goes, whichever it is.
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();

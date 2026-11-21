@@ -3,6 +3,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
 
+use crate::record::sorted_text;
 use crate::{Body, Error, Record, branch};
 
 /// What `compact` did.
@@ -26,7 +27,7 @@ pub struct Compacted {
 /// land without `code_key` has its commit missing from this clone, so its key can't be
 /// computed, it keeps every `checked` record and warns, since dropping a check is the one
 /// mistake it can't undo; a missing commit of a land that needed review keeps its approval the same way.
-/// An `effort` record goes when the fold holds a later one with its `id`, and a `verified`
+/// An `effort` record goes when the fold holds another line of its `id`, and a `verified`
 /// record when the fold holds a newer one of the caller's for its commit.
 /// Fetches first, as best it can, so it sees the latest lands; a line that doesn't parse is
 /// kept.
@@ -123,7 +124,7 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
     }
     // The legacy keys are in now: a composed check compaction keeps keeps its basis.
     keep_bases(&fold, &mut land_keys, newest);
-    let superseded = |record: &Record| match &record.body {
+    let superseded = |record: &Record, line: &str| match &record.body {
         Body::Approved { fingerprint, .. } => fingerprints.contains(fingerprint.as_str()),
         // The diff they were about is on `main`, whatever their branch.
         Body::Commented { fingerprint, .. } | Body::ChangesRequested { fingerprint, .. } => {
@@ -132,12 +133,12 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
         Body::Checked { code_key, .. } => {
             prune_checks && older(record) && !land_keys.contains(code_key)
         }
-        // The fold holds another count of the same session and branch, a later one whoever
-        // wrote it.
-        Body::Effort { .. } => fold
-            .efforts
-            .get(&record.id)
-            .is_some_and(|latest| latest != record),
+        // The fold holds another line of its `id`, a later count whoever wrote it; one the
+        // fold didn't see, appended since, stays.
+        Body::Effort { .. } => fold.lines.get(&record.id).is_some_and(|held| {
+            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line)
+                .is_ok_and(|line| sorted_text(&line) != sorted_text(held))
+        }),
         // Only the caller's newest result for each commit stays; one the fold didn't see,
         // appended since, is newer than all it saw.
         Body::Verified { commit, .. } => fold.verifications.get(commit).is_some_and(|all| {
@@ -179,7 +180,8 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
             // A `reviewed` line is a kind gone with yes/no review (`yes-no-review`).
             let reviewed = serde_json::from_str::<serde_json::Value>(line)
                 .is_ok_and(|v| v["kind"] == "reviewed");
-            if reviewed || serde_json::from_str::<Record>(line).is_ok_and(|r| superseded(&r)) {
+            if reviewed || serde_json::from_str::<Record>(line).is_ok_and(|r| superseded(&r, line))
+            {
                 removed += 1;
             } else {
                 kept.push_str(line);
