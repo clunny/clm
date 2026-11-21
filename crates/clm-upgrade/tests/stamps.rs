@@ -5,7 +5,7 @@ use std::fs;
 use clm_upgrade::{TooNew, check_lock, migrations, pending_in, supersedes};
 use tempfile::TempDir;
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn a_stamp_naming_a_later_own_migration_is_too_new_for_a_shorter_list() {
     let dir = TempDir::new().unwrap();
@@ -20,7 +20,7 @@ fn a_stamp_naming_a_later_own_migration_is_too_new_for_a_shorter_list() {
     assert_eq!(err, TooNew(later.to_string()));
 }
 
-// req:upgrade/shipped-migrations-frozen@46f86d46
+// req:upgrade/shipped-migrations-frozen@290ccdb6
 #[test]
 fn a_missing_lock_reads_as_empty() {
     let dir = TempDir::new().unwrap();

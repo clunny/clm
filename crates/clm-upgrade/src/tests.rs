@@ -74,7 +74,7 @@ fn malformed(list: &[Migration]) -> Option<String> {
     None
 }
 
-// req:upgrade/migration-list@b7ed6123
+// req:upgrade/migration-list@255078e6
 #[test]
 fn the_binarys_migrations_are_well_formed() {
     assert_eq!(malformed(migrations()), None);
@@ -82,7 +82,7 @@ fn the_binarys_migrations_are_well_formed() {
     assert_eq!(latest_in(&[]), None);
 }
 
-// req:upgrade/migration-list@b7ed6123
+// req:upgrade/migration-list@255078e6
 #[test]
 fn a_repeated_id_or_a_required_note_is_malformed() {
     let twice = [
@@ -99,7 +99,7 @@ fn a_repeated_id_or_a_required_note_is_malformed() {
     );
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn stamped_projects_get_the_apply_migrations_after_the_stamp() {
     let list = [
@@ -114,7 +114,7 @@ fn stamped_projects_get_the_apply_migrations_after_the_stamp() {
     );
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn a_migration_whose_files_are_right_is_not_pending() {
     let list = [
@@ -127,7 +127,7 @@ fn a_migration_whose_files_are_right_is_not_pending() {
     assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["b"]);
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn an_unstamped_project_is_judged_by_done_alone() {
     let list = [
@@ -141,7 +141,7 @@ fn an_unstamped_project_is_judged_by_done_alone() {
     assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["b"]);
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn a_clm_toml_that_does_not_parse_counts_as_unstamped() {
     let list = [apply("a", Level::Required, done_a)];
@@ -151,7 +151,7 @@ fn a_clm_toml_that_does_not_parse_counts_as_unstamped() {
     assert_eq!(ids(&pending_in(&list, &[], none.path()).unwrap()), ["a"]);
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn a_declined_note_is_not_pending() {
     let list = [note("n", done_a), note("m", done_b)];
@@ -159,7 +159,32 @@ fn a_declined_note_is_not_pending() {
     assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["m"]);
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
+#[test]
+fn odd_values_stamp_and_decline_nothing() {
+    let list = [
+        apply("a", Level::Required, done_a),
+        apply("b", Level::Required, done_b),
+        note("n", done_c),
+    ];
+    let not_a_string = project(Some("upgraded = 3\n"));
+    assert_eq!(
+        ids(&pending_in(&list, &[], not_a_string.path()).unwrap()),
+        ["a", "b", "n"]
+    );
+    let not_an_array = project(Some("declined_migrations = \"n\"\n"));
+    assert_eq!(
+        ids(&pending_in(&list, &[], not_an_array.path()).unwrap()),
+        ["a", "b", "n"]
+    );
+    let mixed = project(Some("declined_migrations = [\"n\", 1]\n"));
+    assert_eq!(
+        ids(&pending_in(&list, &[], mixed.path()).unwrap()),
+        ["a", "b"]
+    );
+}
+
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn a_note_before_the_stamp_is_still_pending() {
     let list = [note("n", done_a), apply("b", Level::Required, done_b)];
@@ -167,7 +192,7 @@ fn a_note_before_the_stamp_is_still_pending() {
     assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["n"]);
 }
 
-// req:upgrade/pending-migrations@de5ff412
+// req:upgrade/pending-migrations@0b011156
 #[test]
 fn a_stamp_the_list_lacks_is_too_new() {
     let list = [apply("a", Level::Required, done_a)];
@@ -284,7 +309,7 @@ fn superseded_pair() -> ([Migration; 2], &'static str, &'static str) {
     )
 }
 
-// req:upgrade/superseded-notes@e41a6e66
+// req:upgrade/superseded-notes@bcf36436
 #[test]
 fn a_note_is_pending_until_its_superseder_is_done() {
     let (list, old, new) = superseded_pair();

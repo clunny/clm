@@ -17,7 +17,7 @@ fn crate_with(ids: &[&str]) -> TempDir {
     dir
 }
 
-// req:upgrade/shipped-migrations-frozen@46f86d46
+// req:upgrade/shipped-migrations-frozen@290ccdb6
 #[test]
 fn the_directory_hash_covers_names_bytes_and_order() {
     let dir = TempDir::new().unwrap();
@@ -39,7 +39,7 @@ fn the_directory_hash_covers_names_bytes_and_order() {
     assert_ne!(crate::lock::dir_hash(dir.path()).unwrap(), want);
 }
 
-// req:upgrade/shipped-migrations-frozen@46f86d46
+// req:upgrade/shipped-migrations-frozen@290ccdb6
 #[test]
 fn an_edited_shipped_migration_fails_the_lock_naming_it_and_its_version() {
     let dir = crate_with(&["m"]);
@@ -50,7 +50,7 @@ fn an_edited_shipped_migration_fails_the_lock_naming_it_and_its_version() {
     assert!(err.contains("`m`") && err.contains("0.2.0"), "{err}");
 }
 
-// req:upgrade/shipped-migrations-frozen@46f86d46
+// req:upgrade/shipped-migrations-frozen@290ccdb6
 #[test]
 fn a_locked_migration_the_binary_lacks_fails_the_lock() {
     let dir = crate_with(&["m"]);
@@ -59,7 +59,7 @@ fn a_locked_migration_the_binary_lacks_fails_the_lock() {
     assert!(err.contains("`m`") && err.contains("0.2.0"), "{err}");
 }
 
-// req:upgrade/shipped-migrations-frozen@46f86d46
+// req:upgrade/shipped-migrations-frozen@290ccdb6
 #[test]
 fn locking_a_release_adds_only_the_unlisted_migrations() {
     let dir = crate_with(&["a", "b"]);
@@ -90,7 +90,7 @@ fn locking_a_release_adds_only_the_unlisted_migrations() {
     assert_eq!(fs::read_to_string(&lock).unwrap(), after);
 }
 
-// req:upgrade/shipped-migrations-frozen@46f86d46
+// req:upgrade/shipped-migrations-frozen@290ccdb6
 #[test]
 fn every_difference_is_reported_in_the_lock_s_order() {
     let dir = crate_with(&["a", "b"]);
@@ -111,7 +111,7 @@ fn every_difference_is_reported_in_the_lock_s_order() {
     );
 }
 
-// req:upgrade/shipped-migrations-frozen@46f86d46
+// req:upgrade/shipped-migrations-frozen@290ccdb6
 #[test]
 fn a_malformed_lock_fails_both_calls_naming_the_line() {
     let dir = crate_with(&["a"]);

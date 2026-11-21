@@ -5,24 +5,24 @@ use std::fs;
 use std::path::Path;
 
 use clm_upgrade::{
-    apply_in, check_lock, decline_in, latest_in, list_in, migrations, note_in, pending_in,
+    Kind, apply_in, check_lock, decline_in, latest_in, list_in, migrations, note_in, pending_in,
     require_current_in, supersedes,
 };
 use tempfile::TempDir;
 
-/// A project stamped with the last ID of the crate's own list.
+/// A project stamped with the first ID of the crate's own list.
 fn stamped_project() -> TempDir {
     let dir = TempDir::new().unwrap();
-    let last = latest_in(migrations()).unwrap();
+    let first = migrations()[0].id;
     fs::write(
         dir.path().join("clm.toml"),
-        format!("upgraded = \"{last}\"\n\n[land]\ncheck = \"true\"\n"),
+        format!("upgraded = \"{first}\"\n\n[land]\ncheck = \"true\"\n"),
     )
     .unwrap();
     dir
 }
 
-// req:upgrade/migration-list@b7ed6123
+// req:upgrade/migration-list@255078e6
 #[test]
 fn every_form_that_takes_a_list_answers_over_the_list_it_is_given() {
     let (a, b) = (stamped_project(), stamped_project());
@@ -50,7 +50,14 @@ fn every_form_that_takes_a_list_answers_over_the_list_it_is_given() {
     assert_eq!(listed.lines().count(), from_list.len(), "{listed}");
     assert!(listed.starts_with(from_list[0]), "{listed}");
     let first = from_list[0];
-    assert!(note_in(own, pairs, a.path(), first).is_ok(), "{first}");
+    assert_eq!(first, "20261107-projects-set-up-before");
+    let Kind::Note(n) = own.iter().find(|m| m.id == first).unwrap().kind else {
+        panic!("{first} is a note");
+    };
+    assert_eq!(
+        note_in(own, pairs, a.path(), first).unwrap(),
+        format!("{}\n", n.text.trim_end())
+    );
     assert!(decline_in(own, pairs, a.path(), "nope").is_err());
     assert!(apply_in(own, pairs, a.path()).is_ok());
     assert!(
@@ -60,7 +67,7 @@ fn every_form_that_takes_a_list_answers_over_the_list_it_is_given() {
     );
 }
 
-// req:upgrade/migration-list@b7ed6123
+// req:upgrade/migration-list@255078e6
 #[test]
 fn a_migration_is_a_value_a_caller_copies_into_a_list_of_its_own() {
     let mut own = migrations().to_vec();
@@ -70,7 +77,7 @@ fn a_migration_is_a_value_a_caller_copies_into_a_list_of_its_own() {
     assert_eq!(latest_in(&own), Some(migrations()[0].id));
 }
 
-// req:upgrade/shipped-migrations-frozen@46f86d46
+// req:upgrade/shipped-migrations-frozen@290ccdb6
 #[test]
 fn the_lock_check_reads_any_crates_directory() {
     let ids: Vec<&str> = migrations().iter().map(|m| m.id).collect();
@@ -95,7 +102,7 @@ const OWN: [&str; 13] = [
     "20261114-proof-is-real",
 ];
 
-// req:upgrade/own-list-closed@6b42898f
+// req:upgrade/own-list-closed@5ae0f274
 #[test]
 fn the_list_is_exactly_the_thirteen_in_order() {
     let ids: Vec<&str> = migrations().iter().map(|m| m.id).collect();

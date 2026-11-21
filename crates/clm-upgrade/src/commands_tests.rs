@@ -134,7 +134,7 @@ fn marks_a_skipped_required_migration() {
     );
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn applies_stamps_and_leaves_an_edited_file() {
     let list = [apply_m(), note_n()];
@@ -155,7 +155,7 @@ fn applies_stamps_and_leaves_an_edited_file() {
     assert_eq!(read(&dir, "clm.toml"), after);
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn rewrites_an_unedited_note_file() {
     let list = [note_n()];
@@ -168,7 +168,7 @@ fn rewrites_an_unedited_note_file() {
     }
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn replaces_an_existing_stamp_and_writes_nothing_when_current() {
     let list = [apply_m(), note_n()];
@@ -187,7 +187,7 @@ fn replaces_an_existing_stamp_and_writes_nothing_when_current() {
     assert_eq!(read(&settled, "clm.toml"), "upgraded = \"n\"\n");
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn apply_refuses_too_new_and_writes_nothing() {
     let dir = project("upgraded = \"z\"\n");
@@ -197,7 +197,7 @@ fn apply_refuses_too_new_and_writes_nothing() {
     assert_eq!(read(&dir, "clm.toml"), "upgraded = \"z\"\n");
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn the_stamp_goes_in_as_a_top_level_key() {
     let list = [apply_m()];
@@ -241,7 +241,7 @@ fn apply_s() -> Migration {
     }
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn an_odd_stamp_line_is_replaced_alone() {
     let list = [apply_s(), apply_m()];
@@ -283,7 +283,7 @@ fn an_odd_stamp_line_is_replaced_alone() {
     );
 }
 
-// req:upgrade/upgrade-note-and-decline@727f6913
+// req:upgrade/upgrade-note-and-decline@42f2ce87
 #[test]
 fn prints_a_migrations_note() {
     let dir = project("");
@@ -293,7 +293,7 @@ fn prints_a_migrations_note() {
     );
 }
 
-// req:upgrade/upgrade-note-and-decline@727f6913
+// req:upgrade/upgrade-note-and-decline@42f2ce87
 #[test]
 fn note_refuses_unknown_ids_and_too_new() {
     let dir = project("");
@@ -309,7 +309,7 @@ fn note_refuses_unknown_ids_and_too_new() {
     assert!(err.contains("`r`"), "{err}");
 }
 
-// req:upgrade/upgrade-note-and-decline@727f6913
+// req:upgrade/upgrade-note-and-decline@42f2ce87
 #[test]
 fn declining_a_pending_note_hides_it() {
     let list = [note_a(), note_n()];
@@ -330,7 +330,7 @@ fn declining_a_pending_note_hides_it() {
     assert!(read(&dir, "clm.toml").contains("declined_migrations = [\"a\", \"n\"]\n"));
 }
 
-// req:upgrade/upgrade-note-and-decline@727f6913
+// req:upgrade/upgrade-note-and-decline@42f2ce87
 #[test]
 fn decline_refuses_what_it_may_not_decline() {
     let list = [required_r(), note_a()];
@@ -346,7 +346,7 @@ fn decline_refuses_what_it_may_not_decline() {
     assert_eq!(read(&stamped, "clm.toml"), "upgraded = \"z\"\n");
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn a_failing_migration_does_not_stop_the_others_or_stamp() {
     let bad = Migration {
@@ -376,7 +376,7 @@ fn read_only(path: &Path) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o444)).unwrap();
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn a_clm_toml_it_cannot_write_keeps_what_the_run_did() {
     let p = Migration {
@@ -403,7 +403,7 @@ fn a_clm_toml_it_cannot_write_keeps_what_the_run_did() {
     assert_eq!(read(&dir, "clm.toml"), "");
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn apply_refuses_a_clm_toml_it_cannot_read() {
     let list = [apply_s(), apply_m()];
@@ -425,7 +425,7 @@ fn done_by_stamp(root: &Path) -> bool {
     fs::read_to_string(root.join("clm.toml")).is_ok_and(|t| t.contains("upgraded = \"s\""))
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn a_note_the_stamp_takes_is_shown_on_the_run_that_takes_it() {
     let a = Migration {
@@ -469,7 +469,7 @@ fn an_advised_migration_is_never_marked_skipped() {
     );
 }
 
-// req:upgrade/upgrade-note-and-decline@727f6913
+// req:upgrade/upgrade-note-and-decline@42f2ce87
 #[test]
 fn decline_refuses_a_clm_toml_it_cannot_read() {
     let dir = project("declined_migrations = [\"x\"\n");
@@ -503,7 +503,7 @@ fn note_b() -> Migration {
     }
 }
 
-// req:upgrade/upgrade-note-and-decline@727f6913
+// req:upgrade/upgrade-note-and-decline@42f2ce87
 #[test]
 fn an_odd_declined_line_is_replaced_alone() {
     let list = [note_a(), note_b()];
@@ -540,7 +540,7 @@ fn an_odd_declined_line_is_replaced_alone() {
     );
 }
 
-// req:upgrade/upgrade-apply@e3cdf9ee
+// req:upgrade/upgrade-apply@8f1b6421
 #[test]
 fn the_stamp_goes_above_a_commented_header() {
     let list = [apply_m()];
@@ -566,7 +566,7 @@ fn the_stamp_goes_above_a_commented_header() {
     );
 }
 
-// req:upgrade/upgrade-note-and-decline@727f6913
+// req:upgrade/upgrade-note-and-decline@42f2ce87
 #[test]
 fn declining_goes_above_a_commented_header() {
     let dir = project("# Run before clm check.\n[land]\ncheck = \"true\"\n");
