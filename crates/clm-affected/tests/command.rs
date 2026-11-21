@@ -374,6 +374,7 @@ fn a_callers_settings_failure_is_written_as_given_whatever_the_question() {
     }
     // `--overlap` reads each side's settings from its commit, so the caller's loader isn't
     // called and its failure stops nothing.
+    // req:check.affected/overlap-selection@8fd7fe1a
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let status = clm_affected::command(
         ["--overlap", "main", "work", "--root", path],
@@ -1139,6 +1140,37 @@ fn a_link_to_a_file_counts_on_both_sides_as_with_a_checkout() {
     assert_eq!(stdout(&out), stdout(&alone));
 }
 
+#[test]
+fn links_to_links_and_absolute_targets_are_followed_and_one_out_of_the_top_is_no_file() {
+    // req:check.affected/overlap-selection@8fd7fe1a
+    // A file beside the system's temporary directories: where a relative target that climbs
+    // out of a tree extracted there would land.
+    let outside = tempfile::NamedTempFile::new().unwrap();
+    fs::write(outside.path(), "fn outside() {}\n").unwrap();
+    let name = outside.path().file_name().unwrap().to_str().unwrap();
+    let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
+    let root = dir.path();
+    git(root, &["switch", "-q", "main"]);
+    let src = root.join("crates/b/src");
+    std::os::unix::fs::symlink("lib.rs", src.join("link.rs")).unwrap();
+    std::os::unix::fs::symlink("link.rs", src.join("chain.rs")).unwrap();
+    std::os::unix::fs::symlink(outside.path(), src.join("abs.rs")).unwrap();
+    std::os::unix::fs::symlink(format!("../../../../{name}"), src.join("esc.rs")).unwrap();
+    commit_all(root, "links");
+    git(root, &["switch", "-q", "-C", "x", "main"]);
+    touch(root, "crates/b/src/lib.rs");
+    commit_all(root, "x");
+    git(root, &["switch", "-q", "-C", "y", "main"]);
+    touch(root, "crates/b/src/new.rs");
+    commit_all(root, "y");
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node b\nfile crates/b/src/abs.rs\nfile crates/b/src/chain.rs\nfile crates/b/src/lib.rs\nfile crates/b/src/link.rs\n"
+    );
+}
+
 /// The commits of `a_side_that_selects_everything_leaves_the_others_output`, each holding the
 /// `clm.toml` given for it, or none: `m` (`main`), then `x` changing `Cargo.lock` and `y`
 /// changing `crates/b/src/lib.rs`, with `cycle` written on `y` when `y_cycle`. `y` is
@@ -1209,6 +1241,54 @@ fn each_side_takes_the_settings_its_own_commit_holds() {
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.starts_with("clm affected: x:clm.toml: "), "{err}");
+
+    // Side `x`'s graph comes before side `y`'s settings.
+    let dir = overlap_repo_holding(
+        Some(globs),
+        "[a, b]",
+        &|r| {
+            write(r, "Cargo.lock", "lock 2\n");
+            cycle(r);
+        },
+        &|r| {
+            touch(r, "crates/b/src/lib.rs");
+            write(r, "clm.toml", not_toml);
+        },
+    );
+    let out = clm_affected_args(dir.path(), &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.starts_with("clm affected: "), "{err}");
+    assert!(err.contains("dependency cycle"), "{err}");
+    assert!(!err.contains("y:clm.toml"), "{err}");
+}
+
+#[test]
+fn a_sides_settings_are_read_at_the_clm_roots_place_in_its_commit() {
+    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/clm-root-paths@de45727f
+    let dir = subdirectory_repo();
+    let top = dir.path();
+    let sub = top.join("sub");
+    git(top, &["switch", "-q", "main"]);
+    // A `clm.toml` at the top of the git repository is no CLM root's and is never read.
+    write(top, "clm.toml", "this is [not toml\n");
+    commit_all(top, "top toml");
+    git(top, &["switch", "-q", "-c", "x", "main"]);
+    write(&sub, "crates/a/src/lib.rs", "fn g() {}\n");
+    commit_all(top, "x");
+    git(top, &["switch", "-q", "-c", "y", "main"]);
+    write(&sub, "crates/a/src/util.rs", "fn v() {}\n");
+    commit_all(top, "y");
+    let out = clm_affected_args(&sub, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    // The CLM root's own, named from the top of the git repository when it can't be loaded.
+    write(&sub, "clm.toml", "this is [not toml\n");
+    commit_all(top, "y toml");
+    let out = clm_affected_args(&sub, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.starts_with("clm affected: y:sub/clm.toml: "), "{err}");
 }
 
 #[test]

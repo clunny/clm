@@ -216,8 +216,9 @@ fn names(out: &[u8]) -> Vec<String> {
 /// the two commits alone: no working tree, no untracked file. The graph, the scan and the
 /// files that still exist are those of `to`'s tree, each read at the CLM root's place in it,
 /// and every path is under `root` and named from it (`clm-root-paths`). A symbolic link of
-/// `to` counts as a file when it leads to one in the tree `to` extracts to, as a checkout's
-/// link would. Refused as `affected` is when the graph can't be loaded.
+/// `to` counts as a file when it leads to one as a checkout's link would, judged in the tree
+/// `to` extracts to (`leads_to_file`). Refused as `affected` is when the graph can't be
+/// loaded.
 pub fn affected_between(
     root: &Path,
     from: &str,
@@ -262,7 +263,7 @@ pub fn affected_between(
     }
     for link in links(root, to, &prefix)? {
         let target = at_root.join(&link);
-        if !keep(&link) || !target.is_file() {
+        if !keep(&link) || !leads_to_file(tree.path(), &target) {
             continue;
         }
         present.insert(link.clone());
@@ -282,6 +283,45 @@ pub fn affected_between(
         .collect();
     let graph = load_graph(&at_root)?;
     Ok(combined(&graph, &differing, &scan.cited, &scan.reads, all))
+}
+
+/// Whether the link at `path`, in the tree extracted at `top`, leads to a file as a checkout's
+/// link would: links to links and absolute targets followed, except that a relative target
+/// leading out of `top`, the repository's top, leads to nothing (`overlap-selection`).
+fn leads_to_file(top: &Path, path: &Path) -> bool {
+    let mut current = path.to_path_buf();
+    // As many hops as the kernel follows before it gives up on a loop.
+    for _ in 0..40 {
+        let Ok(meta) = fs::symlink_metadata(&current) else {
+            return false;
+        };
+        if !meta.file_type().is_symlink() {
+            return meta.is_file();
+        }
+        let Ok(target) = fs::read_link(&current) else {
+            return false;
+        };
+        if target.is_absolute() {
+            current = target;
+            continue;
+        }
+        let inside = current.starts_with(top);
+        let mut next = current.parent().map(Path::to_path_buf).unwrap_or_default();
+        for part in target.components() {
+            match part {
+                std::path::Component::ParentDir => {
+                    next.pop();
+                }
+                std::path::Component::CurDir => {}
+                other => next.push(other),
+            }
+        }
+        if inside && !next.starts_with(top) {
+            return false;
+        }
+        current = next;
+    }
+    false
 }
 
 /// The CLM root's place in its git repository: `git rev-parse --show-prefix`, empty at the
