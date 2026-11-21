@@ -749,7 +749,7 @@ fn an_untracked_reader_and_an_untracked_doc_count() {
 
 #[test]
 fn why_prints_the_chain_through_a_dependency() {
-    // req:check.affected/why-chain@c55b66f4
+    // req:check.affected/why-chain@6518d01f
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -767,7 +767,7 @@ fn why_prints_the_chain_through_a_dependency() {
 
 #[test]
 fn why_says_not_selected_and_all() {
-    // req:check.affected/why-chain@c55b66f4
+    // req:check.affected/why-chain@6518d01f
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -784,7 +784,7 @@ fn why_says_not_selected_and_all() {
 
 #[test]
 fn why_with_readers_exits_1_naming_both_flags() {
-    // req:check.affected/why-chain@c55b66f4
+    // req:check.affected/why-chain@6518d01f
     let dir = repo("");
     let out = clm_affected_with(
         dir.path(),
@@ -801,7 +801,7 @@ fn why_with_readers_exits_1_naming_both_flags() {
 
 #[test]
 fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
-    // req:check.affected/why-chain@c55b66f4
+    // req:check.affected/why-chain@6518d01f
     let dir = repo("[affected]\nall = [\"Cargo.lock\"]\n");
     let root = dir.path();
     write(root, "Cargo.lock", "lock 2\n");
@@ -821,7 +821,7 @@ fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
 
 #[test]
 fn why_reads_the_scan_for_readers_and_citations() {
-    // req:check.affected/why-chain@c55b66f4
+    // req:check.affected/why-chain@6518d01f
     let dir = readers_repo();
     let root = dir.path();
     write(root, "ARCHITECTURE.md", "# B\n");
@@ -1097,7 +1097,7 @@ fn overlap_reads_the_graph_whole_from_the_commits() {
 #[test]
 fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
     // req:check.affected/affected-files@4fca296e
-    // req:check.affected/why-chain@c55b66f4
+    // req:check.affected/why-chain@6518d01f
     let dir = repo("");
     let root = dir.path();
     // `d` depends on nothing the change reaches, but exempts a test from `undeclared-imports`.
@@ -1125,6 +1125,40 @@ fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
         stdout(&out),
         "crates/d/tests/t.rs exempt from undeclared-imports\n"
     );
+}
+
+#[test]
+fn an_exempt_test_whose_owner_is_affected_is_explained_by_its_exemption() {
+    // req:check.affected/why-chain@6518d01f
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    write(root, "specs/SPEC.md", &spec("[\"clm.toml\"]", "[]"));
+    write(root, "specs/lib/SPEC.md", &spec("[\"lib/**\"]", "[]"));
+    write(root, "specs/other/SPEC.md", &spec("[\"other/**\"]", "[]"));
+    write(
+        root,
+        "specs/app/SPEC.md",
+        "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"app/**\"]\ndepends_on: [lib]\nexemptions:\n  - rule: undeclared-imports\n    files: [\"app/tests/t.rs\"]\n    until: backlog/x\n---\n",
+    );
+    write(root, "clm.toml", "");
+    write(root, "lib/src/lib.rs", "fn f() {}\n");
+    write(root, "other/src/lib.rs", "fn f() {}\n");
+    write(
+        root,
+        "app/tests/t.rs",
+        &format!(
+            "#[test]\nfn t() {{\n    // {}\n}}\n",
+            concat!("req", ":other/x@12345678")
+        ),
+    );
+    commit_all(root, "start");
+    git(root, &["switch", "-q", "-c", "work"]);
+    write(root, "lib/src/lib.rs", "fn g() {}\n");
+    commit_all(root, "lib");
+    let out = clm_affected_with(root, "main", &["--why", "app/tests/t.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "app/tests/t.rs exempt from undeclared-imports\n");
 }
 
 /// A repository on `main` whose CLM root is `sub/`: a root component and `a` owning
