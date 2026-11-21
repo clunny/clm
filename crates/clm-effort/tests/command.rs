@@ -98,8 +98,8 @@ fn record_repo(dir: &Path) -> PathBuf {
 
 #[test]
 fn effort_record_cli() {
-    // req:effort/record-command@021172fb
-    // req:effort/commands-in-crate@c08e640f
+    // req:effort/record-command@7a34e45e
+    // req:effort/commands-in-crate@04545a5f
     let dir = tempfile::tempdir().unwrap();
     let root = record_repo(dir.path());
     let root_arg = root.to_string_lossy().into_owned();
@@ -159,7 +159,8 @@ fn effort_record_cli() {
 
 #[test]
 fn effort_record_paths_and_streams() {
-    // req:effort/commands-in-crate@c08e640f
+    // req:effort/commands-in-crate@04545a5f
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let root = record_repo(dir.path());
     // `--cwd`, `.` components and all, `--transcripts` and `--root` are taken from the
@@ -201,18 +202,45 @@ fn effort_record_paths_and_streams() {
         ),
         "{out:?}"
     );
-    assert!(!out.stdout.contains("warning"), "{out:?}");
+    assert_eq!(out.stdout, "nothing new to record\n", "{out:?}");
+    // With `HOME` and `CLAUDE_CONFIG_DIR` both set empty there is nowhere to read.
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let empty = |key: &str| matches!(key, "HOME" | "CLAUDE_CONFIG_DIR").then(String::new);
+    let code = clm_effort::effort_command(
+        ["record"],
+        &root,
+        dir.path(),
+        &empty,
+        &mut stdout,
+        &mut stderr,
+    );
+    assert_eq!(code, 0);
+    assert_eq!(
+        String::from_utf8(stderr).unwrap(),
+        "warning: no transcripts: neither CLAUDE_CONFIG_DIR nor HOME is set\n"
+    );
+    assert_eq!(
+        String::from_utf8(stdout).unwrap(),
+        "nothing new to record\n"
+    );
     // A failure goes to the error stream after the command's name.
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let out = effort(&root, &root, dir.path(), &["record"]);
     assert_eq!(out.code, 1, "{out:?}");
-    assert!(out.stderr.starts_with("clm effort: "), "{out:?}");
+    assert_eq!(
+        out.stderr,
+        format!(
+            "clm effort: not a CLM repository: {} has no specs/SPEC.md\n",
+            root.display()
+        ),
+        "{out:?}"
+    );
     assert!(out.stdout.is_empty(), "{out:?}");
 }
 
 #[test]
 fn arguments_it_cant_parse() {
-    // req:effort/commands-in-crate@c08e640f
+    // req:effort/commands-in-crate@04545a5f
     let dir = tempfile::tempdir().unwrap();
     let calls: [(Call, &[&str]); 3] = [
         (clm_effort::effort_command, &["record", "--nope"]),
@@ -224,13 +252,67 @@ fn arguments_it_cant_parse() {
         assert_eq!(out.code, 2, "{out:?}");
         assert!(out.stderr.contains("--nope"), "{out:?}");
         assert!(out.stdout.is_empty(), "{out:?}");
-        // Help isn't an error: it goes to standard output with the status `clm` exits with.
-        let out = call(f, dir.path(), dir.path(), dir.path(), &["--help"]);
-        assert_eq!(out.code, 0, "{out:?}");
-        assert!(out.stdout.contains("Usage"), "{out:?}");
-        assert!(out.stderr.is_empty(), "{out:?}");
     }
     // Reaching here is the scenario's last clause: the test's process goes on.
+}
+
+#[test]
+fn help() {
+    // req:effort/commands-in-crate@04545a5f
+    // Help isn't an error: it goes to standard output with the status `clm` exits with,
+    // starting with the command's description, an empty line and its `Usage:` line.
+    let dir = tempfile::tempdir().unwrap();
+    let helps: [(Call, &[&str], &str, &str); 6] = [
+        (
+            clm_effort::effort_command,
+            &["--help"],
+            "The work Claude Code sessions spent, recorded in the ledger",
+            "Usage: clm effort <COMMAND>",
+        ),
+        (
+            clm_effort::effort_command,
+            &["record", "--help"],
+            "Read this machine's transcripts and append an `effort` record for each session and branch whose counts changed",
+            "Usage: clm effort record ",
+        ),
+        (
+            clm_effort::capabilities_command,
+            &["--help"],
+            "What each capability costs, from the ledger's effort records and git: the list, or one capability's page",
+            "Usage: clm capabilities ",
+        ),
+        (
+            clm_effort::capabilities_command,
+            &["decide", "--help"],
+            "Record a review decision on a capability, settling the workaround flags open on it",
+            "Usage: clm capabilities decide ",
+        ),
+        (
+            clm_effort::architecture_command,
+            &["--help"],
+            "What each architectural constraint costs and whether its enforcing rules are built: the list, or one constraint's page",
+            "Usage: clm architecture ",
+        ),
+        (
+            clm_effort::architecture_command,
+            &["decide", "--help"],
+            "Record a review decision on an architectural constraint, settling the workaround flags open on it",
+            "Usage: clm architecture decide ",
+        ),
+    ];
+    for (f, args, about, usage) in helps {
+        let out = call(f, dir.path(), dir.path(), dir.path(), args);
+        assert_eq!(out.code, 0, "{args:?} {out:?}");
+        assert!(out.stderr.is_empty(), "{args:?} {out:?}");
+        let lines: Vec<&str> = out.stdout.lines().collect();
+        assert_eq!(lines[0], about, "{args:?} {out:?}");
+        assert_eq!(lines[1], "", "{args:?} {out:?}");
+        if usage.ends_with(' ') {
+            assert!(lines[2].starts_with(usage), "{args:?} {out:?}");
+        } else {
+            assert_eq!(lines[2], usage, "{args:?} {out:?}");
+        }
+    }
 }
 
 /// A CLM repository with capabilities `p` and `q`, served by node `a`'s two rules.
@@ -263,7 +345,7 @@ fn capabilities(root: &Path, args: &[&str]) -> Out {
 
 #[test]
 fn capabilities_cli_lists() {
-    // req:effort/capabilities-list@be270c03
+    // req:effort/capabilities-list@69c2cf88
     let dir = tempfile::tempdir().unwrap();
     let out = capabilities(&capabilities_repo(dir.path()), &[]);
     let stdout = &out.stdout;
@@ -283,7 +365,7 @@ fn capabilities_cli_lists() {
 
 #[test]
 fn capabilities_cli_outside_a_clm_repository() {
-    // req:effort/capabilities-list@be270c03
+    // req:effort/capabilities-list@69c2cf88
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("plain");
     std::fs::create_dir_all(&root).unwrap();
@@ -300,7 +382,8 @@ fn capabilities_cli_outside_a_clm_repository() {
 
 #[test]
 fn capabilities_cli_says_components() {
-    // req:effort/says-component@06d9e61a
+    // req:effort/capability-page@b58d5e60
+    // A capability with no rules.
     let dir = tempfile::tempdir().unwrap();
     let root = capabilities_repo(dir.path());
     let caps = std::fs::read_to_string(root.join("CAPABILITIES.md")).unwrap();
@@ -320,7 +403,7 @@ fn capabilities_cli_says_components() {
 
 #[test]
 fn capabilities_cli_page() {
-    // req:effort/capability-page@dd387c2f
+    // req:effort/capability-page@b58d5e60
     let dir = tempfile::tempdir().unwrap();
     let out = capabilities(&capabilities_repo(dir.path()), &["q"]);
     let stdout = &out.stdout;
@@ -353,7 +436,7 @@ fn capabilities_json_parses() {
 
 #[test]
 fn capabilities_unknown_slug_exits_1() {
-    // req:effort/capability-page@dd387c2f
+    // req:effort/capability-page@b58d5e60
     let dir = tempfile::tempdir().unwrap();
     let out = capabilities(&capabilities_repo(dir.path()), &["nope"]);
     assert_eq!(out.code, 1);
@@ -362,13 +445,144 @@ fn capabilities_unknown_slug_exits_1() {
 
 #[test]
 fn capabilities_refused_outside_a_clm_repository() {
-    // req:effort/capability-page@dd387c2f
+    // req:effort/capabilities-list@69c2cf88
     let dir = tempfile::tempdir().unwrap();
     let root = capabilities_repo(dir.path());
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let out = capabilities(&root, &["p"]);
     assert_eq!(out.code, 1);
-    assert!(out.stderr.contains("not a CLM repository"));
+    assert!(out.stderr.starts_with("not a CLM repository"), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+/// A git repository whose `specs/SPEC.md` doesn't load, and a directory, in no git
+/// repository, whose `specs/SPEC.md` loads; with the model's message for the first.
+fn unloadable_and_no_git(dir: &Path) -> (PathBuf, PathBuf, String) {
+    let bogus = dir.join("bogus");
+    std::fs::create_dir_all(bogus.join("specs")).unwrap();
+    common::repo(&bogus, "Ann");
+    std::fs::write(
+        bogus.join("specs/SPEC.md"),
+        "---\ntitle: T\nstatus: bogus\nowners: []\n---\n\n## Contract\nc\n",
+    )
+    .unwrap();
+    let (_, violations) = clm_model::load(&bogus);
+    let message = violations[0].message.clone();
+    let plain = dir.join("plain");
+    std::fs::create_dir_all(plain.join("specs")).unwrap();
+    std::fs::write(
+        plain.join("specs/SPEC.md"),
+        "---\ntitle: T\nstatus: active\nowners: []\n---\n\n## Contract\nc\n",
+    )
+    .unwrap();
+    // Not inside any git work tree, whatever holds the temporary directory.
+    let probe = std::process::Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(&plain)
+        .env("GIT_CEILING_DIRECTORIES", dir)
+        .output()
+        .unwrap();
+    assert!(!probe.status.success());
+    (bogus, plain, message)
+}
+
+#[test]
+fn capabilities_specs_that_dont_load_and_git_failing() {
+    // req:effort/capabilities-list@69c2cf88
+    let dir = tempfile::tempdir().unwrap();
+    let (bogus, plain, message) = unloadable_and_no_git(dir.path());
+    for args in [&[][..], &["p"]] {
+        let out = capabilities(&bogus, args);
+        assert_eq!(out.code, 1, "{out:?}");
+        assert_eq!(
+            out.stderr,
+            format!("clm capabilities: the specs don't load: specs/SPEC.md: {message}\n")
+        );
+        assert!(out.stdout.is_empty(), "{out:?}");
+    }
+    let out = capabilities(&plain, &[]);
+    assert_eq!(out.code, 2, "{out:?}");
+    assert!(out.stderr.starts_with("clm capabilities: "), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+#[test]
+fn architecture_refusals_and_failures() {
+    // req:effort/architecture-list@ca3bf29e
+    let dir = tempfile::tempdir().unwrap();
+    let (bogus, plain, message) = unloadable_and_no_git(dir.path());
+    let none = dir.path().join("none");
+    std::fs::create_dir_all(&none).unwrap();
+    let out = architecture(&none, &[]);
+    assert_eq!(out.code, 1, "{out:?}");
+    assert_eq!(
+        out.stderr,
+        format!(
+            "clm architecture: not a CLM repository: {} has no specs/SPEC.md\n",
+            none.display()
+        )
+    );
+    assert!(out.stdout.is_empty(), "{out:?}");
+    let out = architecture(&bogus, &[]);
+    assert_eq!(out.code, 1, "{out:?}");
+    assert_eq!(
+        out.stderr,
+        format!("clm architecture: the specs don't load: specs/SPEC.md: {message}\n")
+    );
+    assert!(out.stdout.is_empty(), "{out:?}");
+    let out = architecture(&plain, &[]);
+    assert_eq!(out.code, 2, "{out:?}");
+    assert!(out.stderr.starts_with("clm architecture: "), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+/// A command run in a root with its arguments.
+type Run = fn(&Path, &[&str]) -> Out;
+
+#[test]
+fn a_slug_before_decide() {
+    // req:effort/decide-command@a16f3453
+    // req:effort/architecture-decide-command@e57282cb
+    let dir = tempfile::tempdir().unwrap();
+    let root = architecture_repo(dir.path());
+    let runs: [(Run, &str, &str, &str); 2] = [
+        (capabilities, "capabilities", "p", "q"),
+        (architecture, "architecture", "e", "x"),
+    ];
+    for (run, command, parent, slug) in runs {
+        let decide = [slug, "--value", "high", "--decision", "keep"];
+        let mut before = vec![parent, "decide"];
+        before.extend(decide);
+        let line = format!(
+            "clm {command}: `decide` takes the slug after it: clm {command} decide <slug> (not {parent})\n"
+        );
+        let out = run(&root, &before);
+        assert_eq!(
+            (out.code, out.stderr.as_str()),
+            (2, line.as_str()),
+            "{out:?}"
+        );
+        assert!(decided(&root).is_empty());
+        // The same in a directory that isn't a CLM repository.
+        let spec = root.join("specs/SPEC.md");
+        let text = std::fs::read(&spec).unwrap();
+        std::fs::remove_file(&spec).unwrap();
+        let out = run(&root, &before);
+        assert_eq!(
+            (out.code, out.stderr.as_str()),
+            (2, line.as_str()),
+            "{out:?}"
+        );
+        let mut after = vec!["decide"];
+        after.extend(decide);
+        let out = run(&root, &after);
+        assert_eq!(out.code, 1, "{out:?}");
+        let refused = format!("clm {command} decide: not a CLM repository");
+        assert!(out.stderr.starts_with(&refused), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        std::fs::write(&spec, text).unwrap();
+        assert!(decided(&root).is_empty());
+    }
 }
 
 /// `capabilities_repo`'s files in a clone with a bare `origin`, so the ledger can push.
@@ -408,7 +622,7 @@ fn decided(root: &Path) -> Vec<clm_ledger::Record> {
 
 #[test]
 fn decide_appends_decided() {
-    // req:effort/decide-command@e1ca5b43
+    // req:effort/decide-command@a16f3453
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
     let out = capabilities(
@@ -436,7 +650,7 @@ fn decide_appends_decided() {
 
 #[test]
 fn decide_settles_open_flags() {
-    // req:effort/decide-command@e1ca5b43
+    // req:effort/decide-command@a16f3453
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
     flag(&root, "f1");
@@ -470,7 +684,7 @@ fn decide_settles_open_flags() {
 
 #[test]
 fn decide_unknown_slug() {
-    // req:effort/decide-command@e1ca5b43
+    // req:effort/decide-command@a16f3453
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
     let out = capabilities(
@@ -484,8 +698,8 @@ fn decide_unknown_slug() {
 
 #[test]
 fn decide_after_parent_options() {
-    // req:effort/decide-command@e1ca5b43
-    // req:effort/commands-in-crate@c08e640f
+    // req:effort/decide-command@a16f3453
+    // req:effort/commands-in-crate@04545a5f
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
     let given = root.to_string_lossy().into_owned();
@@ -520,7 +734,7 @@ fn decide_after_parent_options() {
 
 #[test]
 fn decide_own_root_overrides() {
-    // req:effort/commands-in-crate@c08e640f
+    // req:effort/commands-in-crate@04545a5f
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
     // `decide`'s own `--root`, relative to the directory the command runs in, overrides the
@@ -549,7 +763,7 @@ fn decide_own_root_overrides() {
 
 #[test]
 fn decide_refused_outside_a_clm_repository() {
-    // req:effort/decide-command@e1ca5b43
+    // req:effort/decide-command@a16f3453
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
@@ -563,8 +777,10 @@ fn decide_refused_outside_a_clm_repository() {
 
 #[test]
 fn failures_keep_their_prefix() {
-    // req:effort/commands-in-crate@c08e640f
-    // req:effort/decide-command@e1ca5b43
+    // req:effort/commands-in-crate@04545a5f
+    // req:effort/decide-command@a16f3453
+    // req:effort/architecture-list@ca3bf29e
+    // req:effort/architecture-decide-command@e57282cb
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     // A slug before `decide` is a usage error for `capabilities` as for `architecture`.
@@ -594,7 +810,7 @@ fn failures_keep_their_prefix() {
 
 #[test]
 fn decide_ledger_failure_exits_2() {
-    // req:effort/decide-command@e1ca5b43
+    // req:effort/decide-command@a16f3453
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
     // A file where the ledger branches' ref directory goes, so no ledger ref can be written.
@@ -625,7 +841,7 @@ fn architecture(root: &Path, args: &[&str]) -> Out {
 
 #[test]
 fn architecture_decide_appends_decided() {
-    // req:effort/architecture-decide-command@669a0425
+    // req:effort/architecture-decide-command@e57282cb
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     flag(&root, "f1");
@@ -654,7 +870,7 @@ fn architecture_decide_appends_decided() {
 
 #[test]
 fn architecture_decide_unknown_slug_and_refusals() {
-    // req:effort/architecture-decide-command@669a0425
+    // req:effort/architecture-decide-command@e57282cb
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     let args = |slug: &'static str| ["decide", slug, "--value", "high", "--decision", "keep"];
@@ -692,7 +908,7 @@ fn architecture_decide_unknown_slug_and_refusals() {
 
 #[test]
 fn architecture_decide_ledger_failure_exits_2() {
-    // req:effort/architecture-decide-command@669a0425
+    // req:effort/architecture-decide-command@e57282cb
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     // A file where the ledger branches' ref directory goes, so no ledger ref can be written.
@@ -707,7 +923,7 @@ fn architecture_decide_ledger_failure_exits_2() {
 
 #[test]
 fn architecture_cli_lists_and_pages() {
-    // req:effort/architecture-list@a45a68a0
+    // req:effort/architecture-list@ca3bf29e
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     let out = architecture(&root, &[]);
@@ -749,7 +965,7 @@ fn architecture_json_parses() {
 
 #[test]
 fn architecture_help_says_architectural_constraint() {
-    // req:effort/architecture-list@a45a68a0
+    // req:effort/architecture-list@ca3bf29e
     for args in [&["--help"][..], &["decide", "--help"][..]] {
         let dir = tempfile::tempdir().unwrap();
         let out = architecture(dir.path(), args);
@@ -767,7 +983,7 @@ fn architecture_help_says_architectural_constraint() {
 
 #[test]
 fn architecture_page_unknown_slug_as_text() {
-    // req:effort/architecture-page@8bc35522
+    // req:effort/architecture-page@c58defe7
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     let out = architecture(&root, &["nope"]);

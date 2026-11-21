@@ -260,7 +260,7 @@ fn flag_on_two_capabilities() {
 
 #[test]
 fn list_text_lines() {
-    // req:effort/capabilities-list@be270c03
+    // req:effort/capabilities-list@69c2cf88
     let (graph, fold) = flagged();
     let report = run(&graph, &fold);
     assert_eq!(
@@ -277,7 +277,7 @@ fn list_text_lines() {
 
 #[test]
 fn page_text_sections() {
-    // req:effort/capability-page@dd387c2f
+    // req:effort/capability-page@b58d5e60
     let (graph, fold) = flagged();
     let text = BTreeMap::from([("fr".to_string(), "It needed a fake.".to_string())]);
     let report = report(&Inputs {
@@ -365,7 +365,7 @@ fn flag(settled: bool) -> Flag {
 
 #[test]
 fn architecture_list_lines() {
-    // req:effort/architecture-list@a45a68a0
+    // req:effort/architecture-list@ca3bf29e
     let mut e = constraint("e", &[("a/x", true), ("a/y", false)], None);
     e.flags = vec![flag(false)];
     e.flagged = true;
@@ -383,9 +383,43 @@ fn architecture_list_lines() {
     );
 }
 
+/// Entry `e` enforced by `a/x` and `a/y`, from `architecture` run with `current` `None`.
+fn currency_unknown() -> Constraint {
+    let graph = graph(&[("ARCHITECTURE.md", ENFORCED)]);
+    let fold = fold(&[]);
+    let inputs = Inputs {
+        graph: &graph,
+        fold: &fold,
+        history: None,
+        flag_text: &BTreeMap::new(),
+    };
+    let list = architecture(&inputs, None);
+    constraint_of(&list, "e").clone()
+}
+
+#[test]
+fn currency_unknown_in_the_list() {
+    // req:effort/architecture-list@ca3bf29e
+    let e = currency_unknown();
+    let lines = architecture_text(&[e]);
+    assert!(
+        lines[0].starts_with("architecture 1 · 0 held · 0 ⚑"),
+        "{lines:?}"
+    );
+    assert!(lines[1].starts_with("  e  held 0/2  "), "{lines:?}");
+}
+
+#[test]
+fn currency_unknown_on_the_page() {
+    // req:effort/architecture-page@c58defe7
+    let page = constraint_text(&currency_unknown());
+    let held = page.iter().position(|l| l == "is it held?").unwrap();
+    assert_eq!(page[held + 1..held + 3], ["  unknown a/x", "  unknown a/y"]);
+}
+
 #[test]
 fn architecture_page_sections() {
-    // req:effort/architecture-page@8bc35522
+    // req:effort/architecture-page@c58defe7
     let enforced = [("a/x", true), ("a/y", false)];
     let mut e = constraint("e", &enforced, Some("Partly judgement."));
     e.nodes = vec!["a".into()];

@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn numbers_read_as_the_panel_reads_them() {
-        // req:effort/capabilities-list@be270c03
+        // req:effort/capabilities-list@69c2cf88
         let cases = [
             (850.0, "850"),
             (999.6, "1k"),
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn footer_padded_to_a_wide_slug() {
-        // req:effort/capabilities-list@be270c03
+        // req:effort/capabilities-list@69c2cf88
         let report = Report {
             capabilities: vec![cost("a-very-long-capability-slug")],
             ..Report::default()
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn page_without_rules_or_burdens() {
-        // req:effort/capability-page@dd387c2f
+        // req:effort/capability-page@b58d5e60
         let page = page_text(&cost("p"));
         for line in [
             "0 rules · no components",

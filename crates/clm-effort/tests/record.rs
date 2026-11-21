@@ -101,7 +101,7 @@ fn ledger_tip(clone: &Path) -> String {
 
 #[test]
 fn record_appends_one_commit() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -155,7 +155,7 @@ fn record_appends_one_commit() {
 
 #[test]
 fn rerun_appends_nothing() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -174,7 +174,7 @@ fn rerun_appends_nothing() {
 
 #[test]
 fn more_work_appends_again() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -219,7 +219,7 @@ fn more_work_appends_again() {
 
 #[test]
 fn branch_filter() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -254,7 +254,7 @@ fn branch_filter() {
 
 #[test]
 fn linked_worktree_counted() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let linked = dir.path().join("linked");
@@ -406,7 +406,7 @@ fn build_worktree(clone: &Path, branch: &str) -> PathBuf {
 
 #[test]
 fn a_builds_worktree_removed_after_its_record() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let linked = build_worktree(&clone, "impl/a");
@@ -457,7 +457,7 @@ fn held(session: &str, branch: &str) -> clm_ledger::Entry {
 
 #[test]
 fn the_branch_that_sorts_first_pins_a_subagent() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     // Two clones saw each subagent's worktree on different branches; the branch that sorts
     // first pins it, whether its record is the earlier one (`s2`) or the later (`s1`).
     let dir = tempfile::tempdir().unwrap();
@@ -506,7 +506,7 @@ fn the_branch_that_sorts_first_pins_a_subagent() {
 
 #[test]
 fn a_pin_re_recorded() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     // A re-record of `impl/a` moves its `at` past `impl/b`'s, and the pin stays on `impl/a`.
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
@@ -593,7 +593,7 @@ fn a_cwd_inside_a_detached_worktree_is_detached() {
 
 #[test]
 fn a_ledger_that_cant_be_written_exits_2() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -611,7 +611,7 @@ fn a_ledger_that_cant_be_written_exits_2() {
 
 #[test]
 fn outside_a_clm_repository_refused() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let env = env(dir.path(), &[]);
@@ -621,7 +621,7 @@ fn outside_a_clm_repository_refused() {
 
 #[test]
 fn less_seen_never_shrinks() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let elsewhere = dir.path().join("elsewhere");
@@ -658,7 +658,7 @@ fn less_seen_never_shrinks() {
 
 #[test]
 fn claude_config_dir_is_read_first() {
-    // req:effort/record-command@021172fb
+    // req:effort/record-command@7a34e45e
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let config = dir.path().join("config");
