@@ -134,16 +134,19 @@ fn run(
         }
         return Ok(());
     }
-    let all = settings(root, env).map_err(Failed::Settings)?;
-    if let Some(path) = &args.why {
-        for chain in why(root, base, path, &all).map_err(failed)? {
-            line(out, chain);
-        }
-        return Ok(());
-    }
+    // `--overlap` reads each side's settings from its own commit, never the checkout's.
     let selection = match &args.overlap {
-        Some(revs) => affected_overlap(root, &revs[0], &revs[1], &all),
-        None => affected(root, base, &all),
+        Some(revs) => affected_overlap(root, &revs[0], &revs[1], env),
+        None => {
+            let all = settings(root, env).map_err(Failed::Settings)?;
+            if let Some(path) = &args.why {
+                for chain in why(root, base, path, &all).map_err(failed)? {
+                    line(out, chain);
+                }
+                return Ok(());
+            }
+            affected(root, base, &all)
+        }
     };
     match selection.map_err(failed)? {
         Selection::All(path) => line(out, format!("all {path}")),

@@ -239,7 +239,10 @@ fn help_prints_the_description_usage_and_options() {
             "{flag}: {text}"
         );
         assert_eq!(lines[1], "", "{flag}: {text}");
-        assert!(lines[2].starts_with("Usage: clm affected "), "{flag}: {text}");
+        assert!(
+            lines[2].starts_with("Usage: clm affected "),
+            "{flag}: {text}"
+        );
         for option in ["--base", "--root", "--readers", "--overlap", "--why"] {
             assert!(text.contains(option), "{flag}: {option}: {text}");
         }
@@ -351,7 +354,6 @@ fn a_callers_settings_failure_is_written_as_given_whatever_the_question() {
             "--why",
             "crates/a/src/lib.rs",
         ],
-        vec!["--overlap", "main", "work", "--root", path],
     ] {
         let (mut out, mut err) = (Vec::new(), Vec::new());
         let status = clm_affected::command(
@@ -370,6 +372,19 @@ fn a_callers_settings_failure_is_written_as_given_whatever_the_question() {
             "{args:?}"
         );
     }
+    // `--overlap` reads each side's settings from its commit, so the caller's loader isn't
+    // called and its failure stops nothing.
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let status = clm_affected::command(
+        ["--overlap", "main", "work", "--root", path],
+        root,
+        &|_| None,
+        &failing,
+        &mut out,
+        &mut err,
+    );
+    assert_eq!(status, 0, "{}", String::from_utf8_lossy(&err));
+    assert_eq!(String::from_utf8_lossy(&err), "");
 }
 
 #[test]
@@ -844,10 +859,22 @@ fn clm_affected_args(root: &Path, args: &[&str]) -> Output {
 /// `c` on `c_needs` with a test `crates/c/tests/t.rs`, and a reader of `specs/**` in `a`;
 /// `x` and `y` are branches off it that each hold one commit, written by the two closures.
 fn overlap_repo(clm_toml: &str, c_needs: &str, x: &dyn Fn(&Path), y: &dyn Fn(&Path)) -> TempDir {
+    overlap_repo_holding(Some(clm_toml), c_needs, x, y)
+}
+
+/// `overlap_repo`, with `main` holding no `clm.toml` when `clm_toml` is none.
+fn overlap_repo_holding(
+    clm_toml: Option<&str>,
+    c_needs: &str,
+    x: &dyn Fn(&Path),
+    y: &dyn Fn(&Path),
+) -> TempDir {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     git(root, &["init", "-q", "-b", "main"]);
-    write(root, "clm.toml", clm_toml);
+    if let Some(text) = clm_toml {
+        write(root, "clm.toml", text);
+    }
     write(
         root,
         "specs/SPEC.md",
@@ -882,7 +909,7 @@ fn touch(root: &Path, rel: &str) {
 
 #[test]
 fn a_rename_on_one_side_counts_as_its_old_path_and_its_new_one() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     // `x` moves `b`'s file into `a`, unchanged, which git would read as a rename.
     let dir = overlap_repo(
         "",
@@ -910,7 +937,7 @@ fn a_rename_on_one_side_counts_as_its_old_path_and_its_new_one() {
 
 #[test]
 fn independent_changes_overlap_in_nothing() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo("", "[]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -921,7 +948,7 @@ fn independent_changes_overlap_in_nothing() {
 
 #[test]
 fn a_dependant_of_both_is_what_they_share() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     // req:check.affected/clm-root-paths@de45727f
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
@@ -936,7 +963,7 @@ fn a_dependant_of_both_is_what_they_share() {
 
 #[test]
 fn a_side_that_selects_everything_leaves_the_others_output() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo(
         "[affected]\nall = [\"Cargo.lock\"]\n",
         "[a, b]",
@@ -957,7 +984,7 @@ fn a_side_that_selects_everything_leaves_the_others_output() {
 
 #[test]
 fn a_reader_on_one_side_meets_its_owner_on_the_other() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo(
         "",
         "[]",
@@ -982,7 +1009,7 @@ fn a_reader_on_one_side_meets_its_owner_on_the_other() {
 
 #[test]
 fn overlap_takes_no_working_tree_or_untracked_file() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -998,7 +1025,7 @@ fn overlap_takes_no_working_tree_or_untracked_file() {
 
 #[test]
 fn overlap_refuses_flags_that_dont_combine() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
     for flag in [&["--readers"][..], &["--why", "p"], &["--base", "main"]] {
         let mut args = vec!["--overlap", "x", "y"];
@@ -1014,7 +1041,7 @@ fn overlap_refuses_flags_that_dont_combine() {
 
 #[test]
 fn overlap_names_a_revision_that_is_no_commit_and_commits_with_no_base() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
     let root = dir.path();
     let out = clm_affected_args(root, &["--overlap", "x", "nope"]);
@@ -1037,7 +1064,7 @@ fn overlap_names_a_revision_that_is_no_commit_and_commits_with_no_base() {
 
 #[test]
 fn overlap_has_no_file_line_for_a_deleted_file() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo(
         "",
         "[]",
@@ -1051,7 +1078,7 @@ fn overlap_has_no_file_line_for_a_deleted_file() {
 
 #[test]
 fn overlap_with_shared_components_but_no_shared_file_prints_nothing() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo(
         "",
         "[]",
@@ -1063,9 +1090,130 @@ fn overlap_with_shared_components_but_no_shared_file_prints_nothing() {
     assert_eq!(stdout(&out), "");
 }
 
+/// Writes components `e` and `f`, each depending on the other.
+fn cycle(root: &Path) {
+    write(root, "specs/e/SPEC.md", &spec("[\"crates/e/**\"]", "[f]"));
+    write(root, "specs/f/SPEC.md", &spec("[\"crates/f/**\"]", "[e]"));
+}
+
+#[test]
+fn a_side_whose_graph_cant_be_loaded_is_refused_whatever_is_checked_out() {
+    // req:check.affected/overlap-selection@8fd7fe1a
+    let dir = overlap_repo("", "[]", &|r| touch(r, "crates/a/src/lib.rs"), &cycle);
+    let root = dir.path();
+    git(root, &["switch", "-q", "x"]);
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.starts_with("clm affected: "), "{err}");
+    assert!(err.contains("dependency cycle"), "{err}");
+    assert_eq!(stdout(&out), "");
+    // The checkout's graph, with its cycle, is never read.
+    git(root, &["switch", "-q", "y"]);
+    let out = clm_affected_args(root, &["--overlap", "x", "x"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+}
+
+#[test]
+fn a_link_to_a_file_counts_on_both_sides_as_with_a_checkout() {
+    // req:check.affected/overlap-selection@8fd7fe1a
+    let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
+    let root = dir.path();
+    git(root, &["switch", "-q", "main"]);
+    std::os::unix::fs::symlink("lib.rs", root.join("crates/b/src/link.rs")).unwrap();
+    commit_all(root, "link");
+    git(root, &["switch", "-q", "-C", "x", "main"]);
+    touch(root, "crates/b/src/lib.rs");
+    commit_all(root, "x");
+    git(root, &["switch", "-q", "-C", "y", "main"]);
+    touch(root, "crates/b/src/new.rs");
+    commit_all(root, "y");
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node b\nfile crates/b/src/lib.rs\nfile crates/b/src/link.rs\n"
+    );
+    git(root, &["switch", "-q", "x"]);
+    let alone = clm_affected_args(root, &["--base", "main"]);
+    assert_eq!(stdout(&out), stdout(&alone));
+}
+
+/// The commits of `a_side_that_selects_everything_leaves_the_others_output`, each holding the
+/// `clm.toml` given for it, or none: `m` (`main`), then `x` changing `Cargo.lock` and `y`
+/// changing `crates/b/src/lib.rs`, with `cycle` written on `y` when `y_cycle`. `y` is
+/// checked out.
+fn settings_repo(m: Option<&str>, x: Option<&str>, y: Option<&str>, y_cycle: bool) -> TempDir {
+    let toml = |r: &Path, text: Option<&str>| {
+        if let Some(text) = text {
+            write(r, "clm.toml", text);
+        }
+    };
+    overlap_repo_holding(
+        m,
+        "[a, b]",
+        &|r| {
+            write(r, "Cargo.lock", "lock 2\n");
+            toml(r, x);
+        },
+        &|r| {
+            touch(r, "crates/b/src/lib.rs");
+            toml(r, y);
+            if y_cycle {
+                cycle(r);
+            }
+        },
+    )
+}
+
+#[test]
+fn each_side_takes_the_settings_its_own_commit_holds() {
+    // req:check.affected/overlap-selection@8fd7fe1a
+    let globs = "[affected]\nall = [\"Cargo.lock\"]\n";
+    let not_toml = "this is [not toml\n";
+
+    // (1) No commit holds a `clm.toml`; the working tree's untracked one isn't read.
+    let dir = settings_repo(None, None, None, false);
+    let root = dir.path();
+    write(root, "clm.toml", globs);
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "");
+
+    // (2) `m` commits the globs; the working tree's `clm.toml` holds no `[affected]`.
+    let dir = settings_repo(Some(globs), None, None, false);
+    let root = dir.path();
+    write(root, "clm.toml", "");
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    git(root, &["checkout", "-q", "--", "clm.toml"]);
+    let alone = clm_affected_args(root, &["--base", "main"]);
+    assert!(stdout(&alone).starts_with("node b\n"), "{alone:?}");
+    assert_eq!(stdout(&out), stdout(&alone));
+
+    // (3) `y` also commits a `clm.toml` that isn't TOML; the working tree's can't load either.
+    let dir = settings_repo(Some(globs), None, Some(not_toml), false);
+    let root = dir.path();
+    write(root, "clm.toml", "[affected]\nall = 3\n");
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.starts_with("clm affected: y:clm.toml: "), "{err}");
+    assert_eq!(stdout(&out), "");
+
+    // (4) `x` too, and `y`'s graph can't be loaded: side `x`'s settings are refused first.
+    let dir = settings_repo(Some(globs), Some(not_toml), Some(not_toml), true);
+    let root = dir.path();
+    write(root, "clm.toml", "[affected]\nall = 3\n");
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.starts_with("clm affected: x:clm.toml: "), "{err}");
+}
+
 #[test]
 fn overlap_reads_the_graph_whole_from_the_commits() {
-    // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/overlap-selection@8fd7fe1a
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -1158,7 +1306,10 @@ fn an_exempt_test_whose_owner_is_affected_is_explained_by_its_exemption() {
     commit_all(root, "lib");
     let out = clm_affected_with(root, "main", &["--why", "app/tests/t.rs"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
-    assert_eq!(stdout(&out), "app/tests/t.rs exempt from undeclared-imports\n");
+    assert_eq!(
+        stdout(&out),
+        "app/tests/t.rs exempt from undeclared-imports\n"
+    );
 }
 
 /// A repository on `main` whose CLM root is `sub/`: a root component and `a` owning
