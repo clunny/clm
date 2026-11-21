@@ -84,3 +84,17 @@ pub fn env<'a>(
             .map(|(_, v)| v.to_string()),
     }
 }
+
+/// A directory holding only a link to the `git` on `PATH`: as `PATH`, it finds `git` and no
+/// `ssh-keygen`.
+#[cfg(unix)]
+pub fn git_alone() -> tempfile::TempDir {
+    let path = std::env::var_os("PATH").unwrap();
+    let git = std::env::split_paths(&path)
+        .map(|dir| dir.join("git"))
+        .find(|git| git.is_file())
+        .expect("git on PATH");
+    let dir = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(git, dir.path().join("git")).unwrap();
+    dir
+}

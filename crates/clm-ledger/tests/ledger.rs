@@ -602,7 +602,7 @@ fn record_land(dir: &Path, commit: &str) {
 
 #[test]
 fn verify_clean_history() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     // The first land written before `landed` records named their code key: its key is
@@ -618,7 +618,7 @@ fn verify_clean_history() {
 
 #[test]
 fn verify_reads_the_recorded_key() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
@@ -630,7 +630,7 @@ fn verify_reads_the_recorded_key() {
 
 #[test]
 fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0"]);
     let vars = env(dir.path(), &[]);
@@ -654,7 +654,7 @@ fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
 
 #[test]
 fn verify_reports_a_push_behind_clms_back() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);
@@ -675,7 +675,7 @@ fn verify_reports_a_push_behind_clms_back() {
 
 #[test]
 fn verify_starts_from_the_first_land() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     // Merges from before the ledger existed aren't reported.
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
@@ -686,7 +686,7 @@ fn verify_starts_from_the_first_land() {
 
 #[test]
 fn verify_reports_a_direct_push() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     record_land(dir.path(), &merges[0]);
@@ -708,7 +708,7 @@ fn verify_reports_a_direct_push() {
 
 #[test]
 fn verify_exempts_releases() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     // A release merge, and a version bump that fast-forwarded onto `main`.
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Release v0.9.0"]);
@@ -719,8 +719,73 @@ fn verify_exempts_releases() {
 }
 
 #[test]
+fn verify_where_the_audit_starts() {
+    // req:ledger/verify@9fb2cb6b
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let merges = history(root, &["Merge m0", "Merge m1"]);
+    let (m0, m1) = (&merges[0], &merges[1]);
+    let vars = env(root, &[]);
+    append(root, landed(m1, "f", Some("k")), &vars).unwrap();
+    let (code, out, err) = clm(root, root, &["ledger", "verify"]);
+    assert_eq!(code, Some(1), "{err}");
+    assert_eq!(
+        out,
+        format!(
+            "main: ledger/unchecked-land: landed {m1}: no `checked` record names its code key k\n"
+        )
+    );
+    assert!(!out.contains(m0.as_str()), "{out}");
+    append(root, checked("k"), &vars).unwrap();
+    let p = commit(root, &[("src/hotfix.rs", "x\n")], "hotfix");
+    let (code, out, err) = clm(root, root, &["ledger", "verify"]);
+    assert_eq!(code, Some(1), "{err}");
+    assert_eq!(
+        out,
+        format!(
+            "main: ledger/unrecorded-land: commit {p} (hotfix) has no `landed` record: it is on \
+             main without `clm land`\n"
+        )
+    );
+    // A `main` whose ledger's only `landed` record names a commit not on its chain.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    history(root, &["Merge m0"]);
+    let vars = env(root, &[]);
+    append(root, checked("k"), &vars).unwrap();
+    let elsewhere = "0123456789abcdef0123456789abcdef01234567";
+    append(root, landed(elsewhere, "f", Some("k")), &vars).unwrap();
+    let (code, out, err) = clm(root, root, &["ledger", "verify"]);
+    assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
+}
+
+#[cfg(unix)]
+#[test]
+fn verify_an_audit_that_cannot_run() {
+    // req:ledger/verify@9fb2cb6b
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let s = signed_main(root, "Christopher Lunny");
+    let land = hard_land(root, &s.merge, &s.fingerprint);
+    append_signed(root, "christopher-lunny", &s.christopher, "clm-land", land);
+    let git = common::git_alone();
+    let mut vars = isolated(root).to_vec();
+    vars.push(("PATH", Some(git.path().as_os_str())));
+    let found = with_vars(&vars, || clm_ledger::on_main(root));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].path, Path::new("main"), "{found:?}");
+    assert_eq!(found[0].rule, "ledger/verify", "{found:?}");
+    assert!(
+        found[0]
+            .message
+            .starts_with("can't audit main against the ledger: "),
+        "{found:?}"
+    );
+}
+
+#[test]
 fn verify_findings_offered_to_the_check_on_main_only() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     let vars = isolated(dir.path());
@@ -741,7 +806,7 @@ fn verify_findings_offered_to_the_check_on_main_only() {
 
 #[test]
 fn verify_reports_a_land_no_check_names() {
-    // req:ledger/verify@0a969f83
+    // req:ledger/verify@9fb2cb6b
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);

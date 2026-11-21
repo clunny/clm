@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use clm_ledger::Body;
-use common::{clone_with_origin, commit, env, repo, sh};
+use common::{clone_with_origin, commit, env, git_alone, repo, sh};
 use serde_json::{Map, Value};
 
 fn approved(fingerprint: &str) -> Body {
@@ -353,10 +353,9 @@ fn wrong_namespace_or_unsigned() {
     assert!(!clm_ledger::signed_by(root, &s.with, &line, "clm-approve").unwrap());
 }
 
-/// Runs `run` with `PATH` holding only `git`, so no `ssh-keygen` is found, and `name` set to
-/// `value` on the process: the tools `clm-ledger` starts inherit both. Tests run one per
-/// process (`ci/nextest-runner`), so no other test sees them; the old values come back when
-/// `run` returns or panics.
+/// Runs `run` with each of `vars` set on the process, which the tools `clm-ledger` starts
+/// inherit. Tests run one per process (`ci/nextest-runner`), so no other test sees them; the
+/// old values come back when `run` returns or panics.
 fn on_the_process<R>(vars: &[(&str, &std::ffi::OsStr)], run: impl FnOnce() -> R) -> R {
     struct Restore(Vec<(String, Option<std::ffi::OsString>)>);
     impl Drop for Restore {
@@ -381,18 +380,6 @@ fn on_the_process<R>(vars: &[(&str, &std::ffi::OsStr)], run: impl FnOnce() -> R)
         unsafe { std::env::set_var(name, value) };
     }
     run()
-}
-
-/// A directory holding only a link to the `git` on `PATH`.
-fn git_alone() -> tempfile::TempDir {
-    let path = std::env::var_os("PATH").unwrap();
-    let git = std::env::split_paths(&path)
-        .map(|dir| dir.join("git"))
-        .find(|git| git.is_file())
-        .expect("git on PATH");
-    let dir = tempfile::tempdir().unwrap();
-    std::os::unix::fs::symlink(git, dir.path().join("git")).unwrap();
-    dir
 }
 
 /// An `ssh-agent` serving a socket of its own until dropped.
@@ -449,6 +436,7 @@ impl Drop for Agent {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn signing_refused() {
     // req:ledger/record-signing@13840103
@@ -511,6 +499,7 @@ fn signing_refused() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn no_tool() {
     // req:ledger/signature-check@5f3c7856
