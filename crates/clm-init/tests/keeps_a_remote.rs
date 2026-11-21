@@ -35,7 +35,7 @@ fn bare_path(dir: &Path) -> PathBuf {
 
 #[test]
 fn empty_repository_with_no_remote() {
-    // req:init/init-keeps-a-remote@c228f421
+    // req:init/init-keeps-a-remote@c652d628
     let dir = repo();
     let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     let toml = std::fs::read_to_string(dir.path().join("clm.toml")).unwrap();
@@ -49,7 +49,7 @@ fn empty_repository_with_no_remote() {
 
 #[test]
 fn a_kept_clm_toml_decides_the_host() {
-    // req:init/init-keeps-a-remote@c228f421
+    // req:init/init-keeps-a-remote@c652d628
     let dir = repo();
     std::fs::write(dir.path().join("clm.toml"), "host = \"git\"\n").unwrap();
     init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
@@ -59,7 +59,7 @@ fn a_kept_clm_toml_decides_the_host() {
 
 #[test]
 fn a_remote_already_there() {
-    // req:init/init-keeps-a-remote@c228f421
+    // req:init/init-keeps-a-remote@c652d628
     let dir = repo();
     git(
         dir.path(),
@@ -80,4 +80,33 @@ fn a_remote_already_there() {
     init(other.path(), &opts, &clm_config::process_env).unwrap();
     assert!(git(other.path(), &["remote"]).is_empty());
     assert!(!bare_path(other.path()).exists());
+}
+
+#[test]
+fn the_line_it_prints_and_a_failure() {
+    // req:init/init-keeps-a-remote@c652d628
+    let dir = repo();
+    let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
+    let line = format!(
+        "created remote origin at {}",
+        bare_path(dir.path()).display()
+    );
+    let lines: Vec<&str> = out.lines().collect();
+    let at = lines.iter().position(|l| *l == line).expect(&line);
+    let steps = lines
+        .iter()
+        .position(|l| *l == "Next steps (yours):")
+        .unwrap();
+    assert!(at < steps, "{out}");
+
+    // `clm` under the common git directory is a file: the remote can't be made.
+    let dir = repo();
+    std::fs::write(bare_path(dir.path()).parent().unwrap(), "x").unwrap();
+    let err = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap_err();
+    let expected = match clm_host::keep_remote(dir.path(), Host::None).unwrap_err() {
+        clm_host::Error::Refused(m) | clm_host::Error::Nowhere(m) | clm_host::Error::Git(m) => m,
+    };
+    assert_eq!(err, expected);
+    assert!(git(dir.path(), &["remote"]).is_empty());
+    assert!(dir.path().join("clm.toml").is_file());
 }

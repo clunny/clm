@@ -1,102 +1,19 @@
-//! The text `clm-init` prints and writes says component, never the old words
-//! (`component-words`).
+//! The messages `clm survey --components` prints and the files `clm init` writes say
+//! component, never the old words (`component-words`).
 //!
-//! It reads CLM's own `ARCHITECTURE.md`, so it holds the marker that selects it when that file
-//! changes (`doc-readers-marked`):
+//! None of its tests reads CLM's own `ARCHITECTURE.md` any more, but the root's
+//! `doc_readers.rs` names this file as a reader of it, so it keeps the marker (init's Design):
 //!
 //! clm:reads ARCHITECTURE.md
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use clm_init::{Options, check_nodes, init};
 use tempfile::TempDir;
 
-/// String literals of Rust source `src`, as (1-based line, text), skipping comments and
-/// character literals. Raw strings are read up to their closing quote and hashes.
-fn literals(src: &str) -> Vec<(usize, String)> {
-    let b: Vec<char> = src.chars().collect();
-    let (mut i, mut line, mut out) = (0, 1, Vec::new());
-    while i < b.len() {
-        let c = b[i];
-        if c == '\n' {
-            line += 1;
-        }
-        if c == '/' && b.get(i + 1) == Some(&'/') {
-            while i < b.len() && b[i] != '\n' {
-                i += 1;
-            }
-            continue;
-        }
-        if c == '/' && b.get(i + 1) == Some(&'*') {
-            while i + 1 < b.len() && !(b[i] == '*' && b[i + 1] == '/') {
-                if b[i] == '\n' {
-                    line += 1;
-                }
-                i += 1;
-            }
-            i += 2;
-            continue;
-        }
-        if c == '\'' {
-            // A char literal ('x', '\n', '"') or a lifetime.
-            if b.get(i + 1) == Some(&'\\') {
-                i += 3;
-                while i < b.len() && b[i] != '\'' {
-                    i += 1;
-                }
-                i += 1;
-            } else if b.get(i + 2) == Some(&'\'') {
-                i += 3;
-            } else {
-                i += 1;
-            }
-            continue;
-        }
-        let raw = c == 'r' && matches!(b.get(i + 1), Some('"' | '#'));
-        if c == '"' || raw {
-            let mut j = i + usize::from(raw);
-            let mut hashes = 0;
-            while raw && b.get(j) == Some(&'#') {
-                hashes += 1;
-                j += 1;
-            }
-            if b.get(j) != Some(&'"') {
-                i += 1;
-                continue;
-            }
-            j += 1;
-            let (start, mut text) = (line, String::new());
-            while let Some(&d) = b.get(j) {
-                if d == '\n' {
-                    line += 1;
-                }
-                if !raw && d == '\\' {
-                    text.push(d);
-                    if let Some(&e) = b.get(j + 1) {
-                        text.push(e);
-                        if e == '\n' {
-                            line += 1;
-                        }
-                    }
-                    j += 2;
-                    continue;
-                }
-                if d == '"' && (0..hashes).all(|k| b.get(j + 1 + k) == Some(&'#')) {
-                    j += 1 + hashes;
-                    break;
-                }
-                text.push(d);
-                j += 1;
-            }
-            out.push((start, text));
-            i = j;
-            continue;
-        }
-        i += 1;
-    }
-    out
-}
+mod common;
+use common::written_files;
 
 /// The old words of `text` (`node`, `nodes`, `spine`, `frontier stub`, in any case) standing as words of their own:
 /// no letter, digit or `_` beside them, not joined to an ID, path or key by `-`, `/`, `.`
@@ -148,45 +65,6 @@ fn old_words(text: &str) -> Vec<String> {
     found
 }
 
-/// `file:line: word` for each old word in the string literals of `files` (path, text).
-fn gaps(files: &[(String, String)]) -> Vec<String> {
-    let mut out = Vec::new();
-    for (path, text) in files {
-        let lines: Vec<&str> = text.lines().collect();
-        for (line, lit) in literals(text) {
-            let exempt = lines
-                .get(line - 1)
-                .is_some_and(|l| l.contains(concat!("clm:remove", "-by")));
-            if exempt {
-                continue;
-            }
-            // A message that names the map's old key to say it is retired keeps it.
-            if lit.contains("is retired") {
-                continue;
-            }
-            for w in old_words(&lit) {
-                out.push(format!("{path}:{line}: {w}"));
-            }
-        }
-    }
-    out
-}
-
-fn files_under(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
-    let mut entries: Vec<_> = fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
-    entries.sort();
-    for p in entries {
-        if p.is_dir() {
-            files_under(&p, ext, out);
-        } else if p.extension().is_some_and(|e| e == ext) {
-            out.push(p);
-        }
-    }
-}
-
 /// `file:line: word` for each old word in the templates, read whole line by line.
 fn template_gaps(files: &[(String, String)]) -> Vec<String> {
     let mut out = Vec::new();
@@ -203,22 +81,6 @@ fn template_gaps(files: &[(String, String)]) -> Vec<String> {
     out
 }
 
-fn read(dir: &str, ext: &str) -> Vec<(String, String)> {
-    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut files = Vec::new();
-    files_under(&crate_dir.join(dir), ext, &mut files);
-    files
-        .into_iter()
-        .map(|p| {
-            let rel = p.strip_prefix(crate_dir).unwrap().display().to_string();
-            (
-                format!("crates/clm-init/{rel}"),
-                fs::read_to_string(&p).unwrap(),
-            )
-        })
-        .collect()
-}
-
 fn repo() -> TempDir {
     let dir = TempDir::new().unwrap();
     clm_git::git(dir.path(), &["init", "-q"]).unwrap();
@@ -226,37 +88,15 @@ fn repo() -> TempDir {
 }
 
 #[test]
-fn init_text_says_component() {
-    // req:init/says-component@c8e61ff0
-    let sources = read("src", "rs");
-    let templates = read("templates", "md");
-    assert!(!sources.is_empty() && !templates.is_empty());
-    assert_eq!(gaps(&sources), Vec::<String>::new());
-    assert_eq!(template_gaps(&templates), Vec::<String>::new());
-    // The scanner names the file, line and word, and lets IDs, placeholders and exempt
-    // lines through.
-    let fixture = |src: &str| vec![("f.rs".to_string(), src.to_string())];
-    assert_eq!(
-        gaps(&fixture("fn f() {\n let _ = \"a Node `x`\";\n}")),
-        ["f.rs:2: node"]
-    );
-    assert_eq!(
-        template_gaps(&[("t.md".into(), "ok\nthe spine here\n".into())]),
-        ["t.md:2: spine"]
-    );
-    for ok in [
-        "let _ = \"node-reconciliation {node}\";",
-        &format!("let _ = \"a node\"; // {}", concat!("clm:remove", "-by x")),
-    ] {
-        assert_eq!(gaps(&fixture(ok)), Vec::<String>::new(), "{ok}");
-    }
-}
-
-#[test]
 fn a_new_repository_says_component() {
-    // req:init/says-component@c8e61ff0
+    // req:init/says-component@ea3e27f2
     let dir = repo();
-    init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
+    let opts = Options {
+        langs: ["rust", "typescript", "python"].map(String::from).to_vec(),
+        detectors: true,
+        host: None,
+    };
+    init(dir.path(), &opts, &clm_config::process_env).unwrap();
     let claude = fs::read_to_string(dir.path().join("AGENTS.md")).unwrap();
     assert!(claude.contains("<component-id>/<slug>"), "{claude}");
     let spec = fs::read_to_string(dir.path().join("specs/SPEC.md")).unwrap();
@@ -264,23 +104,26 @@ fn a_new_repository_says_component() {
         spec.contains("How ") && spec.contains(" is split into components."),
         "{spec}"
     );
-    for file in [
-        "AGENTS.md",
-        "ARCHITECTURE.md",
-        "CAPABILITIES.md",
-        "specs/SPEC.md",
-    ] {
-        let text = fs::read_to_string(dir.path().join(file)).unwrap();
-        assert_eq!(
-            template_gaps(&[(file.to_string(), text)]),
-            Vec::<String>::new()
-        );
-    }
+    let written = written_files(dir.path());
+    assert!(written.len() >= 9, "{written:?}");
+    assert_eq!(template_gaps(&written), Vec::<String>::new());
+    // The scanner names the file, line and word, and lets IDs and placeholders through.
+    assert_eq!(
+        template_gaps(&[("t.md".into(), "ok\nthe spine here, a Node\n".into())]),
+        ["t.md:2: spine", "t.md:2: node"]
+    );
+    assert_eq!(
+        template_gaps(&[(
+            "t.md".into(),
+            "node-reconciliation {node} a/nodes x\n".into()
+        )]),
+        Vec::<String>::new()
+    );
 }
 
 #[test]
 fn a_duplicate_in_the_map() {
-    // req:init/says-component@c8e61ff0
+    // req:init/says-component@ea3e27f2
     let dir = repo();
     let map = "components:\n  - { id: a, paths: [] }\n  - { id: a, paths: [] }\n";
     let found = check_nodes(dir.path(), Path::new("map.yaml"), map).unwrap();

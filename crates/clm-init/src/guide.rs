@@ -121,8 +121,8 @@ mod tests {
 
     #[test]
     fn every_page_is_compiled_in() {
-        // req:init/guide-command@088ebe45
-        // req:init/guide-table-from-files@5c6bd405
+        // req:init/guide-command@5a6d8da9
+        // req:init/guide-table-from-files@fa1b0e6f
         let mut missing = Vec::new();
         for entry in std::fs::read_dir(guide_dir()).unwrap() {
             let file = entry.unwrap().file_name().to_string_lossy().into_owned();
@@ -137,43 +137,29 @@ mod tests {
     }
 
     #[test]
-    fn no_page_named_in_source() {
-        // req:init/guide-table-from-files@5c6bd405
-        // Built from parts so this file doesn't match itself.
-        let needle = concat!("docs/", "guide/");
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut named = Vec::new();
-        let mut dirs = vec![src];
-        while let Some(dir) = dirs.pop() {
-            for entry in std::fs::read_dir(dir).unwrap() {
-                let path = entry.unwrap().path();
-                if path.is_dir() {
-                    dirs.push(path);
-                } else if std::fs::read_to_string(&path)
-                    .unwrap()
-                    .lines()
-                    .any(|l| l.contains("include_str!") && l.contains(needle))
-                {
-                    named.push(path);
-                }
-            }
-        }
-        assert!(named.is_empty(), "a guide page named by hand in {named:?}");
-    }
-
-    #[test]
     fn pages_in_the_index_order() {
-        // req:init/guide-command@088ebe45
-        // req:init/guide-table-from-files@5c6bd405
-        // `README.md`'s numbered list: lines `<n>. [Title](file.md)...`.
+        // req:init/guide-command@5a6d8da9
+        // req:init/guide-table-from-files@fa1b0e6f
+        // `README.md`'s links, each page at its first `](<name>.md)` or `](<name>.md#...)`.
         let readme = std::fs::read_to_string(guide_dir().join("README.md")).unwrap();
         let listed: Vec<&str> = readme
-            .lines()
-            .filter(|l| {
-                l.split_once(". ")
-                    .is_some_and(|(n, _)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+            .split("](")
+            .skip(1)
+            .filter_map(|rest| {
+                let end = rest
+                    .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+                    .unwrap_or(rest.len());
+                let (name, after) = rest.split_at(end);
+                let after = after.strip_prefix(".md")?;
+                (!name.is_empty()
+                    && (after.starts_with(')')
+                        || after.strip_prefix('#').is_some_and(|a| {
+                            a.find(|c: char| c.is_whitespace() || "()[]".contains(c))
+                                .is_some_and(|i| a[i..].starts_with(')'))
+                        })))
+                .then_some(name)
             })
-            .filter_map(|l| l.split_once("](")?.1.split_once(".md").map(|(f, _)| f))
+            .filter(|name| *name != "README" && PAGES.iter().any(|(n, _)| n == name))
             .fold(Vec::new(), |mut seen, name| {
                 if !seen.contains(&name) {
                     seen.push(name);
@@ -183,7 +169,7 @@ mod tests {
         let names: Vec<&str> = PAGES.iter().map(|(n, _)| *n).collect();
         assert_eq!(names[0], "index");
         assert_eq!(names[1..=listed.len()], listed[..], "{readme}");
-        // Pages the list doesn't name come after it, by name, before `spec-format`.
+        // Pages `README.md` doesn't link come after them, by name, before `spec-format`.
         assert!(
             names[listed.len() + 1..names.len() - 1].is_sorted(),
             "{names:?}"
@@ -193,7 +179,7 @@ mod tests {
 
     #[test]
     fn pages_as_written() {
-        // req:init/guide-command@088ebe45
+        // req:init/guide-command@5a6d8da9
         for (name, markdown) in PAGES {
             let text = file_text(name);
             assert_eq!(guide(Some(name)).unwrap(), text, "{name}");
@@ -227,7 +213,7 @@ mod tests {
 
     #[test]
     fn index_lines() {
-        // req:init/guide-command@088ebe45
+        // req:init/guide-command@5a6d8da9
         let index = guide(None).unwrap();
         assert!(index.starts_with("index  CLM guide\n"), "{index}");
         assert!(

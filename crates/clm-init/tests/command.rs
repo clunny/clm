@@ -35,7 +35,7 @@ fn run(cwd: &Path, args: &[&str]) -> (u8, String, String) {
 
 #[test]
 fn init_writes_what_it_prints_to_the_buffers() {
-    // req:init/commands-in-crate@646de73d
+    // req:init/commands-in-crate@a3067317
     let tmp = TempDir::new().unwrap();
     git(tmp.path(), &["init", "-q", "-b", "main"]);
     let (code, out, err) = run(tmp.path(), &["init", "--lang", "rust"]);
@@ -57,7 +57,7 @@ fn init_writes_what_it_prints_to_the_buffers() {
 
 #[test]
 fn an_option_init_does_not_have() {
-    // req:init/commands-in-crate@646de73d
+    // req:init/commands-in-crate@a3067317
     let tmp = TempDir::new().unwrap();
     let (code, out, err) = run(tmp.path(), &["init", "--no-such-option"]);
     assert_eq!((code, out.as_str()), (2, ""), "{err}");
@@ -76,7 +76,7 @@ fn an_option_init_does_not_have() {
 
 #[test]
 fn survey_and_guide_refuse_what_they_do_not_have() {
-    // req:init/commands-in-crate@646de73d
+    // req:init/commands-in-crate@a3067317
     let tmp = TempDir::new().unwrap();
     let (code, out, err) = run(tmp.path(), &["survey", "--nope"]);
     assert_eq!((code, out.as_str()), (2, ""), "{err}");
@@ -88,7 +88,7 @@ fn survey_and_guide_refuse_what_they_do_not_have() {
 
 #[test]
 fn survey_writes_its_map_and_its_error_with_the_prefix() {
-    // req:init/commands-in-crate@646de73d
+    // req:init/commands-in-crate@a3067317
     let tmp = TempDir::new().unwrap();
     git(tmp.path(), &["init", "-q", "-b", "main"]);
     std::fs::write(tmp.path().join("a.rs"), "fn a() {}\n").unwrap();
@@ -103,7 +103,7 @@ fn survey_writes_its_map_and_its_error_with_the_prefix() {
 
 #[test]
 fn guide_writes_the_page_or_the_unknown_page_error() {
-    // req:init/commands-in-crate@646de73d
+    // req:init/commands-in-crate@a3067317
     let tmp = TempDir::new().unwrap();
     let (code, out, err) = run(tmp.path(), &["guide", "constraints"]);
     assert_eq!((code, err.as_str()), (0, ""));
@@ -115,7 +115,7 @@ fn guide_writes_the_page_or_the_unknown_page_error() {
 
 #[test]
 fn survey_maps_the_root_it_is_given_or_its_root_option() {
-    // req:init/commands-in-crate@646de73d
+    // req:init/commands-in-crate@a3067317
     let tmp = TempDir::new().unwrap();
     let repo = tmp.path().join("repo");
     std::fs::create_dir_all(repo.join("tool/src")).unwrap();
@@ -144,4 +144,70 @@ fn survey_maps_the_root_it_is_given_or_its_root_option() {
     assert!(!found.contains("tool/src"), "{found}");
     // `--root`, relative to the directory it runs in, overrides the root it is given.
     assert_eq!(map(&repo, Some(&repo), &["--root", "tool"]), found);
+}
+
+#[test]
+fn help_asked_of_each_call() {
+    // req:init/commands-in-crate@a3067317
+    let tmp = TempDir::new().unwrap();
+    let helps = [
+        (
+            "init",
+            "Set up CLM's tooling in the CLM repository found from the current directory, or at the top of the git repository when there is none, and print the steps only a human can do",
+            "Usage: clm init [OPTIONS]",
+        ),
+        (
+            "survey",
+            "Print a compact map of the repository's code, for drafting its spec graph",
+            "Usage: clm survey [OPTIONS]",
+        ),
+        (
+            "guide",
+            "Print CLM's guide: with no page, the index of its pages; with one, that page",
+            "Usage: clm guide [PAGE]",
+        ),
+    ];
+    for (command, about, usage) in helps {
+        let (code, out, err) = run(tmp.path(), &[command, "--help"]);
+        assert_eq!((code, err.as_str()), (0, ""), "{command}: {out}");
+        let first: Vec<&str> = out.lines().take(3).collect();
+        assert_eq!(first, [about, "", usage], "{command}: {out}");
+    }
+}
+
+/// An output stream that refuses every write.
+struct Closed;
+
+impl std::io::Write for Closed {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::ErrorKind::BrokenPipe.into())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::ErrorKind::BrokenPipe.into())
+    }
+}
+
+#[test]
+fn a_closed_output_stream() {
+    // req:init/commands-in-crate@a3067317
+    let tmp = TempDir::new().unwrap();
+    git(tmp.path(), &["init", "-q", "-b", "main"]);
+    std::fs::write(tmp.path().join("a.rs"), "fn a() {}\n").unwrap();
+    git(tmp.path(), &["add", "a.rs"]);
+    let env = |_: &str| None;
+    let none: [&str; 0] = [];
+    let mut err = Vec::new();
+    let init = clm_init::init_command(
+        ["--host", "git"],
+        None,
+        tmp.path(),
+        &env,
+        &mut Closed,
+        &mut err,
+    );
+    assert_eq!(init, 2, "{}", String::from_utf8_lossy(&err));
+    assert!(tmp.path().join("clm.toml").is_file());
+    let survey = clm_init::survey_command(none, None, tmp.path(), &env, &mut Closed, &mut err);
+    let guide = clm_init::guide_command(none, None, tmp.path(), &env, &mut Closed, &mut err);
+    assert_eq!((survey, guide), (2, 2));
 }

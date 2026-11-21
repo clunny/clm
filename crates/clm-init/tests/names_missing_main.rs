@@ -59,7 +59,7 @@ const RENAME: &str = "git branch -m master main";
 
 #[test]
 fn a_repository_on_master() {
-    // req:init/init-names-missing-main@ae42df80
+    // req:init/init-names-missing-main@d5c16d43
     let dir = repo("master");
     commit(dir.path());
     let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
@@ -77,7 +77,7 @@ fn a_repository_on_master() {
 
 #[test]
 fn an_empty_repository_whose_unborn_branch_is_master() {
-    // req:init/init-names-missing-main@ae42df80
+    // req:init/init-names-missing-main@d5c16d43
     let dir = repo("master");
     let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     assert!(first_step(&out).unwrap().contains(RENAME));
@@ -85,7 +85,7 @@ fn an_empty_repository_whose_unborn_branch_is_master() {
 
 #[test]
 fn a_remote_on_master() {
-    // req:init/init-names-missing-main@ae42df80
+    // req:init/init-names-missing-main@d5c16d43
     let remote = repo("master");
     commit(remote.path());
     let dir = clone_of("master", remote.path());
@@ -99,7 +99,7 @@ fn a_remote_on_master() {
 
 #[test]
 fn a_remote_branch_ending_in_main_is_not_main() {
-    // req:init/init-names-missing-main@ae42df80
+    // req:init/init-names-missing-main@d5c16d43
     let remote = repo("master");
     commit(remote.path());
     git(remote.path(), &["branch", "feature/main"]);
@@ -110,7 +110,7 @@ fn a_remote_branch_ending_in_main_is_not_main() {
 
 #[test]
 fn main_already_there() {
-    // req:init/init-names-missing-main@ae42df80
+    // req:init/init-names-missing-main@d5c16d43
     let dir = repo("main");
     commit(dir.path());
     git(dir.path(), &["switch", "-q", "-c", "feature"]);
@@ -127,5 +127,28 @@ fn main_already_there() {
     commit(remote.path());
     let other = clone_of("master", remote.path());
     let out = init(other.path(), &git_host(), &clm_config::process_env).unwrap();
+    assert!(!out.contains("git branch -m"), "{out}");
+}
+
+#[test]
+fn what_it_cant_see() {
+    // req:init/init-names-missing-main@d5c16d43
+    // A detached `HEAD` on a repository with no `main`.
+    let dir = repo("master");
+    commit(dir.path());
+    git(dir.path(), &["switch", "-q", "--detach"]);
+    let out = init(dir.path(), &git_host(), &clm_config::process_env).unwrap();
+    assert!(!out.contains("git branch -m"), "{out}");
+
+    // A clone holding `origin/main` from an earlier fetch, whose `origin` is now gone.
+    let remote = repo("main");
+    commit(remote.path());
+    let dir = clone_of("master", remote.path());
+    git(dir.path(), &["fetch", "-q", "origin"]);
+    git(
+        dir.path(),
+        &["remote", "set-url", "origin", "/nowhere/at/all.git"],
+    );
+    let out = init(dir.path(), &git_host(), &clm_config::process_env).unwrap();
     assert!(!out.contains("git branch -m"), "{out}");
 }

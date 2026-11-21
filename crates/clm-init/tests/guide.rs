@@ -22,7 +22,7 @@ fn guide(args: &[&str]) -> Output {
 
 #[test]
 fn index() {
-    // req:init/guide-command@088ebe45
+    // req:init/guide-command@5a6d8da9
     let out = guide(&[]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
@@ -50,8 +50,8 @@ fn index() {
 
 #[test]
 fn index_in_the_guide_order() {
-    // req:init/guide-table-from-files@5c6bd405
-    // req:init/guide-command@088ebe45
+    // req:init/guide-table-from-files@fa1b0e6f
+    // req:init/guide-command@5a6d8da9
     let docs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
     let title = |file: &Path| {
         let text = std::fs::read_to_string(file).unwrap();
@@ -61,45 +61,67 @@ fn index_in_the_guide_order() {
             .trim()
             .to_owned()
     };
-    // `README.md`'s numbered list: lines `<n>. [Title](<name>.md)...`.
+    // Each page `README.md` links, at its first link `](<name>.md)` or `](<name>.md#...)`,
+    // then the pages it doesn't link, by name in byte order.
     let readme = std::fs::read_to_string(docs.join("guide/README.md")).unwrap();
-    let listed = readme.lines().filter_map(|l| {
-        let (n, rest) = l.split_once(". ")?;
-        (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())).then_some(())?;
-        rest.split_once("](")?
-            .1
-            .split_once(".md")
-            .map(|(name, _)| name)
-    });
-    let mut names: Vec<&str> = Vec::new();
-    for name in listed {
-        if !names.contains(&name) {
+    let mut pages: Vec<String> = std::fs::read_dir(docs.join("guide"))
+        .unwrap()
+        .filter_map(|e| {
+            let file = e.unwrap().file_name().into_string().unwrap();
+            file.strip_suffix(".md")
+                .filter(|stem| *stem != "README")
+                .map(str::to_owned)
+        })
+        .collect();
+    pages.sort();
+    let mut names: Vec<String> = Vec::new();
+    for name in first_links(&readme).into_iter().chain(pages.clone()) {
+        if pages.contains(&name) && !names.contains(&name) {
             names.push(name);
         }
     }
     let mut expected = vec![format!("index  {}", title(&docs.join("guide/README.md")))];
-    for name in names {
+    for name in &names {
         let file = docs.join(format!("guide/{name}.md"));
         expected.push(format!("{name}  {}", title(&file)));
     }
+    expected.push(format!(
+        "spec-format  {}",
+        title(&docs.join("spec-format.md"))
+    ));
+    expected.push("constraints  CLM's constraints".to_owned());
     let out = guide(&[]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
     let lines: Vec<&str> = text.lines().collect();
-    // Pages the list doesn't name may follow it, before `spec-format`.
-    assert_eq!(lines[..expected.len()], expected[..], "{text}");
-    let spec_format = format!("spec-format  {}", title(&docs.join("spec-format.md")));
-    assert_eq!(lines[lines.len() - 2], spec_format, "{text}");
-    assert_eq!(
-        lines.last(),
-        Some(&"constraints  CLM's constraints"),
-        "{text}"
-    );
+    assert_eq!(lines, expected, "{text}");
+}
+
+/// Each `<name>` of a link `](<name>.md)` or `](<name>.md#<anchor>)` in `text`, in order,
+/// `<name>` being ASCII letters, digits, `_` and `-`.
+fn first_links(text: &str) -> Vec<String> {
+    text.split("](")
+        .skip(1)
+        .filter_map(|rest| {
+            let end = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+                .unwrap_or(rest.len());
+            let (name, after) = rest.split_at(end);
+            let after = after.strip_prefix(".md")?;
+            (!name.is_empty()
+                && (after.starts_with(')')
+                    || after.strip_prefix('#').is_some_and(|a| {
+                        a.find(|c: char| c.is_whitespace() || "()[]".contains(c))
+                            .is_some_and(|i| a[i..].starts_with(')'))
+                    })))
+            .then(|| name.to_owned())
+        })
+        .collect()
 }
 
 #[test]
 fn one_page() {
-    // req:init/guide-command@088ebe45
+    // req:init/guide-command@5a6d8da9
     let out = guide(&["shaping-the-graph"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let page = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/guide/shaping-the-graph.md");
@@ -108,7 +130,7 @@ fn one_page() {
 
 #[test]
 fn the_spec_format() {
-    // req:init/guide-command@088ebe45
+    // req:init/guide-command@5a6d8da9
     let out = guide(&["spec-format"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let page = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/spec-format.md");
@@ -117,7 +139,7 @@ fn the_spec_format() {
 
 #[test]
 fn unknown_page() {
-    // req:init/guide-command@088ebe45
+    // req:init/guide-command@5a6d8da9
     let out = guide(&["no-such-page"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let err = String::from_utf8(out.stderr).unwrap();
@@ -131,7 +153,7 @@ fn unknown_page() {
 
 #[test]
 fn constraints_page() {
-    // req:init/guide-constraints-page@0587eab7
+    // req:init/guide-constraints-page@1502a90a
     let out = guide(&["constraints"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
