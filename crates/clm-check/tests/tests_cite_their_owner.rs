@@ -61,7 +61,7 @@ fn found(root: &Path) -> Vec<String> {
 
 #[test]
 fn another_components_requirement() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let text = format!("// x\n// y\n// z\n{}", cite("b/y"));
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", text)]);
     assert_eq!(
@@ -74,7 +74,7 @@ fn another_components_requirement() {
 
 #[test]
 fn its_own_requirement() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", cite("a/y"))]);
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
@@ -93,14 +93,14 @@ fn paths_only() -> TempDir {
 
 #[test]
 fn a_file_only_paths_own() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let dir = paths_only();
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn a_marker_naming_nothing_is_left_to_dangling_markers() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let dir = repo(
         Some("[\"tests/a/**\"]"),
         &[("tests/a/t.rs", cite("b/nope"))],
@@ -110,7 +110,7 @@ fn a_marker_naming_nothing_is_left_to_dangling_markers() {
 
 #[test]
 fn a_capability_is_the_capability_components() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let dir = repo(
         Some("[\"tests/a/**\"]"),
         &[("tests/a/t.rs", cite("capability/c"))],
@@ -135,7 +135,7 @@ fn a_capability_is_the_capability_components() {
 
 #[test]
 fn run_listed_reports_it_too() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", cite("b/y"))]);
     let files = ["specs/SPEC.md", "tests/a/t.rs"].map(std::path::PathBuf::from);
     let found: Vec<_> = clm_check::run_listed(dir.path(), &files)
@@ -147,7 +147,7 @@ fn run_listed_reports_it_too() {
 
 #[test]
 fn exempt_until_split() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let text = format!("// x\n// y\n// z\n{}", cite("b/y"));
     let dir = repo(
         Some("[\"tests/a/**\"]"),
@@ -198,7 +198,7 @@ fn wire_with(root: &Path, paths: &str, wiring: &str) {
 
 #[test]
 fn a_file_only_paths_own_once_the_root_names_its_wiring() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let dir = paths_only();
     wire(dir.path());
     assert_eq!(
@@ -211,7 +211,7 @@ fn a_file_only_paths_own_once_the_root_names_its_wiring() {
 
 #[test]
 fn a_file_no_component_owns_is_not_judged_under_wiring() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let dir = repo(None, &[("elsewhere/t.rs", cite("b/y"))]);
     wire(dir.path());
     assert_eq!(found(dir.path()), Vec::<String>::new());
@@ -219,7 +219,7 @@ fn a_file_no_component_owns_is_not_judged_under_wiring() {
 
 #[test]
 fn a_capability_test_under_wiring() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     let dir = repo(None, &[("tests/capability/see.rs", cite("capability/see"))]);
     wire(dir.path());
     fs::write(
@@ -237,7 +237,7 @@ fn a_capability_test_under_wiring() {
 
 #[test]
 fn a_wiring_file() {
-    // req:check/tests-cite-their-owner@97a93dfa
+    // req:check/tests-cite-their-owner@edb5a1b0
     // Every build may edit a wiring file, but a test there is still its owner's, the root's.
     let dir = repo(None, &[("src/main.rs", cite("b/y"))]);
     wire_with(dir.path(), "[\"src/main.rs\"]", "[\"src/main.rs\"]");
@@ -247,4 +247,37 @@ fn a_wiring_file() {
             "src/main.rs:1: check/tests-cite-their-owner: cites b/y of `b`, but the file is `clm`'s; move the test to `b`'s files"
         ]
     );
+}
+
+#[test]
+fn a_marker_outside_a_test_is_not_judged() {
+    // req:check/tests-cite-their-owner@edb5a1b0
+    let outside = format!("fn f() {{\n    // {}:b/y\n}}\n", concat!("req", ""));
+    let dir = repo(None, &[("src/a/x.rs", outside.clone())]);
+    wire(dir.path());
+    assert_eq!(found(dir.path()), Vec::<String>::new());
+    // The same marker in a test is.
+    let dir = repo(None, &[("src/a/x.rs", format!("{outside}{}", cite("b/y")))]);
+    wire(dir.path());
+    assert_eq!(
+        found(dir.path()),
+        [
+            "src/a/x.rs:4: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s; move the test to `b`'s files"
+        ]
+    );
+}
+
+#[test]
+fn an_architecture_entrys_marker_is_not_judged() {
+    // req:check/tests-cite-their-owner@edb5a1b0
+    let dir = repo(None, &[("src/a/x.rs", cite("architecture/git-is-truth"))]);
+    wire(dir.path());
+    fs::write(
+        dir.path().join("ARCHITECTURE.md"),
+        "# Architecture\n\n## Constraints\n\n### Constraint: git-is-truth\n**Checked.** Git SHALL be the truth.\n\n#### Scenario: s\n- GIVEN g\n- WHEN w\n- THEN t\n\n#### Enforced by\n- a/y\n",
+    )
+    .unwrap();
+    let (graph, _) = clm_model::load(dir.path());
+    assert!(graph.requirement("architecture/git-is-truth").is_some());
+    assert_eq!(found(dir.path()), Vec::<String>::new());
 }

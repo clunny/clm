@@ -86,7 +86,7 @@ fn removed_node_repo() -> TempDir {
 
 #[test]
 fn a_removed_node_is_an_unknown_node() {
-    // req:check/pending-narrows-on-a-graph@201e1738
+    // req:check/pending-narrows-on-a-graph@c3bc3790
     let dir = removed_node_repo();
     let d = dir.path();
     write(d, "t.rs", &in_test(&format!("// {REQ}g/x\n")));
@@ -106,7 +106,7 @@ fn a_removed_node_is_an_unknown_node() {
 
 #[test]
 fn pending_for_narrows_a_loaded_graph_as_pending_in_does() {
-    // req:check/pending-narrows-on-a-graph@201e1738
+    // req:check/pending-narrows-on-a-graph@c3bc3790
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);

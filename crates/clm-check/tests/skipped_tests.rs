@@ -48,7 +48,7 @@ fn found(root: &Path) -> Vec<String> {
 
 #[test]
 fn ignored_rust_test() {
-    // req:check/skipped-tests@347f43dc
+    // req:check/skipped-tests@f51ef849
     let text = format!("#[test]\n{CITES}\nfn a() {{}}\n\n    {IGNORE}\n#[test]\nfn b() {{}}\n");
     let dir = repo(&[("tests/t.rs", text)]);
     assert_eq!(found(dir.path()), [format!("tests/t.rs:5: {MESSAGE}")]);
@@ -56,7 +56,7 @@ fn ignored_rust_test() {
 
 #[test]
 fn ignored_with_a_reason() {
-    // req:check/skipped-tests@347f43dc
+    // req:check/skipped-tests@f51ef849
     let text = format!(
         "{CITES}\n{}\n#[test]\nfn a() {{}}\n",
         concat!("#[ign", "ore = \"slow\"]")
@@ -67,7 +67,7 @@ fn ignored_with_a_reason() {
 
 #[test]
 fn skipped_typescript_tests() {
-    // req:check/skipped-tests@347f43dc
+    // req:check/skipped-tests@f51ef849
     let skips = [
         concat!("it.sk", "ip(\"x\", () => {})"),
         concat!("  test.sk", "ipIf(true)(\"x\", () => {})"),
@@ -86,7 +86,7 @@ fn skipped_typescript_tests() {
 
 #[test]
 fn not_skips_in_typescript() {
-    // req:check/skipped-tests@347f43dc
+    // req:check/skipped-tests@f51ef849
     let text = format!(
         "{CITES}\n{}\n{}\n{}\n{}\n",
         concat!("audit.sk", "ip(1)"),
@@ -100,7 +100,7 @@ fn not_skips_in_typescript() {
 
 #[test]
 fn skipped_python_tests() {
-    // req:check/skipped-tests@347f43dc
+    // req:check/skipped-tests@f51ef849
     let text = format!(
         // The marker is cited again above a test at the end, where it counts once a marker
         // must sit in a test (`check.coverage/markers-in-tests`); the lines above keep their numbers.
@@ -122,7 +122,7 @@ fn skipped_python_tests() {
 
 #[test]
 fn no_markers() {
-    // req:check/skipped-tests@347f43dc
+    // req:check/skipped-tests@f51ef849
     let dir = repo(&[
         (
             "tests/slow.rs",
@@ -135,7 +135,7 @@ fn no_markers() {
 
 #[test]
 fn exempt_skip() {
-    // req:check/skipped-tests@347f43dc
+    // req:check/skipped-tests@f51ef849
     let text = format!("#[test]\n{CITES}\nfn a() {{}}\n\n    {IGNORE}\n#[test]\nfn b() {{}}\n");
     let dir = repo(&[("tests/t.rs", text.clone()), ("tests/u.rs", text)]);
     let spec = dir.path().join("specs/a/SPEC.md");
@@ -160,4 +160,16 @@ fn exempt_skip() {
             format!("tests/u.rs:5: {MESSAGE}")
         ]
     );
+}
+
+#[test]
+fn a_marker_outside_a_test() {
+    // req:check/skipped-tests@f51ef849
+    let text = format!("fn f() {{\n    {CITES}\n}}\n\n{IGNORE}\n#[test]\nfn b() {{}}\n");
+    let dir = repo(&[("src/lib.rs", text.clone())]);
+    assert_eq!(found(dir.path()), Vec::<String>::new());
+    // The same skip beside a marker inside a test is reported.
+    let inside = format!("{text}\n#[test]\nfn c() {{\n    {CITES}\n}}\n");
+    let dir = repo(&[("src/lib.rs", inside)]);
+    assert_eq!(found(dir.path()), [format!("src/lib.rs:5: {MESSAGE}")]);
 }
