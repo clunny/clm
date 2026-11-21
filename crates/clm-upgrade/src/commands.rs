@@ -228,9 +228,7 @@ pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> Result<String
     for span in value_spans(doc.as_table(), key) {
         // A key and its value start on one line; the value may run on over several.
         let last = line_of(span.end.saturating_sub(1).max(span.start));
-        for line in line_of(span.start)..=last {
-            taken[line] = true;
-        }
+        taken[line_of(span.start)..=last].fill(true);
     }
     if let Some(first) = taken.iter().position(|t| *t) {
         let mut out = String::new();
