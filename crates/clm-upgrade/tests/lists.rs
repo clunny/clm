@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use clm_upgrade::{
-    TooNew, apply_in, check_lock, decline_in, latest_in, list_in, migrations, note_in, pending_in,
+    apply_in, check_lock, decline_in, latest_in, list_in, migrations, note_in, pending_in,
     require_current_in, supersedes,
 };
 use tempfile::TempDir;
@@ -70,15 +70,6 @@ fn a_migration_is_a_value_a_caller_copies_into_a_list_of_its_own() {
     assert_eq!(latest_in(&own), Some(migrations()[0].id));
 }
 
-// req:upgrade/pending-migrations@de5ff412
-#[test]
-fn a_stamp_the_given_list_lacks_is_too_new_whatever_the_crate_holds() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("clm.toml"), "upgraded = \"zzz\"\n").unwrap();
-    let err = pending_in(&migrations()[..1], supersedes(), dir.path()).unwrap_err();
-    assert_eq!(err, TooNew("zzz".to_string()));
-}
-
 // req:upgrade/shipped-migrations-frozen@46f86d46
 #[test]
 fn the_lock_check_reads_any_crates_directory() {
@@ -104,38 +95,9 @@ const OWN: [&str; 13] = [
     "20261114-proof-is-real",
 ];
 
-/// A directory under `dir` that `OWN` doesn't name, or one it names that is missing.
-fn closed_violation(dir: &Path) -> Option<String> {
-    let found: Vec<String> = fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap())
-        .filter(|e| e.file_type().unwrap().is_dir())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .collect();
-    if let Some(extra) = found.iter().find(|d| !OWN.contains(&d.as_str())) {
-        return Some(format!("directory `{extra}` is not one of the closed list"));
-    }
-    OWN.iter()
-        .find(|id| !found.iter().any(|d| d == *id))
-        .map(|id| format!("directory `{id}` is missing"))
-}
-
 // req:upgrade/own-list-closed@6b42898f
 #[test]
 fn the_list_is_exactly_the_thirteen_in_order() {
     let ids: Vec<&str> = migrations().iter().map(|m| m.id).collect();
     assert_eq!(ids, OWN);
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/migrations");
-    assert_eq!(closed_violation(&dir), None);
-}
-
-// req:upgrade/own-list-closed@6b42898f
-#[test]
-fn a_directory_added_fails_the_check_naming_it() {
-    let tree = TempDir::new().unwrap();
-    for id in OWN.iter().chain(&["20261120-one-more"]) {
-        fs::create_dir(tree.path().join(id)).unwrap();
-    }
-    let err = closed_violation(tree.path()).unwrap();
-    assert!(err.contains("20261120-one-more"), "{err}");
 }

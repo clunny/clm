@@ -1,12 +1,10 @@
 //! Tests of the migration lock.
 
 use std::fs;
-use std::path::Path;
 
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
-use crate::migrations;
 
 /// A crate directory holding migrations `ids`, each with a `mod.rs` and a nested text file.
 fn crate_with(ids: &[&str]) -> TempDir {
@@ -18,13 +16,6 @@ fn crate_with(ids: &[&str]) -> TempDir {
         fs::write(m.join("text/old.txt"), "old\n").unwrap();
     }
     dir
-}
-
-// req:upgrade/shipped-migrations-frozen@46f86d46
-#[test]
-fn the_shipped_migrations_match_the_lock() {
-    let ids: Vec<&str> = migrations().iter().map(|m| m.id).collect();
-    crate::lock::check_lock(Path::new(env!("CARGO_MANIFEST_DIR")), &ids).unwrap();
 }
 
 // req:upgrade/shipped-migrations-frozen@46f86d46

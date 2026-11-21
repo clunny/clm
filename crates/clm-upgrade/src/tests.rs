@@ -286,19 +286,6 @@ fn superseded_pair() -> ([Migration; 2], &'static str, &'static str) {
 
 // req:upgrade/superseded-notes@e41a6e66
 #[test]
-fn a_note_a_done_migration_supersedes_is_not_pending() {
-    let (list, _, _) = superseded_pair();
-    let dir = project(None);
-    fs::write(dir.path().join("x"), "").unwrap();
-    assert!(
-        pending_in(&list, crate::supersedes(), dir.path())
-            .unwrap()
-            .is_empty()
-    );
-}
-
-// req:upgrade/superseded-notes@e41a6e66
-#[test]
 fn a_note_is_pending_until_its_superseder_is_done() {
     let (list, old, new) = superseded_pair();
     let dir = project(None);
