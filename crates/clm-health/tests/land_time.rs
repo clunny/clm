@@ -136,6 +136,22 @@ fn steps_tied_on_total_go_by_name() {
 }
 
 #[test]
+fn scenario_a_step_no_file_selected() {
+    // req:check.health/land-time-signal@1837fa40
+    let (dir, root) = clone();
+    land(&root, dir.path(), "c1", vec![step("fmt", 1, &[])]);
+    let out = report(&root);
+    assert_eq!(
+        section(&out, "land-time"),
+        [
+            "health/land-time: 0 of 1 timed lands over 60s",
+            "clm.toml: health/land-time: fmt: 1 runs, median 1s, total 1s, selected by no file",
+        ],
+        "{out}"
+    );
+}
+
+#[test]
 fn scenario_no_timings() {
     // req:check.health/land-time-signal@1837fa40
     let (_dir, root) = clone();

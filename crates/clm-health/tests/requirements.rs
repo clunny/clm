@@ -72,7 +72,7 @@ fn scenario_scenarios_and_exceptions() {
     let d = dir.path();
     let a = "---\ntitle: N\nstatus: active\nowners: []\npaths: []\n---\n\n## Requirements\n\n\
 ### Requirement: x\nx.\n\n#### Scenario: 1\n- ok\n\n#### Scenario: 2\n- ok\n\n#### Scenario: 3\n- ok\n\n\
-### Requirement: y\nIt reads it, unless the file is missing, except on Windows; an exception.\n\n\
+### Requirement: y\nIt reads it, Unless the file is missing, EXCEPT on Windows; an exception.\n\n\
 #### Scenario: s\n- unless this, unless that\n";
     write(d, "specs/a/SPEC.md", a);
     let tight = clm_health::Settings {

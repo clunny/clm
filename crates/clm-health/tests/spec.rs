@@ -157,7 +157,7 @@ fn scenario_a_passive_used_to() {
 }
 
 #[test]
-fn history_phrases_match_whole_words_in_any_case() {
+fn scenario_a_phrase_in_any_case() {
     // req:check.health/spec-bloat-signals@28d7c6ab
     let dir = repo();
     let d = dir.path();
@@ -199,6 +199,53 @@ fn scenario_design_heavier_than_the_rest() {
             "health/design-heavy: 1 components",
             "specs/a/SPEC.md: health/design-heavy: design 500 tokens, contract and requirements 125",
         ],
+        "{out}"
+    );
+}
+
+#[test]
+fn scenario_nothing_to_weigh() {
+    // req:check.health/spec-bloat-signals@28d7c6ab
+    let dir = repo();
+    let d = dir.path();
+    let a = node(" \n\t\n", &bytes('d', 2000), "");
+    write(d, "specs/a/SPEC.md", &a);
+    let out = report(d);
+    assert_eq!(
+        section(&out, "design-heavy"),
+        ["health/design-heavy: 0 components"],
+        "{out}"
+    );
+}
+
+#[test]
+fn scenario_over_on_both_counts() {
+    // req:check.health/spec-bloat-signals@28d7c6ab
+    let dir = repo();
+    let d = dir.path();
+    let size = spec("[\"src/a/**\"]", &["x"]).len();
+    for (n, code) in [("a", 1000), ("b", 1200), ("c", 1100), ("d", 8000)] {
+        let mut text = spec(&format!("[\"src/{n}/**\"]"), &["x"]);
+        if n == "d" {
+            // Eight times the size of each of the others, its statement padded.
+            let pad = "y".repeat(7 * size);
+            text = text.replacen("\nx.\n", &format!("\nx.{pad}\n"), 1);
+            assert_eq!(text.len(), 8 * size);
+        }
+        write(d, &format!("specs/{n}/SPEC.md"), &text);
+        write(d, &format!("src/{n}/code.txt"), &"x".repeat(code));
+    }
+    git(d, &["add", "-A"]);
+    let out = report(d);
+    let lines = section(&out, "outlier-size");
+    assert_eq!(lines.len(), 3, "{out}");
+    assert_eq!(lines[0], "health/outlier-size: 1 components", "{out}");
+    assert!(
+        lines[1].starts_with("specs/d/SPEC.md: health/outlier-size: code 2000 tokens"),
+        "{out}"
+    );
+    assert!(
+        lines[2].starts_with("specs/d/SPEC.md: health/outlier-size: spec "),
         "{out}"
     );
 }
