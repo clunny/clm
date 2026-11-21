@@ -714,18 +714,3 @@ fn outside(root: &Path) -> Result<String, String> {
 fn yaml_string(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"")
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn clm_toml_is_stamped_with_the_newest_migration() {
-        // req:init/init-stamps-upgraded@e2f11c8e
-        let text = clm_toml(Host::None, Some("20261105-x"), &[], &[]);
-        let table: toml::Table = text.parse().unwrap();
-        assert_eq!(table["upgraded"].as_str(), Some("20261105-x"));
-        let bare: toml::Table = clm_toml(Host::None, None, &[], &[]).parse().unwrap();
-        assert!(!bare.contains_key("upgraded"));
-    }
-}

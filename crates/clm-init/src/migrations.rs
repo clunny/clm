@@ -81,7 +81,7 @@ mod tests {
         Ok(())
     }
 
-    // req:init/all-migrations@acba0c68
+    // req:init/all-migrations@2cec4a46
     #[test]
     fn the_list_today_is_upgrades_own_and_its_pairs() {
         assert!(own_migrations().is_empty());
@@ -93,7 +93,7 @@ mod tests {
         check_list(&migrations(), own_migrations()).unwrap();
     }
 
-    // req:init/all-migrations@acba0c68
+    // req:init/all-migrations@2cec4a46
     #[test]
     fn a_migration_of_its_own_comes_last_and_is_pending() {
         let own = [migration("z")];
@@ -114,7 +114,7 @@ mod tests {
         assert!(pending.iter().any(|m| m.id == "z"), "z is pending");
     }
 
-    // req:init/all-migrations@acba0c68
+    // req:init/all-migrations@2cec4a46
     #[test]
     fn this_crates_pairs_follow_upgrades() {
         let pairs = pairs_with(&[("z", "20261105-clm-upgrade")]);
@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(pairs[..pairs.len() - 1], clm_upgrade::supersedes()[..]);
     }
 
-    // req:init/all-migrations@acba0c68
+    // req:init/all-migrations@2cec4a46
     #[test]
     fn a_duplicate_id_fails_the_check_naming_it() {
         let taken = clm_upgrade::migrations()[3].id;
@@ -131,7 +131,7 @@ mod tests {
         assert!(err.contains(taken), "{err}");
     }
 
-    // req:init/all-migrations@acba0c68
+    // req:init/all-migrations@2cec4a46
     #[test]
     fn a_required_note_of_its_own_fails_the_check() {
         let own = [Migration {
