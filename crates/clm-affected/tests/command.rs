@@ -170,7 +170,7 @@ fn the_call_writes_what_the_command_prints_and_returns_its_status() {
 
 #[test]
 fn the_root_found_is_used_unless_root_overrides_it() {
-    // req:check.affected/commands-in-crate@6731de32
+    // req:check.affected/commands-in-crate@5a7c0307
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/d/src/lib.rs", "fn g() {}\n");
@@ -190,7 +190,7 @@ fn the_root_found_is_used_unless_root_overrides_it() {
 
 #[test]
 fn the_settings_are_loaded_with_the_environment_given() {
-    // req:check.affected/commands-in-crate@6731de32
+    // req:check.affected/commands-in-crate@5a7c0307
     let dir = repo("");
     let root = dir.path();
     write(root, "Cargo.lock", "lock 2\n");
@@ -213,7 +213,7 @@ fn the_settings_are_loaded_with_the_environment_given() {
 
 #[test]
 fn arguments_it_cant_parse_return_2_with_the_usage_error() {
-    // req:check.affected/commands-in-crate@6731de32
+    // req:check.affected/commands-in-crate@5a7c0307
     let dir = repo("");
     let out = call_in(dir.path(), &["--nope"]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
@@ -221,6 +221,29 @@ fn arguments_it_cant_parse_return_2_with_the_usage_error() {
     let err = String::from_utf8(out.stderr).unwrap();
     assert!(err.contains("--nope"), "{err}");
     assert!(err.contains("Usage: clm affected"), "{err}");
+}
+
+#[test]
+fn help_prints_the_description_usage_and_options() {
+    // req:check.affected/commands-in-crate@5a7c0307
+    let dir = repo("");
+    for flag in ["--help", "-h"] {
+        let out = call_in(dir.path(), &[flag]);
+        assert_eq!(out.status.code(), Some(0), "{flag}: {out:?}");
+        assert_eq!(String::from_utf8_lossy(&out.stderr), "", "{flag}");
+        let text = stdout(&out);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(
+            lines[0],
+            "Print what a change can break: `node <id>` and `file <path>` lines, or `all <path>` when every test must run",
+            "{flag}: {text}"
+        );
+        assert_eq!(lines[1], "", "{flag}: {text}");
+        assert!(lines[2].starts_with("Usage: clm affected "), "{flag}: {text}");
+        for option in ["--base", "--root", "--readers", "--overlap", "--why"] {
+            assert!(text.contains(option), "{flag}: {option}: {text}");
+        }
+    }
 }
 
 #[test]

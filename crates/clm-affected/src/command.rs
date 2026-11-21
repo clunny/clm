@@ -35,7 +35,7 @@ pub struct Args {
 #[command(
     no_binary_name = true,
     bin_name = "clm affected",
-    about = "Print what a change can break: `node <id>` and `file <path>` lines, or `all <path>` when every test must run."
+    about = "Print what a change can break: `node <id>` and `file <path>` lines, or `all <path>` when every test must run"
 )]
 struct Cli {
     #[command(flatten)]
