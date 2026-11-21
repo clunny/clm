@@ -30,7 +30,7 @@ A `clm.toml` with no `upgraded`, or one that doesn't parse as TOML, has every mi
 
 **`clm upgrade`.**
 - *No flag.* One line per pending migration, in list order: `<id> <required|advised> <apply|note> <the note's first line>`, with `skipped` appended for a required one in `skip_migrations`; or `up to date`.
-- *`--apply`.* Reads `clm.toml` as TOML first. Runs, in order, each pending apply migration, and rewrites a pending note migration's file to `new` when the file equals one of its `old` texts. It then sets `upgraded` to `latest_in` of the list it was given, and prints `applied <id>` per migration it changed and `note <id>` per note migration still pending after its rewrites, judged before it writes `upgraded`, so a note the stamp takes is still shown on the run that takes it. It writes `upgraded` by replacing its line, the one that sets the top-level key however the key is written, bare or quoted, with the further lines of a value TOML reads as spanning several, and never past the end of that value, so a bracket in a comment or a string ends nothing; or else as a new line above the first table header's lead-in (at the end when there is none), so it stays a top-level key. Every other line is left as it is. It never stops early: a migration that fails is gathered with the others' results, and the run stamps nothing. A run with nothing to change writes nothing.
+- *`--apply`.* Reads `clm.toml` as TOML first, when it exists. Runs, in order, each pending apply migration, and rewrites a pending note migration's file to `new` when the file equals one of its `old` texts. It then sets `upgraded` to `latest_in` of the list it was given, and prints `applied <id>` per migration it changed and `note <id>` per note migration still pending after its rewrites, judged before it writes `upgraded`, so a note the stamp takes is still shown on the run that takes it. It writes `upgraded` by replacing the lines that set the top-level key however the key is written, bare, quoted or dotted, with the further lines of a value TOML reads as spanning several, and never past the end of that value, so a bracket in a comment or a string ends nothing; the spans the parse gives (`toml`'s `Spanned`) find them. Or else it adds it as a new line above the first table header's lead-in (at the end when there is none), so it stays a top-level key. Every other line is left as it is. It never stops early: a migration that fails is gathered with the others' results, and the run stamps nothing. A run with nothing to change writes nothing.
 - *`--note <id>`.* Prints the migration's note.
 - *`--decline <id>`.* Adds a pending note migration's ID to `declined_migrations`, the same way `upgraded` is written. The session-start reminder then stops naming it.
 - *`--lock <version>`.* Appends to each crate's `migrations.lock`, this one's and `init`'s, one line per migration of that crate the lock doesn't list (**The lock**). Only the release runs it (`ci`).
@@ -54,8 +54,8 @@ A `clm.toml` with no `upgraded`, or one that doesn't parse as TOML, has every mi
 - THEN no two share an ID, each has exactly one of `apply` and `note`, none is `required` with a `note`, and `latest_in` of it is the last one's ID
 
 #### Scenario: the forms that take a list are public
-- GIVEN a caller outside the crate, and a project stamped with the last ID of the crate's own list
-- WHEN it calls `latest_in`, `pending_in`, `require_current_in`, `list_in`, `apply_in`, `note_in` and `decline_in` with `migrations()` and `supersedes()`, and `pending_in` again over the list's first migration alone and over an empty list
+- GIVEN a caller outside the crate, a project stamped with the first ID of the crate's own list, and a second project whose `clm.toml` is empty
+- WHEN it calls `latest_in`, `pending_in`, `require_current_in`, `list_in`, `apply_in`, `note_in` and `decline_in` with `migrations()` and `supersedes()` on the first project, and `pending_in` on the second over the list's first migration alone and over an empty list
 - THEN each answers over the list it is given: `latest_in` names its last, `require_current_in` returns `Ok`, `list_in` prints one line per migration `pending_in` returns, `note_in` prints the first one's note, `decline_in` refuses an ID the list lacks, and `apply_in` sets `upgraded` to the list's last ID; over the first migration alone `pending_in` returns at most that one, and over an empty list nothing
 
 #### Scenario: a fresh project is done
@@ -107,7 +107,7 @@ A `clm.toml` with no `upgraded`, or one that doesn't parse as TOML, has every mi
 - THEN it returns nothing: none of the four notes whose `done` reads the stamp is pending
 
 ### Requirement: upgrade-apply <!-- base: e3cdf9eeacbcba10 -->
-`clm upgrade --apply`, which is `apply_in(list, supersedes, root)` with the list its caller gives, SHALL, in list order, run each pending apply migration and rewrite each pending note migration's file to its `new` text when the file equals one of its `old` texts. It SHALL then set `clm.toml`'s top-level `upgraded` to `latest_in` of that list, by replacing its line or, failing that, adding it above the first table header's lead-in: the comment lines directly above that header, with no blank line between, and the blank lines directly above them; and, when `clm.toml` has no table header, adding it as the last line, after ending the file's last line when it has no newline. It SHALL follow an added line with a blank line when no blank line already follows it there, and change no other line of `clm.toml`. It SHALL print `applied <id>` for each migration it changed and `note <id>` for each note migration still pending after its rewrites, judging which are pending before it writes `upgraded`, so a note whose `done` reads the stamp is shown on the run that takes it; and it SHALL commit nothing. Run again, it SHALL change nothing. On `TooNew` it SHALL exit 1 and write nothing. When `clm.toml` doesn't parse as TOML it SHALL exit 1 with a message naming `clm.toml`, running no migration and writing nothing; when there is no `clm.toml` it SHALL run what is pending and write no stamp. When a migration fails, an apply step returning an error or a note's file that can't be written, it SHALL still run the rest, write no `upgraded`, and exit 1 with a message holding an `applied <id>` line for each migration it changed, in list order, then a line `` migration `<id>` failed: <why> `` for each that failed, and no `note` line; when `clm.toml` can't be written, its message SHALL hold the `applied` lines, then `can't write clm.toml: <why>`.
+`clm upgrade --apply`, which is `apply_in(list, supersedes, root)` with the list its caller gives, SHALL, in list order, run each pending apply migration and rewrite each pending note migration's file to its `new` text when the file equals one of its `old` texts. It SHALL then set `clm.toml`'s top-level `upgraded` to `latest_in` of that list, by replacing the lines that set it, however its key is written (bare, quoted, or dotted as `upgraded.<part>`), with the further lines of a value that spans several, putting the one new line where the first of them was; or, failing that, adding it above the first table header's lead-in: the comment lines directly above that header, with no blank line between, and the blank lines directly above them; and, when `clm.toml` has no table header, adding it as the last line, after ending the file's last line when it has no newline, with no blank line after it. It SHALL follow a line added above a header with a blank line when no blank line already follows it there, and change no other line of `clm.toml`. It SHALL print `applied <id>` for each migration it changed and `note <id>` for each note migration still pending after its rewrites, judging which are pending before it writes `upgraded`, so a note whose `done` reads the stamp is shown on the run that takes it; and it SHALL commit nothing. Run again, it SHALL change nothing. On `TooNew` it SHALL exit 1 and write nothing. When `clm.toml` exists and can't be read as UTF-8 text or doesn't parse as TOML, it SHALL exit 1 with a message naming `clm.toml`, running no migration and writing nothing; when there is no `clm.toml` it SHALL run what is pending and write no stamp. When a migration fails, an apply step returning an error or a note's file that can't be written, it SHALL still run the rest, write no `upgraded`, and exit 1 with a message holding an `applied <id>` line for each migration it changed, in list order, then a line `` migration `<id>` failed: <why> `` for each that failed, in list order, and no `note` line; when `clm.toml` can't be written, its message SHALL hold the `applied` and `note` lines a successful run prints, then `can't write clm.toml: <why>`.
 
 #### Scenario: mechanical, and an edited file
 - GIVEN pending apply migration `m`, and pending note migration `n` with `old`/`new` whose file the project has edited, and a `clm.toml` ending in a `[land]` table
@@ -122,17 +122,22 @@ A `clm.toml` with no `upgraded`, or one that doesn't parse as TOML, has every mi
 #### Scenario: where the stamp goes
 - GIVEN a pending apply migration `m`
 - WHEN `clm upgrade --apply` runs for a `clm.toml` reading `a = 1` with no final newline, and for a project with no `clm.toml`
-- THEN the first `clm.toml` reads `a = 1`, then `upgraded = "<newest>"`, each line ending in a newline; and in the second `m`'s change is made, it prints `applied m`, and no `clm.toml` is written
+- THEN the first `clm.toml` reads `a = 1`, then `upgraded = "<newest>"`, each line ending in a newline and no blank line after them; and in the second `m`'s change is made, it prints `applied m`, and no `clm.toml` is written
+
+#### Scenario: a clm.toml it can't read
+- GIVEN apply migrations `s` and, after it, `m`, neither done
+- WHEN `clm upgrade --apply` runs for a `clm.toml` reading `upgraded = [`, `defects = "ask"`, a blank line, `[land]` and `check = "true"`; and for one whose bytes aren't UTF-8
+- THEN each exits 1 naming `clm.toml`, makes neither migration's change and leaves `clm.toml` as it was
 
 #### Scenario: an odd stamp line
 - GIVEN apply migrations `s` and, after it, `m`, neither done
-- WHEN `clm upgrade --apply` runs for a `clm.toml` reading `upgraded = [`, `defects = "ask"`, a blank line, `[land]` and `check = "true"`; for one reading `upgraded = "s" # was [old`, `defects = "ask"`, a blank line, `[land]` and `check = "true"`; and for one reading `"upgraded" = "s"` and `defects = "ask"`
-- THEN the first exits 1 naming `clm.toml`, makes neither migration's change and leaves `clm.toml` as it was; the second prints `applied m`, exits 0, and leaves `clm.toml` reading `upgraded = "m"` and then every other line as it was; and the third prints `applied m`, exits 0, and leaves `clm.toml` parsing as TOML with one `upgraded`, set to `m`, and `defects = "ask"` as it was
+- WHEN `clm upgrade --apply` runs for a `clm.toml` reading `upgraded = "s" # was [old`, `defects = "ask"`, a blank line, `[land]` and `check = "true"`; for one reading `"upgraded" = "s"` and `defects = "ask"`; and for one reading `upgraded.x = 1`, `defects = "ask"`, a blank line, `[land]` and `check = "true"`
+- THEN each exits 0; the first prints `applied m` and leaves `clm.toml` reading `upgraded = "m"` and then every other line as it was; the second prints `applied m` and leaves `clm.toml` parsing as TOML with one `upgraded`, set to `m`, and `defects = "ask"` as it was; and the third prints `applied s` and `applied m` and leaves `clm.toml` reading `upgraded = "m"` and then every other line as it was
 
 #### Scenario: a failing migration
-- GIVEN apply migrations `bad`, whose step fails with `boom`, and `m` after it, a note migration `n` with `old`/`new` whose file equals an `old` text and can't be written, and an empty `clm.toml`; and a second project with only `m` pending, whose `clm.toml` can be read and not written
+- GIVEN apply migrations `bad`, whose step fails with `boom`, and `m` after it, then a note migration `n` with `old`/`new` whose file equals an `old` text and can't be written, and an empty `clm.toml`; and a second project with `m` and a note migration `p`, with no `old`/`new`, pending, whose `clm.toml` can be read and not written
 - WHEN `clm upgrade --apply` runs in each
-- THEN in the first `m`'s change is made, it exits 1 with `applied m`, then `` migration `bad` failed: boom `` and a `` migration `n` failed: `` line, and `clm.toml` is unchanged; and in the second `m`'s change is made, and it exits 1 with `applied m`, then `can't write clm.toml: ` and the reason
+- THEN in the first `m`'s change is made, it exits 1 with `applied m`, then `` migration `bad` failed: boom ``, then a `` migration `n` failed: `` line, and no `note` line, and `clm.toml` is unchanged; and in the second `m`'s change is made, and it exits 1 with `applied m`, `note p`, then `can't write clm.toml: ` and the reason
 
 #### Scenario: unedited file
 - GIVEN pending note migration `n` with `old`/`new`, and its file equal to one of its `old` texts
@@ -167,8 +172,8 @@ A `clm.toml` with no `upgraded`, or one that doesn't parse as TOML, has every mi
 
 #### Scenario: an odd declined line
 - GIVEN pending note migrations `a` and `b`
-- WHEN `clm upgrade --decline a` runs for a `clm.toml` reading `declined_migrations = ["b"] # was [old`, `defects = "ask"`, a blank line, `[land]` and `check = "true"`; and for one reading `"declined_migrations" = ["b"]` and `defects = "ask"`
-- THEN each prints `declined a` and exits 0; the first leaves `clm.toml` reading `declined_migrations = ["b", "a"]` and then every other line as it was; and the second leaves it parsing as TOML with one `declined_migrations`, `["b", "a"]`, and `defects = "ask"` as it was
+- WHEN `clm upgrade --decline a` runs for a `clm.toml` reading `declined_migrations = ["b"] # was [old`, `defects = "ask"`, a blank line, `[land]` and `check = "true"`; for one reading `"declined_migrations" = ["b"]` and `defects = "ask"`; and for one reading `declined_migrations.x = 1` and `defects = "ask"`
+- THEN each prints `declined a` and exits 0; the first leaves `clm.toml` reading `declined_migrations = ["b", "a"]` and then every other line as it was; the second leaves it parsing as TOML with one `declined_migrations`, `["b", "a"]`, and `defects = "ask"` as it was; and the third leaves it reading `declined_migrations = ["a"]` and `defects = "ask"`
 
 #### Scenario: what note and decline refuse
 - GIVEN an apply migration `r` and a pending note migration `a`
@@ -486,6 +491,7 @@ An `advised` note migration, ID `20261114-proof-is-real`, SHALL tell a project s
 #### Needs
 - check.coverage/markers-in-tests
 - check/coverage-lists
+- check/tests-cite-their-owner
 - config/verify-setting
 
 ### Requirement: own-list-closed <!-- base: 6b42898f99a71b5f -->
