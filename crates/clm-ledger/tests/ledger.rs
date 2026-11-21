@@ -2426,6 +2426,28 @@ fn compact_settles_an_effort_tie() {
     assert_eq!(text.matches(r#""kind":"effort""#).count(), 1, "{text}");
 }
 
+#[test]
+fn compact_keeps_one_of_equal_effort_lines() {
+    // req:ledger/effort-records@828c1a9a
+    // The same count twice, the second with its keys in another order: one record, one line.
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let a = clone_with_origin(home, "a", "A");
+    let env = env(home, &[]);
+    let first = append(&a, effort(5), &env).unwrap();
+    let branch = format!("clm/ledger/{}", first.record.writer);
+    let line: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(records(&a, &branch).trim()).unwrap();
+    let reordered: serde_json::Map<String, serde_json::Value> = line.into_iter().rev().collect();
+    let reordered = serde_json::Value::Object(reordered).to_string();
+    append_line(&a, &branch, &reordered);
+    let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
+    assert_eq!(code, Some(0), "{out}{err}");
+    assert_eq!(out.trim(), "removed 1");
+    let text = records(&a, &branch);
+    assert_eq!(text.matches(r#""kind":"effort""#).count(), 1, "{text}");
+}
+
 /// A composed `checked` record for `key`, built from the checks of `head` and `base`.
 fn composed(key: &str, command: &str, head: &str, base: &str) -> Body {
     Body::Checked {

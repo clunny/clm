@@ -133,11 +133,18 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
         Body::Checked { code_key, .. } => {
             prune_checks && older(record) && !land_keys.contains(code_key)
         }
-        // The fold holds another line of its `id`, a later count whoever wrote it; one the
-        // fold didn't see, appended since, stays.
+        // The fold holds another line of its `id` (`effort-records`): a count before the one
+        // it holds goes, and a later one, appended since the fold was read, stays; every
+        // count goes when it holds a record of another kind, which no count displaces.
         Body::Effort { .. } => fold.lines.get(&record.id).is_some_and(|held| {
-            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line)
-                .is_ok_and(|line| sorted_text(&line) != sorted_text(held))
+            let Ok(line) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line)
+            else {
+                return false;
+            };
+            fold.efforts.get(&record.id).is_none_or(|count| {
+                (&record.at, &record.writer, sorted_text(&line))
+                    < (&count.at, &count.writer, sorted_text(held))
+            })
         }),
         // Only the caller's newest result for each commit stays; one the fold didn't see,
         // appended since, is newer than all it saw.
@@ -175,12 +182,24 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
     let committed = branch::rewrite(root, &name, "ledger: compact", |current| {
         let text = String::from_utf8_lossy(current);
         let mut kept = String::new();
+        // The `effort` lines kept, by sorted text: an equal one is the same record.
+        let mut counts = HashSet::new();
         removed = 0;
         for line in text.lines() {
             // A `reviewed` line is a kind gone with yes/no review (`yes-no-review`).
             let reviewed = serde_json::from_str::<serde_json::Value>(line)
                 .is_ok_and(|v| v["kind"] == "reviewed");
-            if reviewed || serde_json::from_str::<Record>(line).is_ok_and(|r| superseded(&r, line))
+            let mut repeated = || {
+                serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(line).is_ok_and(
+                    |object| {
+                        object.get("kind").and_then(|k| k.as_str()) == Some("effort")
+                            && !counts.insert(sorted_text(&object))
+                    },
+                )
+            };
+            if reviewed
+                || serde_json::from_str::<Record>(line).is_ok_and(|r| superseded(&r, line))
+                || repeated()
             {
                 removed += 1;
             } else {
