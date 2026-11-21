@@ -87,8 +87,8 @@ fn vars(home: &Path) -> Vec<(&'static str, String)> {
 
 #[test]
 fn signed_and_appended() {
-    // req:ledger/record-signing@12908fe7
-    // req:ledger/append@d894aff0
+    // req:ledger/record-signing@13840103
+    // req:ledger/append@bd683cb9
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let clone = clone_with_origin(home, "a", "Ann");
@@ -142,7 +142,7 @@ fn signed_and_appended() {
 
 #[test]
 fn signed_message_keeps_the_line_as_written() {
-    // req:ledger/record-signing@12908fe7
+    // req:ledger/record-signing@13840103
     // A land with no code key and no change: `code_key` stays out, `changes` stays `[]`.
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -186,7 +186,8 @@ fn signed_message_keeps_the_line_as_written() {
 
 #[test]
 fn relative_key_and_another_writers_record() {
-    // req:ledger/record-signing@12908fe7
+    // req:ledger/record-signing@13840103
+    // req:ledger/append@bd683cb9
     // A relative `user.signingkey` is taken from the repository root; a record signed as
     // another writer isn't appended to their branch from here.
     let dir = tempfile::tempdir().unwrap();
@@ -211,16 +212,22 @@ fn relative_key_and_another_writers_record() {
         &msg
     ));
     let as_ann = [("GIT_CONFIG_GLOBAL", global)];
+    let signer = signed.record.writer.clone();
     let err = clm_ledger::append(&clone, signed, &env(home, &as_ann))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("dana/"), "{err}");
+    assert!(signer.starts_with("dana/"), "{signer}");
+    let ann = clm_ledger::writer(&clone, &env(home, &as_ann)).unwrap();
+    assert_eq!(
+        err,
+        format!("the record is signed as writer {signer}, but this clone writes as {ann}")
+    );
     assert_eq!(sh(&clone, &["branch", "--list", "clm/*"]), "");
 }
 
 #[test]
 fn no_key() {
-    // req:ledger/record-signing@12908fe7
+    // req:ledger/record-signing@13840103
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let clone = clone_with_origin(home, "a", "Ann");
@@ -293,7 +300,7 @@ fn signed_line(
 
 #[test]
 fn signed_is_the_file() {
-    // req:ledger/signature-check@8b219b3b
+    // req:ledger/signature-check@5f3c7856
     let dir = tempfile::tempdir().unwrap();
     let s = signers(dir.path());
     assert!(clm_ledger::signed(dir.path(), &s.with).unwrap());
@@ -302,7 +309,7 @@ fn signed_is_the_file() {
 
 #[test]
 fn listed_signer() {
-    // req:ledger/signature-check@8b219b3b
+    // req:ledger/signature-check@5f3c7856
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signers(root);
@@ -315,7 +322,7 @@ fn listed_signer() {
 
 #[test]
 fn another_persons_name() {
-    // req:ledger/signature-check@8b219b3b
+    // req:ledger/signature-check@5f3c7856
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signers(root);
@@ -325,7 +332,7 @@ fn another_persons_name() {
 
 #[test]
 fn edited_after_signing() {
-    // req:ledger/signature-check@8b219b3b
+    // req:ledger/signature-check@5f3c7856
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signers(root);
@@ -336,7 +343,7 @@ fn edited_after_signing() {
 
 #[test]
 fn wrong_namespace_or_unsigned() {
-    // req:ledger/signature-check@8b219b3b
+    // req:ledger/signature-check@5f3c7856
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signers(root);
@@ -344,4 +351,228 @@ fn wrong_namespace_or_unsigned() {
     assert!(!clm_ledger::signed_by(root, &s.with, &line, "clm-land").unwrap());
     line.remove("sig");
     assert!(!clm_ledger::signed_by(root, &s.with, &line, "clm-approve").unwrap());
+}
+
+/// Runs `run` with `PATH` holding only `git`, so no `ssh-keygen` is found, and `name` set to
+/// `value` on the process: the tools `clm-ledger` starts inherit both. Tests run one per
+/// process (`ci/nextest-runner`), so no other test sees them; the old values come back when
+/// `run` returns or panics.
+fn on_the_process<R>(vars: &[(&str, &std::ffi::OsStr)], run: impl FnOnce() -> R) -> R {
+    struct Restore(Vec<(String, Option<std::ffi::OsString>)>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            for (name, old) in self.0.drain(..) {
+                match old {
+                    // SAFETY: one test per process; nothing else reads the environment meanwhile.
+                    Some(old) => unsafe { std::env::set_var(&name, old) },
+                    // SAFETY: as above.
+                    None => unsafe { std::env::remove_var(&name) },
+                }
+            }
+        }
+    }
+    let _restore = Restore(
+        vars.iter()
+            .map(|(name, _)| (name.to_string(), std::env::var_os(name)))
+            .collect(),
+    );
+    for (name, value) in vars {
+        // SAFETY: as above.
+        unsafe { std::env::set_var(name, value) };
+    }
+    run()
+}
+
+/// A directory holding only a link to the `git` on `PATH`.
+fn git_alone() -> tempfile::TempDir {
+    let path = std::env::var_os("PATH").unwrap();
+    let git = std::env::split_paths(&path)
+        .map(|dir| dir.join("git"))
+        .find(|git| git.is_file())
+        .expect("git on PATH");
+    let dir = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(git, dir.path().join("git")).unwrap();
+    dir
+}
+
+/// An `ssh-agent` serving a socket of its own until dropped.
+struct Agent {
+    child: std::process::Child,
+    socket: PathBuf,
+    _dir: tempfile::TempDir,
+}
+
+impl Agent {
+    fn start() -> Agent {
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("agent");
+        let child = Command::new("ssh-agent")
+            .arg("-D")
+            .arg("-a")
+            .arg(&socket)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let start = std::time::Instant::now();
+        while !socket.exists() {
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(10),
+                "ssh-agent made no socket"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        Agent {
+            child,
+            socket,
+            _dir: dir,
+        }
+    }
+
+    fn add(&self, key: &Path) {
+        let ok = Command::new("ssh-add")
+            .arg("-q")
+            .arg(key)
+            .env("SSH_AUTH_SOCK", &self.socket)
+            .stderr(Stdio::null())
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "ssh-add");
+    }
+}
+
+impl Drop for Agent {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[test]
+fn signing_refused() {
+    // req:ledger/record-signing@13840103
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let clone = clone_with_origin(home, "a", "Ann");
+    let owned = vars(home);
+    let vars: Vec<(&str, &str)> = owned.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let env = env(home, &vars);
+    // A key, but no `gpg.format`.
+    let (key, public) = keygen(home, "ann");
+    sh(
+        &clone,
+        &["config", "user.signingkey", key.to_str().unwrap()],
+    );
+    match clm_ledger::sign(&clone, approved("f"), "clm-approve", &env) {
+        Err(clm_ledger::Error::Signing(m)) => assert_eq!(
+            m,
+            "no SSH signing key: set git's user.signingkey to your SSH key, and gpg.format to \
+             ssh (git config gpg.format ssh)"
+        ),
+        other => panic!("{other:?}"),
+    }
+    // `key::` and the public half of a key an agent holds.
+    let agent = Agent::start();
+    agent.add(&key);
+    sh(&clone, &["config", "gpg.format", "ssh"]);
+    sh(
+        &clone,
+        &["config", "user.signingkey", &format!("key::{public}")],
+    );
+    let socket = [("SSH_AUTH_SOCK", agent.socket.as_os_str())];
+    let signed = on_the_process(&socket, || {
+        clm_ledger::sign(&clone, approved("f"), "clm-approve", &env)
+    })
+    .unwrap();
+    let msg = clm_ledger::signed_message(&signed.line());
+    let signers = format!("ann {public}\n");
+    let keys = tempfile::tempdir().unwrap();
+    assert!(verifies(
+        keys.path(),
+        &signers,
+        "ann",
+        "clm-approve",
+        &signed.sig,
+        &msg
+    ));
+    // No `ssh-keygen` on `PATH`.
+    sh(&clone, &["config", "user.signingkey", "../ann"]);
+    let git = git_alone();
+    let path = [("PATH", git.path().as_os_str())];
+    match on_the_process(&path, || {
+        clm_ledger::sign(&clone, approved("f"), "clm-approve", &env)
+    }) {
+        Err(clm_ledger::Error::Signing(m)) => assert!(
+            m.starts_with("can't sign the record: ssh-keygen -Y sign -f "),
+            "{m}"
+        ),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn no_tool() {
+    // req:ledger/signature-check@5f3c7856
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let s = signers(root);
+    let line = signed_line(root, "dana", &s.dana, "clm-approve", approved("f"));
+    let mut no_writer = line.clone();
+    no_writer.remove("writer");
+    let git = git_alone();
+    let path = [("PATH", git.path().as_os_str())];
+    let (first, second) = on_the_process(&path, || {
+        (
+            clm_ledger::signed_by(root, &s.with, &line, "clm-approve"),
+            clm_ledger::signed_by(root, &s.with, &no_writer, "clm-approve"),
+        )
+    });
+    match first {
+        Err(clm_ledger::Error::Signing(m)) => {
+            assert!(m.starts_with("can't check a signature: "), "{m}")
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(!second.unwrap());
+}
+
+#[test]
+fn one_person_part() {
+    // req:ledger/request-cleared@3e4c06c9
+    // An approval by the writer `dana`, with no `/`, signed with dana's key, clears dana/web's
+    // earlier request, and `signed_by` checks it for `dana`.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let s = signers(root);
+    let mut line: Map<String, Value> = serde_json::from_str(
+        r#"{"id":"a1","kind":"approved","writer":"dana","at":"2026-01-02T00:00:00.000Z","fingerprint":"f","branch":"spec/x","change":null}"#,
+    )
+    .unwrap();
+    let message = clm_ledger::signed_message(&line);
+    let mut child = Command::new("ssh-keygen")
+        .args(["-Y", "sign", "-n", "clm-approve", "-f"])
+        .arg(&s.dana)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    use std::io::Write;
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(message.as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success(), "ssh-keygen -Y sign");
+    let sig = String::from_utf8(out.stdout).unwrap();
+    line.insert("sig".into(), sig.trim().into());
+    assert!(clm_ledger::signed_by(root, &s.with, &line, "clm-approve").unwrap());
+    let request = r#"{"id":"r1","kind":"changes_requested","writer":"dana/web","at":"2026-01-01T00:00:00.000Z","branch":"spec/x","fingerprint":"f","text":"t"}"#;
+    let text = format!("{request}\n{}\n", Value::Object(line));
+    let fold = clm_ledger::fold_records(&[("origin/clm/ledger/dana/web", &text)]);
+    assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
+    assert!(fold.cleared(&fold.change_requests["spec/x"][0]));
 }

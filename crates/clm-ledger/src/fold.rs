@@ -148,7 +148,7 @@ pub fn person(writer: &str) -> &str {
 pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
     let mut fold = Fold::default();
     // Every line read, by `id`.
-    let mut read: BTreeMap<String, Vec<(Record, Map<String, Value>)>> = BTreeMap::new();
+    let mut read: BTreeMap<String, Vec<Read>> = BTreeMap::new();
     for (ledger, text) in sources {
         for (n, line) in text.lines().enumerate() {
             let line = line.trim();
@@ -253,12 +253,15 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
     fold
 }
 
+/// A record as read, and its line's JSON object.
+type Read = (Record, Map<String, Value>);
+
 /// The one line the fold holds of the (non-empty) `lines` sharing an `id`, in the order of
 /// `at`, then writer, then sorted text (`effort-records`): the greatest when every one is an
 /// `effort` count, the latest count winning; otherwise the least, so a later line reusing a
 /// record's `id` never displaces it. Equal lines are one record, and no order of reading or
 /// of a line's keys changes the choice.
-fn choose(lines: Vec<(Record, Map<String, Value>)>) -> (Record, Map<String, Value>) {
+fn choose(lines: Vec<Read>) -> Read {
     let efforts = lines
         .iter()
         .all(|(record, _)| matches!(record.body, Body::Effort { .. }));

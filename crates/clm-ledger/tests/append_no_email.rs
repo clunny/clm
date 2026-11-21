@@ -9,7 +9,7 @@ use common::{clone_with_origin, env, sh};
 
 #[test]
 fn a_clone_with_no_email_still_appends() {
-    // req:ledger/append@d894aff0
+    // req:ledger/append@bd683cb9
     // SAFETY: the only test in this binary, so no other thread reads the environment.
     unsafe {
         std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
