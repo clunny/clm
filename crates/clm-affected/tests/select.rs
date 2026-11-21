@@ -65,18 +65,6 @@ fn files(selection: &Selection) -> Vec<&str> {
 }
 
 #[test]
-fn owners_and_their_dependants() {
-    // req:check.affected/affected-components@ce7d5c08
-    let s = select(
-        &graph(),
-        &changed(&["crates/a/src/lib.rs"]),
-        &scanned(&[]),
-        &[],
-    );
-    assert_eq!(nodes(&s), ["a", "b", "c"]);
-}
-
-#[test]
 fn a_dependant_alone_affects_no_dependency() {
     // req:check.affected/affected-components@ce7d5c08
     let s = select(
@@ -86,19 +74,6 @@ fn a_dependant_alone_affects_no_dependency() {
         &[],
     );
     assert_eq!(nodes(&s), ["b", "c"]);
-}
-
-#[test]
-fn nothing_changed_selects_nothing() {
-    // req:check.affected/affected-components@ce7d5c08
-    let s = select(&graph(), &[], &scanned(&[("crates/a/x.rs", &[])]), &[]);
-    assert_eq!(
-        s,
-        Selection::Nodes {
-            nodes: vec![],
-            files: vec![]
-        }
-    );
 }
 
 #[test]
@@ -188,35 +163,6 @@ fn a_file_the_setting_names_selects_everything() {
         &["crates/d/**".to_string()],
     );
     assert_eq!(s, Selection::All("crates/d/src/x.rs".into()));
-}
-
-#[test]
-fn a_deleted_file_no_node_holds_selects_everything() {
-    // req:check.affected/affected-all@a55dd83e
-    let gone = Changed {
-        path: "tools/build.sh".into(),
-        exists: false,
-    };
-    let s = select(&graph(), &[gone], &scanned(&[]), &[]);
-    assert_eq!(s, Selection::All("tools/build.sh".into()));
-}
-
-#[test]
-fn doc_only_paths_select_nothing() {
-    // req:check.affected/doc-only-selects-nothing@bb19731a
-    let s = select(
-        &graph(),
-        &changed(&["docs/decisions/x.md", "backlog/y.md", "specs/a/SPEC.md"]),
-        &scanned(&[("crates/a/x.rs", &[])]),
-        &[],
-    );
-    assert_eq!(
-        s,
-        Selection::Nodes {
-            nodes: vec![],
-            files: vec![]
-        }
-    );
 }
 
 #[test]

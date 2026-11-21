@@ -63,11 +63,17 @@ pub fn why_chain(
     let (mut lines, start) = match cites {
         Some(component) => (vec![format!("{path} cites {component}")], component),
         None => {
-            let owner =
-                clm_coverage::owner(graph, Path::new(path)).expect("a selected file is owned");
-            if !affected.contains(owner) {
+            // Owned only when the scan read it and found no `req:` marker; a selected file
+            // that cites only unaffected components is selected by its exemption alone.
+            let owner = cited
+                .get(path)
+                .is_some_and(Vec::is_empty)
+                .then(|| clm_coverage::owner(graph, Path::new(path)))
+                .flatten()
+                .filter(|owner| affected.contains(owner));
+            let Some(owner) = owner else {
                 return vec![format!("{path} exempt from undeclared-imports")];
-            }
+            };
             (vec![format!("{path} owned by {owner}")], owner)
         }
     };

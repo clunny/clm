@@ -215,8 +215,10 @@ fn names(out: &[u8]) -> Vec<String> {
 /// The selection for the paths that differ between the commits `from` and `to`, read from
 /// the two commits alone: no working tree, no untracked file. The graph, the scan and the
 /// files that still exist are those of `to`'s tree, each read at the CLM root's place in it,
-/// and every path is under `root` and named from it (`clm-root-paths`). Refused as
-/// `affected` is when the graph can't be loaded.
+/// and every path is under `root` and named from it (`clm-root-paths`). A symbolic link of
+/// `to` counts as a file when it leads to one as a checkout's link would, judged in the tree
+/// `to` extracts to (`leads_to_file`). Refused as `affected` is when the graph can't be
+/// loaded.
 pub fn affected_between(
     root: &Path,
     from: &str,
@@ -235,16 +237,18 @@ pub fn affected_between(
             to,
         ],
     )?);
-    let prefix = String::from_utf8_lossy(&git(root, &["rev-parse", "--show-prefix"])?)
-        .trim_end_matches('\n')
-        .to_string();
+    let prefix = show_prefix(root)?;
     let wanted: BTreeSet<&str> = paths.iter().map(String::as_str).collect();
-    let blobs = clm_git::tree_blobs(root, to, &|p| {
-        p.strip_prefix(prefix.as_str())
-            .is_some_and(|p| !p.ends_with(".md") || wanted.contains(p))
-    })?;
+    let keep = |p: &str| !p.ends_with(".md") || wanted.contains(p);
+    // The whole tree, since the graph also reads `changes/`, `backlog/` and the human layer,
+    // and a link is judged where it leads in it.
+    let tree = clm_git::extract_tree(root, to)?;
+    let at_root = tree.path().join(&prefix);
     let mut scan = Scan::default();
     let mut present = BTreeSet::new();
+    let blobs = clm_git::tree_blobs(root, to, &|p| {
+        p.strip_prefix(prefix.as_str()).is_some_and(keep)
+    })?;
     for (path, bytes) in blobs {
         let Some(path) = path.strip_prefix(prefix.as_str()).map(str::to_string) else {
             continue;
@@ -257,6 +261,19 @@ pub fn affected_between(
             scan.add(path, &text);
         }
     }
+    for link in links(root, to, &prefix)? {
+        let target = at_root.join(&link);
+        if !keep(&link) || !leads_to_file(tree.path(), &target) {
+            continue;
+        }
+        present.insert(link.clone());
+        if link.ends_with(".md") {
+            continue;
+        }
+        if let Ok(text) = fs::read_to_string(&target) {
+            scan.add(link, &text);
+        }
+    }
     let differing: Vec<Changed> = paths
         .iter()
         .map(|path| Changed {
@@ -264,29 +281,121 @@ pub fn affected_between(
             path: path.clone(),
         })
         .collect();
-    // The whole tree, since the graph also reads `changes/`, `backlog/` and the human layer.
-    let tree = clm_git::extract_tree(root, to)?;
-    let graph = load_graph(&tree.path().join(&prefix))?;
+    let graph = load_graph(&at_root)?;
     Ok(combined(&graph, &differing, &scan.cited, &scan.reads, all))
 }
 
+/// Whether the link at `path`, in the tree extracted at `top`, leads to a file as a checkout's
+/// link would: links to links and absolute targets followed, except that a relative target
+/// leading out of `top`, the repository's top, leads to nothing (`overlap-selection`).
+fn leads_to_file(top: &Path, path: &Path) -> bool {
+    let mut current = path.to_path_buf();
+    // As many hops as the kernel follows before it gives up on a loop.
+    for _ in 0..40 {
+        let Ok(meta) = fs::symlink_metadata(&current) else {
+            return false;
+        };
+        if !meta.file_type().is_symlink() {
+            return meta.is_file();
+        }
+        let Ok(target) = fs::read_link(&current) else {
+            return false;
+        };
+        if target.is_absolute() {
+            current = target;
+            continue;
+        }
+        let inside = current.starts_with(top);
+        let mut next = current.parent().map(Path::to_path_buf).unwrap_or_default();
+        for part in target.components() {
+            match part {
+                std::path::Component::ParentDir => {
+                    next.pop();
+                }
+                std::path::Component::CurDir => {}
+                other => next.push(other),
+            }
+        }
+        if inside && !next.starts_with(top) {
+            return false;
+        }
+        current = next;
+    }
+    false
+}
+
+/// The CLM root's place in its git repository: `git rev-parse --show-prefix`, empty at the
+/// top and ending in `/` below it.
+fn show_prefix(root: &Path) -> Result<String, Failure> {
+    let out = git(root, &["rev-parse", "--show-prefix"])?;
+    Ok(String::from_utf8_lossy(&out)
+        .trim_end_matches('\n')
+        .to_string())
+}
+
+/// The symbolic links (mode `120000`) of `commit` under `prefix`, named from it.
+fn links(root: &Path, commit: &str, prefix: &str) -> Result<Vec<String>, Failure> {
+    let listing = git(root, &["ls-tree", "-r", "-z", "--full-tree", commit])?;
+    Ok(names(&listing)
+        .into_iter()
+        .filter_map(|entry| {
+            // "<mode> SP <type> SP <oid> TAB <path>"
+            let (meta, path) = entry.split_once('\t')?;
+            if !meta.starts_with("120000 ") {
+                return None;
+            }
+            path.strip_prefix(prefix).map(str::to_string)
+        })
+        .collect())
+}
+
+/// The `[affected] all` globs of the `clm.toml` at the CLM root's place in `rev`'s tree, or
+/// of none when it holds no such file, loaded as `config` loads a committed `clm.toml`
+/// (`config/committed-settings`), the clone's own layers read as any loading reads them.
+/// Refused with `<rev>:<path>: <reason>` when that file can't be loaded, and with the error
+/// loading gives when another layer can't.
+fn committed_globs(
+    root: &Path,
+    rev: &str,
+    prefix: &str,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<Vec<String>, Failure> {
+    let path = format!("{prefix}clm.toml");
+    let source = format!("{rev}:{path}");
+    let text = match clm_git::tree_blobs(root, rev, &|p| p == path)?.pop() {
+        Some((_, bytes)) => Some(
+            String::from_utf8(bytes)
+                .map_err(|_| Failure::Refused(format!("{source}: not UTF-8 text")))?,
+        ),
+        None => None,
+    };
+    clm_config::load_committed(root, text.as_deref(), &source, env)
+        .map(|settings| settings.affected.value.map(|a| a.all).unwrap_or_default())
+        .map_err(|e| Failure::Refused(e.to_string()))
+}
+
 /// What changing both `a` and `b` can break (`overlap`): each side's selection against
-/// their merge base. Refused with `unknown revision <rev>` for a revision that is no commit
-/// and `no merge base between <a> and <b>` for commits with none.
+/// their merge base, with the `[affected] all` globs its own commit holds. Refused with
+/// `unknown revision <rev>` for a revision that is no commit, `no merge base between <a> and
+/// <b>` for commits with none, and then as each side's settings and graph are, side `a`'s
+/// first (`overlap-selection`).
 pub(crate) fn affected_overlap(
     root: &Path,
     a: &str,
     b: &str,
-    all: &[String],
+    env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Selection, Failure> {
     for rev in [a, b] {
         resolve(root, rev, &format!("unknown revision {rev}"))?;
     }
     let base = merge_base(root, a, b, &format!("{a} and {b}"))?;
-    Ok(overlap(
-        affected_between(root, &base, a, all)?,
-        affected_between(root, &base, b, all)?,
-    ))
+    let prefix = show_prefix(root)?;
+    let side = |rev: &str| {
+        let all = committed_globs(root, rev, &prefix, env)?;
+        affected_between(root, &base, rev, &all)
+    };
+    let first = side(a)?;
+    Ok(overlap(first, side(b)?))
 }
 
 #[cfg(test)]
