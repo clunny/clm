@@ -192,6 +192,13 @@ fn scenario_a_removed_component_and_an_empty_change() {
         "tests/t.rs",
         &format!("// {}:b.c/x@00000000\n#[test]\nfn t() {{}}\n", "req"),
     );
+    // A second citing file another component owns: the requirement still counts once.
+    write(d, "specs/a/SPEC.md", &spec("[\"src/**\"]", &[]));
+    write(
+        d,
+        "src/t.rs",
+        &format!("// {}:b.c/x@00000000\n#[test]\nfn t() {{}}\n", "req"),
+    );
     git(d, &["add", "-A"]);
     let out = report(d);
     assert_eq!(

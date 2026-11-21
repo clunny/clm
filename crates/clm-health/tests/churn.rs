@@ -155,6 +155,8 @@ fn scenario_the_patchs_shape() {
         ("log.showRoot", "false"),
         ("color.ui", "always"),
         ("core.quotePath", "true"),
+        ("diff.srcPrefix", "old/"),
+        ("diff.mnemonicPrefix", "true"),
     ] {
         git(d, &["config", key, value]);
     }

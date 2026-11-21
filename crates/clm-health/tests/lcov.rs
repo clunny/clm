@@ -64,7 +64,8 @@ fn no_lcov_file_configured() {
 fn a_root_reached_through_a_link() {
     // req:check.health/unexercised-code@3b36e1e7
     // The root as given is a symbolic link to `r`: a path under the link, made absolute but
-    // not resolved, and one under `r` itself both read as relative.
+    // not resolved, and one under `r` itself both read as relative. White space around a
+    // line is taken off.
     let parent = tempfile::TempDir::new().unwrap();
     let r = parent.path().join("r");
     std::fs::create_dir(&r).unwrap();
@@ -78,7 +79,7 @@ fn a_root_reached_through_a_link() {
         &r,
         "cov.info",
         &format!(
-            "SF:{}\nDA:1,0\nend_of_record\nSF:{}\nDA:2,0\nend_of_record\n",
+            "  SF:{}\t\n DA:1,0 \nend_of_record\t\nSF:{}\nDA:2,0\nend_of_record\n",
             link.join("crates/a/src/lib.rs").display(),
             real.join("crates/a/src/b.rs").display(),
         ),
