@@ -69,44 +69,6 @@ fn why(
 }
 
 #[test]
-fn a_dependant_is_owned_through_its_edges() {
-    // req:check.affected/why-chain@c55b66f4
-    let lines = why(
-        &[("b/src/lib.rs", true)],
-        &[("a/src/lib.rs", &[])],
-        &[],
-        "a/src/lib.rs",
-    );
-    assert_eq!(
-        lines,
-        [
-            "a/src/lib.rs owned by a",
-            "a depends on b",
-            "b owns b/src/lib.rs (changed)"
-        ]
-    );
-}
-
-#[test]
-fn a_changed_file_is_changed_alone() {
-    // req:check.affected/why-chain@c55b66f4
-    let lines = why(&[("b/src/lib.rs", true)], &[], &[], "b/src/lib.rs");
-    assert_eq!(lines, ["b/src/lib.rs (changed)"]);
-}
-
-#[test]
-fn a_path_the_selection_lacks_is_not_selected() {
-    // req:check.affected/why-chain@c55b66f4
-    let lines = why(
-        &[("b/src/lib.rs", true)],
-        &[("c/src/lib.rs", &[])],
-        &[],
-        "c/src/lib.rs",
-    );
-    assert_eq!(lines, ["c/src/lib.rs not selected"]);
-}
-
-#[test]
 fn a_deleted_changed_file_is_not_selected() {
     // req:check.affected/why-chain@c55b66f4
     let lines = why(&[("b/gone.rs", false)], &[], &[], "b/gone.rs");

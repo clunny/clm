@@ -143,9 +143,10 @@ fn repo(clm_toml: &str) -> TempDir {
 
 #[test]
 fn the_call_writes_what_the_command_prints_and_returns_its_status() {
-    // req:check.affected/commands-in-crate@6731de32
-    // A CLM root at the top of its repository prints what it did before `clm-root-paths`.
-    // req:check.affected/clm-root-paths@e89be136
+    // req:check.affected/commands-in-crate@5a7c0307
+    // req:check.affected/clm-root-paths@de45727f
+    // req:check.affected/affected-components@ce7d5c08
+    // req:check.affected/affected-base@ec64a600
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -220,21 +221,6 @@ fn arguments_it_cant_parse_return_2_with_the_usage_error() {
     let err = String::from_utf8(out.stderr).unwrap();
     assert!(err.contains("--nope"), "{err}");
     assert!(err.contains("Usage: clm affected"), "{err}");
-}
-
-#[test]
-fn prints_the_changed_nodes_dependants_and_files() {
-    // req:check.affected/affected-components@ce7d5c08
-    let dir = repo("");
-    let root = dir.path();
-    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
-    commit_all(root, "a");
-    let out = clm_affected(root, "main");
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
-    assert_eq!(
-        stdout(&out),
-        "node a\nnode b\nnode c\nfile crates/a/src/lib.rs\nfile crates/b/src/lib.rs\nfile crates/c/src/lib.rs\n"
-    );
 }
 
 #[test]
@@ -512,19 +498,6 @@ fn a_git_failure_exits_2() {
         assert!(err.contains("git rev-parse"), "{err}");
         assert!(err.contains("not a git repository"), "{err}");
     }
-}
-
-#[test]
-fn an_unknown_base_exits_1_naming_it() {
-    // req:check.affected/affected-base@ec64a600
-    let dir = repo("");
-    let out = clm_affected(dir.path(), "nope");
-    assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert_eq!(stdout(&out), "");
-    assert_eq!(
-        String::from_utf8_lossy(&out.stderr),
-        "clm affected: unknown base nope\n"
-    );
 }
 
 #[test]
@@ -926,7 +899,7 @@ fn independent_changes_overlap_in_nothing() {
 #[test]
 fn a_dependant_of_both_is_what_they_share() {
     // req:check.affected/overlap-selection@f23b11bd
-    // req:check.affected/clm-root-paths@e89be136
+    // req:check.affected/clm-root-paths@de45727f
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -1170,7 +1143,7 @@ fn subdirectory_repo() -> TempDir {
 
 #[test]
 fn a_branch_in_a_subdirectory_root_is_named_from_the_root() {
-    // req:check.affected/clm-root-paths@e89be136
+    // req:check.affected/clm-root-paths@de45727f
     let dir = subdirectory_repo();
     let top = dir.path();
     let sub = top.join("sub");
@@ -1196,7 +1169,7 @@ fn a_branch_in_a_subdirectory_root_is_named_from_the_root() {
 
 #[test]
 fn two_commits_in_a_subdirectory_root_are_read_from_its_place_in_their_trees() {
-    // req:check.affected/clm-root-paths@e89be136
+    // req:check.affected/clm-root-paths@de45727f
     let dir = subdirectory_repo();
     let top = dir.path();
     let sub = top.join("sub");
@@ -1230,7 +1203,7 @@ fn two_commits_in_a_subdirectory_root_are_read_from_its_place_in_their_trees() {
 
 #[test]
 fn a_reader_in_a_subdirectory_root_reads_only_paths_under_it() {
-    // req:check.affected/clm-root-paths@e89be136
+    // req:check.affected/clm-root-paths@de45727f
     let dir = subdirectory_repo();
     let top = dir.path();
     let sub = top.join("sub");
