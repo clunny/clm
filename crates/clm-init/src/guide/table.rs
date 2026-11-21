@@ -76,8 +76,12 @@ fn linked(readme: &str) -> Vec<String> {
                 .unwrap_or(rest.len());
             let (stem, after) = rest.split_at(end);
             let after = after.strip_prefix(".md")?;
-            let closed =
-                after.starts_with(')') || after.strip_prefix('#').is_some_and(|a| a.contains(')'));
+            // An anchor runs to the `)` that closes the link, with no white space or bracket.
+            let anchored = |a: &str| {
+                a.find(|c: char| c.is_whitespace() || "()[]".contains(c))
+                    .is_some_and(|i| a[i..].starts_with(')'))
+            };
+            let closed = after.starts_with(')') || after.strip_prefix('#').is_some_and(anchored);
             (!stem.is_empty() && closed).then(|| stem.to_owned())
         })
         .collect()
@@ -127,6 +131,13 @@ mod tests {
         assert_eq!(all[0].1, tmp.path().join("guide/README.md"));
         assert_eq!(all[1].1, tmp.path().join("guide/b.md"));
         assert_eq!(all[4].1, tmp.path().join("spec-format.md"));
+    }
+
+    #[test]
+    fn an_anchor_the_link_never_closes() {
+        // req:init/guide-table-from-files@fa1b0e6f
+        let readme = "see ](a.md# and (note)\n[B](b.md#x)\n[C](c.md#x y)\n";
+        assert_eq!(linked(readme), ["b"]);
     }
 
     #[test]

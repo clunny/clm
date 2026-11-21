@@ -151,8 +151,13 @@ mod tests {
                     .unwrap_or(rest.len());
                 let (name, after) = rest.split_at(end);
                 let after = after.strip_prefix(".md")?;
-                (!name.is_empty() && (after.starts_with(')') || after.starts_with('#')))
-                    .then_some(name)
+                (!name.is_empty()
+                    && (after.starts_with(')')
+                        || after.strip_prefix('#').is_some_and(|a| {
+                            a.find(|c: char| c.is_whitespace() || "()[]".contains(c))
+                                .is_some_and(|i| a[i..].starts_with(')'))
+                        })))
+                .then_some(name)
             })
             .filter(|name| *name != "README" && PAGES.iter().any(|(n, _)| n == name))
             .fold(Vec::new(), |mut seen, name| {
