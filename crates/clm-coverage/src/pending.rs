@@ -269,7 +269,7 @@ fn node_of(id: &str) -> &str {
 }
 
 /// The node the capabilities are pending on, which builds their tests: the model's
-/// `Graph::capability_tests_node` (`pending-report`, `model/capability-tests-node`).
+/// `Graph::capability_tests_node` (`pending-report`, `model/capability-tests-component`).
 pub(crate) fn entries_node(graph: &Graph) -> &str {
     graph.capability_tests_node()
 }

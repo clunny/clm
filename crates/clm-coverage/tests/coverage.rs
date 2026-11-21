@@ -130,7 +130,7 @@ fn coverage(root: &Path) -> Result<Vec<clm_coverage::Coverage>, Vec<clm_model::V
 
 #[test]
 fn scenario_mixed_coverage() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -158,7 +158,7 @@ fn scenario_mixed_coverage() {
 
 #[test]
 fn scenario_stale_marker_beside_a_current_one() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -175,7 +175,7 @@ fn scenario_stale_marker_beside_a_current_one() {
 
 #[test]
 fn report_carries_the_state_and_markers() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = repo("applied");
     let d = dir.path();
     let g = graph(d);
@@ -195,7 +195,7 @@ fn report_carries_the_state_and_markers() {
 
 #[test]
 fn scenario_obsolete_marker() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = repo("applied");
     let d = dir.path();
     removing_change(d, false);
@@ -213,7 +213,7 @@ fn scenario_obsolete_marker() {
 
 #[test]
 fn removed_requirement_without_markers_is_not_reported() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = repo("applied");
     removing_change(dir.path(), false);
     assert_eq!(lines(dir.path()), ["a/x unbuilt", "a/y unbuilt"]);
@@ -221,7 +221,7 @@ fn removed_requirement_without_markers_is_not_reported() {
 
 #[test]
 fn scenario_same_as_checkout() {
-    // req:check.coverage/markers-from-files@f29b72b7
+    // req:check.coverage/markers-from-files@50921197
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -271,9 +271,9 @@ fn scenario_same_as_checkout() {
 
 #[test]
 fn markers_in_carries_versions() {
-    // req:check.coverage/markers-from-files@f29b72b7
+    // req:check.coverage/markers-from-files@50921197
     let text = in_test(&format!(
-        "// {REQ}a/x@0123abcd {REQ}a/y {REQ}a/z@xyz {REQ}a/w@0123abcd9 {REQ}a/v@0123ABCD\n"
+        "// {REQ}a/x@0123abcd {REQ}a/y {REQ}a/z@xyz {REQ}a/w@0123abcd9 {REQ}a/v@0123ABCD {REQ}a/u@0123abcdg\n"
     ));
     let found = clm_coverage::markers_in(Path::new("t.rs"), &text);
     let seen: Vec<(&str, Option<&str>)> = found
@@ -287,7 +287,8 @@ fn markers_in_carries_versions() {
             ("a/y", None),
             ("a/z", None),
             ("a/w", None),
-            ("a/v", None)
+            ("a/v", None),
+            ("a/u", Some("0123abcd"))
         ]
     );
 }

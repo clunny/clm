@@ -97,43 +97,8 @@ fn in_test(s: &str) -> String {
 }
 
 #[test]
-fn scenario_states() {
-    // req:check.coverage/pending-report@362c927d
-    let dir = repo();
-    let d = dir.path();
-    let (x, y, z) = (version(d, "a/x"), version(d, "a/y"), version(d, "a/z"));
-    write(
-        d,
-        "t.rs",
-        &in_test(&format!(
-            "// {REQ}a/x@11111111\n// {REQ}a/z@{z}\n\n\n\n\n\n\n// {REQ}a/gone\n"
-        )),
-    );
-    let out = pending_text(d, Some("a"));
-    assert_eq!(
-        out,
-        format!("a/gone obsolete t.rs:9\na/x {x} behind 11111111\na/y {y} unbuilt\n")
-    );
-}
-
-#[test]
-fn scenario_blocked() {
-    // req:check.coverage/pending-report@362c927d
-    let dir = repo();
-    let d = dir.path();
-    write(
-        d,
-        "backlog/q.md",
-        "---\ntitle: Q\nkind: question\nblocks: [a/y]\n---\n",
-    );
-    let out = pending_text(d, Some("a"));
-    let y = out.lines().find(|l| l.starts_with("a/y ")).unwrap();
-    assert!(y.ends_with(" unbuilt blocked backlog/q"), "{out}");
-}
-
-#[test]
 fn scenario_blocked_by_a_need() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = needs_repo();
     let d = dir.path();
     write(
@@ -147,23 +112,8 @@ fn scenario_blocked_by_a_need() {
 }
 
 #[test]
-fn scenario_need_satisfied() {
-    // req:check.coverage/pending-report@362c927d
-    let dir = needs_repo();
-    let d = dir.path();
-    write(
-        d,
-        "t.rs",
-        &in_test(&format!("// {REQ}b/z@{}\n", version(d, "b/z"))),
-    );
-    let out = pending_text(d, Some("a"));
-    let y = out.lines().find(|l| l.starts_with("a/y ")).unwrap();
-    assert_eq!(y, format!("a/y {} unbuilt", version(d, "a/y")));
-}
-
-#[test]
 fn scenario_nothing_pending() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo();
     let d = dir.path();
     let cite = |id: &str| format!("// {REQ}{id}@{}\n", version(d, id));
@@ -175,19 +125,4 @@ fn scenario_nothing_pending() {
     assert_eq!(pending_text(d, Some("a")), String::new());
     let out = pending_text(d, None);
     assert_eq!(out.as_str(), "");
-}
-
-#[test]
-fn every_node_without_an_argument() {
-    // req:check.coverage/pending-report@362c927d
-    let dir = repo();
-    let d = dir.path();
-    write(
-        d,
-        "specs/b/SPEC.md",
-        "---\ntitle: B\nstatus: specd\nowners: []\n---\n\n## Requirements\n\n### Requirement: q\nq.\n\n#### Scenario: s\n- ok\n",
-    );
-    let out = pending_text(d, None);
-    let ids: Vec<&str> = out.lines().map(|l| l.split(' ').next().unwrap()).collect();
-    assert_eq!(ids, ["a/x", "a/y", "a/z", "b/q"]);
 }

@@ -39,7 +39,7 @@ fn version(dir: &TempDir) -> String {
 
 #[test]
 fn named_unproven() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = repo();
     let v = version(&dir);
     write(dir.path(), "backlog/u.md", &ITEM.replace("VERSION", &v));
@@ -50,7 +50,7 @@ fn named_unproven() {
 
 #[test]
 fn unproven_at_an_older_version() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = repo();
     write(
         dir.path(),
@@ -63,7 +63,7 @@ fn unproven_at_an_older_version() {
 
 #[test]
 fn unproven_beside_a_stale_marker() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = repo();
     let v = version(&dir);
     write(dir.path(), "backlog/u.md", &ITEM.replace("VERSION", &v));

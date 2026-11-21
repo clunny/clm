@@ -18,7 +18,7 @@ pub use coverage::{
     report,
 };
 #[cfg(feature = "checkout")]
-pub use coverage::{Scan, scan};
+pub use coverage::{Scan, read_files, scan};
 pub use glob::matches;
 pub use lists::{
     DeletedTest, ObsoleteTest, UncitedTest, Uncounted, bare_name, deleted_tests, obsolete_tests,

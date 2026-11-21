@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use clm_model::Graph;
+use clm_model::{Graph, Layer};
 
 use crate::coverage::{Marker, parse_markers, removed};
 use crate::spans::tests_in;
@@ -53,11 +53,15 @@ pub struct UncitedTest {
 }
 
 /// Each requirement or capability that exists, or that a change outside the archive
-/// removed, and that a marker in `outside` cites, sorted by ID.
+/// removed, and that a marker in `outside` cites, sorted by ID; never an architecture entry,
+/// which no test cites (`check/dangling-markers`).
 pub fn uncounted(graph: &Graph, outside: &[Marker]) -> Vec<Uncounted> {
     let removed = removed(graph);
     let mut by_id: BTreeMap<&str, Vec<Marker>> = BTreeMap::new();
     for m in outside {
+        if Layer::of(&m.id) == Some(Layer::Architecture) {
+            continue;
+        }
         if graph.requirement(&m.id).is_some() || removed.contains_key(&m.id) {
             by_id.entry(m.id.as_str()).or_default().push(m.clone());
         }

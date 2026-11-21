@@ -75,7 +75,7 @@ fn line(graph: &clm_model::Graph, markers: &[clm_coverage::Marker], id: &str) ->
 
 #[test]
 fn capabilities_cited_like_rules() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = repo(&[arch("a", &["n/x"], false)]);
     let graph = graph(dir.path());
     let markers = [
@@ -114,7 +114,7 @@ fn capabilities_cited_like_rules() {
 
 #[test]
 fn architecture_entries() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = repo(&[
         arch("a", &["n/x", "n/y"], false),
         arch("b", &["n/x", "n/z"], false),
@@ -178,7 +178,7 @@ fn architecture_entries() {
 
 #[test]
 fn entries_that_are_never_pending() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(&[arch("a", &["n/x"], false), arch("u", &[], true)]);
     write(
         dir.path(),
@@ -209,7 +209,7 @@ fn entries_that_are_never_pending() {
 
 #[test]
 fn entry_blocked_by_item() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(&[arch("a", &["n/x"], false)]);
     write(
         dir.path(),
@@ -235,7 +235,7 @@ const CAPABILITY_NODE: &str = "---\ntitle: Capabilities\nstatus: active\nowners:
 
 #[test]
 fn capabilities_pending_on_capability_node() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(&[arch("a", &["n/x"], false)]);
     write(dir.path(), "specs/capability/SPEC.md", CAPABILITY_NODE);
     let graph = graph(dir.path());
@@ -257,7 +257,7 @@ fn capabilities_pending_on_capability_node() {
 
 #[test]
 fn entries_on_the_roots_row() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -286,7 +286,7 @@ fn entries_on_the_roots_row() {
 
 #[test]
 fn capabilities_on_the_capability_nodes_row() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo(&[arch("a", &["n/x"], false)]);
     write(dir.path(), "specs/capability/SPEC.md", CAPABILITY_NODE);
     let graph = graph(dir.path());

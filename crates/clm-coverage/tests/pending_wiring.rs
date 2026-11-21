@@ -54,7 +54,7 @@ fn pair(node: &str, text: &str) -> (String, String) {
 
 #[test]
 fn scenario_an_obsolete_marker_in_another_components_file() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(Some("[]"));
     let g = graph(dir.path());
     let both = [
@@ -83,7 +83,7 @@ fn scenario_an_obsolete_marker_in_another_components_file() {
 
 #[test]
 fn scenario_only_another_components_file_cites_it() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(Some("[]"));
     let g = graph(dir.path());
     let markers = [marker("b/gone", None, "crates/c/t.rs", 8)];
@@ -95,7 +95,7 @@ fn scenario_only_another_components_file_cites_it() {
 
 #[test]
 fn scenario_an_obsolete_marker_in_a_wiring_file() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(Some("[\"crates/c/shared.rs\"]"));
     let g = graph(dir.path());
     let markers = [
@@ -110,7 +110,7 @@ fn scenario_an_obsolete_marker_in_a_wiring_file() {
 
 #[test]
 fn scenario_an_obsolete_marker_with_no_wiring() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(None);
     let g = graph(dir.path());
     let markers = [
@@ -125,7 +125,7 @@ fn scenario_an_obsolete_marker_with_no_wiring() {
 
 #[test]
 fn an_item_blocks_every_line_and_the_own_wait_follows_it() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(Some("[]"));
     let d = dir.path();
     write(
@@ -152,7 +152,7 @@ fn an_item_blocks_every_line_and_the_own_wait_follows_it() {
 
 #[test]
 fn scenario_a_question_holds_an_obsolete_line() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = repo(None);
     let d = dir.path();
     write(
@@ -202,7 +202,7 @@ fn on(g: &Graph, markers: &[Marker], node: &str) -> Vec<String> {
 
 #[test]
 fn scenario_a_move_into_the_files_owner() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = moved_into_c();
     let g = graph(dir.path());
     let x = g.requirement("c/x").unwrap().version();
@@ -218,7 +218,7 @@ fn scenario_a_move_into_the_files_owner() {
 
 #[test]
 fn scenario_a_move_into_the_files_owner_the_target_blocked() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = moved_into_c();
     let d = dir.path();
     write(
@@ -240,7 +240,7 @@ fn scenario_a_move_into_the_files_owner_the_target_blocked() {
 
 #[test]
 fn a_move_target_on_another_component_still_blocks() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = moved_into_c();
     let d = dir.path();
     write(d, "specs/v/SPEC.md", &spec("[\"crates/v/**\"]", &["keep"]));
@@ -257,7 +257,7 @@ fn a_move_target_on_another_component_still_blocks() {
 
 #[test]
 fn a_move_target_that_waits_on_a_need_stays_on_the_line() {
-    // req:check.coverage/pending-report@362c927d
+    // req:check.coverage/pending-report@8d05b446
     let dir = moved_into_c();
     let d = dir.path();
     write(
