@@ -61,6 +61,42 @@ fn no_lcov_file_configured() {
 }
 
 #[test]
+fn a_root_reached_through_a_link() {
+    // req:check.health/unexercised-code@3b36e1e7
+    // The root as given is a symbolic link to `r`: a path under the link, made absolute but
+    // not resolved, and one under `r` itself both read as relative.
+    let parent = tempfile::TempDir::new().unwrap();
+    let r = parent.path().join("r");
+    std::fs::create_dir(&r).unwrap();
+    common::git(&r, &["init", "-q", "-b", "main"]);
+    write(&r, "specs/SPEC.md", common::ROOT);
+    write(&r, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", &["x"]));
+    let link = parent.path().join("link");
+    std::os::unix::fs::symlink(&r, &link).unwrap();
+    let real = r.canonicalize().unwrap();
+    write(
+        &r,
+        "cov.info",
+        &format!(
+            "SF:{}\nDA:1,0\nend_of_record\nSF:{}\nDA:2,0\nend_of_record\n",
+            link.join("crates/a/src/lib.rs").display(),
+            real.join("crates/a/src/b.rs").display(),
+        ),
+    );
+    std::env::set_current_dir(parent.path()).unwrap();
+    let out = report_with(std::path::Path::new("link"), &with_lcov("cov.info"));
+    assert_eq!(
+        section(&out, "unexercised"),
+        [
+            "health/unexercised: 2 lines",
+            "crates/a/src/b.rs:2: health/unexercised: 1 lines no test runs",
+            "crates/a/src/lib.rs:1: health/unexercised: 1 lines no test runs",
+        ],
+        "{out}"
+    );
+}
+
+#[test]
 fn scenario_records_merged() {
     // req:check.health/unexercised-code@3b36e1e7
     let parent = tempfile::TempDir::new().unwrap();

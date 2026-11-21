@@ -15,14 +15,13 @@ const SIGNAL: &str = "unexercised";
 /// resolved, with the root taken off, and any other path as written. Lines other than `SF:`,
 /// `DA:` and `end_of_record` are skipped.
 fn parse(root: &Path, text: &str) -> BTreeMap<String, BTreeMap<u64, u64>> {
+    // Both roots are absolute, so a relative path never starts with either.
     let roots = [std::path::absolute(root).ok(), root.canonicalize().ok()];
     let relative = |p: &str| {
-        let path = Path::new(p);
         roots
             .iter()
             .flatten()
-            .filter(|_| path.is_absolute())
-            .find_map(|r| path.strip_prefix(r).ok())
+            .find_map(|r| Path::new(p).strip_prefix(r).ok())
             .map_or_else(|| p.to_string(), |r| r.to_string_lossy().into_owned())
     };
     let mut files: BTreeMap<String, BTreeMap<u64, u64>> = BTreeMap::new();
