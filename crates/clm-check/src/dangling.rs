@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn a_marker_only_outside_a_test_is_judged_and_one_in_both_lists_once() {
-        // req:check/dangling-markers@5bc0f97f
+        // req:check/dangling-markers@80e30156
         let scan = Scan {
             req: vec![marker("a/both", 2)],
             outside: vec![marker("a/both", 2), marker("a/outside", 5)],

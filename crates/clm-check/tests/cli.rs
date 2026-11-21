@@ -105,7 +105,7 @@ fn write(root: &Path, rel: &str, content: &str) {
 
 #[test]
 fn a_command_called_in_a_test_writes_its_streams_and_returns_its_status() {
-    // req:check/commands-in-crate@ed866c99
+    // req:check/commands-in-crate@c7d289ca
     let dir = TempDir::new().unwrap();
     write(
         dir.path(),
@@ -148,7 +148,7 @@ fn a_command_called_in_a_test_writes_its_streams_and_returns_its_status() {
 
 #[test]
 fn arguments_it_cant_parse_return_2_with_the_usage_error() {
-    // req:check/commands-in-crate@ed866c99
+    // req:check/commands-in-crate@c7d289ca
     let dir = TempDir::new().unwrap();
     write(
         dir.path(),
@@ -193,23 +193,42 @@ fn arguments_it_cant_parse_return_2_with_the_usage_error() {
 
 #[test]
 fn a_skipped_detector_is_named_on_the_error_stream() {
-    // req:check/commands-in-crate@ed866c99
+    // req:check/detectors@4dd73f3d
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"knip\"\ncommand = [\"sh\", \"-c\", \"touch ran; exit 3\"]\nrequires = \"package.json\"\n",
     ));
+    let skipped = |dir: &TempDir| {
+        let out = clm_check(dir.path());
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        assert_eq!(
+            String::from_utf8(out.stderr).unwrap(),
+            "knip skipped: no package.json\n"
+        );
+        assert!(!dir.path().join("ran").exists());
+    };
+    skipped(&dir);
+    // A link to a file that doesn't exist is no `package.json` either.
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink("missing.json", dir.path().join("package.json")).unwrap();
+        skipped(&dir);
+        fs::remove_file(dir.path().join("package.json")).unwrap();
+    }
+    // With the file there, the detector runs.
+    write(dir.path(), "package.json", "{}\n");
     let out = clm_check(dir.path());
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
-    assert!(out.stdout.is_empty(), "{out:?}");
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert_eq!(
-        String::from_utf8(out.stderr).unwrap(),
-        "knip skipped: no package.json\n"
+        String::from_utf8(out.stdout).unwrap(),
+        "clm.toml: check/detectors: knip failed (exit 3)\n"
     );
-    assert!(!dir.path().join("ran").exists());
+    assert!(dir.path().join("ran").exists());
 }
 
 #[test]
 fn reports_every_violation_and_exits_1() {
-    // req:check/report-and-exit@2528ee97
+    // req:check/report-and-exit@a275f254
     let dir = TempDir::new().unwrap();
     let fm = |deps: &str| {
         format!("---\ntitle: T\nstatus: specd\nowners: []\ndepends_on: [{deps}]\n---\n")
@@ -247,7 +266,7 @@ fn repo_root() -> PathBuf {
 
 #[test]
 fn this_repository_passes_its_rules() {
-    // req:check/report-and-exit@2528ee97
+    // req:check/report-and-exit@a275f254
     let mut words = args(&["--no-detectors", "--root"]);
     words.push(repo_root().into());
     let out = call_check(Path::new("."), &words, &repository_detectors);
@@ -261,7 +280,7 @@ fn this_repository_passes_its_rules() {
 
 #[test]
 fn check_reports_marker_for_finished_change() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     let dir = TempDir::new().unwrap();
     write(
         dir.path(),
@@ -308,7 +327,7 @@ const FAILING_DETECTORS: &str = "[[detectors]]\nname = \"ok\"\ncommand = [\"true
 
 #[test]
 fn check_reports_failing_detectors() {
-    // req:check/detectors@4851be31
+    // req:check/detectors@4dd73f3d
     let dir = detector_repo(Some(FAILING_DETECTORS));
     let out = clm_check(dir.path());
     let stdout = String::from_utf8(out.stdout).unwrap();
@@ -321,7 +340,7 @@ fn check_reports_failing_detectors() {
 #[cfg(unix)]
 #[test]
 fn check_stops_a_hanging_detector() {
-    // req:check/detectors@4851be31
+    // req:check/detectors@4dd73f3d
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"hang\"\ncommand = [\"sh\", \"-c\", \"echo started; sleep 30 & echo $! > child.pid; wait\"]\ntimeout = 1\n\n[[detectors]]\nname = \"bad\"\ncommand = [\"sh\", \"-c\", \"exit 3\"]\n",
     ));
@@ -346,7 +365,7 @@ fn check_stops_a_hanging_detector() {
 
 #[test]
 fn check_reports_a_detector_that_cannot_run() {
-    // req:check/detectors@4851be31
+    // req:check/detectors@4dd73f3d
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"machete\"\ncommand = [\"no-such-tool-xyz\"]\nhint = \"cargo install cargo-machete\"\n",
     ));
@@ -366,7 +385,7 @@ fn check_reports_a_detector_that_cannot_run() {
 
 #[test]
 fn check_runs_detectors_from_the_repository_root() {
-    // req:check/detectors@4851be31
+    // req:check/detectors@4dd73f3d
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"root\"\ncommand = [\"test\", \"-f\", \"specs/SPEC.md\"]\n",
     ));
@@ -379,7 +398,7 @@ fn check_runs_detectors_from_the_repository_root() {
 
 #[test]
 fn check_without_detectors_passes() {
-    // req:check/detectors@4851be31
+    // req:check/detectors@4dd73f3d
     for clm_toml in [None, Some("defects = \"backlog\"\n")] {
         let dir = detector_repo(clm_toml);
         let out = clm_check(dir.path());
@@ -389,7 +408,7 @@ fn check_without_detectors_passes() {
 
 #[test]
 fn scenario_detectors_skipped_on_request() {
-    // req:check/detectors@4851be31
+    // req:check/detectors@4dd73f3d
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"bad\"\ncommand = [\"sh\", \"-c\", \"touch ran; exit 3\"]\n",
     ));
@@ -419,7 +438,7 @@ fn scenario_detectors_skipped_on_request() {
 
 #[test]
 fn scenario_settings_that_cannot_be_loaded() {
-    // req:check/detectors@4851be31
+    // req:check/detectors@4dd73f3d
     let dir = detector_repo(Some(FAILING_DETECTORS));
     // A spec violation `run` finds: an unparseable node.
     write(dir.path(), "specs/a/SPEC.md", "no frontmatter\n");
@@ -493,7 +512,7 @@ fn import_repo(a_deps: &str, b_paths: &str) -> TempDir {
 
 #[test]
 fn check_reports_an_undeclared_import() {
-    // req:check/undeclared-imports@5d13552f
+    // req:check/undeclared-imports@0bd77060
     let dir = import_repo("[]", "[\"crates/b/**\"]");
     let line = "crates/a/Cargo.toml: check/undeclared-imports: imports crates/b/Cargo.toml of component `b`, and `a` doesn't depend on `b`\n";
     let out = clm_check(dir.path());
@@ -509,7 +528,7 @@ fn check_reports_an_undeclared_import() {
 
 #[test]
 fn check_passes_a_declared_or_unowned_import() {
-    // req:check/undeclared-imports@5d13552f
+    // req:check/undeclared-imports@0bd77060
     for dir in [
         import_repo("[b]", "[\"crates/b/**\"]"),
         import_repo("[]", "[\"crates/b/src/**\"]"),
@@ -578,7 +597,7 @@ fn check_fails_stale_pending_change_but_ignores_applied_one() {
 
 #[test]
 fn backlog_lists_each_item() {
-    // req:check/backlog-report@392ec9fd
+    // req:check/backlog-report@546756ba
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(
         dir.path(),
@@ -630,4 +649,235 @@ fn scenario_relative_detector_tool_installed() {
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(!stdout.contains("check/detectors"), "{stdout}");
     assert_eq!(out.status.code(), Some(0), "{stdout}");
+}
+
+#[test]
+fn runs_detectors_in_order_one_after_another() {
+    // req:check/detectors@4dd73f3d
+    // `second` fails unless `first` has finished writing its file.
+    let dir = detector_repo(Some(
+        "[[detectors]]\nname = \"first\"\ncommand = [\"sh\", \"-c\", \"sleep 0.2; touch done; exit 1\"]\n\n[[detectors]]\nname = \"second\"\ncommand = [\"test\", \"-f\", \"done\"]\n",
+    ));
+    let out = clm_check(dir.path());
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "clm.toml: check/detectors: first failed (exit 1)\n"
+    );
+}
+
+#[test]
+fn reports_a_detector_killed_by_a_signal() {
+    // req:check/detectors@4dd73f3d
+    let dir = detector_repo(Some(
+        "[[detectors]]\nname = \"killed\"\ncommand = [\"sh\", \"-c\", \"kill -9 $$\"]\n",
+    ));
+    let out = clm_check(dir.path());
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "clm.toml: check/detectors: killed failed (killed by a signal)\n"
+    );
+}
+
+#[test]
+fn an_empty_command_cannot_run() {
+    // req:check/detectors@4dd73f3d
+    let dir = detector_repo(Some("[[detectors]]\nname = \"empty\"\ncommand = []\n"));
+    let out = clm_check(dir.path());
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "clm.toml: check/detectors: empty could not run: empty command\n"
+    );
+}
+
+#[test]
+fn backlog_orders_kinds_and_joins_components() {
+    // req:check/backlog-report@546756ba
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "specs/SPEC.md", NODE);
+    write(dir.path(), "specs/p/SPEC.md", NODE);
+    write(dir.path(), "specs/q/SPEC.md", NODE);
+    let (graph, _) = clm_model::load(dir.path());
+    let version = graph.requirement("p/r").unwrap().version();
+    let item = |slug: &str, kind: &str, extra: &str| {
+        write(
+            dir.path(),
+            &format!("backlog/{slug}.md"),
+            &format!("---\ntitle: T{slug}\nkind: {kind}\n{extra}---\n"),
+        );
+    };
+    item(
+        "a",
+        "workaround",
+        &format!("components: [p]\nrequirement: p/r@{version}\n"),
+    );
+    item("b", "human-task", "");
+    item("c", "question", "");
+    item("d", "idea", "components: [p, q]\n");
+    item("e", "deferred", "");
+    item("f", "bug", "");
+    let (code, out) = clm(dir.path(), &["backlog"]);
+    assert_eq!(code, Some(0), "{out}");
+    assert_eq!(
+        out.lines().collect::<Vec<_>>(),
+        [
+            "f bug P5 [] Tf",
+            "e deferred P5 [] Te",
+            "d idea P5 [p, q] Td",
+            "c question P5 [] Tc",
+            "b human-task P5 [] Tb",
+            "a workaround P5 [p] Ta",
+        ]
+    );
+}
+
+#[test]
+fn backlog_of_a_spec_that_doesnt_load_prints_its_violations() {
+    // req:check/backlog-report@546756ba
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "specs/SPEC.md", NODE);
+    write(dir.path(), "specs/b/SPEC.md", "no frontmatter\n");
+    write(
+        dir.path(),
+        "backlog/a.md",
+        "---\ntitle: Ay\nkind: question\n---\n",
+    );
+    let (code, out) = clm(dir.path(), &["backlog"]);
+    assert_eq!(code, Some(1), "{out}");
+    let lines: Vec<_> = out.lines().collect();
+    assert!(!lines.is_empty(), "{out}");
+    for line in &lines {
+        let mut parts = line.splitn(3, ": ");
+        assert_eq!(parts.next(), Some("specs/b/SPEC.md"), "{out}");
+        assert!(parts.next().is_some_and(|rule| rule.contains('/')), "{out}");
+        assert!(parts.next().is_some_and(|m| !m.is_empty()), "{out}");
+    }
+}
+
+#[test]
+fn each_call_prints_its_help() {
+    // req:check/commands-in-crate@c7d289ca
+    let dir = TempDir::new().unwrap();
+    let expected = [
+        (
+            "check",
+            "Run every deterministic check; exit 1 on any violation",
+            "Usage: clm check [OPTIONS]",
+        ),
+        (
+            "size",
+            "Report each component's spec and code size in tokens against its budget (advisory)",
+            "Usage: clm size [OPTIONS] [COMPONENT]",
+        ),
+        (
+            "coverage",
+            "List every requirement as current, behind or unbuilt (with citing markers), then the obsolete ones",
+            "Usage: clm coverage [OPTIONS]",
+        ),
+        (
+            "backlog",
+            "List backlog items: ideas, deferred work, questions and bugs",
+            "Usage: clm backlog [OPTIONS]",
+        ),
+    ];
+    let budgets = |_: &Path| -> Result<clm_check::Budgets, Violation> { unreachable!() };
+    let unused = |_: &Path| -> Result<Vec<Detector>, Violation> { unreachable!() };
+    let no_more = |_: &Path| -> Vec<Violation> { unreachable!() };
+    for (command, description, usage) in expected {
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let root = dir.path();
+        let (o, e) = (&mut stdout, &mut stderr);
+        let code = match command {
+            "check" => {
+                let inputs = CheckInputs {
+                    detectors: &unused,
+                    more: &no_more,
+                };
+                check_command(["--help"], root, &no_env, o, e, &inputs)
+            }
+            "size" => clm_check::size_command(["--help"], root, &no_env, o, e, &budgets),
+            "coverage" => clm_check::coverage_command(["--help"], root, &no_env, o, e),
+            _ => backlog_command(["--help"], root, &no_env, o, e),
+        };
+        let stdout = String::from_utf8(stdout).unwrap();
+        assert_eq!(code, 0, "{command}: {stdout}");
+        assert!(stderr.is_empty(), "{command}");
+        let lines: Vec<_> = stdout.lines().take(3).collect();
+        assert_eq!(lines, [description, "", usage], "{command}: {stdout}");
+    }
+}
+
+#[test]
+fn lines_come_in_the_order_of_their_rules() {
+    // req:check/report-and-exit@a275f254
+    let dir = import_repo("[]", "[\"crates/b/**\"]");
+    write(
+        dir.path(),
+        "specs/c/SPEC.md",
+        "---\ntitle: C\nstatus: specd\nowners: []\n---\n## Requirements\n### Requirement: x\nX.\n#### Scenario: s\n- ok\n### Requirement: x\nX.\n#### Scenario: s\n- ok\n",
+    );
+    write(
+        dir.path(),
+        "clm.toml",
+        "[[detectors]]\nname = \"bad\"\ncommand = [\"sh\", \"-c\", \"exit 3\"]\n",
+    );
+    let more = |_: &Path| {
+        vec![Violation {
+            path: PathBuf::from("ledger"),
+            rule: "ledger/verify",
+            message: "a finding".into(),
+        }]
+    };
+    let inputs = CheckInputs {
+        detectors: &repository_detectors,
+        more: &more,
+    };
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let code = check_command(
+        Vec::<OsString>::new(),
+        dir.path(),
+        &no_env,
+        &mut stdout,
+        &mut stderr,
+        &inputs,
+    );
+    let stdout = String::from_utf8(stdout).unwrap();
+    assert_eq!(code, 1, "{stdout}");
+    let lines: Vec<_> = stdout.lines().collect();
+    assert_eq!(lines.len(), 4, "{stdout}");
+    assert!(
+        lines[0].starts_with("specs/c/SPEC.md: model/unique-requirement-ids: "),
+        "{stdout}"
+    );
+    assert_eq!(
+        lines[1],
+        "crates/a/Cargo.toml: check/undeclared-imports: imports crates/b/Cargo.toml of component `b`, and `a` doesn't depend on `b`"
+    );
+    assert_eq!(lines[2], "clm.toml: check/detectors: bad failed (exit 3)");
+    assert_eq!(lines[3], "ledger: ledger/verify: a finding");
+}
+
+#[test]
+fn edges_that_cant_be_read_are_reported_and_the_detectors_still_run() {
+    // req:check/undeclared-imports@0bd77060
+    let dir = import_repo("[b]", "[\"crates/b/**\"]");
+    write(
+        dir.path(),
+        "clm.toml",
+        "[[detectors]]\nname = \"bad\"\ncommand = [\"sh\", \"-c\", \"exit 3\"]\n",
+    );
+    fs::write(dir.path().join(".git/index"), "not an index").unwrap();
+    let out = clm_check(dir.path());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+    let prefix = format!("{}: check/undeclared-imports: ", dir.path().display());
+    assert!(stdout.lines().any(|l| l.starts_with(&prefix)), "{stdout}");
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l == "clm.toml: check/detectors: bad failed (exit 3)"),
+        "{stdout}"
+    );
 }
