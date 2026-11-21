@@ -74,7 +74,7 @@ fn with_vars<R>(vars: &[(&str, Option<&std::ffi::OsStr>)], run: impl FnOnce() ->
 
 #[test]
 fn scenario_a_command_called_in_a_test() {
-    // req:ledger/commands-in-crate@b9042545
+    // req:ledger/commands-in-crate@61f9b60a
     // `clm ledger verify` on a `main` with an unrecorded land: its line on the output buffer,
     // nothing on the error buffer, and 1, as the command prints and exits.
     let dir = tempfile::tempdir().unwrap();
@@ -91,7 +91,7 @@ fn scenario_a_command_called_in_a_test() {
 
 #[test]
 fn the_root_option_overrides_the_root_it_is_given() {
-    // req:ledger/commands-in-crate@b9042545
+    // req:ledger/commands-in-crate@61f9b60a
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);
@@ -123,6 +123,77 @@ fn the_root_option_overrides_the_root_it_is_given() {
             .unwrap()
             .contains("ledger/unrecorded-land")
     );
+}
+
+#[test]
+fn scenario_what_it_prints_where() {
+    // req:ledger/commands-in-crate@61f9b60a
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let env = env(root, alices(root));
+    let first = append(root, approved("f"), &env).unwrap();
+    let branch = format!("clm/ledger/{}", first.record.writer);
+    append_line(root, &branch, "not json");
+    let (code, out, err) = clm(root, root, &["ledger", "show"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(
+        out,
+        format!(
+            "approved f spec/x {} {}\n",
+            first.record.writer, first.record.at
+        )
+    );
+    let warning = format!("warning: {branch} line 2: skipped, not a record: ");
+    assert_eq!(err.lines().count(), 1, "{err}");
+    assert!(err.starts_with(&warning), "{err}");
+    let (code, out, err) = clm(root, root, &["ledger", "verify", "--since", "nowhere"]);
+    assert_eq!((code, out.as_str()), (Some(2), ""), "{err}");
+    assert!(err.starts_with("clm ledger: "), "{err}");
+    assert!(err.contains("nowhere"), "git's message: {err}");
+}
+
+#[test]
+fn scenario_help() {
+    // req:ledger/commands-in-crate@61f9b60a
+    for (args, description, usage) in [
+        (
+            &["--help"][..],
+            "The ledger of approvals, checks and lands: print it, audit `main` against it, or \
+             prune your own superseded records",
+            "Usage: clm ledger <COMMAND>",
+        ),
+        (
+            &["compact", "--help"][..],
+            "Rewrite your own ledger without approvals of landed diffs and checks older than \
+             the newest land, push it, and print how many records went",
+            "Usage: clm ledger compact [OPTIONS]",
+        ),
+        (
+            &["verify", "--help"][..],
+            "Report each commit on `main` no `landed` record names, merge or not, and each \
+             land no `checked` record covers; exit 1 when there is one. Doesn't fetch",
+            "Usage: clm ledger verify [OPTIONS]",
+        ),
+        (
+            &["show", "--help"][..],
+            "Print every record, one per line in time order. Doesn't fetch",
+            "Usage: clm ledger show [OPTIONS]",
+        ),
+    ] {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = clm_ledger::ledger_command(
+            args.iter().copied(),
+            Path::new("."),
+            &|_| None,
+            &mut out,
+            &mut err,
+        );
+        let out = String::from_utf8(out).unwrap();
+        assert_eq!(code, 0, "{args:?}");
+        assert!(err.is_empty(), "{args:?}");
+        let lines: Vec<&str> = out.lines().take(3).collect();
+        assert_eq!(lines, [description, "", usage], "{args:?}:\n{out}");
+    }
 }
 
 /// The diff's fingerprint against `base` in `dir`, which `clm fingerprint` prints, from the

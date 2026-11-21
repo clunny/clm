@@ -58,9 +58,16 @@ pub enum Ledger {
     },
 }
 
-/// The command line `ledger_command` parses: the command's own arguments, without its name.
+// The command line `ledger_command` parses: the command's own arguments, without its name.
+// A plain comment, since clap would print a doc comment as the help's description.
 #[derive(Parser)]
-#[command(name = "clm ledger", bin_name = "clm ledger", no_binary_name = true)]
+#[command(
+    name = "clm ledger",
+    bin_name = "clm ledger",
+    no_binary_name = true,
+    about = "The ledger of approvals, checks and lands: print it, audit `main` against it, or \
+             prune your own superseded records"
+)]
 struct Line {
     #[command(flatten)]
     args: LedgerArgs,
@@ -190,7 +197,7 @@ mod tests {
 
     #[test]
     fn an_error_is_on_the_error_stream_with_2() {
-        // req:ledger/commands-in-crate@b9042545
+        // req:ledger/commands-in-crate@61f9b60a
         let (out, err, code) = written(Err(Error::Writer("no writer".into())));
         assert_eq!(
             (out.as_str(), err.as_str(), code),
@@ -200,7 +207,7 @@ mod tests {
 
     #[test]
     fn warnings_go_to_the_error_stream_and_lines_to_the_output() {
-        // req:ledger/commands-in-crate@b9042545
+        // req:ledger/commands-in-crate@61f9b60a
         let done = Ok((vec!["w".into()], vec!["a".into(), "b".into()], 1));
         let (out, err, code) = written(done);
         assert_eq!(
@@ -211,7 +218,7 @@ mod tests {
 
     #[test]
     fn a_finding_prints_as_the_models_violation_line() {
-        // req:ledger/commands-in-crate@b9042545
+        // req:ledger/commands-in-crate@61f9b60a
         let v = violation(Finding {
             rule: "ledger/unrecorded-land",
             commit: "abc".into(),
@@ -223,7 +230,7 @@ mod tests {
 
     #[test]
     fn arguments_it_cannot_parse_return_2_with_the_usage_error() {
-        // req:ledger/commands-in-crate@b9042545
+        // req:ledger/commands-in-crate@61f9b60a
         let (mut out, mut err) = (Vec::new(), Vec::new());
         let code = ledger_command(
             ["show", "--no-such-option"],
