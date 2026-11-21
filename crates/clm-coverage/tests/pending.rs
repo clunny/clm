@@ -354,7 +354,8 @@ fn priority_is_the_highest_of_the_live_changes_touching_it() {
     let dir = repo();
     let d = dir.path();
     let modifies_x = "---\ncomponent: a\n---\n## MODIFIED Requirements\n### Requirement: x <!-- base: 0000000000000000 -->\nx.\n\n#### Scenario: s\n- ok\n";
-    for (change, priority) in [("m", "P2"), ("k", "P4")] {
+    // `z`, beyond the scenario, sorts last, so the last change's priority isn't the highest.
+    for (change, priority) in [("m", "P2"), ("k", "P4"), ("z", "P3")] {
         write(
             d,
             &format!("changes/{change}/change.md"),

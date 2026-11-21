@@ -32,14 +32,30 @@ fn located(markers: &[clm_coverage::Marker]) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Points this process's git, and every git it starts, at no repository but one found
+/// from the directory it runs in: no inherited `GIT_DIR`, work tree or index.
+fn no_outer_git() {
+    // SAFETY: nextest runs each test in a process of its own.
+    unsafe {
+        for var in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
+            std::env::remove_var(var);
+        }
+    }
+}
+
+/// Pins `d` outside any git work tree, whatever holds the temporary directory.
+fn outside_git(d: &Path) {
+    no_outer_git();
+    // SAFETY: nextest runs each test in a process of its own.
+    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", d.parent().unwrap()) };
+}
+
 #[test]
 fn scenario_a_tree_outside_git() {
     // req:check.coverage/markers-from-files@50921197
     let dir = TempDir::new().unwrap();
     let d = dir.path();
-    // Pin the directory outside any git work tree, whatever holds the temporary directory.
-    // SAFETY: nextest runs each test in a process of its own.
-    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", d.parent().unwrap()) };
+    outside_git(d);
     let rev_parse = Command::new("git")
         .args(["rev-parse", "--git-dir"])
         .current_dir(d)
@@ -83,8 +99,7 @@ fn a_link_to_a_file_is_read_through_it() {
     // req:check.coverage/markers-from-files@50921197
     let dir = TempDir::new().unwrap();
     let d = dir.path();
-    // SAFETY: nextest runs each test in a process of its own.
-    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", d.parent().unwrap()) };
+    outside_git(d);
     write(d, "real/t.rs", test_citing("a/x"));
     std::os::unix::fs::symlink(d.join("real/t.rs"), d.join("l.rs")).unwrap();
     std::os::unix::fs::symlink(d.join("real"), d.join("dir")).unwrap();
@@ -120,6 +135,7 @@ fn git(d: &Path, args: &[&str], stdin: Option<&str>) -> String {
 #[test]
 fn scenario_a_file_in_conflict() {
     // req:check.coverage/markers-from-files@50921197
+    no_outer_git();
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(
