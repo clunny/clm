@@ -169,6 +169,59 @@ fn scenario_arguments_it_cant_parse() {
 }
 
 #[test]
+fn scenario_help() {
+    // req:check.health/commands-in-crate@bb8aa7f2
+    let dir = repo();
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let status = clm_health::health_command(
+        ["--help"],
+        dir.path(),
+        Ok(common::settings(12000, 40000)),
+        &|_| None,
+        &mut stdout,
+        &mut stderr,
+    );
+    let health = String::from_utf8(stdout).unwrap();
+    assert_eq!((status, stderr.as_slice()), (0, &b""[..]), "{health}");
+    let lines: Vec<&str> = health.lines().take(3).collect();
+    assert_eq!(
+        lines,
+        [
+            "Print one advisory report of the repository's health; exits 0 whatever it finds",
+            "",
+            "Usage: clm health [OPTIONS]",
+        ],
+        "{health}"
+    );
+
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let status = clm_health::workaround_command(
+        ["--help"],
+        dir.path(),
+        Ok(3),
+        &mut "".as_bytes(),
+        &|_| None,
+        &mut stdout,
+        &mut stderr,
+    );
+    let workaround = String::from_utf8(stdout).unwrap();
+    assert_eq!((status, stderr.as_slice()), (0, &b""[..]), "{workaround}");
+    let lines: Vec<&str> = workaround.lines().take(3).collect();
+    assert_eq!(
+        lines,
+        [
+            "Flag that a requirement was hard to build: write \
+             `backlog/workaround-<component>-<slug>-<n>.md` with the situation from stdin and \
+             print its path. Commits nothing",
+            "",
+            "Usage: clm workaround [OPTIONS] --title <TITLE> <REQUIREMENT>",
+        ],
+        "{workaround}"
+    );
+    assert!(!dir.path().join("backlog").exists(), "a flag was written");
+}
+
+#[test]
 fn scenario_a_clean_repository() {
     // req:check.health/health-report@d9222477
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

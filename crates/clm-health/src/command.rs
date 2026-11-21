@@ -34,10 +34,21 @@ pub struct WorkaroundArgs {
     pub root: Option<PathBuf>,
 }
 
+/// What `clm health --help` prints first (`commands-in-crate`).
+const HEALTH_ABOUT: &str =
+    "Print one advisory report of the repository's health; exits 0 whatever it finds";
+
+/// What `clm workaround --help` prints first (`commands-in-crate`).
+const WORKAROUND_ABOUT: &str = "Flag that a requirement was hard to build: write \
+     `backlog/workaround-<component>-<slug>-<n>.md` with the situation from stdin and print its \
+     path. Commits nothing";
+
 /// `A` parsed from `args`, the words after the command's name; on a usage error (or a request
-/// for help) the text clap renders, written where clap puts it, and the status to return.
+/// for help, whose first line is `about`) the text clap renders, written where clap puts it,
+/// and the status to return.
 fn parse<'a, A: Args + FromArgMatches, I, T>(
     name: &'static str,
+    about: &'static str,
     args: I,
     out: &'a mut dyn Write,
     err: &'a mut dyn Write,
@@ -46,7 +57,8 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let command = A::augment_args(clap::Command::new(name).bin_name(name).no_binary_name(true));
+    let command =
+        A::augment_args(clap::Command::new(name).bin_name(name).no_binary_name(true)).about(about);
     let parsed = command
         .try_get_matches_from(args)
         .and_then(|m| A::from_arg_matches(&m));
@@ -73,7 +85,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let args: HealthArgs = match parse("clm health", args, out, err) {
+    let args: HealthArgs = match parse("clm health", HEALTH_ABOUT, args, out, err) {
         Ok(args) => args,
         Err(status) => return status,
     };
@@ -120,7 +132,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let args: WorkaroundArgs = match parse("clm workaround", args, out, err) {
+    let args: WorkaroundArgs = match parse("clm workaround", WORKAROUND_ABOUT, args, out, err) {
         Ok(args) => args,
         Err(status) => return status,
     };
