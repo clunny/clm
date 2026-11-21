@@ -39,6 +39,7 @@ Read against the rule and the code on 2026-11-20 and 2026-11-21, by one reader p
 - No call's return that another component's test asserts changes. `check_lock` returns every difference where it returned the first; `init`'s one test of it has one difference.
 - `plugin-panel/test/agents.test.ts` parses `crates/clm-effort/src/prices.rs` as text. `effort`'s build can't edit that test, so its Design tells it to keep the rows' shape and the fallback constant's name.
 - `upgrade/migration-markers-in-tests` is built before the next release, which freezes the note it changes.
+- All of this change's components were over the spec budget before it and each grows, as "Settled on 2026-11-20" in the plan item expects of every wave: stating what was unstated costs more text than the rule's cuts save. No seam is proposed here; budgets and splits are `backlog/the-brakes-on-the-spec-s-growth-only-advise`, for after the plan (`slim-components`).
 - The names other components and the human layers use stay: every requirement of `init` that another component needs or `ARCHITECTURE.md` names, `upgrade/own-list-closed`, `ledger/request-cleared`, and the `effort` and `ledger` requirements `effort`, `replica` and the web crates name.
 
 ## What the requirements no longer state
@@ -79,7 +80,7 @@ Scenario outcomes that change under their names, none losing a case:
 - `effort`: `capabilities-list` "outside a CLM repository", `commands-in-crate` "arguments it can't parse", `prices` "unknown model" (the fallback's $3.00, where it named a row that holds $2.00).
 - `ledger`: `legacy-doc-only` "paths", `commands-in-crate` "arguments it can't parse".
 - `upgrade`: `migration-list` "the forms that take a list are public" and "a fresh project is done" (every `done` is true but that of `20261105-clm-upgrade-2`, which a later migration supersedes), `own-list-closed` "the list as it stands", `upgrade-note-and-decline` "declining advised drift", `migration-agents-md` "CLAUDE.md alone", `migration-markers-in-tests` "the note", `shipped-migrations-frozen` "locking a release".
-- `init`: `init-check-permissions` "no settings" (every rule `init-seeds-permissions` names, where it said twenty of what are twenty-six), `guide-command` "page left out", `guide-table-from-files` "this repository", `template-says-pull-request` "the written architecture", `template-says-architectural-constraint` "the written layers", `templates-say-new-words` "a new repository", `survey-components` "entries the model refuses", `all-migrations` "a duplicate ID", `commands-in-crate` "arguments it can't parse".
+- `init`: `init-next-steps` "azure next steps", `init-check-permissions` "no settings" (every rule `init-seeds-permissions` names, where it said twenty of what are twenty-six), `guide-command` "page left out", `guide-table-from-files` "this repository", `template-says-pull-request` "the written architecture", `template-says-architectural-constraint` "the written layers", `templates-say-new-words` "a new repository", `survey-components` "entries the model refuses", `all-migrations` "a duplicate ID", `commands-in-crate` "arguments it can't parse".
 
 ## What no test asserts today
 
