@@ -717,4 +717,40 @@ fn names_json_escapes_are_read_whole() {
     subagent(&f, &worktree);
     let (work, _) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), Some("impl/c"));
     assert_eq!(by_branch(&work), [("impl/c", "s1/agent-x", 10)], "{work:?}");
+
+    // `"` and `\` are escaped as well; an entry with no `timestamp` keeps its tokens.
+    for name in ["impl/a\"b", "impl/a\\b"] {
+        let f = fixture();
+        let mut line = serde_json::from_str::<serde_json::Value>(&entry(
+            "s1",
+            name,
+            &f.cwd,
+            0,
+            "m1",
+            OPUS,
+            (4, 1),
+        ))
+        .unwrap();
+        line.as_object_mut().unwrap().remove("timestamp");
+        write(&f.transcripts, &f.cwd, "s1.jsonl", &[line.to_string()]);
+        let counted = [(f.cwd.clone(), Unlinked)];
+        let (work, _) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), Some(name));
+        assert_eq!(by_branch(&work), [(name, "s1", 4)], "{work:?}");
+        assert_eq!(work[0].active_seconds, 0);
+    }
+    for dir in ["a\"b", "a\\b"] {
+        let f = fixture();
+        let worktree = f.cwd.join(".claude").join("worktrees").join(dir);
+        let counted = vec![
+            (f.cwd.clone(), Unlinked),
+            (worktree.clone(), Branch("impl/c".into())),
+        ];
+        subagent(&f, &worktree);
+        let (work, _) = clm_effort::sessions(&f.transcripts, &counted, &pins(&[]), Some("impl/c"));
+        assert_eq!(
+            by_branch(&work),
+            [("impl/c", "s1/agent-x", 10)],
+            "{dir} {work:?}"
+        );
+    }
 }
