@@ -253,10 +253,13 @@ fn a_file_it_cant_read_is_reported_from_the_root() {
         // Run as root, which reads any file: nothing to show.
         return;
     }
-    let line = the_one_failure(dir.path());
-    let prefix = format!("{}: check/node-size: ", dir.path().display());
-    assert!(line.starts_with(&prefix), "{line}");
+    let out = clm_size(dir.path(), None);
     fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let prefix = format!("{}: check/node-size: ", dir.path().display());
+    assert_eq!(stdout.lines().count(), 1, "{stdout}");
+    assert!(stdout.starts_with(&prefix), "{stdout}");
 }
 
 /// `a`'s and `b`'s code counts, from `clm size`'s lines.
