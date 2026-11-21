@@ -1,14 +1,30 @@
 mod common;
 
+use std::path::Path;
+
 use common::{commit_ago, git, repo, report, section, spec, write};
 use tempfile::TempDir;
 
-const HOUR: u64 = 3600;
-const DAY: u64 = 86_400;
+/// What `clm health --root <root>` with `extra` arguments after it prints to standard output.
+fn clm_health(root: &Path, extra: &[&str]) -> String {
+    let mut args = vec!["--root", root.to_str().unwrap()];
+    args.extend(extra);
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let status = clm_health::health_command(
+        args,
+        Path::new("/nonexistent"),
+        Ok(common::settings(12000, 40000)),
+        &|_| None,
+        &mut stdout,
+        &mut stderr,
+    );
+    assert_eq!(status, 0, "{}", String::from_utf8_lossy(&stderr));
+    String::from_utf8(stdout).unwrap()
+}
 
-#[test]
-fn scenario_lapsed_claim() {
-    // req:check.health/state-signals@baf22711
+/// A repository whose `origin` holds `main`, committed 20 hours ago, and each of `claims`,
+/// a branch off `main` committed the given seconds ago.
+fn claims(claims: &[(&str, u64)]) -> (TempDir, TempDir) {
     let origin = TempDir::new().unwrap();
     git(origin.path(), &["init", "-q", "--bare"]);
     let dir = repo();
@@ -17,23 +33,55 @@ fn scenario_lapsed_claim() {
     let url = origin.path().to_str().unwrap();
     git(d, &["remote", "add", "origin", url]);
     git(d, &["push", "-q", "origin", "main"]);
-    for (branch, ago) in [
-        ("impl/a", 10 * HOUR),
-        ("impl/b", HOUR),
-        ("propose/q", 6 * HOUR),
-    ] {
+    for &(branch, ago) in claims {
         git(d, &["switch", "-q", "-c", branch, "main"]);
         commit_ago(d, branch, ago);
         git(d, &["push", "-q", "origin", branch]);
     }
     git(d, &["switch", "-q", "main"]);
-    let out = report(d);
+    (origin, dir)
+}
+
+const HOUR: u64 = 3600;
+const DAY: u64 = 86_400;
+
+#[test]
+fn scenario_lapsed_claim() {
+    // req:check.health/state-signals@baf22711
+    let (_origin, dir) = claims(&[
+        ("impl/a", 10 * HOUR),
+        ("impl/b", HOUR),
+        ("propose/q", 6 * HOUR),
+    ]);
+    let out = clm_health(dir.path(), &["--expiry", "4"]);
     assert_eq!(
         section(&out, "lapsed-claim"),
         [
             "health/lapsed-claim: 2 claims",
             "impl/a: health/lapsed-claim: last pushed 10h ago",
             "propose/q: health/lapsed-claim: last pushed 6h ago",
+        ],
+        "{out}"
+    );
+    // A longer expiry keeps them.
+    let out = clm_health(dir.path(), &["--expiry", "11"]);
+    assert_eq!(
+        section(&out, "lapsed-claim"),
+        ["health/lapsed-claim: 0 claims"],
+        "{out}"
+    );
+}
+
+#[test]
+fn scenario_the_default_expiry() {
+    // req:check.health/state-signals@baf22711
+    let (_origin, dir) = claims(&[("propose/q", 5 * HOUR), ("impl/b", 3 * HOUR)]);
+    let out = clm_health(dir.path(), &[]);
+    assert_eq!(
+        section(&out, "lapsed-claim"),
+        [
+            "health/lapsed-claim: 1 claims",
+            "propose/q: health/lapsed-claim: last pushed 5h ago",
         ],
         "{out}"
     );
@@ -124,6 +172,44 @@ fn scenario_stalled_change() {
 }
 
 #[test]
+fn scenario_a_removed_component_and_an_empty_change() {
+    // req:check.health/state-signals@baf22711
+    let dir = repo();
+    let d = dir.path();
+    write(
+        d,
+        "changes/20260105-r/change.md",
+        "---\nstatus: applied\n---\n",
+    );
+    write(
+        d,
+        "changes/20260105-r/deltas/b.c.md",
+        "---\ncomponent: b.c\nremove: true\n---\n## REMOVED Requirements\n\n\
+### Requirement: x <!-- base: 00000000 -->\n",
+    );
+    write(
+        d,
+        "tests/t.rs",
+        &format!("// {}:b.c/x@00000000\n#[test]\nfn t() {{}}\n", "req"),
+    );
+    git(d, &["add", "-A"]);
+    let out = report(d);
+    assert_eq!(
+        section(&out, "pending"),
+        [
+            "health/pending: 1 components",
+            "specs/b/c/SPEC.md: health/pending: 1 pending (0 unbuilt, 0 behind, 1 obsolete)",
+        ],
+        "{out}"
+    );
+    assert_eq!(
+        section(&out, "stalled-change"),
+        ["health/stalled-change: 0 changes"],
+        "{out}"
+    );
+}
+
+#[test]
 fn scenario_unanswered_question() {
     // req:check.health/state-signals@baf22711
     let dir = repo();
@@ -133,6 +219,10 @@ fn scenario_unanswered_question() {
     write(d, "backlog/q.md", &item("question"));
     write(d, "backlog/b.md", &item("bug"));
     commit_ago(d, "q", 45 * DAY);
+    git(d, &["rm", "-q", "backlog/q.md"]);
+    commit_ago(d, "q gone", 2 * DAY + HOUR);
+    write(d, "backlog/q.md", &item("question"));
+    commit_ago(d, "q again", 2 * DAY);
     write(d, "backlog/h.md", &item("human-task"));
     commit_ago(d, "h", 3 * DAY);
     write(d, "backlog/u.md", &item("question"));

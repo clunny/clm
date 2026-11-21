@@ -1,12 +1,12 @@
 //! The signals of state other commands each show a part of: `check`, `pending`,
 //! `oversized`, `lapsed-claim`, `stalled-change` and `unanswered` (`state-signals`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use clm_check::Size;
 use clm_coverage::{Marker, State};
-use clm_model::{BacklogKind, ChangeStatus, Graph};
+use clm_model::{BacklogKind, ChangeStatus, Graph, Layer};
 
 use crate::{Failure, Section, finding};
 
@@ -28,9 +28,12 @@ pub(crate) fn check(root: &Path) -> Section {
     Section::of("check", "violations", lines)
 }
 
-/// Each node with pending requirements, with how many are in each pending state.
+/// Each node with pending requirements, with how many are in each pending state. A
+/// requirement of a node the graph no longer holds counts once, on that node, wherever
+/// `clm_coverage::pending` lists its markers.
 pub(crate) fn pending(graph: &Graph, markers: &[Marker]) -> Section {
     let mut counts: BTreeMap<&str, [usize; 3]> = BTreeMap::new();
+    let mut seen = BTreeSet::new();
     let list = clm_coverage::pending(graph, markers);
     for p in &list {
         let slot = match p.state {
@@ -39,7 +42,14 @@ pub(crate) fn pending(graph: &Graph, markers: &[Marker]) -> Section {
             State::Obsolete => 2,
             State::Current => continue,
         };
-        counts.entry(p.node.as_str()).or_default()[slot] += 1;
+        let removed =
+            p.id.split_once('/')
+                .map(|(node, _)| node)
+                .filter(|node| Layer::of(&p.id).is_none() && !graph.nodes.contains_key(*node));
+        let node = removed.unwrap_or(p.node.as_str());
+        if seen.insert((node, p.id.as_str())) {
+            counts.entry(node).or_default()[slot] += 1;
+        }
     }
     let lines = counts
         .into_iter()

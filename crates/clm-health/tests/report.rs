@@ -33,6 +33,7 @@ const SIGNALS: [&str; 24] = [
 #[test]
 fn every_signal_prints_its_summary_in_the_table_order() {
     // req:check.health/health-report@d9222477
+    // A git repository with no commit, no remote and no file but `specs/SPEC.md`.
     let dir = repo();
     let out = report(dir.path());
     let summaries: Vec<&str> = out
@@ -41,7 +42,36 @@ fn every_signal_prints_its_summary_in_the_table_order() {
         .map(|l| l["health/".len()..].split(':').next().unwrap())
         .collect();
     assert_eq!(summaries, SIGNALS, "{out}");
-    assert!(out.contains("health/check: 0 violations\n"), "{out}");
+    assert_eq!(
+        out.lines().collect::<Vec<_>>(),
+        [
+            "health/check: 0 violations",
+            "health/pending: 0 components",
+            "health/oversized: 0 components",
+            "health/lapsed-claim: no origin",
+            "health/stalled-change: 0 changes",
+            "health/unanswered: 0 items",
+            "health/uncited-decision: 0 decisions",
+            "health/unserved: 0 entries",
+            "health/history-words: 0 lines",
+            "health/design-heavy: 0 components",
+            "health/outlier-size: no median: fewer than 3 components with requirements",
+            "health/unexercised: no lcov file configured",
+            "health/workaround: 0 flags",
+            "health/exemption: 0 exemptions",
+            "health/rewritten: 0 requirements",
+            "health/churn: no history",
+            "health/land-time: 0 of 0 timed lands over 120s",
+            "health/many-scenarios: 0 requirements",
+            "health/many-exceptions: 0 requirements",
+            "health/reconsider: 0 requirements",
+            "health/outside-contract: 0 names",
+            "health/test-placement: 0 requirements",
+            "health/design-exit: 0 lines",
+            "health/uncited-test: 0 tests",
+        ],
+        "{out}"
+    );
 }
 
 #[test]

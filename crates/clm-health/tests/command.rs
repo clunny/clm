@@ -266,7 +266,8 @@ fn scenario_findings_dont_fail_it() {
 #[test]
 fn scenario_settings_cant_be_loaded() {
     // req:check.health/health-report@d9222477
-    let dir = repo();
+    // A directory with no `specs/SPEC.md`: the violation is printed before the tree is read.
+    let dir = TempDir::new().unwrap();
     write(dir.path(), "clm.toml", "[health]\nreconsider = 0\n");
     // What `crates/clm` passes when `config` rejects that file.
     let rejected = clm_check::Violation {
@@ -277,11 +278,76 @@ fn scenario_settings_cant_be_loaded() {
     let out = call_health(dir.path(), &[], Err(rejected));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status, 1, "{out:?}");
-    assert!(
-        stderr.contains("clm.toml") && stderr.contains("`health`"),
-        "{stderr}"
+    assert_eq!(
+        stderr,
+        "clm health: clm.toml: check.health/health-report: `health`: `reconsider` must be at least 1\n"
     );
     assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+#[test]
+fn scenario_refused() {
+    // req:check.health/health-report@d9222477
+    let settings = || Ok(common::settings(12000, 40000));
+
+    // No `specs/SPEC.md`: exit 1 naming it, through the command and `report`.
+    let empty = TempDir::new().unwrap();
+    let out = call_health(empty.path(), &[], settings());
+    assert_eq!(out.status, 1, "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    let why = format!("{}: specs/SPEC.md not found", empty.path().display());
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        format!("clm health: {why}\n")
+    );
+    match clm_health::report(empty.path(), &common::settings(12000, 40000), 4) {
+        Err(clm_health::Failure::Refused(message)) => assert_eq!(message, why),
+        other => panic!("{other:?}"),
+    }
+
+    // `specs/SPEC.md` outside a git repository: git fails, exit 2.
+    let plain = TempDir::new().unwrap();
+    write(plain.path(), "specs/SPEC.md", common::ROOT);
+    let inside = Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .current_dir(plain.path())
+        .output()
+        .unwrap();
+    assert!(
+        !inside.status.success(),
+        "the directory is in a git work tree"
+    );
+    let out = call_health(plain.path(), &[], settings());
+    assert_eq!(out.status, 2, "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.starts_with("clm health: ") && stderr.len() > 14,
+        "{stderr}"
+    );
+    match clm_health::report(plain.path(), &common::settings(12000, 40000), 4) {
+        Err(clm_health::Failure::Git(message)) => {
+            assert_eq!(stderr, format!("clm health: {message}\n"))
+        }
+        other => panic!("{other:?}"),
+    }
+
+    // An output stream that refuses the report: exit 1 with its error.
+    let dir = repo();
+    let mut stderr = Vec::new();
+    let status = clm_health::health_command(
+        std::iter::empty::<&str>(),
+        dir.path(),
+        settings(),
+        &|_| None,
+        &mut Broken,
+        &mut stderr,
+    );
+    assert_eq!(status, 1);
+    assert_eq!(
+        String::from_utf8(stderr).unwrap(),
+        "clm health: stdout is gone\n"
+    );
 }
 
 #[test]
