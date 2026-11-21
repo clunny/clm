@@ -177,8 +177,10 @@ fn quote(s: &str) -> String {
 /// Sets top-level `key` in `clm.toml` to the TOML `value`, writing only when that changes it.
 fn set_key(root: &Path, key: &str, value: &str) -> Result<(), String> {
     let path = root.join("clm.toml");
-    let Ok(text) = fs::read_to_string(&path) else {
-        return Ok(());
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("can't read clm.toml: {e}")),
     };
     let new = set_top_level(&text, key, value)?;
     if new != text {
@@ -195,22 +197,24 @@ fn is_header(line: &str) -> bool {
 /// plain or quoted key, one per leaf for a dotted one (`key.part = ...`). A header table of that
 /// name sets nothing at the top level and gives none.
 fn value_spans(doc: &toml_edit::Table, key: &str) -> Vec<std::ops::Range<usize>> {
-    fn leaves(item: &toml_edit::Item, out: &mut Vec<std::ops::Range<usize>>) {
-        match item {
-            toml_edit::Item::Table(t) if t.is_dotted() => {
-                for (_, child) in t.iter() {
-                    leaves(child, out);
-                }
-            }
-            toml_edit::Item::Value(v) => out.extend(v.span()),
-            _ => {}
-        }
-    }
     let mut out = Vec::new();
     if let Some(item) = doc.get(key) {
         leaves(item, &mut out);
     }
     out
+}
+
+/// The spans of the values a top-level item sets, following dotted keys.
+fn leaves(item: &toml_edit::Item, out: &mut Vec<std::ops::Range<usize>>) {
+    match item {
+        toml_edit::Item::Table(t) if t.is_dotted() => {
+            for (_, child) in t.iter() {
+                leaves(child, out);
+            }
+        }
+        toml_edit::Item::Value(v) => out.extend(v.span()),
+        _ => {}
+    }
 }
 
 /// `text` with the lines that set top-level `key` replaced by one line `key = value`, where the
@@ -219,6 +223,16 @@ fn value_spans(doc: &toml_edit::Table, key: &str) -> Vec<std::ops::Range<usize>>
 /// none. Every other line is left as it is. The lines are found from the parse, so a bracket in a
 /// comment or a string ends nothing. Fails, naming `clm.toml`, when `text` isn't TOML.
 pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> Result<String, String> {
+    let new = edit_top_level(text, key, value)?;
+    // A table of the same name (`[key]`, `[key.part]`) can't be replaced line by line; refuse
+    // rather than write a clm.toml that no longer parses.
+    toml_edit::ImDocument::parse(new.as_str()).map_err(|_| {
+        format!("can't set `{key}` in clm.toml: a table of that name is in the way; fix it by hand")
+    })?;
+    Ok(new)
+}
+
+fn edit_top_level(text: &str, key: &str, value: &str) -> Result<String, String> {
     let doc = toml_edit::ImDocument::parse(text)
         .map_err(|e| format!("clm.toml doesn't parse as TOML: {e}"))?;
     let new_line = format!("{key} = {value}\n");
@@ -242,7 +256,18 @@ pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> Result<String
         }
         return Ok(out);
     }
-    let first_header = lines.iter().position(|l| is_header(l));
+    // A line a top-level value runs on over, such as one of a multi-line array or string, is no
+    // header whatever it starts with.
+    let mut inside = vec![false; lines.len()];
+    let mut spans = Vec::new();
+    for (_, item) in doc.as_table().iter() {
+        leaves(item, &mut spans);
+    }
+    for span in spans {
+        let last = line_of(span.end.saturating_sub(1).max(span.start));
+        inside[line_of(span.start) + 1..=last].fill(true);
+    }
+    let first_header = (0..lines.len()).find(|&i| !inside[i] && is_header(lines[i]));
     Ok(match first_header {
         Some(header) => {
             // The header's lead-in: the comment lines directly above it, then the blank lines

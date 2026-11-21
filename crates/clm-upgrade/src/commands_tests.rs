@@ -405,6 +405,53 @@ fn a_clm_toml_it_cannot_write_keeps_what_the_run_did() {
 
 // req:upgrade/upgrade-apply@8f1b6421
 #[test]
+fn a_line_inside_a_value_is_no_header() {
+    let text =
+        "allow = [\n  [\"a\", \"b\"],\n]\nnote = \"\"\"\n[x]\n\"\"\"\n\n[land]\ncheck = \"true\"\n";
+    assert_eq!(
+        set_top_level(text, "k", "1").unwrap(),
+        text.replace("\n\n[land]", "\nk = 1\n\n[land]")
+    );
+}
+
+// req:upgrade/upgrade-apply@8f1b6421
+#[test]
+fn a_table_of_the_same_name_is_refused_not_broken() {
+    let text = "upgraded.x = 1\n\n[upgraded.y]\nz = 1\n";
+    let err = set_top_level(text, "upgraded", "\"m\"").unwrap_err();
+    assert!(err.contains("clm.toml"), "{err}");
+    let dir = project(text);
+    let err = apply_in(&[apply_m()], &[], dir.path()).unwrap_err();
+    assert!(
+        err.starts_with("applied m\n") && err.contains("clm.toml"),
+        "{err}"
+    );
+    assert_eq!(read(&dir, "clm.toml"), text);
+}
+
+fn spoil_clm_toml(root: &Path) -> Result<(), String> {
+    fs::write(root.join("clm.toml"), b"\xff\xfe\n").map_err(|e| e.to_string())
+}
+
+// req:upgrade/upgrade-apply@8f1b6421
+#[test]
+fn a_clm_toml_a_migration_made_unreadable_is_not_stamped_silently() {
+    let spoil = Migration {
+        id: "spoil",
+        level: Level::Required,
+        done: never,
+        kind: Kind::Apply(spoil_clm_toml, ""),
+    };
+    let dir = project("");
+    let err = apply_in(&[spoil], &[], dir.path()).unwrap_err();
+    assert!(
+        err.starts_with("applied spoil\n") && err.contains("clm.toml"),
+        "{err}"
+    );
+}
+
+// req:upgrade/upgrade-apply@8f1b6421
+#[test]
 fn apply_refuses_a_clm_toml_it_cannot_read() {
     let list = [apply_s(), apply_m()];
     let broken = "upgraded = [\ndefects = \"ask\"\n\n[land]\ncheck = \"true\"\n";
