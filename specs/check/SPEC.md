@@ -16,12 +16,13 @@ A test cites the requirement it proves as `req:<id>@<version>`, where the versio
 
 The markers and the states are computed by the child component `check.coverage` (crate `clm-coverage`). A component whose code reads them imports `clm-coverage`, depends on `check.coverage` and reads that Contract. `clm-check` re-exports none of that library's items (`check-coverage-split`). The crate builds for `wasm32-unknown-unknown` with its default features disabled (`check-builds-for-wasm`).
 
-`clm size [<component>]` reports each component's size in tokens against its budget, marking the components over either (`node-size`, `node-size-budgets`). It is advisory: it exits 0 whatever the sizes and whatever violations the spec holds, 1 only for an unknown component, settings that can't be loaded or tracked files that can't be listed, and 2 on arguments it can't parse; no rule of `clm check` reads the sizes.
+`clm size [<component>]` reports each component's size in tokens against its budget, marking the components over either (`node-size`, `node-size-budgets`). It is advisory: it exits 0 whatever the sizes and whatever violations the spec holds, 1 only for an unknown component, settings that can't be loaded, or the working tree's files that can't be listed, probed or read, and 2 on arguments it can't parse; no rule of `clm check` reads the sizes.
 
 `clm-check` offers these calls to other crates:
-- `run(root)`, every rule of `clm check` but `undeclared-imports`, the detectors and the rules its caller passes, on the checkout at `root`, and `run_listed(root, files)`, the same on a listing its caller passes (`run-listed`), each returning the violations, `model`'s `Violation`, which the crate offers again; `clm rebase` and `clm health` call `run`, and `clm wrap-up` calls `run_listed`.
+- `run(root)`, every rule of `clm check` but `undeclared-imports`, the detectors and the rules its caller passes, on the checkout at `root`, and `run_listed(root, files)`, the same on a listing its caller passes (`run-listed`), each returning the violations, `model`'s `Violation`, which the crate offers again, and `format(v)`, a violation's line `<path>: <rule>: <message>` as `clm check` prints it; `clm rebase` and `clm health` call `run`, and `clm wrap-up` calls `run_listed`.
 - `size(root, graph, markers, defaults)`, each component's `Size` for the working tree at `root` (`node-size`): its `node`, a `spec` and a `code` `Count` of `tokens` against a `budget`, and `oversized()`, `defaults` being the `Budgets` a component's frontmatter doesn't set; `clm health`, `clm effort` and `clm view` read it. `size_of(graph, files, markers, defaults)` gives the same from a map of each file to its `Length` (`Length::of(path, text)`, or `Length::from(bytes)` for a file of one part, its test part a `TestPart`), and `linguist_excluded(attributes, path)` says whether `.gitattributes` texts mark a path generated or vendored (`size-of-listing`, `linguist-attributes`); both build for wasm, and the web app's `replica` and `view.repo` use them on a listing with no working tree.
 - `pending_for(graph, markers, component)` and `pending_in(root, component)` (`pending-narrows-on-a-graph`).
+- `code_spans(text: &str) -> impl Iterator<Item = (usize, &str)>`, with the default feature `checkout`: each code span of a Markdown text, read as `asset-references` states, as its text and the byte offset in `text` where that text starts, in order; `removed-requirement-names` and `check.health` read spans with it.
 - `status(root)`, `coverage(root)` and `backlog(root)`, which give, for the checkout at `root`, `check.coverage/status-report`'s report, each requirement's coverage (`check.coverage/coverage-report`) and the backlog items in `clm backlog`'s order (`backlog-report`), or the violations loading the spec reports when there are any.
 
 `clm-check` offers each of `clm check`, `clm size`, `clm coverage` and `clm backlog` as a call (`commands-in-crate`, `commands-live-in-their-crates`), `check_command`, `size_command`, `coverage_command` and `backlog_command`, whose arguments `CheckArgs`, `SizeArgs`, `CoverageArgs` and `BacklogArgs` the `clm` binary's parser reads: each takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `check_command` also takes `CheckInputs`: a loader of the detectors the settings name for a root, each a `Detector { name, command, hint, timeout, requires }`, or the violation saying why they can't be loaded, and a source of the violations of rules other components decide. `size_command` also takes a loader of the `Budgets` a component doesn't set, or the violation saying why they can't be loaded. The `clm` binary routes each command to its call and adds nothing to what it writes.
@@ -31,7 +32,7 @@ The markers and the states are computed by the child component `check.coverage` 
 
 A removal marker's change is classified from the graph (`model`), in this order: archived (it is under `changes/archive/`, whatever its status), missing (no change with that ID, including a directory without a parseable `change.md`), `done`, `abandoned`, or live (`proposed`, `approved`, `applied`, `implementing`). Its violation uses the marker's `<file>:<line>` as its path, as `dangling-markers` does (`remove-by-markers`).
 
-**The split** (`check-coverage-split`, `nested-splits`). `check` keeps the rules `clm check` runs, the detectors and `clm size`; `check.coverage` keeps what says how far the code has caught up with the spec, which the queue, the views, `clm rebase` and the Worker read. `clm-check` depends on `clm-coverage` and re-exports none of its items, and its `checkout` feature turns on `clm-coverage`'s. `pending_in`, `status`, `coverage` and `backlog`, which read a checkout, live in `clm-check`; `pending_in`'s unknown-node violation carries the rule `check/pending-narrows-on-a-graph`, the requirement that states the refusal. `run` matches `paths` with `clm-coverage`'s `matches`, as `pending` does. The `dangling-markers` rule (`violations` in `dangling.rs`) lives in `clm-check` and takes the removed IDs from `clm-coverage`'s `removed`, as `removed-requirement-names` does. The tests in `crates/clm-check/tests` cite `check`'s requirements only; the child's tests sit in its own crate and call `clm-coverage`.
+**The split** (`check-coverage-split`, `nested-splits`). `check` keeps the rules `clm check` runs, the detectors and `clm size`; `check.coverage` keeps what says how far the code has caught up with the spec, which the queue, the views, `clm rebase` and the Worker read. `clm-check` depends on `clm-coverage` and re-exports none of its items, and its `checkout` feature turns on `clm-coverage`'s. `pending_in`, `status`, `coverage` and `backlog`, which read a checkout, live in `clm-check`; `pending_in`'s unknown-node violation carries the rule `check/pending-narrows-on-a-graph`, the requirement that states the refusal. `run` matches `paths` with `clm-coverage`'s `matches`, as `pending` does. `clm coverage --obsolete-tests` and `--deleted-tests` read the working tree's files through `clm-coverage`'s `read_files(root)`, the files `scan` reads (`check.coverage/markers-from-files`), so the lists and the coverage read one set: `clm-check` keeps no listing, walk or read loop of its own for them, and the copy it held in `lists.rs` is removed. The `dangling-markers` rule (`violations` in `dangling.rs`) lives in `clm-check` and takes the removed IDs from `clm-coverage`'s `removed`, as `removed-requirement-names` does. The tests in `crates/clm-check/tests` cite `check`'s requirements only; the child's tests sit in its own crate and call `clm-coverage`.
 
 **Shared paths** (`paths-disjoint`). `run` lists the files `git ls-files --cached` lists, Markdown included, itself through `git` (outside a git work tree, none); `run_listed` reads the listing its caller passes instead (`run-listed`). A file belongs to one component, the one whose builds own it and whose size it counts toward, so `nested-splits` keeps `paths` disjoint, parents and children included. A component's `tests` carve its test files out of whatever `paths` match them (`components-own-their-tests`): the file is the `tests` component's, so a suite's directory can belong to a harness component while each feature owns its own tests in it. `paths-disjoint`, `unowned-files` and `undeclared-imports` all read a file's component as its owner, the one place that rule is written. **Exemptions** (`temporary-exemptions`): `undeclared-imports`, `tests-cite-their-owner` and `skipped-tests` drop a violation in a file whose owner's `exemptions` name that rule for it, and nothing else, reading only the owner's entries; whether an exemption is still needed is `check.health`'s report, never a violation, so the build that fixes the code still lands.
 
@@ -169,12 +170,12 @@ The counting itself is `size_of(graph, files, markers, defaults)` (`size-of-list
 - capability/see-project-state
 
 ### Requirement: asset-references
-`clm check` SHALL fail when a component's Contract or Design mentions, in a code span, a concrete path of the form `` `assets/<path>` `` that isn't one of that component's assets, naming the component and the path. A path is concrete when it contains no `<`, `>` or `*` and doesn't end in `/`. Mentions in requirements, scenarios and frontmatter never count. The violation's path SHALL be the component's `SPEC.md` and its message ``component `<id>` mentions `assets/<path>`, which isn't in <dir>/assets/``, `<dir>` being the directory that holds that `SPEC.md`, once for each component and path however many times its Contract and Design mention the path. A code span SHALL be read as CommonMark reads one within a block of lines between blank lines: a run of backticks opens a span that closes at the next run of the same length in the block, and opens none when no such run follows; outside a span a backslash escapes the one character after it, and inside a span it escapes nothing; a span that starts and ends with a space and holds something other than white space loses one space at each end; and the lines of a fenced code block hold no span, the block running from a line that starts, after any indentation, with three or more backticks or tildes (a backtick fence whose line holds no further backtick) to a line holding, after any indentation, only a fence of the same character at least as long, or to the end of the text. A span SHALL count only when its whole text starts `assets/`.
+`clm check` SHALL fail when a component's Contract or Design mentions, in a code span, a concrete path of the form `` `assets/<path>` `` that isn't one of that component's assets, naming the component and the path. A path is concrete when it contains no `<`, `>` or `*` and doesn't end in `/`. Mentions in requirements, scenarios and frontmatter never count. The violation's path SHALL be the component's `SPEC.md` and its message ``component `<id>` mentions `assets/<path>`, which isn't in <dir>/assets/``, `<dir>` being the directory that holds that `SPEC.md`, once for each component and path however many times its Contract and Design mention the path. A code span SHALL be read as CommonMark reads one within a block of lines between blank lines: a run of backticks opens a span that closes at the next run of the same length in the block, and opens none when no such run follows; outside a span a backslash escapes the one character after it, and inside a span it escapes nothing; a span that starts and ends with a space and holds something other than white space loses one space at each end; and the lines of a fenced code block hold no span, the block running from a line that starts, after any indentation, with three or more backticks or tildes (a backtick fence whose line holds no further backtick) to a line holding nothing but a fence of the same character at least as long, white space around it aside, or to the end of the text. A span SHALL count only when its whole text starts `assets/`.
 
 #### Scenario: missing mockup
 - GIVEN component `a` whose Design mentions `` `assets/m.html` `` and no file `specs/a/assets/m.html`
 - WHEN `clm check` runs
-- THEN it exits non-zero naming `a` and `assets/m.html`
+- THEN it exits 1 with the line ``specs/a/SPEC.md: check/asset-references: component `a` mentions `assets/m.html`, which isn't in specs/a/assets/``
 
 #### Scenario: placeholders and directories
 - GIVEN component `a` whose Contract mentions `` `assets/<path>` ``, `` `assets/<node-id>/**` `` and `` `assets/mockups/` ``, and no assets
@@ -195,6 +196,7 @@ The counting itself is `size_of(graph, files, markers, defaults)` (`size-of-list
 - GIVEN component `a` with no assets, and in turn each of these Contracts or Designs
 - WHEN `clm check` runs on each
 - THEN it reports `assets/<path>` for `a` exactly as listed:
+  - a block mentioning `` `assets/m.html` `` and then a lone backtick followed by assets/n.html with no backtick after it in the block: `m.html` only, since an unpaired backtick opens no span;
   - a block holding a lone backtick, then a block mentioning `` `assets/m.html` ``, then a block holding an escaped backtick (`` \` ``) and `` `assets/n.html` ``: `m.html` and `n.html`, one line each;
   - a span `` `C:\` `` followed by `` `assets/m.html` ``: `m.html`;
   - a backslash followed by two backticks, then ` b `, then `` `assets/x.html` ``, then ` c` and two backticks, and in another block two backslashes directly before `` `assets/y.html` ``: `y.html` only, since the first backslash escapes one backtick and the second backtick pairs with the one before `assets/x.html`, while an escaped backslash escapes no backtick;
@@ -216,7 +218,7 @@ The `clm-check` crate SHALL build for `wasm32-unknown-unknown` with its default 
 - architecture/web-optional
 
 ### Requirement: detectors
-`clm check` SHALL run each detector in the repository's `clm.toml` from the repository root, copying its stdout and stderr to its own stderr as they arrive, and report a violation `clm.toml: check/detectors: <name> failed (exit <code>)` for each that exits non-zero. The detectors SHALL run one at a time, in `clm.toml`'s order, each finishing before the next starts. A detector still running when its `timeout` has passed SHALL be stopped, together with the processes it started, and reported as `clm.toml: check/detectors: <name> timed out after <n>s`, and `clm check` SHALL go on to the next detector. A detector that ends without an exit code before its `timeout` has passed, killed by a signal, SHALL be reported as `clm.toml: check/detectors: <name> failed (killed by a signal)`. A detector whose command can't be started SHALL be reported as `clm.toml: check/detectors: <name> could not run: <error>`, followed by `; install with: <hint>` when it has a hint; an empty command is one that can't be started, its `<error>` being `empty command`. A detector whose `requires` names a path that doesn't exist under the repository root SHALL NOT run: `clm check` SHALL write the line `<name> skipped: no <path>` to its stderr and report no `check/detectors` violation for it; one whose `requires` exists, or that has none, runs as this requirement says. `run` SHALL NOT run detectors. `clm check --no-detectors` SHALL run every other rule as `clm check` does, but run no detector and report no `check/detectors` violation, so it needs neither the detectors' tools nor loadable settings. When its caller can't load the settings, `clm check` SHALL report the violation the caller gives for the failure, run no detector, and still report every other rule's violations.
+`clm check` SHALL run each detector in the repository's `clm.toml` from the repository root, copying its stdout and stderr to its own stderr as they arrive, and report a violation `clm.toml: check/detectors: <name> failed (exit <code>)` for each that exits non-zero. The detectors SHALL run one at a time, in `clm.toml`'s order, each finishing before the next starts. A detector still running when its `timeout` has passed SHALL be stopped, together with the processes it started, and reported as `clm.toml: check/detectors: <name> timed out after <n>s`, and `clm check` SHALL go on to the next detector. A detector that ends without an exit code before its `timeout` has passed, killed by a signal, SHALL be reported as `clm.toml: check/detectors: <name> failed (killed by a signal)`. A detector whose command can't be started SHALL be reported as `clm.toml: check/detectors: <name> could not run: <error>`, followed by `; install with: <hint>` when it has a hint; an empty command is one that can't be started, its `<error>` being `empty command`. A detector whose `requires` names a path that doesn't exist under the repository root, a symbolic link whose target doesn't exist counting as none, SHALL NOT run: `clm check` SHALL write the line `<name> skipped: no <path>` to its stderr and report no `check/detectors` violation for it; one whose `requires` exists, or that has none, runs as this requirement says. `run` SHALL NOT run detectors. `clm check --no-detectors` SHALL run every other rule as `clm check` does, but run no detector and report no `check/detectors` violation, so it needs neither the detectors' tools nor loadable settings. When its caller can't load the settings, `clm check` SHALL report the violation the caller gives for the failure, run no detector, and still report every other rule's violations.
 
 #### Scenario: failing detector
 - GIVEN a `clm.toml` with detectors `ok` (`["true"]`) and `bad` (`["sh", "-c", "echo unused-dep; exit 3"]`)
@@ -254,17 +256,24 @@ The `clm-check` crate SHALL build for `wasm32-unknown-unknown` with its default 
 - THEN it exits 1 and prints that violation and the spec's, one line each, and no `bad failed` line
 
 #### Scenario: detectors that end oddly
-- GIVEN in turn each of these lists of detectors in a clean repository
+- GIVEN a clean repository whose `clm.toml` has a detector `first` (`["sh", "-c", "sleep 0.2; touch done; exit 1"]`) followed by `second` (`["test", "-f", "done"]`)
 - WHEN `clm check` runs
-- THEN it reports exactly these `check/detectors` lines:
-  - `first` (`["sh", "-c", "sleep 0.2; touch done; exit 1"]`) then `second` (`["test", "-f", "done"]`): `clm.toml: check/detectors: first failed (exit 1)` alone, since `second` starts after `first` has written `done`;
-  - `killed` (`["sh", "-c", "kill -9 $$"]`): `clm.toml: check/detectors: killed failed (killed by a signal)`;
-  - `empty`, whose command is `[]`: a line starting `clm.toml: check/detectors: empty could not run: empty command`
+- THEN its only `check/detectors` line is `clm.toml: check/detectors: first failed (exit 1)`, since `second` starts after `first` has written `done`
+
+#### Scenario: a detector killed by a signal
+- GIVEN a clean repository whose `clm.toml` has a detector `killed` (`["sh", "-c", "kill -9 $$"]`)
+- WHEN `clm check` runs
+- THEN it exits 1 with the line `clm.toml: check/detectors: killed failed (killed by a signal)`
+
+#### Scenario: an empty command
+- GIVEN a clean repository whose `clm.toml` has a detector `empty` whose command is `[]`
+- WHEN `clm check` runs
+- THEN it exits 1 with the line `clm.toml: check/detectors: empty could not run: empty command`
 
 #### Scenario: a detector whose required path is missing
 - GIVEN a clean repository with no `package.json` whose `clm.toml` has a detector `knip` (`["sh", "-c", "touch ran; exit 3"]`, `requires = "package.json"`)
 - WHEN `clm check` runs
-- THEN it exits 0, stdout is empty, stderr is exactly the line `knip skipped: no package.json`, and no file `ran` exists; with a file `package.json` in the repository, it exits 1 with the line `clm.toml: check/detectors: knip failed (exit 3)` and `ran` exists
+- THEN it exits 0, stdout is empty, stderr is exactly the line `knip skipped: no package.json`, and no file `ran` exists, and the same when `package.json` is a symbolic link to a file that doesn't exist; with a file `package.json` in the repository, it exits 1 with the line `clm.toml: check/detectors: knip failed (exit 3)` and `ran` exists
 
 #### Serves
 - capability/no-dead-weight
@@ -337,7 +346,7 @@ The violation's path SHALL be the first holder's file, `backlog/<slug>.md` or `c
 - capability/keep-a-backlog
 
 ### Requirement: node-size
-`clm size` SHALL print one line per component, sorted by ID, and `clm size <component>` only that component's line: `<component>`, `spec <tokens>/<budget>` and `code <tokens>/<budget>`, tab-separated, followed by a tab and `oversized` when the component is oversized, and SHALL exit 0. A component is *oversized* when either count exceeds a budget its frontmatter doesn't set for that count, or exceeds a `size_budget` it does set (`oversized-is-a-state`). A count's tokens SHALL be the total bytes of the parts it counts divided by 4, rounded up once. Spec tokens SHALL count the component's `SPEC.md`. Code tokens SHALL count, among the files `git ls-files --cached` lists, except a file with a NUL byte in its first 8000 bytes or whose `linguist-generated` or `linguist-vendored` attribute is set or `true` (any other value, `false` and unset don't exclude it): every part holding a `req:` marker that cites one of the component's requirements, wherever it sits, and every part holding no `req:` marker of a file the component owns (`check.coverage/owner`, so a file its `tests` match among them) (`tests-count-where-cited`). A file SHALL be one part, except a `.rs` file holding a line whose text, trimmed, is exactly `#[cfg(test)]`, which SHALL be two: the bytes from the first such line to the end of the file, and the bytes before it (`inline-tests-count-where-cited`). A part with markers SHALL NOT count toward a component its markers don't cite, even when that component's `paths` hold its file. A marker's component is the part of its ID before the `/`, as `check.coverage/pending-report` reads it, so a marker citing a requirement the component no longer holds still counts toward that component, and a part whose markers name only components that don't exist counts toward none. Each budget SHALL be the component's `size_budget` value for it when set, else the default passed in. `size(root, graph, markers, defaults)` SHALL return each component's counts, budgets and whether it is oversized, for the callers that show sizes, such as `clm health` and `clm view`. `clm size <component>` SHALL print ``specs/<component path>/SPEC.md: check/node-size: unknown component `<component>` ``, `<component path>` being the ID with each `.` written `/`, and exit 1 when no component has that ID. When its caller can't load the settings, `clm size` SHALL print the violation the caller gives for the failure and nothing else, whatever component it is given, and exit 1. When the files the index holds can't be listed, as in a directory in no git repository, it SHALL print `<root>: check/node-size: <error>`, `<root>` being the root it reads as it was given, and exit 1. Violations in the spec SHALL NOT stop it: it prints the lines of the components that load and exits 0.
+`clm size` SHALL print one line per component, sorted by ID, and `clm size <component>` only that component's line: `<component>`, `spec <tokens>/<budget>` and `code <tokens>/<budget>`, tab-separated, followed by a tab and `oversized` when the component is oversized, and SHALL exit 0. A component is *oversized* when either count exceeds a budget its frontmatter doesn't set for that count, or exceeds a `size_budget` it does set (`oversized-is-a-state`). A count's tokens SHALL be the total bytes of the parts it counts divided by 4, rounded up once. Spec tokens SHALL count the component's `SPEC.md`. Code tokens SHALL count, among the files `git ls-files --cached` lists, except a file with a NUL byte in its first 8000 bytes or whose `linguist-generated` or `linguist-vendored` attribute is set or `true` (any other value, `false` and unset don't exclude it): every part holding a `req:` marker that cites one of the component's requirements, wherever it sits, and every part holding no `req:` marker of a file the component owns (`check.coverage/owner`, so a file its `tests` match among them) (`tests-count-where-cited`). A file SHALL be one part, except a `.rs` file holding a line whose text, trimmed, is exactly `#[cfg(test)]`, which SHALL be two: the bytes from the first such line to the end of the file, and the bytes before it (`inline-tests-count-where-cited`). A part with markers SHALL NOT count toward a component its markers don't cite, even when that component's `paths` hold its file. A marker's component is the part of its ID before the `/`, as `check.coverage/pending-report` reads it, so a marker citing a requirement the component no longer holds still counts toward that component, and a part whose markers name only components that don't exist counts toward none. Each budget SHALL be the component's `size_budget` value for it when set, else the default passed in. `size(root, graph, markers, defaults)` SHALL return each component's counts, budgets and whether it is oversized, for the callers that show sizes, such as `clm health` and `clm view`. `clm size <component>` SHALL print ``specs/<component path>/SPEC.md: check/node-size: unknown component `<component>` ``, `<component path>` being the ID with each `.` written `/`, and exit 1 when no component has that ID. When its caller can't load the settings, `clm size` SHALL print the violation the caller gives for the failure and nothing else, whatever component it is given, and exit 1. When the files the index holds can't be listed, as in a directory in no git repository, or a file it counts can't be read, or `git check-attr` fails on them, it SHALL print `<root>: check/node-size: <error>`, `<root>` being the root it reads as it was given, and exit 1. Violations in the spec SHALL NOT stop it: it prints the lines of the components that load and exits 0.
 
 #### Scenario: over its spec budget
 - GIVEN defaults of 1000 spec and 1000 code tokens, and component `a` with paths `["src/a/**"]`, a `SPEC.md` of 4001 bytes and one tracked file `src/a/x.rs` of 400 bytes with no markers
@@ -409,10 +418,12 @@ The violation's path SHALL be the first holder's file, `backlog/<slug>.md` or `c
 - WHEN `clm size a` runs
 - THEN it prints `a`'s line as in `over its spec budget` and exits 0
 
-#### Scenario: no work tree
-- GIVEN a directory in no git repository holding component `a` with paths `["src/a/**"]` and a file `src/a/x.rs`
-- WHEN `clm size --root <that directory>` runs
-- THEN it exits 1 printing one line, which starts `<that directory>: check/node-size: `
+#### Scenario: files it can't list or read
+- GIVEN in turn each of these, with component `a` with paths `["src/a/**"]`
+- WHEN `clm size --root <its root>` runs
+- THEN it exits 1 printing one line, which starts `<its root>: check/node-size: `:
+  - a directory in no git repository holding `src/a/x.rs`;
+  - a git repository with a tracked `src/a/x.rs` that its user can't read
 
 #### Serves
 - capability/know-health
@@ -770,11 +781,12 @@ When the root sets `outside` (`model/outside-globs`), even to `[]`, `run` SHALL 
   - a tracked `src/a/deleted.rs` of 4000 bytes removed from the working tree;
   - `src/a/x.rs` held in the index at stages 1, 2 and 3 of a conflict in place of stage 0;
   - an untracked `src/a/t.rs` of 800 bytes whose marker, directly above a test, cites `b/x`;
+  - a tracked `src/a/d/y.rs` whose directory `src/a/d` has been replaced in the working tree by an untracked regular file;
   - and, in place of `src/a/x.rs`, a tracked 400-byte file under `src/a/` whose name holds the byte `0xE9`, which isn't UTF-8
 
 #### Serves
-- architecture/reuse-first
-- architecture/no-dead-code
+- capability/know-health
+- architecture/slim-components
 
 #### Needs
 - vcs/tracked-files
@@ -911,8 +923,13 @@ A detector command whose first word is a relative path holding a `/` SHALL be sp
 - WHEN `clm check` runs
 - THEN it reports no `check/tests-cite-their-owner` violation
 
-#### Scenario: markers it doesn't judge
-- GIVEN a root with `wiring: []`, component `a` with paths `["crates/a/**"]`, component `b` with requirement `y`, an `ARCHITECTURE.md` with entry `git-is-truth`, and `crates/a/x.rs` holding a marker citing `b/y` in the body of a function with no test attribute and a test citing `architecture/git-is-truth`
+#### Scenario: a marker outside a test is not judged
+- GIVEN a root with `wiring: []`, component `a` with paths `["crates/a/**"]`, component `b` with requirement `y`, and `crates/a/x.rs` whose only marker cites `b/y` in the body of a function with no test attribute
+- WHEN `clm check` runs
+- THEN it reports no `check/tests-cite-their-owner` violation
+
+#### Scenario: an architecture entry's marker
+- GIVEN a root with `wiring: []`, component `a` with paths `["crates/a/**"]`, an `ARCHITECTURE.md` with entry `git-is-truth`, and `crates/a/x.rs` holding a test whose only marker cites `architecture/git-is-truth`
 - WHEN `clm check` runs
 - THEN it reports no `check/tests-cite-their-owner` violation
 
@@ -966,9 +983,10 @@ After the obsolete lines `clm coverage` SHALL print one line `<id> uncounted <fi
 - check.coverage/test-lists
 - check.coverage/markers-in-tests
 - check.coverage/owner
+- check.coverage/markers-from-files
 
 ### Requirement: commands-in-crate
-`clm-check` SHALL offer each of `clm check`, `clm size`, `clm coverage` and `clm backlog` as a call of its own that takes the command's arguments as the command line gives them, the repository root its caller found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2, and for `--help` it SHALL write to the output stream exactly the help the `clm` binary prints for that command's `--help`, and return 0. The call SHALL take what the command reads of the settings and of other components' results as further arguments: for `clm check`, a loader of the detectors the settings name for the root it checks, which gives the violation saying why when they can't be loaded, and a source of the violations of rules other components decide for that root, which it reports after its own (`report-and-exit`); for `clm size`, a loader of the budgets a component doesn't set, which gives the violation saying why when they can't be loaded. What `clm coverage` prints of each requirement's state is stated by `check.coverage/coverage-report`: the call SHALL write those lines for the repository unchanged (`commands-live-in-their-crates`).
+`clm-check` SHALL offer each of `clm check`, `clm size`, `clm coverage` and `clm backlog` as a call of its own that takes the command's arguments as the command line gives them, the repository root its caller found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2, and for `--help` it SHALL write the command's help to the output stream and nothing to the error stream, and return 0: the help's first line is the command's description, then an empty line, then a `Usage:` line naming the command in full. The call SHALL take what the command reads of the settings and of other components' results as further arguments: for `clm check`, a loader of the detectors the settings name for the root it checks, which gives the violation saying why when they can't be loaded, and a source of the violations of rules other components decide for that root, which it reports after its own (`report-and-exit`); for `clm size`, a loader of the budgets a component doesn't set, which gives the violation saying why when they can't be loaded. What `clm coverage` prints of each requirement's state is stated by `check.coverage/coverage-report`: the call SHALL write those lines for the repository unchanged (`commands-live-in-their-crates`).
 
 #### Scenario: a command called in a test
 - GIVEN a fixture repository
@@ -988,7 +1006,11 @@ After the obsolete lines `clm coverage` SHALL print one line `<id> uncounted <fi
 #### Scenario: help
 - GIVEN the calls for `clm check`, `clm size`, `clm coverage` and `clm backlog`
 - WHEN each is given `--help`
-- THEN each returns 0 with, in the output buffer, exactly what `clm <command> --help` prints on standard output, `Usage: clm <command>` among it, and nothing in the error buffer
+- THEN each returns 0 with nothing in the error buffer, and the output buffer's help starts with these lines, an empty line between the two:
+  - `clm check`: `Run every deterministic check; exit 1 on any violation`, then `Usage: clm check [OPTIONS]`;
+  - `clm size`: `Report each component's spec and code size in tokens against its budget (advisory)`, then `Usage: clm size [OPTIONS] [COMPONENT]`;
+  - `clm coverage`: `List every requirement as current, behind or unbuilt (with citing markers), then the obsolete ones`, then `Usage: clm coverage [OPTIONS]`;
+  - `clm backlog`: `List backlog items: ideas, deferred work, questions and bugs`, then `Usage: clm backlog [OPTIONS]`
 
 #### Serves
 - architecture/path-ownership

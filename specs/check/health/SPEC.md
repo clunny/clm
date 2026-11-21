@@ -58,7 +58,7 @@ Crate `clm-health`, dispatched from `crates/clm` as `clm health` and `clm workar
 - `lapsed-claim`: `clm-orchestrator`'s `claim_refs(root)` for the component claims and `propose_refs(root)` for the backlog claims, on the refs as fetched, without fetching (the caller fetched, or sees the last fetch, as `clm status` does), each ref carrying its tip time and whether it is merged. Whether there is an `origin` is judged first, through `clm-git`, by whether `refs/remotes/origin/main` exists.
 - `stalled-change`: `clm_coverage::change_progress`.
 - `unanswered`: for each `question` or `human-task` item, `git log --diff-filter=A --format=%ct -- backlog/<slug>.md` through `clm-git`, the earliest when several. Without a commit no item was added to git and `git log` can't run, so no item is read. `now` is passed in, so tests are deterministic.
-- `uncited-decision`: the decisions `clm-model` loads, `status: accepted` only (a superseded one is history), each cited as `uncited-decisions` says. The Markdown sources are found by walking their directories without following a symlinked directory, so a link to an ancestor can't loop.
+- `uncited-decision`: the decisions `clm-model` loads, `status: accepted` only (a superseded one is history), each cited as `uncited-decisions` says, its code spans read through `clm_check::code_spans`; the crate keeps no span reader of its own. The Markdown sources are found by walking their directories without following a symlinked directory, so a link to an ancestor can't loop.
 - `unserved`: each entry of the human layers, architecture first, each layer's in file order, that no rule's effective serves (`Graph::effective_serves`, a `#### Serves` block or its component's `serves`) names. It is advisory: an entry may be proven end to end by its own tests alone.
 - `history-words`: a scenario may legitimately give a date, which is why requirements and scenarios are never read; the phrase list sits in `spec-bloat-signals`' statement, which the signal therefore never reads. A phrase goes on the list only when it narrates a change wherever it appears: "no longer" stays off it, since it as often states a present condition (a local branch that no longer contains its remote tip, a tree the session no longer has), and so does "used to", since it is as often a passive that describes the present system (a ref that is used to hold the claim, a file that may be used to override a setting); the matcher reads no grammar, so a phrase that is history only in some of its forms is dropped rather than parsed (`yagni`), and a signal that advises costs reader time and invites wrong cuts each time it misfires (`health-advises`).
 - `design-heavy`: the Requirements section's bytes are counted as the model stores a section's text.
@@ -74,7 +74,7 @@ unless, except, but not, other than, only when, in which case, whichever, so als
 
 - `reconsider`: the score (`reconsider-score`) is `f + r + s + e` with `f` the flags, `r` the archived rewrites, `s` one when the scenarios exceed `scenarios` and `e` one when the exception clauses exceed `exceptions`.
 
-- `outside-contract`, `test-placement`, `design-exit` and `uncited-test` (`rule-signals`) count what a program can see of the rule for a requirement. Each is a heuristic and none is a fault by itself: a helper's unit test rightly cites nothing, and a Contract may be what is missing a name. By `rule-signals`' reading, `foreign_files(repo, base, head, component)`, `clm_gate::fingerprint_of` and `RequirementSignals` are code names and `clm.toml`, `human_burdens`, `origin/main` and `Settings` are not. The sentences and the placement phrases are `clm-gate`'s `sentences` and `places_a_test`, so a sentence the signal reports is one the gate doesn't count as a cut when a branch drops it, and this component depends on `gate` for them alone; a statement's fenced lines, which the gate reads as part of the statement, are left out here as they are for `outside-contract`. A Contract is never read for `design-exit`: a dependant's build receives the Contract and not the requirements, so a Contract keeps its summary of exits.
+- `outside-contract`, `test-placement`, `design-exit` and `uncited-test` (`rule-signals`) count what a program can see of the rule for a requirement. Each is a heuristic and none is a fault by itself: a helper's unit test rightly cites nothing, and a Contract may be what is missing a name. A statement's code spans are read through `clm_check::code_spans`, as `uncited-decision`'s are. By `rule-signals`' reading, `foreign_files(repo, base, head, component)`, `clm_gate::fingerprint_of` and `RequirementSignals` are code names and `clm.toml`, `human_burdens`, `origin/main` and `Settings` are not. The sentences and the placement phrases are `clm-gate`'s `sentences` and `places_a_test`, so a sentence the signal reports is one the gate doesn't count as a cut when a branch drops it, and this component depends on `gate` for them alone; a statement's fenced lines, which the gate reads as part of the statement, are left out here as they are for `outside-contract`. A Contract is never read for `design-exit`: a dependant's build receives the Contract and not the requirements, so a Contract keeps its summary of exits.
 
 **Loading.** The graph loads whenever `<root>/specs/SPEC.md` exists; the violations `clm-model` reports for a tree it loads, a stale workaround flag among them, are findings under `check`, as `clm_check::run` returns them. The settings are `config`'s, which the `clm` crate loads and hands to the call, or hands the violation that rejected them, which the call prints (`health-report`).
 
@@ -98,19 +98,19 @@ unless, except, but not, other than, only when, in which case, whichever, so als
 - THEN it prints a line containing `health/check: check/dangling-markers:`, exits 0, and no file `ran` exists
 
 #### Scenario: settings can't be loaded
-- GIVEN settings the caller couldn't load: the violation `config` gives for a `clm.toml` that sets `reconsider = 0` under `[health]`
+- GIVEN a directory with no `specs/SPEC.md`, and settings the caller couldn't load: a violation of `clm.toml` naming `health`, as the caller passes when `config` rejects `reconsider = 0` under `[health]`
 - WHEN `clm health` runs
 - THEN it exits 1 naming `clm.toml` and `health`
 
 #### Scenario: every summary
-- GIVEN a git repository with no commit, no remote and no file but `specs/SPEC.md`, and settings that set no `lcov` and a land target of 120 seconds
+- GIVEN a git repository with no commit, no remote and no file but a `specs/SPEC.md` the model loads without a violation, and settings that set no `lcov` and a land target of 120 seconds
 - WHEN `clm health` runs
-- THEN it prints exactly these lines, in this order, and exits 0: `health/check: 0 violations`, `health/pending: 0 components`, `health/oversized: 0 components`, `health/lapsed-claim: no origin`, `health/stalled-change: 0 changes`, `health/unanswered: 0 items`, `health/uncited-decision: 0 decisions`, `health/unserved: 0 entries`, `health/history-words: 0 lines`, `health/design-heavy: 0 components`, `health/outlier-size: no median: fewer than 3 components with requirements`, `health/unexercised: no lcov file configured`, `health/workaround: 0 flags`, `health/exemption: 0 exemptions`, `health/rewritten: 0 requirements`, `health/churn: no history`, `health/land-time: 0 of 0 timed lands over 120s`, `health/many-scenarios: 0 requirements`, `health/many-exceptions: 0 requirements`, `health/reconsider: 0 requirements`, `health/outside-contract: 0 names`, `health/test-placement: 0 requirements`, `health/design-exit: 0 lines`, `health/uncited-test: 0 tests`
+- THEN it prints exactly these lines, in this order, then the four summaries scenario `nothing found` shows, and exits 0: `health/check: 0 violations`, `health/pending: 0 components`, `health/oversized: 0 components`, `health/lapsed-claim: no origin`, `health/stalled-change: 0 changes`, `health/unanswered: 0 items`, `health/uncited-decision: 0 decisions`, `health/unserved: 0 entries`, `health/history-words: 0 lines`, `health/design-heavy: 0 components`, `health/outlier-size: no median: fewer than 3 components with requirements`, `health/unexercised: no lcov file configured`, `health/workaround: 0 flags`, `health/exemption: 0 exemptions`, `health/rewritten: 0 requirements`, `health/churn: no history`, `health/land-time: 0 of 0 timed lands over 120s`, `health/many-scenarios: 0 requirements`, `health/many-exceptions: 0 requirements`, `health/reconsider: 0 requirements`
 
 #### Scenario: refused
-- GIVEN in turn: a directory with no `specs/SPEC.md`; a directory holding `specs/SPEC.md` that isn't a git repository; a directory with no `specs/SPEC.md`, with settings the caller passes as a violation of `clm.toml`; and a repository whose report the output stream refuses to take
+- GIVEN in turn: a directory with no `specs/SPEC.md`; a directory holding `specs/SPEC.md` that isn't a git repository; and a repository whose report the output stream refuses to take
 - WHEN `clm health` runs on each, and `report` is called on the first two
-- THEN it exits 1 with `clm health: <root>: specs/SPEC.md not found` on standard error for the first; 2 for the second; 1 naming `clm.toml` and not `specs/SPEC.md` for the third; and 1 with `clm health: ` and the stream's error on standard error for the fourth; printing nothing to standard output for the first three; and `report` returns `Failure::Refused` for the first and `Failure::Git` for the second
+- THEN it exits 1 with `clm health: <root>: specs/SPEC.md not found` on standard error for the first; 2 for the second; and 1 with `clm health: ` and the stream's error on standard error for the third; printing nothing to standard output for the first two; and `report` returns `Failure::Refused` for the first and `Failure::Git` for the second
 
 #### Needs
 - config/health-setting
@@ -133,11 +133,6 @@ unless, except, but not, other than, only when, in which case, whichever, so als
 - WHEN `clm health` runs with no `--expiry`
 - THEN it prints `propose/q: health/lapsed-claim: last pushed 5h ago`
 
-#### Scenario: no origin
-- GIVEN a repository with no remote
-- WHEN `clm health` runs
-- THEN it prints `health/lapsed-claim: no origin` and no `lapsed-claim` line
-
 #### Scenario: stalled change
 - GIVEN an `applied` change `20260101-c` whose delta adds `a/x` and `a/y`, neither cited, and an `applied` change `20260102-d` whose added requirement is current
 - WHEN `clm health` runs
@@ -157,10 +152,10 @@ unless, except, but not, other than, only when, in which case, whichever, so als
 - model/parse-backlog
 
 ### Requirement: uncited-decisions
-`clm health` SHALL report each accepted decision whose name is the whole text of no code span outside fenced code blocks in any component's `SPEC.md`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `AGENTS.md`, Markdown file (`*.md`) under `docs/guide/`, Markdown file under `changes/` outside `changes/archive/`, or other decision, as `docs/decisions/<name>.md: health/uncited-decision: nothing names it`. A code span is the text between a line's first and second backtick, its third and fourth, and so on; it names a decision when it equals the decision's name, compared with case, so a span that holds the name with anything else, such as `docs/decisions/<name>.md` or the name with a suffix, doesn't. A source that is missing or isn't UTF-8 text SHALL name nothing. A superseded decision SHALL NOT be reported.
+`clm health` SHALL report each accepted decision whose name is the whole text of no code span outside fenced code blocks in any component's `SPEC.md`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `AGENTS.md`, Markdown file (`*.md`) under `docs/guide/`, Markdown file under `changes/` outside `changes/archive/`, or other decision, as `docs/decisions/<name>.md: health/uncited-decision: nothing names it`. A code span is read as `check/asset-references` reads one, so a backtick that no run of backticks of its length follows in its block opens none; a span names a decision when its whole text equals the decision's name, compared with case, so a span that holds the name with anything else, such as `docs/decisions/<name>.md` or the name with a suffix, doesn't. A source that is missing or isn't UTF-8 text SHALL name nothing. A superseded decision SHALL NOT be reported.
 
 #### Scenario: cited and uncited
-- GIVEN decisions `kept` (named as `` `kept` `` in `specs/a/SPEC.md`), `lone` (named only as `` `docs/decisions/lone.md` `` and `` `lone-ish` `` in `ARCHITECTURE.md`, and as `` `lone` `` in a `CLAUDE.md` whose bytes aren't UTF-8) and `old` (`status: superseded`, named nowhere), and no `CAPABILITIES.md`, `AGENTS.md` or `docs/guide/`
+- GIVEN decisions `kept` (named as `` `kept` `` in `specs/a/SPEC.md`), `lone` (named only as `` `docs/decisions/lone.md` `` and `` `lone-ish` `` in `ARCHITECTURE.md`; as `` `lone` `` in a `CLAUDE.md` whose bytes aren't UTF-8; and in `AGENTS.md` on a line holding `` `other` ``, then a single backtick directly before `lone` and no backtick after it) and `old` (`status: superseded`, named nowhere), and no `CAPABILITIES.md` or `docs/guide/`
 - WHEN `clm health` runs
 - THEN it prints `docs/decisions/lone.md: health/uncited-decision: nothing names it` and no `uncited-decision` line for `kept` or `old`
 
@@ -168,6 +163,9 @@ unless, except, but not, other than, only when, in which case, whichever, so als
 - GIVEN decision `fenced`, whose only mention is `` `fenced` `` inside a ```` ``` ```` block of `specs/a/SPEC.md`
 - WHEN `clm health` runs
 - THEN it prints an `uncited-decision` line for `fenced`
+
+#### Needs
+- check/asset-references
 
 ### Requirement: unserved-entries
 `clm health` SHALL report each entry no rule's effective serves names as `<file>: health/unserved: <id> served by no rule`, `<file>` being `ARCHITECTURE.md` or `CAPABILITIES.md`.
@@ -235,7 +233,7 @@ unless, except, but not, other than, only when, in which case, whichever, so als
 - architecture/spec-is-current
 
 ### Requirement: unexercised-code
-When the settings set `lcov` and the file it names, joined to the repository root, can be read as UTF-8 text, `clm health` SHALL read it as lcov and report, for each file some component owns (`check.coverage/owner`), each run of consecutive line numbers whose count is 0 as `<path>:<start>-<end>: health/unexercised: <n> lines no test runs`, `<path>:<start>` alone for a run of one line, the summary counting lines. Each line of the file is read with its leading and trailing white space taken off: `SF:<path>` SHALL start a file's record, `DA:<line>,<count>` give a line's count, and `end_of_record` end the record; every other line, and a `DA:` line outside a record or whose line or count isn't a whole number, SHALL be skipped. The counts the records give one line of one file SHALL be added, so a line any record ran isn't reported. An `SF:` path that is absolute and under the repository root SHALL be read relative to it, and any other as written. With `lcov` unset it SHALL print `health/unexercised: no lcov file configured`, and with the file missing or not readable as text `health/unexercised: <lcov> not found`, `<lcov>` the setting as written, and in both cases report nothing else for the signal and still exit 0.
+When the settings set `lcov` and the file it names, joined to the repository root, can be read as UTF-8 text, `clm health` SHALL read it as lcov and report, for each file some component owns (`check.coverage/owner`), each run of consecutive line numbers whose count is 0 as `<path>:<start>-<end>: health/unexercised: <n> lines no test runs`, `<path>:<start>` alone for a run of one line, the summary counting lines. Each line of the file is read with its leading and trailing white space taken off: `SF:<path>` SHALL start a file's record, `DA:<line>,<count>` give a line's count, and `end_of_record` end the record; every other line, and a `DA:` line outside a record or whose line or count isn't ASCII digits, optionally after one `+`, SHALL be skipped; a third field after a further comma SHALL be ignored. The counts the records give one line of one file SHALL be added, so a line any record ran isn't reported. An `SF:` path SHALL be read relative to the repository root: one that is absolute and under the root, the root made absolute or with its symbolic links resolved, with the root taken off; one that is relative as written; and one that is absolute and outside the root as written, so no component owns it. With `lcov` unset it SHALL print `health/unexercised: no lcov file configured`, and with the file missing or not readable as text `health/unexercised: <lcov> not found`, `<lcov>` the setting as written, and in both cases report nothing else for the signal and still exit 0.
 
 #### Scenario: a run of unexercised lines
 - GIVEN `lcov = "cov.info"` whose record for `crates/a/src/lib.rs` (owned by component `a`) has `DA:3,1`, `DA:4,0`, `DA:5,0`, `DA:6,2` and `DA:9,0`, and a record for `vendor/x.rs` (owned by no component) with `DA:1,0`
@@ -243,9 +241,9 @@ When the settings set `lcov` and the file it names, joined to the repository roo
 - THEN it prints `crates/a/src/lib.rs:4-5: health/unexercised: 2 lines no test runs` and `crates/a/src/lib.rs:9: health/unexercised: 1 lines no test runs`, its summary says `3 lines`, and no line names `vendor/x.rs`
 
 #### Scenario: records merged
-- GIVEN `lcov = "cov.info"` holding, for `crates/a/src/lib.rs` (owned by component `a`) named by its absolute path under the repository root, a record with `DA:4,0` and `DA:8,0` and another with `DA:4,3`, `DA:x,0` and `DA:9,`; and `DA:7,0` before any `SF:` line
-- WHEN `clm health` runs
-- THEN it prints `crates/a/src/lib.rs:8: health/unexercised: 1 lines no test runs` and no other `unexercised` line, and its summary says `1 lines`
+- GIVEN a repository `r` with component `a` owning `crates/a/**`, and `lcov = "cov.info"` holding: for `crates/a/src/lib.rs`, named by its absolute path under `r`, a record with `DA:4,0` and `DA:8,0,abc` and another with `DA:4,3`, `DA:x,0`, `DA:9,` and `DA:+10,0`; a record for `crates/a/src/b.rs`, named so, with `DA:2,0`; a record for `/elsewhere/crates/a/src/b.rs` with `DA:3,0`; a record for `r/crates/a/src/c.rs` with `DA:1,0`; and `DA:7,0` before any `SF:` line
+- WHEN `clm health --root r` runs from the directory holding `r`
+- THEN it prints `crates/a/src/lib.rs:8: health/unexercised: 1 lines no test runs`, `crates/a/src/lib.rs:10: health/unexercised: 1 lines no test runs` and `crates/a/src/b.rs:2: health/unexercised: 1 lines no test runs` and no other `unexercised` line, and its summary says `3 lines`
 
 #### Scenario: no file
 - GIVEN `lcov = "cov.info"` and no such file
@@ -327,8 +325,8 @@ A requirement's score SHALL be zero when no `workaround` item names it, and othe
 
 #### Scenario: no history
 - GIVEN a git repository with no commit, and a directory that isn't a git repository
-- WHEN `clm health` runs on the repository, and `churn` is called on each
-- THEN its `churn` section is the one line `health/churn: no history`, and `churn` returns `None` for the repository and `Failure::Git` for the directory
+- WHEN `churn` is called on each
+- THEN it returns `None` for the repository and `Failure::Git` for the directory
 
 #### Scenario: the patch's shape
 - GIVEN component `a` with requirement `x`, a repository whose git configuration sets `diff.noprefix` to `true`, `diff.dstPrefix` to `new/`, `log.showRoot` to `false`, `color.ui` to `always` and `core.quotePath` to `true`, and a root commit that adds `req:a/x@11111111` in `tests/my test.rs`, `req:a/x@22222222` in `tests/a"b.rs`, `req:a/x@33333333` in `tests/é.rs` and `req:a/x@44444444` in `docs/my notes.md`
@@ -453,7 +451,7 @@ The field of `Settings` that holds the size budgets `oversized` compares against
 - model/exemptions
 
 ### Requirement: commands-in-crate
-`clm-health` SHALL offer each of `clm health` and `clm workaround` as a call of its own that takes the command's arguments, the words after its name, as the command line gives them; the repository root the caller found, which the command's `--root` overrides; what the caller loaded for the command, for `clm health` its `Settings` or the violation that rejected them, and for `clm workaround` its `[effort] workaround_flag` or why it couldn't be read, together with a reader of standard input; the environment as a lookup, which neither command reads; and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2, and given `--help` it SHALL write to the output stream the same help `clm` prints for that command, line for line, write nothing to the error stream, and return 0.
+`clm-health` SHALL offer each of `clm health` and `clm workaround` as a call of its own that takes the command's arguments, the words after its name, as the command line gives them; the repository root the caller found, which the command's `--root` overrides; what the caller loaded for the command, for `clm health` its `Settings` or the violation that rejected them, and for `clm workaround` its `[effort] workaround_flag` or why it couldn't be read, together with a reader of standard input; the environment as a lookup, which neither command reads; and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. Given `--help`, each call SHALL write the command's help to the output stream, nothing to the error stream, and return 0: its first line the command's description, `Print one advisory report of the repository's health; exits 0 whatever it finds` for `clm health` and ``Flag that a requirement was hard to build: write `backlog/workaround-<component>-<slug>-<n>.md` with the situation from stdin and print its path. Commits nothing`` for `clm workaround`; then an empty line; then the usage line, `Usage: clm health [OPTIONS]` and `Usage: clm workaround [OPTIONS] --title <TITLE> <REQUIREMENT>`.
 
 #### Scenario: a command called in a test
 - GIVEN a fixture repository
@@ -468,14 +466,14 @@ The field of `Settings` that holds the size budgets `oversized` compares against
 #### Scenario: help
 - GIVEN the call of `clm health` and that of `clm workaround`
 - WHEN each is passed `--help`
-- THEN each writes to the output buffer exactly the help `clm health --help` or `clm workaround --help` prints, line for line, writes nothing to the error buffer, and returns 0
+- THEN each writes its help to the output buffer, its first line the command's description and its third its usage line, as stated above, writes nothing to the error buffer, and returns 0
 
 #### Serves
 - architecture/path-ownership
 - capability/prove-by-tests
 
 ### Requirement: rule-signals
-After `reconsider`, `clm health` SHALL report four signals of the rule for a requirement (`requirements-state-what-the-contract-shows`), each advisory. A requirement's *statement* is its lines below its heading up to its first line outside a fenced block that starts `####`, its fenced lines left out; a *code span* is the text between a line's first and second backtick, its third and fourth, and so on.
+After `reconsider`, `clm health` SHALL report four signals of the rule for a requirement (`requirements-state-what-the-contract-shows`), each advisory. A requirement's *statement* is its lines below its heading up to its first line outside a fenced block that starts `####`, its fenced lines left out; a *code span* is read in the statement as `check/asset-references` reads one, as `uncited-decisions` reads it.
 - under `outside-contract`, for each requirement, each distinct code name in its statement, in the order it first appears, that the component's Contract text doesn't contain, compared with case, as `specs/<component path>/SPEC.md: health/outside-contract: <component>/<slug> names <name>`, the summary counting `names`. A code name is the text of a code span with one trailing parenthesised list taken off, when that text is identifiers, each an ASCII letter or `_` followed by ASCII letters, digits or `_`, joined by `::`, and the span held such a list, or the text holds `::`, or holds an ASCII lowercase letter directly followed by an ASCII uppercase one;
 - under `test-placement`, each requirement whose statement, its lines joined by line breaks, holds a sentence that places a test as `gate/cuts` reads a sentence and a placement, as `specs/<component path>/SPEC.md: health/test-placement: <component>/<slug> <phrase>`, `<phrase>` the placement phrase that comes first in the first such sentence, spelled as `gate/cuts` lists it, the summary counting `requirements`;
 - under `design-exit`, each line of a component's Design outside fenced blocks that holds `exit`, `exits` or `exited`, then optionally `with`, then optionally `status` or `code`, then a number of ASCII digits, the words compared without regard to ASCII case, each word and the number with no ASCII letter, digit or `_` directly before or after it, and each separated from the next by one or more white-space characters, as `specs/<component path>/SPEC.md:<line>: health/design-exit: <match>`, `<match>` the line's first match as written, once per line, the summary counting `lines`. A Contract SHALL NOT be read for it;
@@ -518,3 +516,4 @@ After `reconsider`, `clm health` SHALL report four signals of the rule for a req
 #### Needs
 - gate/cuts
 - check.coverage/test-lists
+- check/asset-references
