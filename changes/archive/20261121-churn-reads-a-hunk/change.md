@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [churn-reads-a-hunk-s-removed-and-added-lines-as-a-file-header]
 ---
 

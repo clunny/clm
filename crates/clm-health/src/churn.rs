@@ -53,13 +53,25 @@ pub fn churn(root: &Path) -> Result<Option<Vec<Churn>>, Failure> {
     let log = clm_git::run(root, "git", &LOG, clm_git::Options::default())?;
     let mut cited: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut path: Option<String> = None;
-    let mut after_minus = false;
+    // A file's header runs from its `diff ` line to its first `@@` hunk header; past
+    // that, a `+++ ` line is an added line whose text starts `++ `. No hunk line starts
+    // `diff ` or `@@`, since each starts ` `, `+`, `-` or `\`.
+    let mut in_hunk = false;
     let log = String::from_utf8_lossy(&log);
     for line in log.lines() {
-        let header = after_minus && line.starts_with("+++ ");
-        after_minus = line.starts_with("--- ");
-        if header {
-            path = header_path(&line["+++ ".len()..]);
+        if line.starts_with("diff ") {
+            in_hunk = false;
+            path = None;
+            continue;
+        }
+        if line.starts_with("@@") {
+            in_hunk = true;
+            continue;
+        }
+        if !in_hunk {
+            if let Some(name) = line.strip_prefix("+++ ") {
+                path = header_path(name);
+            }
             continue;
         }
         let (Some(text), Some(file)) = (line.strip_prefix('+'), &path) else {

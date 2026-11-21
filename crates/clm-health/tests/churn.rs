@@ -16,7 +16,7 @@ fn commit(root: &Path, message: &str) {
 
 #[test]
 fn scenario_re_cited_across_commits_and_a_rename() {
-    // req:check.health/churn-signal@06a1b9c3
+    // req:check.health/churn-signal@42cdc1ac
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["x", "y"]));
@@ -42,7 +42,7 @@ fn scenario_re_cited_across_commits_and_a_rename() {
 
 #[test]
 fn scenario_what_doesnt_count() {
-    // req:check.health/churn-signal@06a1b9c3
+    // req:check.health/churn-signal@42cdc1ac
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["z"]));
@@ -83,7 +83,7 @@ fn scenario_what_doesnt_count() {
 
 #[test]
 fn no_commit_is_no_history() {
-    // req:check.health/churn-signal@06a1b9c3
+    // req:check.health/churn-signal@42cdc1ac
     let dir = repo();
     let d = dir.path();
     assert_eq!(clm_health::churn(d).unwrap(), None);
@@ -97,7 +97,7 @@ fn no_commit_is_no_history() {
 
 #[test]
 fn a_path_git_quotes_counts() {
-    // req:check.health/churn-signal@06a1b9c3
+    // req:check.health/churn-signal@42cdc1ac
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["x"]));
@@ -121,7 +121,7 @@ fn a_path_git_quotes_counts() {
 
 #[test]
 fn scenario_no_history() {
-    // req:check.health/churn-signal@06a1b9c3
+    // req:check.health/churn-signal@42cdc1ac
     let dir = repo();
     assert_eq!(clm_health::churn(dir.path()).unwrap(), None);
     let plain = tempfile::TempDir::new().unwrap();
@@ -146,7 +146,7 @@ fn scenario_no_history() {
 
 #[test]
 fn scenario_the_patchs_shape() {
-    // req:check.health/churn-signal@06a1b9c3
+    // req:check.health/churn-signal@42cdc1ac
     let dir = repo();
     let d = dir.path();
     for (key, value) in [
@@ -189,7 +189,7 @@ fn scenario_the_patchs_shape() {
 
 #[test]
 fn paths_with_spaces_and_a_users_prefixes() {
-    // req:check.health/churn-signal@06a1b9c3
+    // req:check.health/churn-signal@42cdc1ac
     let dir = repo();
     let d = dir.path();
     // A user's configured prefixes don't change what is read, nor does hiding the
@@ -212,7 +212,7 @@ fn paths_with_spaces_and_a_users_prefixes() {
 
 #[test]
 fn a_marker_outside_a_test_counts() {
-    // req:check.health/churn-signal@06a1b9c3
+    // req:check.health/churn-signal@42cdc1ac
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"src/**\"]", &["x"]));
@@ -220,6 +220,66 @@ fn a_marker_outside_a_test_counts() {
         write(d, "src/lib.rs", &format!("fn f() {{}}\n{}", cite("a/x", v)));
         commit(d, v);
     }
+    let out = report(d);
+    assert_eq!(
+        section(&out, "churn"),
+        [
+            "health/churn: 1 requirements",
+            "specs/a/SPEC.md: health/churn: a/x cited at 3 versions",
+        ],
+        "{out}"
+    );
+}
+
+#[test]
+fn scenario_a_hunk_line_that_reads_like_a_header() {
+    // req:check.health/churn-signal@42cdc1ac
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &spec("[\"tests/**\"]", &["x"]));
+    let first = cite("a/x", "@11111111");
+    write(d, "tests/x.rs", &format!("-- one\n{first}"));
+    commit(d, "one");
+    // In one hunk the patch shows `--- one` then `+++ b/notes.md`: a file header's shape.
+    let (second, third) = (cite("a/x", "@22222222"), cite("a/x", "@33333333"));
+    write(
+        d,
+        "tests/x.rs",
+        &format!("++ b/notes.md\n{second}{third}{first}"),
+    );
+    commit(d, "two");
+    let patch = git(
+        d,
+        &[
+            "-c",
+            "diff.noprefix=false",
+            "-c",
+            "diff.dstPrefix=b/",
+            "-c",
+            "diff.mnemonicPrefix=false",
+            "log",
+            "-p",
+            "-1",
+            "--format=",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-textconv",
+        ],
+    );
+    assert!(
+        patch.contains("\n--- one\n+++ b/notes.md\n"),
+        "the hunk holds no header-shaped lines:\n{patch}"
+    );
+    let churn = clm_health::churn(d).unwrap().unwrap();
+    assert_eq!(
+        churn,
+        [Churn {
+            id: "a/x".into(),
+            versions: ["11111111", "22222222", "33333333"]
+                .map(String::from)
+                .into(),
+        }]
+    );
     let out = report(d);
     assert_eq!(
         section(&out, "churn"),
