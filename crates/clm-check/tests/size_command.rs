@@ -284,6 +284,9 @@ fn hash(root: &Path, rel: &str) -> String {
     String::from_utf8(out.stdout).unwrap().trim().to_string()
 }
 
+/// A case's name, and what it does to the fixture.
+type Case<'a> = (&'a str, &'a dyn Fn(&Path));
+
 #[cfg(unix)]
 #[test]
 fn only_tracked_regular_files_count() {
@@ -298,7 +301,7 @@ fn only_tracked_regular_files_count() {
         );
         dir
     };
-    let cases: [(&str, &dyn Fn(&Path)); 7] = [
+    let cases: [Case; 7] = [
         ("a tracked link", &|root| {
             write(root, "big.txt", &[b'b'; 4000]);
             std::os::unix::fs::symlink("../../big.txt", root.join("src/a/link")).unwrap();
