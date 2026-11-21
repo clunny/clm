@@ -277,7 +277,7 @@ fn landed_record_written_before_the_code_key() {
 
 #[test]
 fn subscriptions_ended_in_another_order() {
-    // req:ledger/subscription-records@e4cb2df2
+    // req:ledger/subscription-records@94d71184
     // The end comes first, in the file and in time, and still ends `s1`.
     let text = [
         r#"{"id":"u1","kind":"unsubscribed","writer":"alice/web","at":"2026-01-01T00:00:00.000Z","subscription":"s1"}"#,
@@ -636,6 +636,45 @@ fn huge_effort_shown_without_overflow() {
     assert!(
         shown[0].contains(&format!(" {} 120s ", u64::MAX)),
         "{shown:?}"
+    );
+}
+
+#[test]
+fn show_a_check() {
+    // req:ledger/show@6e2fd27f
+    let line = r#"{"id":"1","kind":"checked","writer":"x/1","at":"2026-01-01T00:00:00.000Z","code_key":"k","command":"check"}"#;
+    let fold = clm_ledger::fold_records(&[("origin/clm/ledger/x/1", line)]);
+    assert_eq!(
+        clm_ledger::show(&fold),
+        ["checked k x/1 2026-01-01T00:00:00.000Z"]
+    );
+}
+
+#[test]
+fn show_odd_endpoints() {
+    // req:ledger/subscription-records@94d71184
+    let subscribed = |id: &str, endpoint: &str| {
+        format!(
+            r#"{{"id":"{id}","kind":"subscribed","writer":"alice/web","at":"2026-01-01T00:00:00.000Z","endpoint":"{endpoint}","p256dh":"p","auth":"a"}}"#
+        )
+    };
+    let text = [
+        subscribed("s1", "https://push.example:8443/s?x=1"),
+        subscribed("s2", "https://user:token@push.example/s/1"),
+        subscribed("s3", "not a url"),
+        subscribed("s4", "foo?x=https://a/b"),
+    ]
+    .join("\n");
+    let fold = clm_ledger::fold_records(&[("origin/clm/ledger/alice/web", &text)]);
+    let at = "alice/web 2026-01-01T00:00:00.000Z";
+    assert_eq!(
+        clm_ledger::show(&fold),
+        [
+            format!("subscribed s1 https://push.example:8443 {at}"),
+            format!("subscribed s2 https://push.example {at}"),
+            format!("subscribed s3 - {at}"),
+            format!("subscribed s4 - {at}"),
+        ]
     );
 }
 

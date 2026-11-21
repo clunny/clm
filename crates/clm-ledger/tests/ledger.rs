@@ -301,7 +301,7 @@ fn at_now() -> String {
 
 #[test]
 fn compact_prunes_a_landed_approval_and_older_checks() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -328,7 +328,7 @@ fn compact_prunes_a_landed_approval_and_older_checks() {
 #[cfg(unix)]
 #[test]
 fn compact_warns_when_origin_refuses_the_push() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -356,7 +356,7 @@ fn compact_warns_when_origin_refuses_the_push() {
 
 #[test]
 fn compact_keeps_an_open_approval() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -375,7 +375,7 @@ fn compact_keeps_an_open_approval() {
 
 #[test]
 fn compact_keeps_lands_and_newer_checks() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -425,8 +425,28 @@ fn append_line(dir: &Path, branch: &str, line: &str) {
 }
 
 #[test]
+fn compact_keeps_a_line_it_cannot_parse() {
+    // req:ledger/compact@59996cc0
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let a = clone_with_origin(home, "a", "A");
+    let env = env(home, &[]);
+    let mine = append(&a, approved("f"), &env).unwrap();
+    let branch = format!("clm/ledger/{}", mine.record.writer);
+    append_line(&a, &branch, "not json");
+    tick();
+    append(&a, landed("c", "f", Some("m")), &env).unwrap();
+    let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
+    assert_eq!(code, Some(0), "{out}{err}");
+    assert_eq!(out.trim(), "removed 1");
+    let text = records(&a, &branch);
+    assert!(text.lines().any(|l| l == "not json"), "{text}");
+    assert!(!text.contains(r#""kind":"approved""#), "{text}");
+}
+
+#[test]
 fn compact_drops_reviewed_lines() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -445,7 +465,7 @@ fn compact_drops_reviewed_lines() {
 
 #[test]
 fn compact_keeps_a_lands_check() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     // `checked k`, then the land naming `k`.
@@ -464,7 +484,7 @@ fn compact_keeps_a_lands_check() {
 
 #[test]
 fn compact_keeps_an_older_lands_check() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0", "Merge b1"]);
     let env = env(dir.path(), &[]);
@@ -487,7 +507,7 @@ fn compact_keeps_an_older_lands_check() {
 
 #[test]
 fn compact_keeps_every_check_when_a_lands_key_is_unknown() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     // A land without `code_key` whose commit isn't in this clone: its key can't be
     // computed, so no check is dropped, though the landed approval still is.
     let dir = tempfile::tempdir().unwrap();
@@ -502,7 +522,12 @@ fn compact_keeps_every_check_when_a_lands_key_is_unknown() {
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 1");
-    assert!(err.contains("warning") && err.contains(missing), "{err}");
+    // This repository has no `origin`, so the push's warning follows.
+    let warning = format!(
+        "warning: kept every `checked` record: landed {missing} isn't in this clone, so its \
+         code key can't be computed; fetch it and compact again"
+    );
+    assert_eq!(err.lines().next(), Some(warning.as_str()), "{err}");
     let fold = clm_ledger::fold(dir.path()).unwrap();
     assert!(fold.checks.contains_key("old"), "{fold:?}");
     assert!(fold.approvals.is_empty(), "{fold:?}");
@@ -736,7 +761,7 @@ fn verify_reports_a_land_no_check_names() {
 
 #[test]
 fn show_lists_the_fold_in_time_order() {
-    // req:ledger/show@803f9c27
+    // req:ledger/show@6e2fd27f
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "T");
     std::fs::write(dir.path().join("clm.toml"), "host = \"none\"\n").unwrap();
@@ -758,7 +783,7 @@ fn show_lists_the_fold_in_time_order() {
 
 #[test]
 fn show_prints_whether_a_land_needed_review() {
-    // req:ledger/show@803f9c27
+    // req:ledger/show@6e2fd27f
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "T");
     std::fs::write(dir.path().join("clm.toml"), "host = \"none\"\n").unwrap();
@@ -785,7 +810,7 @@ fn show_prints_whether_a_land_needed_review() {
 
 #[test]
 fn show_sorts_across_ledgers() {
-    // req:ledger/show@803f9c27
+    // req:ledger/show@6e2fd27f
     // Writer `b`'s record is older, though its ledger is read after `a`'s.
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -1081,7 +1106,7 @@ fn verify_approval_for_another_diff() {
 
 #[test]
 fn compact_keeps_a_signed_lands_approval() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let s = signed_main(root, "Christopher Lunny");
@@ -1115,7 +1140,7 @@ fn compact_keeps_a_signed_lands_approval() {
 
 #[test]
 fn compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     // Whether its first parent is signed can't be told, so the approval stays.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1141,7 +1166,14 @@ fn compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched() {
     let (code, out, err) = clm(root, root, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 0");
-    assert!(err.contains("warning") && err.contains(missing), "{err}");
+    assert_eq!(
+        err,
+        format!(
+            "warning: kept the approval of f: landed {missing} isn't in this clone, so \
+             whether `clm ledger verify` reads it can't be told; fetch it and compact again\n"
+        )
+    );
+    assert!(clm_ledger::fold(root).unwrap().approvals.contains_key("f"));
 }
 
 #[test]
@@ -1182,7 +1214,7 @@ fn subscribed(endpoint: &str) -> Body {
 
 #[test]
 fn show_prints_a_subscription_without_its_keys() {
-    // req:ledger/subscription-records@e4cb2df2
+    // req:ledger/subscription-records@94d71184
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     repo(root, "T");
@@ -1213,7 +1245,7 @@ fn show_prints_a_subscription_without_its_keys() {
 
 #[test]
 fn compact_keeps_subscription_records() {
-    // req:ledger/subscription-records@e4cb2df2
+    // req:ledger/subscription-records@94d71184
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
@@ -2320,7 +2352,7 @@ fn compact_keeps_the_basis_of_a_composed_check() {
 
 #[test]
 fn compact_still_prunes_a_check_no_land_or_basis_names() {
-    // req:ledger/compact@cf9d661f
+    // req:ledger/compact@59996cc0
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);

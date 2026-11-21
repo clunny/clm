@@ -427,7 +427,7 @@ fn origin(url: &str) -> String {
 mod tests {
     #[test]
     fn origin_of_an_endpoint() {
-        // req:ledger/subscription-records@e4cb2df2
+        // req:ledger/subscription-records@94d71184
         for (url, want) in [
             ("https://push.example/s/2", "https://push.example"),
             ("https://push.example", "https://push.example"),
