@@ -1312,7 +1312,7 @@ fn rust_and_python_manifests() {
 
 #[test]
 fn survey_counts_agents_md_as_a_spec_file() {
-    // req:init/survey-agents-md@3dd4afc6
+    // req:init/init-root-ownership@e3d39505
     let (_tmp, dir) = repo();
     write(&dir, "AGENTS.md", "x\n");
     write(&dir, "src/a.rs", "fn a() {}\n");

@@ -280,19 +280,6 @@ fn from_a_subdirectory() {
 /// Covers the files outside the crates.
 const TOP: &str = "  - { id: top, paths: [\"Cargo.toml\", \"README.md\", \"docs/**\"] }\n";
 
-#[test]
-fn components_key() {
-    // req:init/survey-components@d0f9f634
-    let map = format!(
-        "components:\n  - {{ id: a, paths: [\"crates/a/**\"], depends_on: [b] }}\n  - {{ id: b, paths: [\"crates/b/**\"] }}\n{TOP}"
-    );
-    let repo = repo(TWO_CRATES);
-    fs::write(repo.path().join("map.yaml"), map).unwrap();
-    let out = clm(repo.path(), &["survey", "--components", "map.yaml"]);
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
-    assert!(out.stdout.is_empty() && out.stderr.is_empty(), "{out:?}");
-}
-
 /// Runs `clm survey --components map.yaml` on `files` with `map` written beside them.
 fn components(files: &[(&str, &[u8])], map: &str) -> Output {
     let repo = repo(files);

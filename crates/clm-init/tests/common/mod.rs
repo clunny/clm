@@ -84,3 +84,26 @@ pub const ISOLATED_GIT: [(&str, &str); 2] = [
 pub fn process_env(key: &str) -> Option<String> {
     std::env::var(key).ok()
 }
+
+/// Every file under `root` but those in `.git`, as (path relative to `root`, text), sorted
+/// by path: the files a `clm init` in a fresh repository wrote.
+pub fn written_files(root: &Path) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().is_some_and(|n| n == ".git") {
+                continue;
+            }
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                let rel = path.strip_prefix(root).unwrap().display().to_string();
+                out.push((rel, std::fs::read_to_string(&path).unwrap()));
+            }
+        }
+    }
+    out.sort();
+    out
+}

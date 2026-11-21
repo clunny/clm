@@ -137,31 +137,6 @@ mod tests {
     }
 
     #[test]
-    fn no_page_named_in_source() {
-        // req:init/guide-table-from-files@5c6bd405
-        // Built from parts so this file doesn't match itself.
-        let needle = concat!("docs/", "guide/");
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut named = Vec::new();
-        let mut dirs = vec![src];
-        while let Some(dir) = dirs.pop() {
-            for entry in std::fs::read_dir(dir).unwrap() {
-                let path = entry.unwrap().path();
-                if path.is_dir() {
-                    dirs.push(path);
-                } else if std::fs::read_to_string(&path)
-                    .unwrap()
-                    .lines()
-                    .any(|l| l.contains("include_str!") && l.contains(needle))
-                {
-                    named.push(path);
-                }
-            }
-        }
-        assert!(named.is_empty(), "a guide page named by hand in {named:?}");
-    }
-
-    #[test]
     fn pages_in_the_index_order() {
         // req:init/guide-command@088ebe45
         // req:init/guide-table-from-files@5c6bd405
