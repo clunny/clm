@@ -197,10 +197,15 @@ where
             }
             0
         }
-        Err(e) => {
-            let _ = writeln!(out, "check/node-size: {e}");
-            1
-        }
+        // The listing, a tracked file or `git check-attr` failed.
+        Err(e) => report(
+            &[Violation {
+                path: root.to_path_buf(),
+                rule: "check/node-size",
+                message: e.to_string(),
+            }],
+            out,
+        ),
     }
 }
 

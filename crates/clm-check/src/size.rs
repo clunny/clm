@@ -256,7 +256,15 @@ mod tree {
             let len = match std::fs::symlink_metadata(&path) {
                 Ok(m) if m.is_file() => m.len(),
                 Ok(_) => continue,
-                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                // Gone from the working tree, its directory included.
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                    ) =>
+                {
+                    continue;
+                }
                 Err(e) => return Err(e),
             };
             let rust = rel.extension().is_some_and(|e| e == "rs");
