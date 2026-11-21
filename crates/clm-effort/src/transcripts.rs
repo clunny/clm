@@ -305,7 +305,11 @@ fn millis(text: &str) -> Option<i64> {
             .then(|| digits.iter().fold(0, |n, d| n * 10 + i64::from(d - b'0')))
     };
     let (y, m, d) = (number(&b[0..4])?, number(&b[5..7])?, number(&b[8..10])?);
-    let (h, min, s) = (number(&b[11..13])?, number(&b[14..16])?, number(&b[17..19])?);
+    let (h, min, s) = (
+        number(&b[11..13])?,
+        number(&b[14..16])?,
+        number(&b[17..19])?,
+    );
     let mut rest = &b[19..];
     let mut ms = 0;
     if let Some(fraction) = rest.strip_prefix(b".") {
@@ -326,7 +330,11 @@ fn millis(text: &str) -> Option<i64> {
             if oh > 23 || om > 59 {
                 return None;
             }
-            if *sign == b'-' { -(oh * 60 + om) } else { oh * 60 + om }
+            if *sign == b'-' {
+                -(oh * 60 + om)
+            } else {
+                oh * 60 + om
+            }
         }
         _ => return None,
     };
@@ -364,12 +372,12 @@ mod tests {
         // req:effort/transcripts@50c1e34f
         assert_eq!(super::millis("1970-01-01T00:00:00.000Z"), Some(0));
         // An offset names the instant in UTC; a fraction is cut to the millisecond.
-        assert_eq!(
-            super::millis("1970-01-01T02:00:00.123456+02:00"),
-            Some(123)
-        );
+        assert_eq!(super::millis("1970-01-01T02:00:00.123456+02:00"), Some(123));
         assert_eq!(super::millis("1970-01-01T00:00:00-00:30"), Some(1_800_000));
-        assert_eq!(super::millis("2024-02-29T00:00:00Z"), Some(19_782 * 86_400_000));
+        assert_eq!(
+            super::millis("2024-02-29T00:00:00Z"),
+            Some(19_782 * 86_400_000)
+        );
         for text in [
             "2026-10-30T0:03:00Z",
             "+2026-10-30T00:04:00Z",

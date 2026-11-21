@@ -80,7 +80,7 @@ fn repository(dir: &Path) -> (String, String) {
 
 #[test]
 fn history_counts_commits_and_items() {
-    // req:effort/history@809c694b
+    // req:effort/history@a4b7b012
     let dir = tempfile::tempdir().unwrap();
     let (on_a, on_b) = repository(dir.path());
     let history = history(dir.path()).unwrap();
@@ -106,7 +106,7 @@ fn history_counts_commits_and_items() {
 
 #[test]
 fn page_with_history() {
-    // req:effort/history@809c694b
+    // req:effort/history@a4b7b012
     let dir = tempfile::tempdir().unwrap();
     repository(dir.path());
     let (graph, _) = clm_model::load(dir.path());
@@ -144,7 +144,7 @@ fn page_with_history() {
 
 #[test]
 fn blocks_added_later_and_odd_lines_kept() {
-    // req:effort/history@809c694b
+    // req:effort/history@a4b7b012
     // An item added blocking nothing, whose body has a line a patch writes as `+++ ...`,
     // later edited to block `a/x`; and a friction item, whose added date the page shows.
     let dir = tempfile::tempdir().unwrap();
@@ -191,8 +191,70 @@ fn blocks_added_later_and_odd_lines_kept() {
 }
 
 #[test]
+fn odd_history() {
+    // req:effort/history@a4b7b012
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    repo(root, "Ann");
+    write(
+        root,
+        "specs/SPEC.md",
+        "---\ntitle: T\nstatus: active\nowners: []\n---\n\n## Contract\nc\n",
+    );
+    write(
+        root,
+        "CAPABILITIES.md",
+        "## Capabilities\n\n### Capability: p\nA person can p.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n",
+    );
+    write(
+        root,
+        "specs/a/SPEC.md",
+        &node("capability/p", "crates/a/**"),
+    );
+    commit_at(root, DAY, "specs");
+    let item = |kind: &str| {
+        format!("---\ntitle: Which?\nkind: {kind}\ncomponents: [a]\nblocks: [a/x]\n---\n\nWhich?\n")
+    };
+    // Open a day and a half.
+    write(root, "backlog/q1.md", &item("question"));
+    commit_at(root, 2 * DAY, "ask q1");
+    std::fs::remove_file(root.join("backlog/q1.md")).unwrap();
+    commit_at(root, 2 * DAY + 3 * DAY / 2, "answer q1");
+    // Deleted by a commit whose time is a day before the one adding it.
+    write(root, "backlog/q2.md", &item("question"));
+    commit_at(root, 5 * DAY, "ask q2");
+    std::fs::remove_file(root.join("backlog/q2.md")).unwrap();
+    commit_at(root, 4 * DAY, "answer q2");
+    // Added as an idea, later edited to be a question: no life.
+    write(root, "backlog/i.md", &item("idea"));
+    commit_at(root, 6 * DAY, "idea");
+    write(root, "backlog/i.md", &item("question"));
+    commit_at(root, 6 * DAY + 1, "now a question");
+    let (graph, _) = clm_model::load(root);
+    let version = graph.requirement("a/x").unwrap().version().to_string();
+    write(
+        root,
+        "backlog/fr.md",
+        &format!(
+            "---\ntitle: Hard\nkind: workaround\ncomponents: [a]\nrequirement: a/x@{version}\n---\n\nWhy.\n"
+        ),
+    );
+    commit_at(root, 7 * DAY, "flag");
+    let history = history(root).unwrap();
+    assert!(
+        history.items.iter().all(|l| l.slug != "i"),
+        "{:?}",
+        history.items
+    );
+    let report = clm_effort::capabilities(root).unwrap();
+    let p = &report.capabilities[0];
+    assert_eq!(p.blocking, Some((2, 1)));
+    assert_eq!(p.flags[0].added.as_deref(), Some("1970-01-08"));
+}
+
+#[test]
 fn unborn_head_has_no_history() {
-    // req:effort/history@809c694b
+    // req:effort/history@a4b7b012
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     sh(root, &["init", "-q", "-b", "main"]);

@@ -47,13 +47,32 @@ mod tests {
 
     #[test]
     fn unknown_model_uses_fallback() {
-        // req:effort/prices@b1a2b29a
+        // req:effort/prices@ad02c242
         let million = Usage {
             input: 1_000_000,
             ..Usage::default()
         };
         assert_eq!(dollars("some-new-model", &million), 3.0);
         assert_eq!(dollars("claude-sonnet-4-6", &million), 3.0);
+        // The fallback is the Sonnet 4 rates, not the `sonnet-5` family's.
+        assert_eq!(dollars("claude-sonnet-5", &million), 2.0);
+        let each = |usage: Usage| dollars("some-new-model", &usage);
+        let one = 1_000_000;
+        let fallback = [
+            each(Usage {
+                output: one,
+                ..Usage::default()
+            }),
+            each(Usage {
+                cache_read: one,
+                ..Usage::default()
+            }),
+            each(Usage {
+                cache_write: one,
+                ..Usage::default()
+            }),
+        ];
+        assert_eq!(fallback, [15.0, 0.3, 3.75]);
         assert_eq!(dollars("claude-opus-5-5", &million), 4.0);
         assert_eq!(dollars("claude-opus-5", &million), 5.0);
         assert_eq!(dollars("Claude-Fable-5-1", &million), 10.0);
