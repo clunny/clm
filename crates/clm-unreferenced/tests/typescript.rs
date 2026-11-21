@@ -6,7 +6,7 @@ use common::{TAIL, lines, names, repo};
 
 #[test]
 fn scenario_entry_module_and_re_exports() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         (
             "packages/core/package.json",
@@ -40,7 +40,7 @@ fn scenario_entry_module_and_re_exports() {
 
 #[test]
 fn scenario_exports_map_default_entry_and_no_entry() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         (
             "packages/lib/package.json",
@@ -65,7 +65,7 @@ fn scenario_exports_map_default_entry_and_no_entry() {
 
 #[test]
 fn scenario_test_files_node_modules_and_nameless_manifests() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         (
             "packages/core/package.json",
@@ -93,7 +93,7 @@ fn scenario_test_files_node_modules_and_nameless_manifests() {
 
 #[test]
 fn entry_values_resolve_as_given_with_extensions_and_as_directories() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         (
             "p/package.json",
@@ -109,7 +109,7 @@ fn entry_values_resolve_as_given_with_extensions_and_as_directories() {
 
 #[test]
 fn exported_declarations_patterns_imports_and_what_is_not_listed() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p", "main": "index.ts"}"#),
         (
@@ -163,7 +163,7 @@ fn exported_declarations_patterns_imports_and_what_is_not_listed() {
 
 #[test]
 fn re_export_cycles_end() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p", "main": "a.ts"}"#),
         ("p/a.ts", "export * from './b'\nexport function fa() {}\n"),
@@ -174,7 +174,7 @@ fn re_export_cycles_end() {
 
 #[test]
 fn deepest_package_owns_a_file() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         ("package.json", r#"{"name": "outer", "main": "index.ts"}"#),
         (
@@ -191,7 +191,7 @@ fn deepest_package_owns_a_file() {
 
 #[test]
 fn broken_package_json_is_an_error_naming_it() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[("web/package.json", "{\"name\": ")]);
     let err = clm_unreferenced::scan(dir.path(), &[], &[]).unwrap_err();
     assert!(err.starts_with("web/package.json: "), "{err}");
@@ -200,7 +200,7 @@ fn broken_package_json_is_an_error_naming_it() {
 
 #[test]
 fn scenario_used_from_another_package_a_test_file_and_an_embedding_file() {
-    // req:check.unreferenced/typescript-uses@18d0ccf0
+    // req:check.unreferenced/typescript-uses@b8ac7637
     let dir = repo(&[
         ("packages/core/package.json", r#"{"name": "@acme/core"}"#),
         (
@@ -225,7 +225,7 @@ fn scenario_used_from_another_package_a_test_file_and_an_embedding_file() {
 
 #[test]
 fn strings_jsx_text_and_doc_comments_count_and_untracked_files_do_not() {
-    // req:check.unreferenced/typescript-uses@18d0ccf0
+    // req:check.unreferenced/typescript-uses@b8ac7637
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         (
@@ -243,7 +243,7 @@ fn strings_jsx_text_and_doc_comments_count_and_untracked_files_do_not() {
 
 #[test]
 fn scenario_types_reached_through_used_items() {
-    // req:check.unreferenced/typescript-uses@18d0ccf0
+    // req:check.unreferenced/typescript-uses@b8ac7637
     let dir = repo(&[
         ("packages/core/package.json", r#"{"name": "@acme/core"}"#),
         (
@@ -279,7 +279,7 @@ fn scenario_types_reached_through_used_items() {
 
 #[test]
 fn renamed_re_export_carries_its_declaration() {
-    // req:check.unreferenced/typescript-uses@18d0ccf0
+    // req:check.unreferenced/typescript-uses@b8ac7637
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         (
@@ -299,7 +299,7 @@ fn renamed_re_export_carries_its_declaration() {
 
 #[test]
 fn own_exports_shadow_star_exports() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         ("p/index.ts", "export * from './a'\nexport const x = 1\n"),
@@ -316,7 +316,7 @@ fn own_exports_shadow_star_exports() {
 
 #[test]
 fn fallback_entry_prefers_src_index_and_the_first_extension() {
-    // req:check.unreferenced/typescript-packages@95acf450
+    // req:check.unreferenced/typescript-packages@33764053
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         ("p/src/index.js", "export function fromSrcJs() {}\n"),
@@ -328,7 +328,7 @@ fn fallback_entry_prefers_src_index_and_the_first_extension() {
 
 #[test]
 fn heritage_interface_extends_and_variable_annotations_carry_private_members_do_not() {
-    // req:check.unreferenced/typescript-uses@18d0ccf0
+    // req:check.unreferenced/typescript-uses@b8ac7637
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         (
@@ -348,8 +348,8 @@ fn heritage_interface_extends_and_variable_annotations_carry_private_members_do_
 
 #[test]
 fn every_embedding_file_counts_and_other_files_do_not() {
-    // req:check.unreferenced/typescript-uses@18d0ccf0
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/typescript-uses@b8ac7637
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         (
@@ -368,7 +368,7 @@ fn every_embedding_file_counts_and_other_files_do_not() {
 
 #[test]
 fn a_file_that_parses_with_errors_is_used_as_far_as_it_parses() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         (

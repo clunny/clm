@@ -64,7 +64,7 @@ fn sorted(mut v: Vec<String>) -> Vec<String> {
 
 #[test]
 fn scenario_kinds_listed() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a-lib")),
         (
@@ -84,7 +84,7 @@ fn scenario_kinds_listed() {
 
 #[test]
 fn every_listed_kind_and_restricted_visibility() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("Cargo.toml", &manifest("a")),
         (
@@ -118,7 +118,7 @@ fn every_listed_kind_and_restricted_visibility() {
 
 #[test]
 fn scenario_impl_type_names() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -142,7 +142,7 @@ fn scenario_impl_type_names() {
 
 #[test]
 fn scenario_test_code_skipped() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -175,7 +175,7 @@ fn scenario_test_code_skipped() {
 
 #[test]
 fn scenario_not_test_is_checked() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -207,7 +207,7 @@ fn scenario_not_test_is_checked() {
 
 #[test]
 fn raw_strings_in_cfg_and_a_module_declared_both_ways() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -223,7 +223,7 @@ fn raw_strings_in_cfg_and_a_module_declared_both_ways() {
 
 #[test]
 fn test_items_of_an_impl_and_modules_of_another_package_are_not_listed() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -240,7 +240,7 @@ fn test_items_of_an_impl_and_modules_of_another_package_are_not_listed() {
 
 #[test]
 fn scenario_module_tree_of_lib_rs() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -260,7 +260,7 @@ fn scenario_module_tree_of_lib_rs() {
 
 #[test]
 fn path_attributes_blocks_and_untracked_files_are_not_followed() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -282,7 +282,7 @@ fn path_attributes_blocks_and_untracked_files_are_not_followed() {
 
 #[test]
 fn scenario_binary_modules() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -298,7 +298,7 @@ fn scenario_binary_modules() {
 
 #[test]
 fn scenario_entry_points_skipped() {
-    // req:check.unreferenced/entry-attributes@69e092f6
+    // req:check.unreferenced/entry-attributes@df16589f
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -323,7 +323,7 @@ fn scenario_entry_points_skipped() {
 
 #[test]
 fn scenario_stale_entry() {
-    // req:check.unreferenced/entry-attributes@69e092f6
+    // req:check.unreferenced/entry-attributes@df16589f
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -346,7 +346,7 @@ fn scenario_stale_entry() {
 
 #[test]
 fn scenario_entry_on_a_used_item() {
-    // req:check.unreferenced/entry-attributes@69e092f6
+    // req:check.unreferenced/entry-attributes@df16589f
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -367,7 +367,7 @@ fn scenario_entry_on_a_used_item() {
 
 #[test]
 fn entry_on_an_impl_block_marks_its_items() {
-    // req:check.unreferenced/entry-attributes@69e092f6
+    // req:check.unreferenced/entry-attributes@df16589f
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -383,7 +383,7 @@ fn entry_on_an_impl_block_marks_its_items() {
 
 #[test]
 fn scenario_binaries_and_lib_name() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         (
             "crates/a/Cargo.toml",
@@ -411,7 +411,7 @@ fn scenario_binaries_and_lib_name() {
 
 #[test]
 fn nested_package_owns_its_files() {
-    // req:check.unreferenced/public-items@7833fc92
+    // req:check.unreferenced/public-items@32359404
     let dir = repo(&[
         ("Cargo.toml", &manifest("outer")),
         ("src/lib.rs", "pub fn outer_item() {}\n"),
@@ -426,7 +426,7 @@ fn nested_package_owns_its_files() {
 
 #[test]
 fn scenario_used_by_another_crate() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         ("crates/a/src/lib.rs", "pub fn f() {}\npub fn h() {}\n"),
@@ -438,7 +438,7 @@ fn scenario_used_by_another_crate() {
 
 #[test]
 fn scenario_used_only_in_its_own_library() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         ("crates/a/src/lib.rs", "mod x;\nfn g() {\n    x::f();\n}\n"),
@@ -449,7 +449,7 @@ fn scenario_used_only_in_its_own_library() {
 
 #[test]
 fn scenario_comments_strings_doctests_and_tests() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -484,7 +484,7 @@ fn scenario_comments_strings_doctests_and_tests() {
 
 #[test]
 fn scenario_through_an_exported_macro() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -507,7 +507,7 @@ fn scenario_through_an_exported_macro() {
 
 #[test]
 fn macro_carriers_at_any_depth_with_matchers_outside_comments_and_tests() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -530,7 +530,7 @@ fn macro_carriers_at_any_depth_with_matchers_outside_comments_and_tests() {
 
 #[test]
 fn scenario_through_a_renamed_re_export() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -549,7 +549,7 @@ fn scenario_through_a_renamed_re_export() {
 
 #[test]
 fn re_exports_chain_and_skip_restricted_self_and_underscore() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -576,8 +576,8 @@ fn re_exports_chain_and_skip_restricted_self_and_underscore() {
 
 #[test]
 fn carriers_in_a_test_module_file_and_other_files_carry_nothing() {
-    // req:check.unreferenced/references@daf06376
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/references@30f5d4b3
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -597,7 +597,7 @@ fn carriers_in_a_test_module_file_and_other_files_carry_nothing() {
 
 #[test]
 fn renames_of_raw_identifiers_carry() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -616,7 +616,7 @@ fn renames_of_raw_identifiers_carry() {
 
 #[test]
 fn scenario_whole_words_only() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         ("crates/a/src/lib.rs", "pub fn get() {}\npub fn put() {}\n"),
@@ -631,7 +631,7 @@ fn scenario_whole_words_only() {
 
 #[test]
 fn scenario_untracked_user() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -650,7 +650,7 @@ fn scenario_untracked_user() {
 
 #[test]
 fn tracked_file_missing_from_the_working_tree_is_skipped() {
-    // req:check.unreferenced/references@daf06376
+    // req:check.unreferenced/references@30f5d4b3
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -663,7 +663,7 @@ fn tracked_file_missing_from_the_working_tree_is_skipped() {
 
 #[test]
 fn allow_entry_skips_every_item_with_its_full_name() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -678,7 +678,7 @@ fn allow_entry_skips_every_item_with_its_full_name() {
 
 #[test]
 fn scenario_stale_entries() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         ("crates/a/src/lib.rs", "pub fn used() {}\n"),
@@ -699,7 +699,7 @@ fn scenario_stale_entries() {
 
 #[test]
 fn invalid_utf8_and_parse_errors_are_used_as_far_as_they_parse() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -721,7 +721,7 @@ fn invalid_utf8_and_parse_errors_are_used_as_far_as_they_parse() {
 #[cfg(unix)]
 #[test]
 fn unreadable_tracked_file_is_an_error_naming_it() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     use std::os::unix::fs::PermissionsExt;
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
@@ -739,7 +739,7 @@ fn unreadable_tracked_file_is_an_error_naming_it() {
 
 #[test]
 fn broken_manifests_are_errors_naming_the_file() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[("crates/a/Cargo.toml", "[package\nname = 1\n")]);
     let err = clm_unreferenced::scan(dir.path(), &[], &[]).unwrap_err();
     assert!(err.starts_with("crates/a/Cargo.toml: "), "{err}");
@@ -758,7 +758,7 @@ fn broken_manifests_are_errors_naming_the_file() {
 
 #[test]
 fn git_failing_is_an_error_naming_the_command() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = TempDir::new().unwrap();
     let err = clm_unreferenced::scan(dir.path(), &[], &[]).unwrap_err();
     assert!(err.contains("git"), "{err}");
@@ -767,7 +767,7 @@ fn git_failing_is_an_error_naming_the_command() {
 
 #[test]
 fn scenario_types_reached_through_used_items() {
-    // req:check.unreferenced/signature-carriers@fa9799f5
+    // req:check.unreferenced/signature-carriers@c6b7a5c4
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -795,7 +795,7 @@ fn scenario_types_reached_through_used_items() {
 
 #[test]
 fn scenario_chains_traits_aliases_and_impl_headers() {
-    // req:check.unreferenced/signature-carriers@fa9799f5
+    // req:check.unreferenced/signature-carriers@c6b7a5c4
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -823,7 +823,7 @@ fn scenario_chains_traits_aliases_and_impl_headers() {
 
 #[test]
 fn every_signature_part_carries() {
-    // req:check.unreferenced/signature-carriers@fa9799f5
+    // req:check.unreferenced/signature-carriers@c6b7a5c4
     // Each used item names one type in one part of its signature, and nothing else names it.
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
@@ -851,7 +851,7 @@ fn every_signature_part_carries() {
 
 #[test]
 fn restricted_test_and_trait_impl_members_carry_nothing() {
-    // req:check.unreferenced/signature-carriers@fa9799f5
+    // req:check.unreferenced/signature-carriers@c6b7a5c4
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -885,7 +885,7 @@ fn restricted_test_and_trait_impl_members_carry_nothing() {
 
 #[test]
 fn impl_headers_trait_impl_members_tuple_fields_and_parameter_names_carry() {
-    // req:check.unreferenced/signature-carriers@fa9799f5
+    // req:check.unreferenced/signature-carriers@c6b7a5c4
     // Each type below is carried by exactly one route.
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),

@@ -79,7 +79,8 @@ const TAIL: &str = "is public but nothing outside its library uses it";
 
 #[test]
 fn a_command_called_in_a_test() {
-    // req:check.unreferenced/commands-in-crate@215013cd
+    // req:check.unreferenced/commands-in-crate@01c980d6
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -113,7 +114,7 @@ fn a_command_called_in_a_test() {
 
 #[test]
 fn arguments_it_cannot_parse() {
-    // req:check.unreferenced/commands-in-crate@215013cd
+    // req:check.unreferenced/commands-in-crate@01c980d6
     let dir = repo(&[("README.md", "# none\n")]);
     let out = clm(dir.path(), &["unreferenced", "--bogus"]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
@@ -128,7 +129,7 @@ fn arguments_it_cannot_parse() {
 
 #[test]
 fn scenario_findings() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let lib = format!(
         "mod x;\n\npub fn f() {{}}\n{}pub fn z() {{}}\n",
         "\n".repeat(6)
@@ -151,7 +152,7 @@ fn scenario_findings() {
 
 #[test]
 fn scenario_clean_or_no_rust() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let used = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -182,7 +183,7 @@ fn scenario_clean_or_no_rust() {
 
 #[test]
 fn scenario_broken_manifest() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     for (path, text) in [
         ("crates/a/Cargo.toml", "[package\n"),
         ("web/package.json", "{\"name\": \n"),
@@ -199,7 +200,7 @@ fn scenario_broken_manifest() {
 
 #[test]
 fn package_findings_are_worded_for_packages() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -222,7 +223,7 @@ fn package_findings_are_worded_for_packages() {
 
 #[test]
 fn scenario_allowed_package_and_item() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         ("packages/core/package.json", r#"{"name": "@acme/core"}"#),
         (
@@ -253,7 +254,7 @@ fn scenario_allowed_package_and_item() {
 
 #[test]
 fn one_name_for_a_crate_and_a_package_skips_both() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         (
             "crates/acme/Cargo.toml",
@@ -279,8 +280,8 @@ fn one_name_for_a_crate_and_a_package_skips_both() {
 
 #[test]
 fn root_option_names_the_repository() {
-    // req:check.unreferenced/report@849ec044
-    // req:check.unreferenced/commands-in-crate@215013cd
+    // req:check.unreferenced/report@1a2b2341
+    // req:check.unreferenced/commands-in-crate@01c980d6
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -294,7 +295,7 @@ fn root_option_names_the_repository() {
 
 #[test]
 fn scenario_allowed_item_and_crate() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\npub fn g() {}\n"),
@@ -317,7 +318,7 @@ fn scenario_allowed_item_and_crate() {
 
 #[test]
 fn scenario_stale_entries() {
-    // req:check.unreferenced/allow-list@8bbdff3e
+    // req:check.unreferenced/allow-list@06e35e0b
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn used() {}\n"),
@@ -350,7 +351,7 @@ fn scenario_stale_entries() {
 
 #[test]
 fn scenario_entry_given_as_an_argument() {
-    // req:check.unreferenced/entry-attributes@69e092f6
+    // req:check.unreferenced/entry-attributes@df16589f
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         (
@@ -371,8 +372,8 @@ fn scenario_entry_given_as_an_argument() {
 
 #[test]
 fn scenario_stale_entry() {
-    // req:check.unreferenced/entry-attributes@69e092f6
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/entry-attributes@df16589f
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -398,7 +399,7 @@ fn scenario_stale_entry() {
 
 #[test]
 fn stale_entries_follow_in_the_order_given() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -424,7 +425,7 @@ fn stale_entries_follow_in_the_order_given() {
 
 #[test]
 fn runs_no_cargo_npm_node_or_python() {
-    // req:check.unreferenced/report@849ec044
+    // req:check.unreferenced/report@1a2b2341
     use std::os::unix::fs::PermissionsExt;
     let dir = repo(&[
         ("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n"),
