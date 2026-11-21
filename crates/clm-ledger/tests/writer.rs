@@ -8,7 +8,7 @@ fn is_hex8(s: &str) -> bool {
 
 #[test]
 fn first_use() {
-    // req:ledger/writer-identity@6a854d4d
+    // req:ledger/writer-identity@deccdd40
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "Christopher Lunny");
     let file = dir.path().join(".git/clm/writer");
@@ -26,7 +26,7 @@ fn first_use() {
 
 #[test]
 fn shared_by_worktrees() {
-    // req:ledger/writer-identity@6a854d4d
+    // req:ledger/writer-identity@deccdd40
     let dir = tempfile::tempdir().unwrap();
     let main = dir.path().join("main");
     std::fs::create_dir_all(&main).unwrap();
@@ -42,7 +42,7 @@ fn shared_by_worktrees() {
 
 #[test]
 fn setting_wins() {
-    // req:ledger/writer-identity@6a854d4d
+    // req:ledger/writer-identity@deccdd40
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "Christopher Lunny");
     let id = clm_ledger::writer(dir.path(), &env(dir.path(), &[("CLM_WRITER", "clunny")])).unwrap();
@@ -51,7 +51,7 @@ fn setting_wins() {
 
 #[test]
 fn an_empty_person_part_names_the_setting() {
-    // req:ledger/writer-identity@6a854d4d
+    // req:ledger/writer-identity@deccdd40
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "!!!");
     let err = clm_ledger::writer(dir.path(), &env(dir.path(), &[])).unwrap_err();
@@ -60,7 +60,7 @@ fn an_empty_person_part_names_the_setting() {
 
 #[test]
 fn a_name_is_lowercased_and_runs_of_other_characters_become_one_dash() {
-    // req:ledger/writer-identity@6a854d4d
+    // req:ledger/writer-identity@deccdd40
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "  O'Brien,  Ann ");
     let id = clm_ledger::writer(dir.path(), &env(dir.path(), &[])).unwrap();
@@ -69,7 +69,7 @@ fn a_name_is_lowercased_and_runs_of_other_characters_become_one_dash() {
 
 #[test]
 fn a_setting_that_is_not_a_slug_is_refused() {
-    // req:ledger/writer-identity@6a854d4d
+    // req:ledger/writer-identity@deccdd40
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "T");
     let env = env(dir.path(), &[("CLM_WRITER", "Christopher/Lunny")]);
@@ -79,7 +79,7 @@ fn a_setting_that_is_not_a_slug_is_refused() {
 
 #[test]
 fn an_empty_clone_file_is_taken_over() {
-    // req:ledger/writer-identity@6a854d4d
+    // req:ledger/writer-identity@deccdd40
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), "T");
     let file = dir.path().join(".git/clm/writer");
@@ -87,5 +87,20 @@ fn an_empty_clone_file_is_taken_over() {
     std::fs::write(&file, "").unwrap();
     let id = clm_ledger::writer(dir.path(), &env(dir.path(), &[])).unwrap();
     let clone = id.strip_prefix("t/").expect(&id);
+    assert!(is_hex8(clone), "{id}");
     assert_eq!(std::fs::read_to_string(&file).unwrap().trim(), clone);
+}
+
+#[test]
+fn a_setting_config_accepts_that_is_not_a_slug_is_refused() {
+    // req:ledger/writer-identity@deccdd40
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), "T");
+    let env = env(dir.path(), &[("CLM_WRITER", "ann--lee")]);
+    let err = clm_ledger::writer(dir.path(), &env).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "`writer` is `ann--lee`, not a slug: use lowercase letters, digits and `-`, such as \
+         `ann-lee`"
+    );
 }
