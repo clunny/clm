@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [check-affected-s-design-names-select-without-the-files-it-could-not-read]
 ---
 
