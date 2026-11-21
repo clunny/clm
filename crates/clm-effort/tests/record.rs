@@ -309,7 +309,7 @@ fn linked_worktree_counted() {
 
 #[test]
 fn subagent_recorded_for_its_worktree_branch() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     // A session in the main checkout, which has `main` checked out, on `spec/x`, launches
     // one subagent in a linked worktree on `impl/a` and one in the checkout itself.
     let dir = tempfile::tempdir().unwrap();
@@ -354,7 +354,7 @@ fn subagent_recorded_for_its_worktree_branch() {
 
 #[test]
 fn a_cwd_inside_a_worktree_keeps_its_branch() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     // A `--cwd` inside the linked worktree is the deepest counted directory holding the
     // subagent's `cwd`, and is still that worktree.
     let dir = tempfile::tempdir().unwrap();
@@ -569,7 +569,7 @@ fn a_pin_re_recorded() {
 
 #[test]
 fn a_cwd_inside_a_detached_worktree_is_detached() {
-    // req:effort/transcripts@39911632
+    // req:effort/transcripts@50c1e34f
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let linked = clone.join(".claude/worktrees/a");

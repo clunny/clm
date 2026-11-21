@@ -74,17 +74,17 @@ pub fn sessions(
     let mut groups: BTreeMap<(String, String), Group> = BTreeMap::new();
     let mut bad = 0;
     // With a branch named plainly, a line that doesn't hold it can't be its entry, and isn't
-    // parsed.
-    let needle = branch.filter(|b| !b.contains(['"', '\\']));
+    // parsed. A name JSON would escape can't be looked for, so every line is read.
+    let needle = branch.filter(|b| !escaped(b)).map(str::as_bytes);
     // A subagent's line counts for `branch` when it holds the branch or ran in a worktree
     // that has the branch checked out, so it must name one or the other; with a path JSON
-    // would escape, every subagent line is parsed.
-    let worktrees: Option<Vec<&str>> = counted
+    // would escape, or one that isn't UTF-8, every subagent line is parsed.
+    let worktrees: Option<Vec<&[u8]>> = counted
         .iter()
         .filter(
             |(_, held)| matches!((held, branch), (Checkout::Branch(b), Some(only)) if b == only),
         )
-        .map(|(dir, _)| dir.to_str().filter(|d| !d.contains(['"', '\\'])))
+        .map(|(dir, _)| dir.to_str().filter(|d| !escaped(d)).map(str::as_bytes))
         .collect();
     // The agents some pin names, whose files are read whole, since their worktree may be
     // gone.
@@ -106,19 +106,23 @@ pub fn sessions(
         let pinned_file = agent
             .as_deref()
             .is_some_and(|agent| pinned_agents.contains(agent));
-        let paths: &[&str] = match (&worktrees, &agent) {
+        let paths: &[&[u8]] = match (&worktrees, &agent) {
             (_, None) => &[],
             (Some(paths), Some(_)) if !pinned_file => paths,
             // The empty string, which every line holds.
-            _ => &[""],
+            _ => &[b""],
         };
         for line in bytes.split(|b| *b == b'\n') {
+            // The filter compares bytes, so a line that isn't UTF-8 is judged like any other.
+            let named = |b: &[u8]| holds(line, b) || paths.iter().any(|p| holds(line, p));
+            if needle.is_some_and(|b| !named(b)) {
+                continue;
+            }
             let Ok(line) = std::str::from_utf8(line) else {
                 bad += 1;
                 continue;
             };
-            let named = |b: &str| line.contains(b) || paths.iter().any(|p| line.contains(p));
-            if line.trim().is_empty() || needle.is_some_and(|b| !named(b)) {
+            if line.trim().is_empty() {
                 continue;
             }
             match serde_json::from_str::<Value>(line) {
@@ -176,14 +180,13 @@ fn read_entry(
     groups: &mut BTreeMap<(String, String), Group>,
 ) {
     let field = |name: &str| entry.get(name).and_then(Value::as_str);
-    let (Some(session), Some(git_branch), Some(cwd), Some(time)) = (
-        field("sessionId"),
-        field("gitBranch"),
-        field("cwd"),
-        field("timestamp").and_then(millis),
-    ) else {
+    let (Some(session), Some(git_branch), Some(cwd)) =
+        (field("sessionId"), field("gitBranch"), field("cwd"))
+    else {
         return;
     };
+    // A time that can't be read loses the entry's time, never its tokens.
+    let time = field("timestamp").and_then(millis);
     // The deepest counted directory holding `cwd` is the worktree it ran in.
     let Some((_, checkout)) = counted
         .iter()
@@ -212,9 +215,13 @@ fn read_entry(
     if model == Some(SYNTHETIC) {
         return;
     }
+    let tokens = model.zip(message.and_then(|m| m.get("usage")));
+    if time.is_none() && tokens.is_none() {
+        return;
+    }
     let group = groups.entry((branch.to_string(), session)).or_default();
-    group.times.push(time);
-    let (Some(model), Some(usage)) = (model, message.and_then(|m| m.get("usage"))) else {
+    group.times.extend(time);
+    let Some((model, usage)) = tokens else {
         return;
     };
     let count = |name: &str| usage.get(name).and_then(Value::as_u64).unwrap_or(0);
@@ -271,20 +278,72 @@ fn jsonl_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// An RFC 3339 UTC time, `YYYY-MM-DDTHH:MM:SS[.fff]Z`, as milliseconds since the epoch.
+/// Whether JSON would write `text` otherwise than as it is: it holds `"`, `\` or a character
+/// below U+0020.
+fn escaped(text: &str) -> bool {
+    text.chars().any(|c| c == '"' || c == '\\' || c < ' ')
+}
+
+/// Whether `line` holds the bytes `needle` anywhere.
+fn holds(line: &[u8], needle: &[u8]) -> bool {
+    needle.is_empty() || line.windows(needle.len()).any(|w| w == needle)
+}
+
+/// An RFC 3339 date-time, `YYYY-MM-DDTHH:MM:SS[.f...]` then `Z`, `+HH:MM` or `-HH:MM`, every
+/// field of its digits and in range, as milliseconds since the epoch, the fraction cut to
+/// the millisecond; any other text, a leap second included, is no time.
 fn millis(text: &str) -> Option<i64> {
-    let text = text.strip_suffix('Z')?;
-    let (date, time) = text.split_once('T')?;
-    let mut date = date.splitn(3, '-').map(|n| n.parse::<i64>().ok());
-    let (y, m, d) = (date.next()??, date.next()??, date.next()??);
-    let (clock, fraction) = time.split_once('.').unwrap_or((time, "0"));
-    let mut clock = clock.splitn(3, ':').map(|n| n.parse::<i64>().ok());
-    let (h, min, s) = (clock.next()??, clock.next()??, clock.next()??);
-    if !fraction.bytes().all(|b| b.is_ascii_digit()) {
+    let b = text.as_bytes();
+    let separators = [(4, b'-'), (7, b'-'), (10, b'T'), (13, b':'), (16, b':')];
+    if b.len() < 20 || separators.iter().any(|&(at, c)| b[at] != c) {
         return None;
     }
-    let ms: i64 = format!("{fraction:0<3}")[..3].parse().ok()?;
-    Some((days(y, m, d) * 86_400 + h * 3600 + min * 60 + s) * 1000 + ms)
+    let number = |digits: &[u8]| -> Option<i64> {
+        digits
+            .iter()
+            .all(u8::is_ascii_digit)
+            .then(|| digits.iter().fold(0, |n, d| n * 10 + i64::from(d - b'0')))
+    };
+    let (y, m, d) = (number(&b[0..4])?, number(&b[5..7])?, number(&b[8..10])?);
+    let (h, min, s) = (number(&b[11..13])?, number(&b[14..16])?, number(&b[17..19])?);
+    let mut rest = &b[19..];
+    let mut ms = 0;
+    if let Some(fraction) = rest.strip_prefix(b".") {
+        let digits = fraction.iter().take_while(|c| c.is_ascii_digit()).count();
+        if digits == 0 {
+            return None;
+        }
+        let mut first = [b'0'; 3];
+        let kept = digits.min(3);
+        first[..kept].copy_from_slice(&fraction[..kept]);
+        ms = number(&first)?;
+        rest = &fraction[digits..];
+    }
+    let offset = match rest {
+        b"Z" => 0,
+        [sign @ (b'+' | b'-'), oh @ .., b':', _, _] if oh.len() == 2 => {
+            let (oh, om) = (number(oh)?, number(&rest[4..6])?);
+            if oh > 23 || om > 59 {
+                return None;
+            }
+            if *sign == b'-' { -(oh * 60 + om) } else { oh * 60 + om }
+        }
+        _ => return None,
+    };
+    if !(1..=12).contains(&m) || d < 1 || d > month_days(y, m) || h > 23 || min > 59 || s > 59 {
+        return None;
+    }
+    Some((days(y, m, d) * 86_400 + h * 3600 + min * 60 + s - offset * 60) * 1000 + ms)
+}
+
+/// The days month `m` of year `y` has.
+fn month_days(y: i64, m: i64) -> i64 {
+    match m {
+        2 if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
 }
 
 /// Days since 1970-01-01 of a proleptic Gregorian date (Howard Hinnant's `days_from_civil`).
@@ -302,7 +361,38 @@ fn days(y: i64, m: i64, d: i64) -> i64 {
 mod tests {
     #[test]
     fn millis_of_a_timestamp() {
+        // req:effort/transcripts@50c1e34f
         assert_eq!(super::millis("1970-01-01T00:00:00.000Z"), Some(0));
+        // An offset names the instant in UTC; a fraction is cut to the millisecond.
+        assert_eq!(
+            super::millis("1970-01-01T02:00:00.123456+02:00"),
+            Some(123)
+        );
+        assert_eq!(super::millis("1970-01-01T00:00:00-00:30"), Some(1_800_000));
+        assert_eq!(super::millis("2024-02-29T00:00:00Z"), Some(19_782 * 86_400_000));
+        for text in [
+            "2026-10-30T0:03:00Z",
+            "+2026-10-30T00:04:00Z",
+            "2026-10-30T00:05:00.Z",
+            "2026-10-30T00:05:75Z",
+            "2026-10-30T00:05:60Z",
+            "2026-13-01T00:00:00Z",
+            "2026-00-01T00:00:00Z",
+            "2026-02-29T00:00:00Z",
+            "2026-04-31T00:00:00Z",
+            "2026-12-31T24:02:00Z",
+            "2026-12-31T23:60:00Z",
+            "2026-10-30t00:00:00Z",
+            "2026-10-30T00:00:00z",
+            "2026-10-30T00:00:00",
+            "2026-10-30T00:00:00+24:00",
+            "2026-10-30T00:00:00+02:60",
+            "2026-10-30T00:00:00+0200",
+            "2026-10-30T00:00:00Zjunk",
+            "12026-10-30T00:00:00Z",
+        ] {
+            assert_eq!(super::millis(text), None, "{text}");
+        }
         assert_eq!(super::millis("1970-01-02T00:00:01.5Z"), Some(86_401_500));
         assert_eq!(
             super::millis("2024-03-01T00:00:00Z"),
