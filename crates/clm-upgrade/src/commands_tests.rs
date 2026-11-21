@@ -355,15 +355,70 @@ fn a_failing_migration_does_not_stop_the_others_or_stamp() {
         done: never,
         kind: Kind::Apply(|_| Err("boom".to_string()), ""),
     };
-    let list = [bad, apply_m()];
+    let list = [bad, apply_m(), note_n()];
     let dir = project("");
+    // The note's file equals an old text and can't be written.
+    fs::write(dir.path().join("NOTE.md"), "old").unwrap();
+    read_only(&dir.path().join("NOTE.md"));
+    let err = apply_in(&list, &[], dir.path()).unwrap_err();
+    let lines: Vec<&str> = err.lines().collect();
+    assert_eq!(lines.len(), 3, "{err}");
+    assert_eq!(lines[0], "applied m");
+    assert_eq!(lines[1], "migration `bad` failed: boom");
+    assert!(lines[2].starts_with("migration `n` failed: "), "{err}");
+    assert!(dir.path().join("m").exists());
+    assert_eq!(read(&dir, "NOTE.md"), "old");
+    assert_eq!(read(&dir, "clm.toml"), "");
+}
+
+fn read_only(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o444)).unwrap();
+}
+
+// req:upgrade/upgrade-apply@e3cdf9ee
+#[test]
+fn a_clm_toml_it_cannot_write_keeps_what_the_run_did() {
+    let p = Migration {
+        id: "p",
+        level: Level::Advised,
+        done: never,
+        kind: Kind::Note(Note {
+            text: "p",
+            file: "P.md",
+            old: &[],
+            new: None,
+        }),
+    };
+    let list = [apply_m(), p];
+    let dir = project("");
+    read_only(&dir.path().join("clm.toml"));
     let err = apply_in(&list, &[], dir.path()).unwrap_err();
     assert!(
-        err.contains("applied m") && err.contains("`bad` failed: boom"),
+        err.starts_with("applied m\nnote p\ncan't write clm.toml: "),
         "{err}"
     );
+    assert!(err.len() > "applied m\nnote p\ncan't write clm.toml: ".len());
     assert!(dir.path().join("m").exists());
     assert_eq!(read(&dir, "clm.toml"), "");
+}
+
+// req:upgrade/upgrade-apply@e3cdf9ee
+#[test]
+fn apply_refuses_a_clm_toml_it_cannot_read() {
+    let list = [apply_s(), apply_m()];
+    let broken = "upgraded = [\ndefects = \"ask\"\n\n[land]\ncheck = \"true\"\n";
+    let dir = project(broken);
+    let err = apply_in(&list, &[], dir.path()).unwrap_err();
+    assert!(err.contains("clm.toml"), "{err}");
+    assert!(!dir.path().join("s").exists() && !dir.path().join("m").exists());
+    assert_eq!(read(&dir, "clm.toml"), broken);
+    let bytes = b"upgraded = \"s\"\n\xff\xfe\n";
+    fs::write(dir.path().join("clm.toml"), bytes).unwrap();
+    let err = apply_in(&list, &[], dir.path()).unwrap_err();
+    assert!(err.contains("clm.toml"), "{err}");
+    assert!(!dir.path().join("s").exists() && !dir.path().join("m").exists());
+    assert_eq!(fs::read(dir.path().join("clm.toml")).unwrap(), bytes);
 }
 
 fn done_by_stamp(root: &Path) -> bool {

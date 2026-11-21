@@ -63,23 +63,29 @@ pub fn apply_in(
     supersedes: &[(&str, &str)],
     root: &Path,
 ) -> Result<String, String> {
+    check_clm_toml(root)?;
     let pending = pending_or_refuse(list, supersedes, root)?;
     let mut out = String::new();
     let mut failures = String::new();
     for m in &pending {
-        match &m.kind {
-            Kind::Apply(run, _) => match run(root) {
-                Ok(()) => out.push_str(&format!("applied {}\n", m.id)),
-                Err(e) => failures.push_str(&format!("migration `{}` failed: {e}\n", m.id)),
-            },
-            Kind::Note(n) => {
-                let Some(new) = n.new else { continue };
-                let path = root.join(n.file);
-                if fs::read_to_string(&path).is_ok_and(|text| n.old.contains(&text.as_str())) {
-                    fs::write(&path, new).map_err(|e| format!("can't write {}: {e}", n.file))?;
-                    out.push_str(&format!("applied {}\n", m.id));
+        let result = match &m.kind {
+            Kind::Apply(run, _) => run(root).map(|()| true),
+            Kind::Note(n) => match n.new {
+                Some(new)
+                    if fs::read_to_string(root.join(n.file))
+                        .is_ok_and(|text| n.old.contains(&text.as_str())) =>
+                {
+                    fs::write(root.join(n.file), new)
+                        .map(|()| true)
+                        .map_err(|e| format!("can't write {}: {e}", n.file))
                 }
-            }
+                _ => Ok(false),
+            },
+        };
+        match result {
+            Ok(true) => out.push_str(&format!("applied {}\n", m.id)),
+            Ok(false) => {}
+            Err(e) => failures.push_str(&format!("migration `{}` failed: {e}\n", m.id)),
         }
     }
     if !failures.is_empty() {
@@ -97,9 +103,23 @@ pub fn apply_in(
         }
     }
     if let Some(latest) = latest_in(list) {
-        set_key(root, "upgraded", &quote(latest))?;
+        set_key(root, "upgraded", &quote(latest)).map_err(|e| format!("{out}{e}"))?;
     }
     Ok(out)
+}
+
+/// Refuses a `clm.toml` that exists and can't be read as UTF-8 text or doesn't parse as TOML,
+/// so nothing runs on settings `--apply` couldn't stamp. A missing one is fine.
+fn check_clm_toml(root: &Path) -> Result<(), String> {
+    let bytes = match fs::read(root.join("clm.toml")) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("can't read clm.toml: {e}")),
+    };
+    let text = String::from_utf8(bytes).map_err(|_| "clm.toml isn't UTF-8 text".to_string())?;
+    text.parse::<toml::Table>()
+        .map(|_| ())
+        .map_err(|e| format!("clm.toml doesn't parse as TOML: {e}"))
 }
 
 /// `clm upgrade --note <id>`: the migration's note.
