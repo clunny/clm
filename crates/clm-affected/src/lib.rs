@@ -23,7 +23,14 @@ pub use why::why_chain;
 /// otherwise. The readers (`readers`) join the files.
 pub fn affected(root: &Path, base: &str, all: &[String]) -> Result<Selection, Failure> {
     let (graph, differing, scan) = inputs(root, base)?;
-    Ok(combined(&graph, &differing, &scan.cited, &scan.reads, all))
+    Ok(combined(
+        &graph,
+        &differing,
+        &scan.cited,
+        &scan.unread,
+        &scan.reads,
+        all,
+    ))
 }
 
 /// The lines saying why the change selects `path` (`why_chain`), with `all` the
@@ -34,6 +41,7 @@ pub fn why(root: &Path, base: &str, path: &str, all: &[String]) -> Result<Vec<St
         &graph,
         &differing,
         &scan.cited,
+        &scan.unread,
         &scan.reads,
         all,
         path,
@@ -45,10 +53,11 @@ fn combined(
     graph: &Graph,
     differing: &[Changed],
     cited: &BTreeMap<String, Vec<String>>,
+    unread: &[String],
     reads: &BTreeMap<String, Vec<String>>,
     all: &[String],
 ) -> Selection {
-    match select(graph, differing, cited, all) {
+    match select(graph, differing, cited, unread, all) {
         Selection::Nodes { nodes, mut files } => {
             files.extend(readers(differing, reads));
             files.sort();
@@ -150,6 +159,9 @@ struct Scan {
     cited: BTreeMap<String, Vec<String>>,
     /// Each file holding a reads marker, with its globs.
     reads: BTreeMap<String, Vec<String>>,
+    /// The listed files, Markdown left out, that can't be read as UTF-8 text: only an
+    /// exemption selects them (`affected-files`).
+    unread: Vec<String>,
 }
 
 impl Scan {
@@ -174,7 +186,7 @@ fn cited_ids(text: &str) -> Vec<String> {
 }
 
 /// The files `check.coverage`'s scan reads, tracked or untracked and not ignored, UTF-8 and
-/// not Markdown.
+/// not Markdown, with the listed non-Markdown files it can't read as UTF-8 kept apart.
 fn scanned(root: &Path) -> Result<Scan, Failure> {
     let listed = git(
         root,
@@ -192,10 +204,10 @@ fn scanned(root: &Path) -> Result<Scan, Failure> {
         if rel.extension().is_some_and(|e| e == "md") || !root.join(rel).is_file() {
             continue;
         }
-        let Ok(text) = fs::read_to_string(root.join(rel)) else {
-            continue; // not UTF-8: not a test source
-        };
-        scan.add(path, &text);
+        match fs::read_to_string(root.join(rel)) {
+            Ok(text) => scan.add(path, &text),
+            Err(_) => scan.unread.push(path),
+        }
     }
     Ok(scan)
 }
@@ -257,8 +269,9 @@ pub fn affected_between(
         if path.ends_with(".md") {
             continue;
         }
-        if let Ok(text) = String::from_utf8(bytes) {
-            scan.add(path, &text);
+        match String::from_utf8(bytes) {
+            Ok(text) => scan.add(path, &text),
+            Err(_) => scan.unread.push(path),
         }
     }
     for link in links(root, to, &prefix)? {
@@ -270,8 +283,9 @@ pub fn affected_between(
         if link.ends_with(".md") {
             continue;
         }
-        if let Ok(text) = fs::read_to_string(&target) {
-            scan.add(link, &text);
+        match fs::read_to_string(&target) {
+            Ok(text) => scan.add(link, &text),
+            Err(_) => scan.unread.push(link),
         }
     }
     let differing: Vec<Changed> = paths
@@ -282,7 +296,14 @@ pub fn affected_between(
         })
         .collect();
     let graph = load_graph(&at_root)?;
-    Ok(combined(&graph, &differing, &scan.cited, &scan.reads, all))
+    Ok(combined(
+        &graph,
+        &differing,
+        &scan.cited,
+        &scan.unread,
+        &scan.reads,
+        all,
+    ))
 }
 
 /// Whether the link at `path`, in the tree extracted at `top`, leads to a file as a checkout's
@@ -404,7 +425,7 @@ mod cited_ids_tests {
 
     #[test]
     fn a_marker_outside_a_test_is_cited_like_one_inside() {
-        // req:check.affected/affected-files@4fca296e
+        // req:check.affected/affected-files@72f3baff
         let marker = |id: &str| format!("// {}{id}", concat!("req", ":"));
         let text = format!(
             "{}\nfn helper() {{}}\n\n#[test]\nfn t() {{\n    {}\n}}\n",

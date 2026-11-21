@@ -62,6 +62,7 @@ fn why(
         &graph(),
         &changed(differing),
         &map(cited),
+        &[],
         &map(reads),
         &["Cargo.lock".to_string()],
         path,

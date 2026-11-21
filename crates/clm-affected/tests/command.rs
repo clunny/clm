@@ -260,7 +260,7 @@ fn nothing_changed_prints_nothing() {
 
 #[test]
 fn uncommitted_untracked_and_deleted() {
-    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/affected-files@72f3baff
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/old.rs", "fn o() {}\n");
@@ -459,7 +459,7 @@ fn the_base_defaults_to_origin_main() {
 
 #[test]
 fn selects_through_the_markers_of_the_files_the_scan_reads() {
-    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/affected-files@72f3baff
     let dir = repo("");
     let root = dir.path();
     // Cites `a`, so selected though `d` owns it.
@@ -491,7 +491,7 @@ fn selects_through_the_markers_of_the_files_the_scan_reads() {
 
 #[test]
 fn a_marker_outside_a_test_still_selects() {
-    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/affected-files@72f3baff
     let dir = repo("");
     let root = dir.path();
     // The only marker is a file-header comment, on no line of a test.
@@ -1324,7 +1324,7 @@ fn overlap_reads_the_graph_whole_from_the_commits() {
 
 #[test]
 fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
-    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/affected-files@72f3baff
     // req:check.affected/why-chain@6518d01f
     let dir = repo("");
     let root = dir.path();
@@ -1505,4 +1505,176 @@ fn a_reader_in_a_subdirectory_root_reads_only_paths_under_it() {
     let out = clm_affected_with(&sub, "main", &["--readers"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(stdout(&out), "file crates/a/tests/r.rs\n");
+}
+
+/// A repository on `main` with a root component holding `.gitmodules` and `clm.toml`, and
+/// `a` owning `crates/a/**` with `crates/a/src/lib.rs`, depended on by nothing; switched to a
+/// branch `work`.
+fn no_file_repo() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    write(root, "clm.toml", "");
+    write(
+        root,
+        "specs/SPEC.md",
+        &spec("[\".gitmodules\", \"clm.toml\"]", "[]"),
+    );
+    write(root, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", "[]"));
+    write(root, "crates/a/src/lib.rs", "fn f() {}\n");
+    commit_all(root, "start");
+    git(root, &["switch", "-q", "-c", "work"]);
+    dir
+}
+
+/// A git repository at `root/rel` holding one commit.
+fn nested_repo(root: &Path, rel: &str) {
+    let nested = root.join(rel);
+    fs::create_dir_all(&nested).unwrap();
+    git(&nested, &["init", "-q", "-b", "main"]);
+    write(&nested, "x.rs", "fn x() {}\n");
+    commit_all(&nested, "nested");
+}
+
+/// The lines of `out` that name `needle`.
+fn naming<'a>(out: &'a str, needle: &str) -> Vec<&'a str> {
+    out.lines().filter(|l| l.contains(needle)).collect()
+}
+
+#[test]
+fn a_changed_path_that_is_no_file() {
+    // req:check.affected/affected-files@72f3baff
+    // (1) A submodule, with its `.gitmodules` entry.
+    let dir = no_file_repo();
+    let root = dir.path();
+    nested_repo(root, "crates/a/sub");
+    write(
+        root,
+        ".gitmodules",
+        "[submodule \"sub\"]\n\tpath = crates/a/sub\n\turl = ./sub\n",
+    );
+    git(
+        root,
+        &[
+            "-c",
+            "advice.addEmbeddedRepo=false",
+            "add",
+            ".gitmodules",
+            "crates/a/sub",
+        ],
+    );
+    git(root, &["commit", "-q", "-m", "submodule"]);
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let printed = stdout(&out);
+    assert!(printed.lines().any(|l| l == "node a"), "{printed}");
+    assert_eq!(naming(&printed, "crates/a/sub"), Vec::<&str>::new());
+
+    // (2) A link to a directory.
+    let dir = no_file_repo();
+    let root = dir.path();
+    std::os::unix::fs::symlink("src", root.join("crates/a/dir")).unwrap();
+    commit_all(root, "link to a directory");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let printed = stdout(&out);
+    assert!(printed.lines().any(|l| l == "node a"), "{printed}");
+    assert_eq!(naming(&printed, "crates/a/dir"), Vec::<&str>::new());
+
+    // (3) A link to a file is a file.
+    let dir = no_file_repo();
+    let root = dir.path();
+    std::os::unix::fs::symlink("lib.rs", root.join("crates/a/src/link.rs")).unwrap();
+    commit_all(root, "link to a file");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let printed = stdout(&out);
+    assert!(printed.lines().any(|l| l == "node a"), "{printed}");
+    assert!(
+        printed.lines().any(|l| l == "file crates/a/src/link.rs"),
+        "{printed}"
+    );
+
+    // (4) An untracked nested repository on a branch equal to `main`.
+    let dir = no_file_repo();
+    let root = dir.path();
+    nested_repo(root, "crates/a/nested");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let printed = stdout(&out);
+    assert!(printed.lines().any(|l| l == "node a"), "{printed}");
+    assert_eq!(naming(&printed, "crates/a/nested"), Vec::<&str>::new());
+
+    // (5) And one no component's `paths` hold, named as git names it.
+    nested_repo(root, "tools/nested");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "all tools/nested/\n");
+}
+
+/// A repository on `main` with a root component owning only `clm.toml`, `a` owning
+/// `crates/a/**` with only `crates/a/src/lib.rs`, and `d` owning `crates/d/**` with
+/// `crates/d/tests/t.rs` and `crates/d/tests/t.py`, which isn't UTF-8, both exempt from
+/// `undeclared-imports`, no component depending on another; switched to a branch `work`.
+fn exempt_bytes_repo() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    write(root, "clm.toml", "");
+    write(root, "specs/SPEC.md", &spec("[\"clm.toml\"]", "[]"));
+    write(root, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", "[]"));
+    write(
+        root,
+        "specs/d/SPEC.md",
+        "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"crates/d/**\"]\ndepends_on: []\nexemptions:\n  - rule: undeclared-imports\n    files: [\"crates/d/tests/t.rs\", \"crates/d/tests/t.py\"]\n    until: backlog/x\n---\n",
+    );
+    write(root, "crates/a/src/lib.rs", "fn f() {}\n");
+    write(root, "crates/d/tests/t.rs", "fn t() {}\n");
+    fs::write(root.join("crates/d/tests/t.py"), b"x = '\xff\xfe'\n").unwrap();
+    commit_all(root, "start");
+    git(root, &["switch", "-q", "-c", "work"]);
+    dir
+}
+
+#[test]
+fn an_exempt_file_whatever_its_bytes() {
+    // req:check.affected/affected-files@72f3baff
+    let dir = exempt_bytes_repo();
+    let root = dir.path();
+    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
+    commit_all(root, "a");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node a\nfile crates/a/src/lib.rs\nfile crates/d/tests/t.py\nfile crates/d/tests/t.rs\n"
+    );
+    let out = clm_affected_with(root, "main", &["--why", "crates/d/tests/t.py"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "crates/d/tests/t.py exempt from undeclared-imports\n"
+    );
+}
+
+#[test]
+fn an_exempt_file_whatever_its_bytes_on_both_sides() {
+    // req:check.affected/affected-files@72f3baff
+    // req:check.affected/overlap-selection@8fd7fe1a
+    let dir = exempt_bytes_repo();
+    let root = dir.path();
+    git(root, &["switch", "-q", "-c", "x", "main"]);
+    touch(root, "crates/a/src/lib.rs");
+    commit_all(root, "x");
+    git(root, &["switch", "-q", "-c", "y", "main"]);
+    touch(root, "crates/a/src/new.rs");
+    commit_all(root, "y");
+    // Only the commits hold the file: the working tree's copy is gone.
+    fs::remove_file(root.join("crates/d/tests/t.py")).unwrap();
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node a\nfile crates/a/src/lib.rs\nfile crates/d/tests/t.py\nfile crates/d/tests/t.rs\n"
+    );
 }

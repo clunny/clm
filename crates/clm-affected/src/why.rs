@@ -10,16 +10,17 @@ use crate::select::{Changed, Selection};
 
 /// The lines saying why the change selects `path`: its first reason that holds, then the
 /// shortest `depends_on` route from the component that brought it in to a component owning a
-/// changed file. `cited` and `reads` are what the scan found, as for `combined`.
+/// changed file. `cited`, `unread` and `reads` are what the scan found, as for `combined`.
 pub fn why_chain(
     graph: &Graph,
     differing: &[Changed],
     cited: &BTreeMap<String, Vec<String>>,
+    unread: &[String],
     reads: &BTreeMap<String, Vec<String>>,
     all: &[String],
     path: &str,
 ) -> Vec<String> {
-    let (nodes, files) = match combined(graph, differing, cited, reads, all) {
+    let (nodes, files) = match combined(graph, differing, cited, unread, reads, all) {
         Selection::All(file) => return vec![format!("all: {file}")],
         Selection::Nodes { nodes, files } => (nodes, files),
     };
