@@ -160,7 +160,7 @@ fn set_key(root: &Path, key: &str, value: &str) -> Result<(), String> {
     let Ok(text) = fs::read_to_string(&path) else {
         return Ok(());
     };
-    let new = set_top_level(&text, key, value);
+    let new = set_top_level(&text, key, value)?;
     if new != text {
         fs::write(&path, new).map_err(|e| format!("can't write clm.toml: {e}"))?;
     }
@@ -171,39 +171,61 @@ fn is_header(line: &str) -> bool {
     line.trim_start().starts_with('[')
 }
 
-fn bracket_depth(line: &str) -> i32 {
-    line.chars().fold(0, |depth, c| match c {
-        '[' => depth + 1,
-        ']' => depth - 1,
-        _ => depth,
-    })
+/// The byte spans of the values that set top-level `key`, however its key is written: one for a
+/// plain or quoted key, one per leaf for a dotted one (`key.part = ...`). A header table of that
+/// name sets nothing at the top level and gives none.
+fn value_spans(doc: &toml_edit::Table, key: &str) -> Vec<std::ops::Range<usize>> {
+    fn leaves(item: &toml_edit::Item, out: &mut Vec<std::ops::Range<usize>>) {
+        match item {
+            toml_edit::Item::Table(t) if t.is_dotted() => {
+                for (_, child) in t.iter() {
+                    leaves(child, out);
+                }
+            }
+            toml_edit::Item::Value(v) => out.extend(v.span()),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(item) = doc.get(key) {
+        leaves(item, &mut out);
+    }
+    out
 }
 
-/// `text` with the top-level `key = value` line replaced (with the lines of a multi-line array it
-/// began), or else added above the first table header's lead-in (its directly preceding comment
-/// lines and the blank lines above them), or at the end when there is none. Every other line is
-/// left as it is.
-pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> String {
+/// `text` with the lines that set top-level `key` replaced by one line `key = value`, where the
+/// first of them was; or else that line added above the first table header's lead-in (its
+/// directly preceding comment lines and the blank lines above them), or at the end when there is
+/// none. Every other line is left as it is. The lines are found from the parse, so a bracket in a
+/// comment or a string ends nothing. Fails, naming `clm.toml`, when `text` isn't TOML.
+pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> Result<String, String> {
+    let doc = toml_edit::ImDocument::parse(text)
+        .map_err(|e| format!("clm.toml doesn't parse as TOML: {e}"))?;
     let new_line = format!("{key} = {value}\n");
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
-    let first_header = lines.iter().position(|l| is_header(l));
-    let top = &lines[..first_header.unwrap_or(lines.len())];
-    let existing = top.iter().position(|line| {
-        let trimmed = line.trim_start();
-        trimmed.starts_with(key) && trimmed[key.len()..].trim_start().starts_with('=')
-    });
-    if let Some(i) = existing {
-        let mut end = i + 1;
-        let mut depth = bracket_depth(lines[i]);
-        while depth > 0 && end < lines.len() {
-            depth += bracket_depth(lines[end]);
-            end += 1;
+    let line_of = |at: usize| text[..at].matches('\n').count();
+    let mut taken = vec![false; lines.len()];
+    for span in value_spans(doc.as_table(), key) {
+        // A key and its value start on one line; the value may run on over several.
+        let last = line_of(span.end.saturating_sub(1).max(span.start));
+        for line in line_of(span.start)..=last {
+            taken[line] = true;
         }
-        return [&lines[..i], &[new_line.as_str()], &lines[end..]]
-            .concat()
-            .concat();
     }
-    match first_header {
+    if let Some(first) = taken.iter().position(|t| *t) {
+        let mut out = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i == first {
+                out.push_str(&new_line);
+            }
+            if !taken[i] {
+                out.push_str(line);
+            }
+        }
+        return Ok(out);
+    }
+    let first_header = lines.iter().position(|l| is_header(l));
+    Ok(match first_header {
         Some(header) => {
             // The header's lead-in: the comment lines directly above it, then the blank lines
             // above those.
@@ -225,5 +247,5 @@ pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> String {
         }
         None if text.is_empty() || text.ends_with('\n') => format!("{text}{new_line}"),
         None => format!("{text}\n{new_line}"),
-    }
+    })
 }

@@ -5,7 +5,6 @@ use std::fs;
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
-
 /// A crate directory holding migrations `ids`, each with a `mod.rs` and a nested text file.
 fn crate_with(ids: &[&str]) -> TempDir {
     let dir = TempDir::new().unwrap();
