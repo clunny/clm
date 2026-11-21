@@ -1,7 +1,7 @@
 DELETE crates/clm-coverage/tests/pending_lines.rs::scenario_states	duplicate of pending.rs::scenario_states: same fixture, same three lines
 DELETE crates/clm-coverage/tests/pending_lines.rs::scenario_blocked	subset of pending.rs::scenario_blocked, which shows one item, two items sorted and blocked_by
 DELETE crates/clm-coverage/tests/pending_lines.rs::scenario_need_satisfied	pending.rs::scenario_need_satisfied asserts the same line with every need current
-DELETE crates/clm-coverage/tests/pending_lines.rs::every_node_without_an_argument	the scenario "every component" puts an unbuilt component in pending.rs::every_node_sorted_by_node_then_requirement
+DELETE crates/clm-coverage/tests/pending_lines.rs::every_node_without_an_argument	its one case of its own, a component with status unbuilt listed, is stated by pending-report's scenario "every component", whose GIVEN the build gives pending.rs::every_node_sorted_by_node_then_requirement when it proves that scenario
 DELETE crates/clm-coverage/tests/pending.rs::scenario_nothing_pending	subset of pending_lines.rs::scenario_nothing_pending, which also shows the whole list empty
 DELETE crates/clm-coverage/tests/status.rs::rendered_groups_are_indented	asserts the layout of a text form no command prints; its cells are shown by other status tests
 DELETE crates/clm-check/tests/git_layer.rs::covered_by_the_scan	vcs/one-git-layer reads every crate (wave 1's yes)
@@ -23,8 +23,8 @@ DELETE crates/clm-affected/tests/why.rs::a_dependant_is_owned_through_its_edges	
 DELETE crates/clm-affected/tests/why.rs::a_changed_file_is_changed_alone	asserts through the internal why_chain what the second half of why_prints_the_chain_through_a_dependency asserts
 DELETE crates/clm-affected/tests/why.rs::a_path_the_selection_lacks_is_not_selected	asserts through the internal why_chain what the first half of why_says_not_selected_and_all asserts
 DELETE crates/clm-unreferenced/tests/git_layer.rs::runs_git_only_through_the_layer	vcs/one-git-layer reads every crate
-DELETE crates/clm-unreferenced/tests/scan.rs::scenario_allowed_item_and_crate	a subset of command.rs::scenario_allowed_item_and_crate, same fixture, through scan, which the Contract no longer offers
-DELETE crates/clm-unreferenced/tests/scan.rs::scenario_entry_given_as_an_argument	a subset of command.rs::scenario_entry_given_as_an_argument, same fixture, through scan
-DELETE crates/clm-unreferenced/tests/scan.rs::findings_sorted_by_path_then_line_number	a subset of command.rs::scenario_findings, same fixture, through scan
+DELETE crates/clm-unreferenced/tests/scan.rs::scenario_allowed_item_and_crate	a duplicate of command.rs::scenario_allowed_item_and_crate, same fixture
+DELETE crates/clm-unreferenced/tests/scan.rs::scenario_entry_given_as_an_argument	a duplicate of command.rs::scenario_entry_given_as_an_argument, same fixture
+DELETE crates/clm-unreferenced/tests/scan.rs::findings_sorted_by_path_then_line_number	a duplicate of command.rs::scenario_findings, same fixture
 DELETE crates/clm-health/tests/words.rs::no_old_word_in_the_crates_text	the scan of source for retired words is cut
 DELETE crates/clm-health/tests/words.rs::scanner_finds_a_bare_word_and_spares_ids	a test of that scan's own scanner
