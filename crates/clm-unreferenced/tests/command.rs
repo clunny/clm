@@ -52,21 +52,8 @@ impl Status {
 fn clm(dir: &Path, args: &[&str]) -> Out {
     let (name, rest) = args.split_first().unwrap();
     assert_eq!(*name, "unreferenced");
-    // The binary ran with git's own config isolated; the call's `git` inherits this process's
-    // environment, so the test sets it here. Safe: the tests run one per process
-    // (`ci/nextest-runner`), and every call sets the same values.
-    unsafe {
-        std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
-        std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
-    }
-    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let status = clm_unreferenced::command(
-        rest.iter().copied(),
-        dir,
-        &|key| std::env::var(key).ok(),
-        &mut stdout,
-        &mut stderr,
-    );
+    let mut stdout = Vec::new();
+    let (status, stderr) = call(dir, rest, &|key| std::env::var(key).ok(), &mut stdout);
     Out {
         status: Status(status),
         stdout,
@@ -177,7 +164,7 @@ fn scenario_clean_or_no_rust() {
     for dir in [&used, &packages_used, &nothing] {
         let out = clm(dir.path(), &["unreferenced"]);
         assert_eq!(out.status.code(), Some(0), "{out:?}");
-        assert!(out.stdout.is_empty(), "{out:?}");
+        assert!(out.stdout.is_empty() && out.stderr.is_empty(), "{out:?}");
     }
 }
 
@@ -468,8 +455,9 @@ fn call(
     env: &dyn Fn(&str) -> Option<String>,
     out: &mut dyn std::io::Write,
 ) -> (u8, Vec<u8>) {
-    // Safe: the tests run one per process (`ci/nextest-runner`), and every call sets the same
-    // values.
+    // The binary ran with git's own config isolated; the call's `git` inherits this process's
+    // environment, so the test sets it here. Safe: the tests run one per process
+    // (`ci/nextest-runner`), and every call sets the same values.
     unsafe {
         std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
         std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
@@ -502,6 +490,10 @@ fn help_asked_of_the_call() {
             Some("Usage: clm unreferenced [OPTIONS]"),
             "{flag}: {out}"
         );
+        // Then its options.
+        for option in ["--allow <ALLOW>", "--entry <ENTRY>", "--root <ROOT>"] {
+            assert!(out.contains(option), "{flag}: {out}");
+        }
     }
 }
 
@@ -524,8 +516,12 @@ fn a_stream_that_refuses_writes() {
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
     ]);
-    let (status, _) = call(dir.path(), &[], &|_| None, &mut Refusing);
+    // The scan itself succeeds, so the 2 comes from the refused write alone.
+    let mut out = Vec::new();
+    assert_eq!(call(dir.path(), &[], &|_| None, &mut out).0, 1);
+    let (status, err) = call(dir.path(), &[], &|_| None, &mut Refusing);
     assert_eq!(status, 2);
+    assert!(err.is_empty(), "{}", String::from_utf8_lossy(&err));
     let (status, _) = call(dir.path(), &["--help"], &|_| None, &mut Refusing);
     assert_eq!(status, 2);
 }
@@ -618,15 +614,36 @@ fn scenario_odd_manifests_and_unreadable_files() {
         assert_eq!(stderr.lines().count(), 1, "{stderr}");
     }
 
+    // A tracked file it doesn't read is no error, however unreadable.
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+        ("README.md", "# a\n"),
+    ]);
+    let readme = dir.path().join("README.md");
+    fs::set_permissions(&readme, fs::Permissions::from_mode(0o000)).unwrap();
+    let out = clm(dir.path(), &["unreferenced"]);
+    fs::set_permissions(&readme, fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stderr.is_empty(), "{out:?}");
+
     // `--root` naming a directory in no git repository.
     let outside = TempDir::new().unwrap();
     let elsewhere = repo(&[("README.md", "# none\n")]);
     let root = outside.path().to_str().unwrap();
+    // git looks no further up than the directory itself, whatever repository holds the
+    // temporary directory. Safe: the tests run one per process (`ci/nextest-runner`).
+    let above = outside.path().parent().unwrap();
+    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", above) };
     let out = clm(elsewhere.path(), &["unreferenced", "--root", root]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
     let stderr = String::from_utf8(out.stderr).unwrap();
-    assert!(stderr.starts_with("clm unreferenced: "), "{stderr}");
-    assert!(stderr.contains("git"), "{stderr}");
+    // The error `vcs/tracked-files` returns: the command git ran, then git's standard error.
+    assert!(
+        stderr.starts_with("clm unreferenced: git ls-files -z --cached --deduplicate: "),
+        "{stderr}"
+    );
+    assert!(stderr.contains("not a git repository"), "{stderr}");
     assert_eq!(stderr.lines().count(), 1, "{stderr}");
 }

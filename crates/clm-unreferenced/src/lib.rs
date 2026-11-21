@@ -36,6 +36,7 @@ pub struct Args {
 #[command(
     name = "clm unreferenced",
     no_binary_name = true,
+    long_about = None,
     about = "List the public items of the workspace's Rust libraries and TypeScript and Python \
              packages that nothing outside their own library or package uses; exit 1 when it \
              lists any"
