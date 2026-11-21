@@ -74,23 +74,30 @@ fn read_lock(crate_dir: &Path) -> Result<Vec<(String, String, String)>, String> 
 }
 
 /// Checks the lock of the crate at `crate_dir` against the migrations `ids` it holds: every locked
-/// migration must still exist and hash as locked.
+/// migration must still exist and hash as locked. The error names every one that doesn't, one
+/// line each in the lock's order.
 pub fn check_lock(crate_dir: &Path, ids: &[&str]) -> Result<(), String> {
+    let mut wrong = Vec::new();
     for (id, version, hash) in read_lock(crate_dir)? {
         if !ids.contains(&id.as_str()) {
-            return Err(format!(
+            wrong.push(format!(
                 "migration `{id}`, shipped in {version}, is gone; a shipped migration never changes"
             ));
+            continue;
         }
-        let actual = dir_hash(&migration_dir(crate_dir, &id))
-            .map_err(|e| format!("migration `{id}`: {e}"))?;
-        if actual != hash {
-            return Err(format!(
+        match dir_hash(&migration_dir(crate_dir, &id)) {
+            Ok(actual) if actual == hash => {}
+            Ok(_) => wrong.push(format!(
                 "migration `{id}`, shipped in {version}, was edited; a shipped migration never changes, so fix it with a new migration"
-            ));
+            )),
+            Err(e) => wrong.push(format!("migration `{id}`, shipped in {version}: {e}")),
         }
     }
-    Ok(())
+    if wrong.is_empty() {
+        Ok(())
+    } else {
+        Err(wrong.join("\n"))
+    }
 }
 
 /// Appends to the lock one line naming `version` for each of `ids` it doesn't list, leaving
