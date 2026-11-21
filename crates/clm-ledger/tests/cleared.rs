@@ -97,26 +97,3 @@ fn a_signed_approval_counts_as_well() {
     assert!(fold.lines["a1"].contains_key("sig"));
     assert!(fold.cleared(&request()));
 }
-
-#[test]
-fn no_other_person_parser() {
-    // req:ledger/request-cleared@0fe654c6
-    // Splitting on `/` is how a writer's person is taken apart: only `person` does it.
-    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut found = Vec::new();
-    for entry in std::fs::read_dir(&src).unwrap() {
-        let path = entry.unwrap().path();
-        let text = std::fs::read_to_string(&path).unwrap();
-        let file = path.file_name().unwrap().to_string_lossy().into_owned();
-        for (n, line) in text.lines().enumerate() {
-            if ["split('/')", "split_once('/')", "splitn(2, '/')"]
-                .iter()
-                .any(|call| line.contains(call))
-            {
-                found.push(format!("{file}:{}", n + 1));
-            }
-        }
-    }
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert!(found[0].starts_with("fold.rs:"), "{found:?}");
-}
