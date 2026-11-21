@@ -333,6 +333,7 @@ fn compact_warns_when_origin_refuses_the_push() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let mine = append(&a, approved("f"), &env(home, &[])).unwrap();
+    append(&a, checked("k"), &env(home, &[])).unwrap();
     tick();
     append(&a, landed("c", "f", Some("m")), &env(home, &[])).unwrap();
     let origin = home.join("origin.git");
@@ -345,13 +346,15 @@ fn compact_warns_when_origin_refuses_the_push() {
     }
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
-    assert_eq!(out.trim(), "removed 1");
+    assert_eq!(out.trim(), "removed 2");
     let branch = format!("clm/ledger/{}", mine.record.writer);
-    assert!(
-        err.contains(&format!("isn't on origin yet: git push origin {branch}")),
-        "{err}"
+    assert_eq!(
+        err,
+        format!("warning: the compacted ledger isn't on origin yet: git push origin {branch}\n")
     );
-    assert!(!records(&a, &branch).contains("\"approved\""));
+    let text = records(&a, &branch);
+    assert!(!text.contains("\"approved\""), "{text}");
+    assert!(!text.contains("\"checked\""), "{text}");
 }
 
 #[test]
@@ -2424,6 +2427,8 @@ fn compact_settles_an_effort_tie() {
     assert_eq!(out.trim(), "removed 1");
     let text = records(&a, &branch);
     assert_eq!(text.matches(r#""kind":"effort""#).count(), 1, "{text}");
+    // The one the fold keeps: the greater sorted text, `output` 6.
+    assert!(text.contains(r#""output":6"#), "{text}");
 }
 
 #[test]
