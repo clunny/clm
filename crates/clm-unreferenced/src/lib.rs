@@ -33,7 +33,13 @@ pub struct Args {
 
 /// The command line `command` parses: the command's own arguments, without its name.
 #[derive(Parser)]
-#[command(name = "clm unreferenced", no_binary_name = true)]
+#[command(
+    name = "clm unreferenced",
+    no_binary_name = true,
+    about = "List the public items of the workspace's Rust libraries and TypeScript and Python \
+             packages that nothing outside their own library or package uses; exit 1 when it \
+             lists any"
+)]
 struct Line {
     #[command(flatten)]
     args: Args,

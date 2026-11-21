@@ -458,3 +458,95 @@ fn runs_no_cargo_npm_node_or_python() {
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(!ran.exists(), "ran {:?}", fs::read_to_string(&ran));
 }
+
+/// The call run with `dir` as the root, `args` after the command's name, and `env` as its
+/// environment lookup, writing to `out` and to a buffer for the error stream.
+fn call(
+    dir: &Path,
+    args: &[&str],
+    env: &dyn Fn(&str) -> Option<String>,
+    out: &mut dyn std::io::Write,
+) -> (u8, Vec<u8>) {
+    // Safe: the tests run one per process (`ci/nextest-runner`), and every call sets the same
+    // values.
+    unsafe {
+        std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
+        std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
+    }
+    let mut err = Vec::new();
+    let status = clm_unreferenced::command(args.iter().copied(), dir, env, out, &mut err);
+    (status, err)
+}
+
+const HELP_FIRST_LINE: &str = "List the public items of the workspace's Rust libraries and TypeScript and Python packages that nothing outside their own library or package uses; exit 1 when it lists any";
+
+#[test]
+fn help_asked_of_the_call() {
+    // req:check.unreferenced/commands-in-crate@01c980d6
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    for flag in ["--help", "-h"] {
+        let mut out = Vec::new();
+        let (status, err) = call(dir.path(), &[flag], &|_| None, &mut out);
+        assert_eq!(status, 0, "{flag}");
+        assert!(err.is_empty(), "{flag}: {}", String::from_utf8_lossy(&err));
+        let out = String::from_utf8(out).unwrap();
+        let mut lines = out.lines();
+        assert_eq!(lines.next(), Some(HELP_FIRST_LINE), "{flag}: {out}");
+        assert_eq!(lines.next(), Some(""), "{flag}: {out}");
+        assert_eq!(
+            lines.next(),
+            Some("Usage: clm unreferenced [OPTIONS]"),
+            "{flag}: {out}"
+        );
+    }
+}
+
+/// A stream whose every write fails.
+struct Refusing;
+
+impl std::io::Write for Refusing {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("refused"))
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("refused"))
+    }
+}
+
+#[test]
+fn a_stream_that_refuses_writes() {
+    // req:check.unreferenced/commands-in-crate@01c980d6
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    let (status, _) = call(dir.path(), &[], &|_| None, &mut Refusing);
+    assert_eq!(status, 2);
+    let (status, _) = call(dir.path(), &["--help"], &|_| None, &mut Refusing);
+    assert_eq!(status, 2);
+}
+
+#[test]
+fn an_environment_it_does_not_read() {
+    // req:check.unreferenced/commands-in-crate@01c980d6
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    let mut out = Vec::new();
+    let (status, err) = call(
+        dir.path(),
+        &[],
+        &|key| panic!("the call read {key} from the environment"),
+        &mut out,
+    );
+    assert_eq!(status, 1, "{}", String::from_utf8_lossy(&err));
+    assert_eq!(
+        String::from_utf8(out).unwrap(),
+        format!("crates/a/src/lib.rs:1: a::f {TAIL}\n")
+    );
+    // The caller's process goes on.
+}
