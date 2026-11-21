@@ -60,7 +60,7 @@ fn change_repo(delta: &str) -> TempDir {
 
 #[test]
 fn coverage_command_prints_report() {
-    // req:check.coverage/coverage-report@533d2f1a
+    // req:check.coverage/coverage-report@72845fef
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(
         dir.path(),

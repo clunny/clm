@@ -127,6 +127,7 @@ mod tests {
 
     #[test]
     fn double_star() {
+        // req:check.coverage/owner@732fc105
         assert!(matches("crates/v/**", "crates/v/tests/t.rs"));
         assert!(matches("crates/v/**", "crates/v/t.rs"));
         assert!(!matches("crates/v/**", "crates/vv/t.rs"));
@@ -140,6 +141,7 @@ mod tests {
 
     #[test]
     fn star_and_question_mark_stay_in_a_segment() {
+        // req:check.coverage/owner@732fc105
         assert!(!matches("crates/*", "crates/v/t.rs"));
         assert!(matches("crates/*", "crates/t.rs"));
         assert!(matches("crates/*.rs", "crates/t.rs"));
@@ -152,6 +154,7 @@ mod tests {
 
     #[test]
     fn literal_patterns_match_leading_directories() {
+        // req:check.coverage/owner@732fc105
         assert!(matches("crates/v", "crates/v/t.rs"));
         assert!(matches("crates/v/", "crates/v/t.rs"));
         assert!(matches("crates/v", "crates/v"));
@@ -161,6 +164,7 @@ mod tests {
 
     #[test]
     fn brackets() {
+        // req:check.coverage/owner@732fc105
         assert!(matches("[ab].rs", "a.rs"));
         assert!(!matches("[ab].rs", "c.rs"));
         assert!(matches("[!a].rs", "c.rs"));
@@ -180,6 +184,7 @@ mod tests {
 
     #[test]
     fn a_wildcard_pattern_is_also_compared_literally() {
+        // req:check.coverage/owner@732fc105
         assert!(matches("docs/[draft]", "docs/[draft]/t.md"));
         assert!(matches("docs/[draft]", "docs/[draft]"));
     }

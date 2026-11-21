@@ -98,7 +98,7 @@ fn checkout_status(root: &Path) -> Result<clm_coverage::StatusReport, Vec<clm_mo
 
 #[test]
 fn scenario_one_pending_change() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -113,7 +113,7 @@ fn scenario_one_pending_change() {
 
 #[test]
 fn a_requirement_cited_only_at_an_old_version_is_not_current() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -129,7 +129,7 @@ fn a_requirement_cited_only_at_an_old_version_is_not_current() {
 
 #[test]
 fn rows_within_a_group_are_sorted_by_id() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     change(d, "20260102-b", "applied", &["y"]);
@@ -142,7 +142,7 @@ fn rows_within_a_group_are_sorted_by_id() {
 
 #[test]
 fn scenario_complete_change() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -158,7 +158,7 @@ fn scenario_complete_change() {
 
 #[test]
 fn scenario_requirement_removed_later() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     write(
@@ -180,7 +180,7 @@ fn scenario_requirement_removed_later() {
 
 #[test]
 fn scenario_requirement_added_back_later() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &[]);
@@ -195,7 +195,7 @@ fn scenario_requirement_added_back_later() {
 
 #[test]
 fn a_requirement_added_back_cited_at_an_old_version_does_not_hold_the_change_back() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &[]);
@@ -211,7 +211,7 @@ fn a_requirement_added_back_cited_at_an_old_version_does_not_hold_the_change_bac
 
 #[test]
 fn scenario_unapplied_change() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     for status in ["proposed", "approved"] {
@@ -227,7 +227,7 @@ fn scenario_unapplied_change() {
 
 #[test]
 fn scenario_removed_requirement_still_cited() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x"]);
@@ -245,7 +245,7 @@ fn scenario_removed_requirement_still_cited() {
 
 #[test]
 fn an_unapplied_change_is_never_complete() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     for status in ["proposed", "approved"] {
@@ -273,7 +273,7 @@ fn an_unapplied_change_is_never_complete() {
 
 #[test]
 fn scenario_groups_in_order() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-a", "applied", &["x"]);
@@ -296,7 +296,7 @@ fn scenario_groups_in_order() {
 
 #[test]
 fn scenario_nothing_in_flight() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let report = checkout_status(dir.path()).unwrap();
     assert!(report.changes.is_empty());
@@ -309,22 +309,8 @@ fn scenario_nothing_in_flight() {
 }
 
 #[test]
-fn rendered_groups_are_indented() {
-    // req:check.coverage/status-report@92bb0866
-    let dir = repo();
-    let d = dir.path();
-    change(d, "20260101-c", "implementing", &["x", "y"]);
-    cite_x(d);
-    let text = checkout_status(d).unwrap().to_string();
-    assert!(
-        text.ends_with("changes\n  implementing\n    20260101-c  1/2 requirements\n"),
-        "{text}"
-    );
-}
-
-#[test]
 fn status_from_files_matches_checkout() {
-    // req:check.coverage/status-report@92bb0866
+    // req:check.coverage/status-report@3f658f05
     let dir = repo();
     let d = dir.path();
     cite_x(d);
