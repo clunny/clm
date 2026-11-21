@@ -103,7 +103,10 @@ fn the_line_it_prints_and_a_failure() {
     let dir = repo();
     std::fs::write(bare_path(dir.path()).parent().unwrap(), "x").unwrap();
     let err = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap_err();
-    assert!(!err.is_empty());
+    let expected = match clm_host::keep_remote(dir.path(), Host::None).unwrap_err() {
+        clm_host::Error::Refused(m) | clm_host::Error::Nowhere(m) | clm_host::Error::Git(m) => m,
+    };
+    assert_eq!(err, expected);
     assert!(git(dir.path(), &["remote"]).is_empty());
     assert!(dir.path().join("clm.toml").is_file());
 }

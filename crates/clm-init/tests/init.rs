@@ -437,6 +437,18 @@ fn repeated_and_unknown_languages() {
     );
     assert!(out.stdout.is_empty(), "{out:?}");
     assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "only .git");
+    // Before it looks for the repository: outside one, the language is the error.
+    let plain = TempDir::new().unwrap();
+    let out = clm(
+        plain.path(),
+        &["init", "--lang", "cobol"],
+        &path_with(&hosts),
+    );
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).starts_with("clm init: unknown language `cobol`"),
+        "{out:?}"
+    );
     // Compared exactly, case included.
     let out = clm(&dir, &["init", "--lang", "Rust"], &path_with(&hosts));
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -731,9 +743,13 @@ fn init_leaves_settings_that_arent_json() {
     ] {
         let (_tmp, dir) = repo();
         write(&dir, ".claude/settings.json", text);
-        let steps = next_steps(&init(&dir, &[], &fake_hosts()));
+        let out = init(&dir, &[], &fake_hosts());
+        let steps = next_steps(&out);
         assert_eq!(read(&dir, ".claude/settings.json"), text);
         step(&steps, &[".claude/settings.json", "Bash(clm land *)"]);
+        // No line among the files it lists.
+        let (listed, _) = out.split_once("Next steps").unwrap();
+        assert!(!listed.contains(".claude/settings.json"), "{out}");
     }
 }
 
@@ -1870,4 +1886,28 @@ fn the_roots_title() {
     let spec = read(&dir, "specs/SPEC.md");
     assert!(!spec.contains("### Requirement:"), "{spec}");
     assert_eq!(loaded(&dir).1, Vec::<String>::new());
+
+    let dir = tmp.path().join("a\\b");
+    fs::create_dir(&dir).unwrap();
+    git(&dir, &["init", "-q", "-b", "main"]);
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(spec_key(&dir, "title"), r#"title: "a\\b""#);
+}
+
+#[test]
+fn the_clones_own_host() {
+    // req:init/init-next-steps@1a95eded
+    // The clone's `clm.local.toml` sets the host the steps go by.
+    let (_tmp, dir) = repo();
+    write(&dir, "clm.local.toml", "host = \"git\"\n");
+    let out = init(&dir, &[], &fake_hosts());
+    assert_eq!(host_line(&dir), "host = \"none\"");
+    let mut expected = vec![
+        "Commit these files and push them to `main` yourself; from then on every branch \
+         lands through `clm land`."
+            .to_owned(),
+    ];
+    expected.extend(clm_host::setup_steps(clm_config::Host::Git));
+    assert_eq!(step_lines(&out).unwrap(), expected);
+    assert!(!out.contains("created remote"), "{out}");
 }

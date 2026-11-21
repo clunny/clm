@@ -818,11 +818,15 @@ fn what_is_left_out() {
     git(dir, &["add", "assets/logo.dat", "gone.rs"]);
     fs::remove_file(dir.join("gone.rs")).unwrap();
     fs::write(dir.join("untracked.rs"), "fn u() {}\n").unwrap();
+    let mut late = vec![b'/'; 8000];
+    late.extend_from_slice(b"\0\n");
+    fs::write(dir.join("late.rs"), late).unwrap();
+    git(dir, &["add", "late.rs"]);
     let out = survey(dir);
     let dirs = section(&out, "directories");
     assert!(
         dirs.iter()
-            .any(|l| l.starts_with(".  ") && l.contains("rust 2 files")),
+            .any(|l| l.starts_with(".  ") && l.contains("rust 3 files")),
         "{out}"
     );
     for absent in ["assets", "gone.rs", "untracked.rs"] {
