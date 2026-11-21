@@ -248,7 +248,24 @@ fn scenario_a_hunk_line_that_reads_like_a_header() {
         &format!("++ b/notes.md\n{second}{third}{first}"),
     );
     commit(d, "two");
-    let patch = git(d, &["log", "-p", "-1", "--format="]);
+    let patch = git(
+        d,
+        &[
+            "-c",
+            "diff.noprefix=false",
+            "-c",
+            "diff.dstPrefix=b/",
+            "-c",
+            "diff.mnemonicPrefix=false",
+            "log",
+            "-p",
+            "-1",
+            "--format=",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-textconv",
+        ],
+    );
     assert!(
         patch.contains("\n--- one\n+++ b/notes.md\n"),
         "the hunk holds no header-shaped lines:\n{patch}"
