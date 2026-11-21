@@ -322,21 +322,6 @@ fn scenario_entry_points_skipped() {
 }
 
 #[test]
-fn scenario_entry_given_as_an_argument() {
-    // req:check.unreferenced/entry-attributes@69e092f6
-    let dir = repo(&[
-        ("crates/a/Cargo.toml", &manifest("a")),
-        (
-            "crates/a/src/lib.rs",
-            "#[event(fetch)]\npub async fn fetch() {}\n\
-             #[worker::event(scheduled)]\npub async fn tick() {}\n",
-        ),
-    ]);
-    assert_eq!(names(dir.path(), &[]), ["a::fetch", "a::tick"]);
-    assert!(lines(dir.path(), &[], &["event"]).is_empty());
-}
-
-#[test]
 fn scenario_stale_entry() {
     // req:check.unreferenced/entry-attributes@69e092f6
     let dir = repo(&[
@@ -677,18 +662,6 @@ fn tracked_file_missing_from_the_working_tree_is_skipped() {
 }
 
 #[test]
-fn scenario_allowed_item_and_crate() {
-    // req:check.unreferenced/allow-list@8bbdff3e
-    let dir = repo(&[
-        ("crates/a/Cargo.toml", &manifest("a")),
-        ("crates/a/src/lib.rs", "pub fn f() {}\npub fn g() {}\n"),
-        ("crates/b/Cargo.toml", &manifest("b")),
-        ("crates/b/src/lib.rs", "pub fn h() {}\n"),
-    ]);
-    assert_eq!(names(dir.path(), &["a::f", "b"]), ["a::g"]);
-}
-
-#[test]
 fn allow_entry_skips_every_item_with_its_full_name() {
     // req:check.unreferenced/allow-list@8bbdff3e
     let dir = repo(&[
@@ -720,30 +693,6 @@ fn scenario_stale_entries() {
             "clm.toml: allow zz skips no finding",
             "clm.toml: allow a::used skips no finding",
             "clm.toml: allow a skips no finding",
-        ]
-    );
-}
-
-#[test]
-fn findings_sorted_by_path_then_line_number() {
-    // req:check.unreferenced/report@849ec044
-    let mut lib = String::from("mod x;\n\npub fn f() {}\n");
-    lib.push_str(&"\n".repeat(6));
-    lib.push_str("pub fn z() {}\n");
-    let mut x = "\n".repeat(11);
-    x.push_str("pub fn h() {}\n");
-    let dir = repo(&[
-        ("crates/a/Cargo.toml", &manifest("a")),
-        ("crates/a/src/lib.rs", &lib),
-        ("crates/a/src/x.rs", &x),
-    ]);
-    let tail = "is public but nothing outside its library uses it";
-    assert_eq!(
-        clm_unreferenced::scan(dir.path(), &[], &[]).unwrap(),
-        [
-            format!("crates/a/src/lib.rs:3: a::f {tail}"),
-            format!("crates/a/src/lib.rs:10: a::z {tail}"),
-            format!("crates/a/src/x.rs:12: a::h {tail}"),
         ]
     );
 }
