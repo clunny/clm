@@ -6,7 +6,7 @@ status: accepted
 
 `shared-plumbing-in-git` makes `clm-git`'s `REMOTE` the one spelling of the remote's name in the code, and each crate that moves onto it proves so with a test that reads its own `src/`. `sync/shared-plumbing` and `orchestrator/shared-plumbing` look for a string literal beginning `"origin`, which works there because neither crate prints `origin` to a person. It doesn't work for `land`, whose messages begin `"origin can't be reached` and ``"origin's `main` has moved``, and it misses the refs spelled inside a longer literal, such as `"refs/remotes/origin/main"` and `"+refs/heads/main:refs/remotes/origin/main"`.
 
-So the crates moved after those two (`land`, `ledger`, `host`, `init`, `view`) scan each line of their `src/` outside a `//` comment for the three shapes the name takes as a git argument:
+So the crates moved after those two (`land`, `ledger`, `host`, `init`, `view`) scan each line of their `src/` outside a `//` comment for the three shapes the name takes as a git argument (amended by `20261120-wave-2-rest-by-the-rule`: `ledger` and `init` scan no longer: that change cut their `shared-plumbing` requirements, as rules over a file's text that no architectural constraint names, which its review read; what each crate does with the remote stays stated by its own requirements):
 
 - `"origin"`: the remote itself, as `fetch`, `push`, `ls-remote` or `remote get-url` takes it, or as compared with `git remote`'s output;
 - `"origin/`: a remote-tracking ref by its short name, such as `"origin/main"`;

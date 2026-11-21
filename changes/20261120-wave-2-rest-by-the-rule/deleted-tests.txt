@@ -1,0 +1,21 @@
+DELETE crates/clm-effort/tests/says_component.rs::the_printed_text_says_component	the scan of source for retired words is cut
+DELETE crates/clm-effort/tests/says_component.rs::the_scanner_reports_old_words_and_spares_ids	a test of that scan's own scanner
+DELETE crates/clm-ledger/tests/git_layer.rs::runs_git_and_gh_only_through_the_layer	ledger/git-through-layer is cut: vcs/one-git-layer scans every crate for the same calls
+DELETE crates/clm-ledger/tests/git_layer.rs::no_copy_of_the_remotes_name	ledger/shared-plumbing is cut: a scan of source for the remote's name
+DELETE crates/clm-ledger/tests/cleared.rs::no_other_person_parser	a scan of source; request-cleared now states the person part every call reads
+DELETE crates/clm-ledger/tests/doc_only.rs::legacy_list_is_frozen	a scan of source; legacy_paths pins the frozen list by value
+DELETE crates/clm-upgrade/tests/forms_gone.rs::no_form_without_a_list_is_exported_called_or_marked	forms-without-a-list-gone is cut: it stated only an absence, read from source
+DELETE crates/clm-upgrade/tests/forms_gone.rs::a_left_form_is_found_by_name_and_a_form_with_a_list_is_not	a test of that scan's own scanner
+DELETE crates/clm-upgrade/tests/lists.rs::a_directory_added_fails_the_check_naming_it	own-list-closed no longer states which directories sit under src/migrations; the test tested only its own helper
+DELETE crates/clm-upgrade/src/lock_tests.rs::the_shipped_migrations_match_the_lock	the same check_lock call as tests/lists.rs::the_lock_check_reads_any_crates_directory, which asserts more
+DELETE crates/clm-upgrade/src/tests.rs::a_note_a_done_migration_supersedes_is_not_pending	asserted by src/pairs_tests.rs::only_the_pairs_the_caller_gives_supersede with the same IDs
+DELETE crates/clm-upgrade/tests/lists.rs::a_stamp_the_given_list_lacks_is_too_new_whatever_the_crate_holds	the same path as src/tests.rs::a_stamp_the_list_lacks_is_too_new; the crate-holds case is tests/stamps.rs's
+DELETE crates/clm-init/tests/git_layer.rs::runs_git_and_gh_only_through_the_layer	vcs/one-git-layer reads clm-init's src/ for every call it looked for
+DELETE crates/clm-init/tests/git_layer.rs::names_the_remote_only_through_the_layer	the scan of source for the remote's name is cut (shared-plumbing)
+DELETE crates/clm-init/tests/git_layer.rs::lists_tracked_files_through_the_layer	the scan of source for ls-files is cut (survey-tracked-through-git); survey_reads_the_index_alone proves the behaviour
+DELETE crates/clm-init/tests/says_component.rs::init_text_says_component	the scan of source for retired words is cut
+DELETE crates/clm-init/src/guide.rs::no_page_named_in_source	the scan of source for include_str! is cut; every_page_is_compiled_in proves the table complete
+DELETE crates/clm-init/tests/survey.rs::components_key	repeats survey.rs::good_map, map and assertions alike
+DELETE crates/clm-init/src/init.rs::clm_toml_is_stamped_with_the_newest_migration	stamps_upgraded.rs holds its reachable half; the other is input no caller gives
+DELETE crates/clm-init/tests/own_migrations_frozen.rs::a_shipped_migration_edited_is_reported	repeats upgrade's lock_tests.rs::an_edited_shipped_migration_fails_the_lock_naming_it_and_its_version
+DELETE crates/clm-init/tests/own_migrations_frozen.rs::a_crate_with_no_lock_file_passes	repeats clm-upgrade's tests/stamps.rs::a_missing_lock_reads_as_empty; the scenario moves to upgrade/shipped-migrations-frozen
