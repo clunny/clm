@@ -550,3 +550,82 @@ fn an_environment_it_does_not_read() {
     );
     // The caller's process goes on.
 }
+
+#[test]
+fn scenario_odd_manifests_and_unreadable_files() {
+    // req:check.unreferenced/report@1a2b2341
+    // req:check.unreferenced/public-items@32359404
+    use std::os::unix::fs::PermissionsExt;
+    // A `[package]` without a string `name`.
+    for manifest in [
+        "[package]\nversion = \"0.1.0\"\n",
+        "[package]\nname = 1\nversion = \"0.1.0\"\n",
+    ] {
+        let dir = repo(&[("crates/a/Cargo.toml", manifest)]);
+        let out = clm(dir.path(), &["unreferenced"]);
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        assert_eq!(
+            String::from_utf8(out.stderr).unwrap(),
+            "clm unreferenced: crates/a/Cargo.toml: [package] has no name\n"
+        );
+    }
+
+    // No `[package]` table, a `package` key that isn't one, and a nameless `package.json`.
+    let dir = repo(&[
+        ("Cargo.toml", "[workspace]\n"),
+        ("crates/b/Cargo.toml", "package = 1\n"),
+        ("package.json", r#"{"private": true}"#),
+    ]);
+    let out = clm(dir.path(), &["unreferenced"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty() && out.stderr.is_empty(), "{out:?}");
+
+    // A `[lib] name` that isn't a string leaves the package's name.
+    let dir = repo(&[
+        (
+            "crates/a/Cargo.toml",
+            "[package]\nname = \"a-b\"\nversion = \"0.1.0\"\n\n[lib]\nname = 1\n",
+        ),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    let out = clm(dir.path(), &["unreferenced"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        format!("crates/a/src/lib.rs:1: a_b::f {TAIL}\n")
+    );
+
+    // A tracked source the process can't read.
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    let lib = dir.path().join("crates/a/src/lib.rs");
+    fs::set_permissions(&lib, fs::Permissions::from_mode(0o000)).unwrap();
+    // Running as root reads it anyway, and then there is no unreadable file to show.
+    if fs::read(&lib).is_err() {
+        let out = clm(dir.path(), &["unreferenced"]);
+        fs::set_permissions(&lib, fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(
+            stderr.starts_with("clm unreferenced: crates/a/src/lib.rs: "),
+            "{stderr}"
+        );
+        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    }
+
+    // `--root` naming a directory in no git repository.
+    let outside = TempDir::new().unwrap();
+    let elsewhere = repo(&[("README.md", "# none\n")]);
+    let root = outside.path().to_str().unwrap();
+    let out = clm(elsewhere.path(), &["unreferenced", "--root", root]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.starts_with("clm unreferenced: "), "{stderr}");
+    assert!(stderr.contains("git"), "{stderr}");
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+}
