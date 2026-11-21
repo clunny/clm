@@ -35,7 +35,7 @@ fn bare_path(dir: &Path) -> PathBuf {
 
 #[test]
 fn empty_repository_with_no_remote() {
-    // req:init/init-keeps-a-remote@c228f421
+    // req:init/init-keeps-a-remote@c652d628
     let dir = repo();
     let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     let toml = std::fs::read_to_string(dir.path().join("clm.toml")).unwrap();
@@ -49,7 +49,7 @@ fn empty_repository_with_no_remote() {
 
 #[test]
 fn a_kept_clm_toml_decides_the_host() {
-    // req:init/init-keeps-a-remote@c228f421
+    // req:init/init-keeps-a-remote@c652d628
     let dir = repo();
     std::fs::write(dir.path().join("clm.toml"), "host = \"git\"\n").unwrap();
     init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
@@ -59,7 +59,7 @@ fn a_kept_clm_toml_decides_the_host() {
 
 #[test]
 fn a_remote_already_there() {
-    // req:init/init-keeps-a-remote@c228f421
+    // req:init/init-keeps-a-remote@c652d628
     let dir = repo();
     git(
         dir.path(),

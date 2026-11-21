@@ -596,7 +596,7 @@ fn clm_toml(
     let mut text = format!(
         "# CLM settings for this repository (`clm config get <key>` shows each).\n\
          \n\
-         # Where the remote lives: `none`, `git` or `github`.\n\
+         # Where the remote lives: `none`, `git`, `github` or `azure`.\n\
          host = \"{host}\"\n\
          # Whose approval of a spec change counts: `any` writer's, the author's included; set\n\
          # `other` to count only a person's other than the branch's commit authors.\n\

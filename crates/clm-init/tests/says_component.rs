@@ -113,7 +113,10 @@ fn a_new_repository_says_component() {
         ["t.md:2: spine", "t.md:2: node"]
     );
     assert_eq!(
-        template_gaps(&[("t.md".into(), "node-reconciliation {node} a/nodes x\n".into())]),
+        template_gaps(&[(
+            "t.md".into(),
+            "node-reconciliation {node} a/nodes x\n".into()
+        )]),
         Vec::<String>::new()
     );
 }

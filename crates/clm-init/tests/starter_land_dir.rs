@@ -75,7 +75,7 @@ fn run_script(dir: &Path, land_dir: Option<&str>, target_dir: Option<&str>) -> S
 
 #[test]
 fn a_land_hands_the_place() {
-    // req:init/starter-check-land-dir@3e5ee659
+    // req:init/starter-check-land-dir@a75bc01a
     let dir = rust_repo();
     let seen = run_script(dir.path(), Some("/tmp/x/land"), None);
     assert_eq!(seen, "target=/tmp/x/land incremental=0\n");
@@ -83,7 +83,7 @@ fn a_land_hands_the_place() {
 
 #[test]
 fn no_place_handed_leaves_the_callers_variables() {
-    // req:init/starter-check-land-dir@3e5ee659
+    // req:init/starter-check-land-dir@a75bc01a
     let dir = rust_repo();
     let seen = run_script(dir.path(), None, Some("/tmp/y"));
     assert_eq!(seen, "target=/tmp/y incremental=unset\n");
@@ -94,7 +94,7 @@ fn no_place_handed_leaves_the_callers_variables() {
 
 #[test]
 fn a_repository_without_cargo_toml_still_passes() {
-    // req:init/starter-check-land-dir@3e5ee659
+    // req:init/starter-check-land-dir@a75bc01a
     let dir = rust_repo();
     fs::remove_file(dir.path().join("Cargo.toml")).unwrap();
     let _forks = FORKS.lock().unwrap_or_else(|e| e.into_inner());

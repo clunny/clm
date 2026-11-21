@@ -8,6 +8,19 @@ use std::path::{Path, PathBuf};
 use clap::{Args, Parser};
 use clm_config::Host;
 
+/// The first line of `clm init`'s help.
+const INIT_ABOUT: &str = "Set up CLM's tooling in the CLM repository found from the current \
+    directory, or at the top of the git repository when there is none, and print the steps \
+    only a human can do";
+
+/// The first line of `clm survey`'s help.
+const SURVEY_ABOUT: &str =
+    "Print a compact map of the repository's code, for drafting its spec graph";
+
+/// The first line of `clm guide`'s help.
+const GUIDE_ABOUT: &str =
+    "Print CLM's guide: with no page, the index of its pages; with one, that page";
+
 /// The environment, as a lookup.
 pub type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
 
@@ -49,7 +62,9 @@ pub struct GuideArgs {
     pub page: Option<String>,
 }
 
-/// A command line one of the calls parses: the command's own arguments, without its name.
+// A command line one of the calls parses: the command's own arguments, without its name. A
+// plain comment, not a doc comment, which clap would show as the help's first line: each call
+// hands `parse` its command's description instead.
 #[derive(Parser)]
 #[command(no_binary_name = true)]
 struct Line<A: Args> {
@@ -57,10 +72,12 @@ struct Line<A: Args> {
     args: A,
 }
 
-/// Parses `args` as the arguments of `name`, such as `clm init`, writing help to `out` and a
-/// usage error to `err`; the status to return when there is nothing to run.
+/// Parses `args` as the arguments of `name`, such as `clm init`, whose help starts with
+/// `about`, writing help to `out` and a usage error to `err`; the status to return when there
+/// is nothing to run.
 fn parse<A: Args, I, T>(
     name: &'static str,
+    about: &'static str,
     args: I,
     out: &mut dyn Write,
     err: &mut dyn Write,
@@ -71,7 +88,8 @@ where
 {
     let command = <Line<A> as clap::CommandFactory>::command()
         .name(name)
-        .bin_name(name);
+        .bin_name(name)
+        .about(about);
     let parsed = command
         .try_get_matches_from(args)
         .and_then(|mut m| <Line<A> as clap::FromArgMatches>::from_arg_matches_mut(&mut m));
@@ -103,7 +121,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let args: InitArgs = match parse("clm init", args, out, err) {
+    let args: InitArgs = match parse("clm init", INIT_ABOUT, args, out, err) {
         Ok(args) => args,
         Err(code) => return code,
     };
@@ -151,7 +169,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let args: SurveyArgs = match parse("clm survey", args, out, err) {
+    let args: SurveyArgs = match parse("clm survey", SURVEY_ABOUT, args, out, err) {
         Ok(args) => args,
         Err(code) => return code,
     };
@@ -211,7 +229,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let args: GuideArgs = match parse("clm guide", args, out, err) {
+    let args: GuideArgs = match parse("clm guide", GUIDE_ABOUT, args, out, err) {
         Ok(args) => args,
         Err(code) => return code,
     };

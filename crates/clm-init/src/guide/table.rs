@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn order_from_the_index_page() {
-        // req:init/guide-table-from-files@5c6bd405
+        // req:init/guide-table-from-files@fa1b0e6f
         let tmp = dir(&[
             ("README.md", b"# G\n\n1. [B](b.md#x)\n2. [A](a.md)\n3. [B](b.md)\n[gone](gone.md) [s](../spec-format.md) [i](README.md)\n"),
             ("a.md", b"# A\n"),
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn unlinked_pages_by_name() {
-        // req:init/guide-table-from-files@5c6bd405
+        // req:init/guide-table-from-files@fa1b0e6f
         let tmp = dir(&[
             ("README.md", b"# G\n1. [M](m.md)\n"),
             ("z.md", b"# Z\n"),
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn spec_format_that_is_not_utf8() {
-        // req:init/guide-table-from-files@5c6bd405
+        // req:init/guide-table-from-files@fa1b0e6f
         let tmp = dir(&[("README.md", b"# G\n")]);
         std::fs::write(tmp.path().join("spec-format.md"), b"\xff").unwrap();
         let err = names(&tmp).unwrap_err();
@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn a_page_named_spec_format() {
-        // req:init/guide-table-from-files@5c6bd405
+        // req:init/guide-table-from-files@fa1b0e6f
         let tmp = dir(&[("README.md", b"# G\n"), ("spec-format.md", b"# S\n")]);
         let err = names(&tmp).unwrap_err();
         assert!(err.contains("spec-format.md"), "{err}");
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn missing_index_page() {
-        // req:init/guide-table-from-files@5c6bd405
+        // req:init/guide-table-from-files@fa1b0e6f
         let tmp = dir(&[("a.md", b"# A\n")]);
         let err = names(&tmp).unwrap_err();
         assert!(err.contains("README.md"), "{err}");
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn page_that_is_not_utf8() {
-        // req:init/guide-table-from-files@5c6bd405
+        // req:init/guide-table-from-files@fa1b0e6f
         let tmp = dir(&[("README.md", b"# G\n"), ("bad.md", b"\xff\xfe")]);
         let err = names(&tmp).unwrap_err();
         assert!(err.contains("bad.md"), "{err}");

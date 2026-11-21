@@ -150,17 +150,11 @@ fn host_line(dir: &Path) -> String {
 
 #[test]
 fn template_says_pull_request() {
-    // req:init/template-says-pull-request@603d3610
+    // req:init/template-says-pull-request@c09d31bb
     let (_tmp, dir) = repo();
-    init(&dir, &[], &fake_hosts());
-    // The written file holds no entry of CLM's to word (`carried-constraints`); no template
-    // calls a host's pull request a page, as only the guide has pages.
-    let arch = read(&dir, "ARCHITECTURE.md");
-    assert!(!arch.contains("page's URL"), "{arch}");
-    for path in templates() {
-        for line in fs::read_to_string(&path).unwrap().lines() {
-            assert!(!line.contains("page's"), "{}: {line}", path.display());
-        }
+    // No file it writes calls a host's pull request a page, as only the guide has pages.
+    for (path, text) in written_for_every_language(&dir) {
+        assert!(!text.contains("page's"), "{path}: {text}");
     }
 }
 
@@ -178,7 +172,7 @@ const ROOT_PATHS: &str =
 
 #[test]
 fn root_owns_what_init_writes_and_leaves_the_code_outside() {
-    // req:init/init-root-ownership@6b897376
+    // req:init/init-root-ownership@e3d39505
     let (_tmp, dir) = repo();
     for file in [
         "src/main.rs",
@@ -200,7 +194,7 @@ fn root_owns_what_init_writes_and_leaves_the_code_outside() {
 
 #[test]
 fn root_outside_counts_the_untracked_files_the_bootstrap_commits() {
-    // req:init/init-root-ownership@6b897376
+    // req:init/init-root-ownership@e3d39505
     let (_tmp, dir) = repo();
     write(&dir, "src/main.rs", "x\n");
     write(&dir, ".gitignore", "build/\n");
@@ -222,7 +216,7 @@ fn root_outside_counts_the_untracked_files_the_bootstrap_commits() {
 
 #[test]
 fn root_outside_in_an_empty_repository() {
-    // req:init/init-root-ownership@6b897376
+    // req:init/init-root-ownership@e3d39505
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     assert_eq!(spec_key(&dir, "paths"), ROOT_PATHS);
@@ -231,7 +225,7 @@ fn root_outside_in_an_empty_repository() {
 
 #[test]
 fn root_outside_skips_clm_files_and_escapes() {
-    // req:init/init-root-ownership@6b897376
+    // req:init/init-root-ownership@e3d39505
     // CLM's own files are the root's or spec paths; a name with `"` or `\` is escaped as YAML.
     let (_tmp, dir) = repo();
     for file in [
@@ -260,15 +254,30 @@ fn root_outside_skips_clm_files_and_escapes() {
 
 #[test]
 fn no_remote() {
-    // req:init/init-files@35b2667c
+    // req:init/init-files@86bfd1b0
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     assert_eq!(host_line(&dir), "host = \"none\"");
 }
 
 #[test]
+fn the_host_comment() {
+    // req:init/init-files@86bfd1b0
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let toml = read(&dir, "clm.toml");
+    let lines: Vec<&str> = toml.lines().collect();
+    let at = lines.iter().position(|l| *l == "host = \"none\"").unwrap();
+    let comment = lines[at - 1];
+    assert!(comment.starts_with('#'), "{toml}");
+    for host in ["`none`", "`git`", "`github`", "`azure`"] {
+        assert!(comment.contains(host), "{host}: {comment}");
+    }
+}
+
+#[test]
 fn host_given() {
-    // req:init/init-files@35b2667c
+    // req:init/init-files@86bfd1b0
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     init(&dir, &["--host", "git"], &fake_hosts());
@@ -282,7 +291,7 @@ fn host_given() {
 
 #[test]
 fn azure_remote() {
-    // req:init/init-files@35b2667c
+    // req:init/init-files@86bfd1b0
     let (_tmp, dir) = repo();
     origin(&dir, "https://o@dev.azure.com/o/p/_git/r");
     let hosts = fake_hosts();
@@ -293,7 +302,7 @@ fn azure_remote() {
 
 #[test]
 fn host_from_origin() {
-    // req:init/init-files@35b2667c
+    // req:init/init-files@86bfd1b0
     for (url, host) in [
         ("git@github.com:o/r.git", "github"),
         ("https://GitHub.com/o/r", "github"),
@@ -310,7 +319,7 @@ fn host_from_origin() {
 
 #[test]
 fn project_files_kept() {
-    // req:init/init-files@35b2667c
+    // req:init/init-files@86bfd1b0
     let (_tmp, dir) = repo();
     write(&dir, "CLAUDE.md", "# Our rules\n");
     write(&dir, "clm.toml", "defects = \"off\"\n");
@@ -378,7 +387,7 @@ fn other_projects_have_no_build_table() {
 
 #[test]
 fn two_languages() {
-    // req:init/init-detectors@f534f33f
+    // req:init/init-detectors@5fd8dbae
     let (_tmp, dir) = repo();
     init(&dir, &["--lang", "rust", "--lang", "python"], &fake_hosts());
     assert_eq!(
@@ -391,7 +400,7 @@ fn two_languages() {
 
 #[test]
 fn existing_codebase() {
-    // req:init/init-detectors@f534f33f
+    // req:init/init-detectors@5fd8dbae
     let (_tmp, dir) = repo();
     write(&dir, "src/main.rs", "fn main() {}\n");
     init(&dir, &["--lang", "rust", "--no-detectors"], &fake_hosts());
@@ -403,7 +412,7 @@ fn existing_codebase() {
 
 #[test]
 fn repeated_and_unknown_languages() {
-    // req:init/init-detectors@f534f33f
+    // req:init/init-detectors@5fd8dbae
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &["--lang", "rust", "--lang", "rust"], &hosts);
@@ -519,7 +528,7 @@ fn no_ci(steps: &str) {
 
 #[test]
 fn next_steps_name_the_push_and_clm_land() {
-    // req:init/init-next-steps@01bcacd1
+    // req:init/init-next-steps@1a95eded
     let (_tmp, dir) = repo();
     let steps = next_steps(&init(&dir, &["--lang", "rust"], &fake_hosts()));
     assert!(steps.contains("push them to `main`"), "{steps}");
@@ -540,7 +549,7 @@ fn next_steps_name_the_push_and_clm_land() {
 
 #[test]
 fn azure_next_steps() {
-    // req:init/init-next-steps@01bcacd1
+    // req:init/init-next-steps@1a95eded
     let (_tmp, dir) = repo();
     let steps = next_steps(&init(&dir, &["--host", "azure"], &fake_hosts()));
     let given = clm_host::setup_steps(clm_config::Host::Azure);
@@ -558,7 +567,7 @@ fn azure_next_steps() {
 
 #[test]
 fn next_steps_skip_what_is_done() {
-    // req:init/init-next-steps@01bcacd1
+    // req:init/init-next-steps@1a95eded
     // The push is left after a local commit, and not once `origin/main` has the files; the
     // host's setup steps stay, since `clm init` can't ask the host.
     let (tmp, dir) = repo();
@@ -604,7 +613,7 @@ fn step(steps: &str, words: &[&str]) -> usize {
 
 #[test]
 fn an_old_clm_toml_gets_no_upgrade_step() {
-    // req:init/init-next-steps@01bcacd1
+    // req:init/init-next-steps@1a95eded
     let (_tmp, dir) = repo();
     write(&dir, "clm.toml", "approval = \"any\"\n");
     commit_all(&dir);
@@ -655,7 +664,7 @@ fn allowed(dir: &Path) -> Vec<String> {
 
 #[test]
 fn init_writes_whitespace_settings_new_and_keeps_complete_ones() {
-    // req:init/init-seeds-permissions@88ca3bd9
+    // req:init/init-seeds-permissions@ccc79706
     let (_tmp, dir) = repo();
     write(&dir, ".claude/settings.json", "  \n");
     init(&dir, &[], &fake_hosts());
@@ -669,7 +678,7 @@ fn init_writes_whitespace_settings_new_and_keeps_complete_ones() {
 
 #[test]
 fn init_leaves_settings_that_arent_json() {
-    // req:init/init-seeds-permissions@88ca3bd9
+    // req:init/init-seeds-permissions@ccc79706
     for text in [
         "{",
         "[]",
@@ -686,7 +695,7 @@ fn init_leaves_settings_that_arent_json() {
 
 #[test]
 fn a_rerun_leaves_the_settings_alone() {
-    // req:init/init-seeds-permissions@88ca3bd9
+    // req:init/init-seeds-permissions@ccc79706
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -710,7 +719,7 @@ fn a_rerun_leaves_the_settings_alone() {
 
 #[test]
 fn a_rerun_with_the_rules_names_nothing() {
-    // req:init/init-seeds-permissions@88ca3bd9
+    // req:init/init-seeds-permissions@ccc79706
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -733,7 +742,7 @@ const HEADING: &str = "missing allow rules in .claude/settings.json:\n";
 
 #[test]
 fn check_permissions_all_allowed() {
-    // req:init/init-check-permissions@888b5f73
+    // req:init/init-check-permissions@7521e60b
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     commit_all(&dir);
@@ -745,7 +754,7 @@ fn check_permissions_all_allowed() {
 
 #[test]
 fn check_permissions_reads_both_files() {
-    // req:init/init-check-permissions@888b5f73
+    // req:init/init-check-permissions@7521e60b
     let (_tmp, dir) = repo();
     let rest: Vec<String> = rules()
         .into_iter()
@@ -771,7 +780,7 @@ fn check_permissions_reads_both_files() {
 
 #[test]
 fn check_permissions_without_settings() {
-    // req:init/init-check-permissions@888b5f73
+    // req:init/init-check-permissions@7521e60b
     let (_tmp, dir) = repo();
     write(&dir, "specs/SPEC.md", "x\n");
     let out = check_permissions(&dir);
@@ -786,7 +795,7 @@ fn check_permissions_without_settings() {
 
 #[test]
 fn check_permissions_wants_the_exact_rule() {
-    // req:init/init-check-permissions@888b5f73
+    // req:init/init-check-permissions@7521e60b
     let (_tmp, dir) = repo();
     let mut allow: Vec<String> = rules()
         .into_iter()
@@ -816,7 +825,7 @@ fn check_permissions_wants_the_exact_rule() {
 
 #[test]
 fn check_permissions_outside_a_repository_and_with_other_options() {
-    // req:init/init-check-permissions@888b5f73
+    // req:init/init-check-permissions@7521e60b
     let plain = TempDir::new().unwrap();
     let out = check_permissions(plain.path());
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -837,7 +846,7 @@ fn check_permissions_outside_a_repository_and_with_other_options() {
 
 #[test]
 fn rerun_from_a_subdirectory() {
-    // req:init/init-root@79bcb63a
+    // req:init/init-root@57c73388
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &["--lang", "rust"], &hosts);
@@ -851,7 +860,7 @@ fn rerun_from_a_subdirectory() {
 
 #[test]
 fn clm_repository_in_a_subdirectory() {
-    // req:init/init-root@79bcb63a
+    // req:init/init-root@57c73388
     // `tool/` holds files an earlier `clm` wrote, its workflow among them; the git
     // repository's top has none. The workflow is the project's now and stays as it is, and
     // a clean `git status` (untracked files included) shows nothing written outside `tool/`.
@@ -887,7 +896,7 @@ fn clm_repository_in_a_subdirectory() {
 
 #[test]
 fn no_clm_repository() {
-    // req:init/init-root@79bcb63a
+    // req:init/init-root@57c73388
     let (_tmp, dir) = repo();
     write(&dir, "src/main.rs", "fn main() {}\n");
     init(&dir.join("src"), &["--lang", "rust"], &fake_hosts());
@@ -899,7 +908,7 @@ fn no_clm_repository() {
 
 #[test]
 fn search_stops_at_the_git_repository() {
-    // req:init/init-root@79bcb63a
+    // req:init/init-root@57c73388
     // A git repository nested in a CLM repository is a repository of its own.
     let (_tmp, outer) = repo();
     let hosts = fake_hosts();
@@ -915,7 +924,7 @@ fn search_stops_at_the_git_repository() {
 
 #[test]
 fn search_stops_at_the_top_without_a_git_entry() {
-    // req:init/init-root@79bcb63a
+    // req:init/init-root@57c73388
     // A work tree with its git directory elsewhere has no `.git`: the search still ends at
     // its top, not at a CLM repository above it.
     let tmp = TempDir::new().unwrap();
@@ -956,7 +965,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
 
 #[test]
 fn not_a_repository() {
-    // req:init/init-files@35b2667c
+    // req:init/init-files@86bfd1b0
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join("plain");
     fs::create_dir(&dir).unwrap();
@@ -1030,7 +1039,7 @@ fn init_with_ignore(before: &[u8]) -> (Vec<u8>, String) {
 
 #[test]
 fn ignore_file_written_in_a_new_repository() {
-    // req:init/init-ignores-local-settings@b0683dfd
+    // req:init/init-ignores-local-settings@77443238
     let (_tmp, dir) = repo();
     let out = init(&dir, &[], &fake_hosts());
     assert_eq!(read(&dir, ".gitignore"), IGNORED);
@@ -1042,7 +1051,7 @@ fn ignore_file_written_in_a_new_repository() {
 
 #[test]
 fn empty_ignore_file() {
-    // req:init/init-ignores-local-settings@b0683dfd
+    // req:init/init-ignores-local-settings@77443238
     let (after, out) = init_with_ignore(b"");
     assert_eq!(after, IGNORED.as_bytes());
     assert!(
@@ -1056,7 +1065,7 @@ fn empty_ignore_file() {
 
 #[test]
 fn ignore_lines_appended() {
-    // req:init/init-ignores-local-settings@b0683dfd
+    // req:init/init-ignores-local-settings@77443238
     // Each keeps its bytes and gains the missing entries, in order, each on a line of its own.
     for (before, after) in [
         (
@@ -1123,7 +1132,7 @@ fn ignore_lines_appended() {
 
 #[test]
 fn ignore_lines_already_listed() {
-    // req:init/init-ignores-local-settings@b0683dfd
+    // req:init/init-ignores-local-settings@77443238
     for before in [
         "/clm.local.toml\n.clm/\n/.claude/worktrees\n",
         "node_modules/\nclm.local.toml  \n/.clm/  \n.claude/worktrees",
@@ -1141,7 +1150,7 @@ fn ignore_lines_already_listed() {
 
 #[test]
 fn tracked_local_settings_kept() {
-    // req:init/init-ignores-local-settings@b0683dfd
+    // req:init/init-ignores-local-settings@77443238
     // Git reports a tracked file as not ignored unless told to read the patterns alone.
     let (_tmp, dir) = repo();
     let before = "clm.local.toml\n.clm/\n.claude/worktrees/\n";
@@ -1170,7 +1179,7 @@ fn tracked_local_settings_kept() {
 
 #[test]
 fn ignore_check_failure_leaves_the_file() {
-    // req:init/init-ignores-local-settings@b0683dfd
+    // req:init/init-ignores-local-settings@77443238
     // Git refuses a probe path beyond a symbolic link: `clm init` fails with git's message.
     let (_tmp, dir) = repo();
     let elsewhere = TempDir::new().unwrap();
@@ -1190,7 +1199,7 @@ fn ignore_check_failure_leaves_the_file() {
 
 #[test]
 fn ignore_file_in_a_parent_counts() {
-    // req:init/init-ignores-local-settings@b0683dfd
+    // req:init/init-ignores-local-settings@77443238
     // An ignore file elsewhere counts as git counts it.
     let (_tmp, dir) = repo();
     write(&dir, ".gitignore", "clm.local.toml\n");
@@ -1207,7 +1216,7 @@ fn ignore_file_in_a_parent_counts() {
 
 #[test]
 fn ignore_file_in_a_subdirectory_clm_repository() {
-    // req:init/init-ignores-local-settings@b0683dfd
+    // req:init/init-ignores-local-settings@77443238
     let hosts = fake_hosts();
     let (_tmp0, model) = repo();
     init(&model, &[], &hosts);
@@ -1337,7 +1346,7 @@ fn loaded(dir: &Path) -> (Vec<String>, Vec<String>) {
 
 #[test]
 fn empty_repository() {
-    // req:init/init-files@35b2667c
+    // req:init/init-files@86bfd1b0
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     let out = init(&dir, &["--lang", "rust"], &fake_hosts());
@@ -1371,7 +1380,7 @@ fn empty_repository() {
 
 #[test]
 fn human_layers() {
-    // req:init/init-files@35b2667c
+    // req:init/init-files@86bfd1b0
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     let caps = read(&dir, "CAPABILITIES.md");
@@ -1405,20 +1414,22 @@ fn holds_old_term(text: &str) -> bool {
         .any(|w| w[0] == "architecture" && w[1].starts_with("requirement"))
 }
 
-/// The files under `crates/clm-init/templates/`.
-fn templates() -> Vec<std::path::PathBuf> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
-    fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect()
+/// Every file `clm init --lang rust --lang typescript --lang python` wrote in `dir`, as
+/// (path, text).
+fn written_for_every_language(dir: &Path) -> Vec<(String, String)> {
+    init(dir, &EVERY_LANGUAGE, &fake_hosts());
+    let written = common::written_files(dir);
+    assert!(written.len() >= 9, "{written:?}");
+    written
 }
+
+const EVERY_LANGUAGE: [&str; 6] = ["--lang", "rust", "--lang", "typescript", "--lang", "python"];
 
 #[test]
 fn template_says_architectural_constraint() {
-    // req:init/template-says-architectural-constraint@b04e7622
+    // req:init/template-says-architectural-constraint@1fc53af0
     let (_tmp, dir) = repo();
-    init(&dir, &[], &fake_hosts());
+    let written = written_for_every_language(&dir);
     let arch = read(&dir, "ARCHITECTURE.md");
     let agents = read(&dir, "AGENTS.md");
     assert!(
@@ -1431,26 +1442,24 @@ fn template_says_architectural_constraint() {
         agents.contains("architectural constraints apply to all work"),
         "{agents}"
     );
-    assert!(!holds_old_term(&arch) && !holds_old_term(&agents));
-    for path in templates() {
-        let text = fs::read_to_string(&path).unwrap();
-        assert!(
-            !holds_old_term(&text),
-            "{} holds the old term",
-            path.display()
-        );
+    for (path, text) in &written {
+        assert!(!holds_old_term(text), "{path} holds the old term");
     }
+    // A word is a run of letters and digits, compared in any case.
+    assert!(holds_old_term("the Architecture-Requirements here"));
+    assert!(holds_old_term("architecture_requirement"));
+    assert!(!holds_old_term("architectures requirement"));
 }
 
 #[test]
 fn templates_say_new_words() {
-    // req:init/templates-say-new-words@5d88e574
+    // req:init/templates-say-new-words@8d1bce25
     let (_tmp, dir) = repo();
-    init(&dir, &[], &fake_hosts());
+    let written = written_for_every_language(&dir);
     assert!(read(&dir, "specs/SPEC.md").contains("\nstatus: unbuilt\n"));
-    // No template holds a word `plain-terms-renames` replaced.
-    for path in templates() {
-        for line in fs::read_to_string(&path).unwrap().lines() {
+    // No file it wrote holds a word `plain-terms-renames` replaced.
+    for (path, text) in &written {
+        for line in text.lines() {
             assert!(
                 !line.contains("specd")
                     && line.trim() != "kind: human"
@@ -1458,8 +1467,7 @@ fn templates_say_new_words() {
                     && !line
                         .split(|c: char| !c.is_alphanumeric() && c != '_')
                         .any(|w| w == "burdens"),
-                "{}: {line}",
-                path.display()
+                "{path}: {line}"
             );
         }
     }
@@ -1504,7 +1512,7 @@ fn typescript_project_sets_build_setup() {
 
 #[test]
 fn init_seeds_the_allow_rules() {
-    // req:init/init-seeds-permissions@88ca3bd9
+    // req:init/init-seeds-permissions@ccc79706
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     let allow = allowed(&dir);
@@ -1535,7 +1543,7 @@ fn init_seeds_the_allow_rules() {
 
 #[test]
 fn init_keeps_the_settings_it_finds() {
-    // req:init/init-seeds-permissions@88ca3bd9
+    // req:init/init-seeds-permissions@ccc79706
     let (_tmp, dir) = repo();
     write(
         &dir,
