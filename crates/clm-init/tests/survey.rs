@@ -535,11 +535,11 @@ fn the_old_key() {
     fs::write(repo.path().join("map.yaml"), map).unwrap();
     let out = clm(repo.path(), &["survey", "--components", "map.yaml"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
-    let text = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        text.contains("map.yaml") && text.contains("`components`") && text.contains("`nodes`"),
-        "{text}"
+    assert_eq!(
+        stdout(&out),
+        "map.yaml: survey/old-key: sets `nodes`, which is retired; list the components under `components`\n"
     );
+    assert!(out.stderr.is_empty(), "{out:?}");
     let flag = clm(repo.path(), &["survey", "--nodes", "map.yaml"]);
     assert_eq!(flag.status.code(), Some(2), "{flag:?}");
     assert!(
@@ -756,4 +756,222 @@ fn stable() {
         (from.to_owned(), to.to_owned())
     });
     assert_eq!(edges, sorted);
+}
+
+/// Commits the index in `dir` as `t`.
+fn commit(dir: &Path, message: &str) {
+    git(
+        dir,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "-m",
+            message,
+        ],
+    );
+}
+
+#[test]
+fn what_is_left_out() {
+    // req:init/survey-map@bb42d2d4
+    // `c.rs` at three merge stages after a conflicted merge.
+    let repo = repo(&[("a.rs", b"fn a() {}\n"), ("c.rs", b"fn c() {}\n")]);
+    let dir = repo.path();
+    commit(dir, "base");
+    git(dir, &["switch", "-q", "-c", "other"]);
+    fs::write(dir.join("c.rs"), "fn other() {}\n").unwrap();
+    git(dir, &["add", "c.rs"]);
+    commit(dir, "other");
+    git(dir, &["switch", "-q", "main"]);
+    fs::write(dir.join("c.rs"), "fn ours() {}\n").unwrap();
+    git(dir, &["add", "c.rs"]);
+    commit(dir, "ours");
+    let merge = Command::new("git")
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "merge",
+            "-q",
+            "other",
+        ])
+        .current_dir(dir)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(!merge.status.success(), "{merge:?}");
+    let staged = Command::new("git")
+        .args(["ls-files", "--stage", "c.rs"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&staged.stdout).lines().count(), 3);
+    fs::create_dir(dir.join("assets")).unwrap();
+    fs::write(dir.join("assets/logo.dat"), b"\x89PNG\0\0\x01").unwrap();
+    fs::write(dir.join("gone.rs"), "fn gone() {}\n").unwrap();
+    git(dir, &["add", "assets/logo.dat", "gone.rs"]);
+    fs::remove_file(dir.join("gone.rs")).unwrap();
+    fs::write(dir.join("untracked.rs"), "fn u() {}\n").unwrap();
+    let out = survey(dir);
+    let dirs = section(&out, "directories");
+    assert!(
+        dirs.iter()
+            .any(|l| l.starts_with(".  ") && l.contains("rust 2 files")),
+        "{out}"
+    );
+    for absent in ["assets", "gone.rs", "untracked.rs"] {
+        assert!(!out.contains(absent), "{absent}: {out}");
+    }
+
+    // An empty repository: the five headings alone.
+    let empty = self::repo(&[]);
+    let out = clm(empty.path(), &["survey"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "# directories\n\n# manifests\n\n# tests\n\n# docs\n\n# edges\n"
+    );
+
+    // Outside a git repository.
+    let plain = TempDir::new().unwrap();
+    let ceiling = plain.path().parent().unwrap().to_str().unwrap();
+    let [global, nosystem] = common::ISOLATED_GIT;
+    let vars = [global, nosystem, ("GIT_CEILING_DIRECTORIES", ceiling)];
+    let out = common::call(plain.path(), &["survey"], &common::process_env, &vars);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).starts_with("clm survey: "),
+        "{out:?}"
+    );
+}
+
+#[test]
+fn a_map_it_cant_use() {
+    // req:init/survey-components@10e105e7
+    let good = format!("components:\n{}{TOP}", a_and_b("b"));
+    let refused = |out: &Output| {
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        let err = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(err.starts_with("clm survey: map.yaml: "), "{err}");
+        err
+    };
+    // No file `map.yaml`.
+    let workspace = repo(TWO_CRATES);
+    refused(&clm(
+        workspace.path(),
+        &["survey", "--components", "map.yaml"],
+    ));
+    for map in [
+        "components: 3\n".to_owned(),
+        format!(
+            "components:\n  - {{ id: a, paths: [\"crates/a/**\"], test_depends_on: [b] }}\n  - {{ id: b, paths: [\"crates/b/**\"] }}\n{TOP}"
+        ),
+        format!("{good}extra: 1\n"),
+    ] {
+        refused(&components(TWO_CRATES, &map));
+    }
+    let err = refused(&components(TWO_CRATES, "outside: [\"x/**\"]\n"));
+    assert!(err.contains("missing field `components`"), "{err}");
+    let unknown = format!("components:\n{}{TOP}", a_and_b("z"));
+    let err = refused(&components(TWO_CRATES, &unknown));
+    assert_eq!(
+        err,
+        "clm survey: map.yaml: component `a` depends on unknown component `z`\n"
+    );
+    let err = refused(&components(TWO_CRATES, &format!("{good}outside: [\"\"]\n")));
+    assert!(
+        err.contains("`outside` must be a list of non-empty globs"),
+        "{err}"
+    );
+
+    // A good map in a directory that isn't in a git repository.
+    let plain = TempDir::new().unwrap();
+    fs::write(plain.path().join("map.yaml"), &good).unwrap();
+    let ceiling = plain.path().parent().unwrap().to_str().unwrap();
+    let [global, nosystem] = common::ISOLATED_GIT;
+    let vars = [global, nosystem, ("GIT_CEILING_DIRECTORIES", ceiling)];
+    let out = common::call(
+        plain.path(),
+        &["survey", "--components", "map.yaml"],
+        &common::process_env,
+        &vars,
+    );
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).starts_with("clm survey: "),
+        "{out:?}"
+    );
+}
+
+#[test]
+fn the_lines_it_prints() {
+    // req:init/survey-components@10e105e7
+    let overlap = format!(
+        "components:\n{}  - {{ id: c, paths: [\"crates/a/src/lib.rs\"] }}\n{TOP}",
+        a_and_b("b")
+    );
+    let out = components(TWO_CRATES, &overlap);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "map.yaml: survey/overlap: crates/a/src/lib.rs is in the paths of `a` and `c`\n"
+    );
+
+    let cycle = "components:\n  - { id: a, paths: [\"crates/a/**\"], depends_on: [b] }\n  - { id: b, paths: [\"crates/b/**\"], depends_on: [a] }\n  - { id: top, paths: [\"Cargo.toml\"] }\n";
+    let text = stdout(&components(TWO_CRATES, cycle));
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "map.yaml: survey/cycle: depends_on cycle: a -> b -> a",
+            "map.yaml: survey/uncovered: README.md is in no component's paths",
+        ],
+        "{text}"
+    );
+
+    let edge = format!("components:\n{}{TOP}", a_and_b(""));
+    assert_eq!(
+        stdout(&components(TWO_CRATES, &edge)),
+        "map.yaml: survey/undeclared-edge: crates/a/Cargo.toml (component `a`) imports crates/b/Cargo.toml (component `b`), and `a` doesn't depend on `b`\n"
+    );
+
+    let twice = "components:\n  - { id: a, paths: [\"crates/a/**\"] }\n  - { id: a, paths: [] }\n";
+    let out = components(TWO_CRATES, twice);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "map.yaml: survey/duplicate-component: component `a` appears twice\n"
+    );
+}
+
+#[test]
+fn an_edge_into_an_overlap() {
+    // req:init/survey-components@10e105e7
+    let map = format!(
+        "components:\n{}  - {{ id: c, paths: [\"crates/b/Cargo.toml\"] }}\n{TOP}",
+        a_and_b("")
+    );
+    let out = components(TWO_CRATES, &map);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let text = stdout(&out);
+    assert!(
+        text.lines()
+            .any(|l| l.starts_with("map.yaml: survey/overlap: crates/b/Cargo.toml ")),
+        "{text}"
+    );
+    assert!(
+        !text
+            .lines()
+            .any(|l| l.contains("survey/undeclared-edge") && l.contains("crates/b/Cargo.toml")),
+        "{text}"
+    );
 }
