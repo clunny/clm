@@ -136,9 +136,10 @@ pub fn init(cwd: &Path, opts: &Options, env: crate::Env) -> Result<String, Strin
     };
 
     let migrations = crate::migrations();
+    let newest = clm_upgrade::latest_in(&migrations).expect("upgrade's own list is never empty");
     let toml = clm_toml(
         host,
-        clm_upgrade::latest_in(&migrations),
+        newest,
         &langs,
         if opts.detectors { &langs } else { &[] },
     );
@@ -582,17 +583,12 @@ fn missing_main(root: &Path) -> Option<String> {
     Some(step)
 }
 
-fn clm_toml(
-    host: Host,
-    newest_migration: Option<&str>,
-    langs: &[&Lang],
-    detectors: &[&Lang],
-) -> String {
+fn clm_toml(host: Host, newest_migration: &str, langs: &[&Lang], detectors: &[&Lang]) -> String {
     // The newest migration this binary holds, so a new repository has none pending
     // (`init-stamps-upgraded`).
-    let upgraded = newest_migration.map_or(String::new(), |id| {
-        format!("# The last migration this repository took (`clm upgrade`).\nupgraded = \"{id}\"\n")
-    });
+    let upgraded = format!(
+        "# The last migration this repository took (`clm upgrade`).\nupgraded = \"{newest_migration}\"\n"
+    );
     let mut text = format!(
         "# CLM settings for this repository (`clm config get <key>` shows each).\n\
          \n\
