@@ -926,7 +926,6 @@ fn a_serves_c(r: &Repo) {
 #[test]
 fn spec_changed_reports_capabilities() {
     // req:sync/spec-changed@14245755
-    // req:sync/extract-through-layer@ccb1a495
     let r = repo("impl/a");
     a_serves_c(&r);
     main_moves(
@@ -2175,7 +2174,7 @@ fn only_checkouts_of_the_repo(r: &Repo, log: &Path) {
 
 #[test]
 fn no_post_checkout_hook_when_regenerating() {
-    // req:sync/extract-through-layer@ccb1a495
+    // req:sync/extract-through-layer@861ea529
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     main_moves(
@@ -2193,7 +2192,7 @@ fn no_post_checkout_hook_when_regenerating() {
 
 #[test]
 fn no_post_checkout_hook_when_comparing_a_nodes_spec() {
-    // req:sync/extract-through-layer@ccb1a495
+    // req:sync/extract-through-layer@861ea529
     let r = repo("impl/a");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -3192,7 +3191,6 @@ fn an_edit_outside_the_root_that_main_changed() {
 #[test]
 fn specs_conflict_in_a_subdirectory_root() {
     // req:sync/paths-under-the-root@6e985447
-    // req:sync/extract-through-layer@ccb1a495
     let r = repo_at("spec/x", TOOL);
     let root = tool(&r);
     write(
@@ -3318,7 +3316,6 @@ fn a_conflict_outside_the_root() {
 #[test]
 fn spec_changed_in_a_subdirectory_root() {
     // req:sync/paths-under-the-root@6e985447
-    // req:sync/extract-through-layer@ccb1a495
     let r = repo_at("impl/a", TOOL);
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");

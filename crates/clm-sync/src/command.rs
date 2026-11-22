@@ -27,17 +27,24 @@ pub struct AutosyncArgs {
     pub root: Option<PathBuf>,
 }
 
-/// The command line `rebase_command` parses: the command's own arguments, without its name.
+// The command line `rebase_command` parses: the command's own arguments, without its name.
 #[derive(Parser)]
-#[command(no_binary_name = true)]
+#[command(
+    no_binary_name = true,
+    about = "Rebase the branch onto origin/main, regenerate applied specs and run `clm check`; \
+             exit 1 with what is left to resolve"
+)]
 struct RebaseLine {
     #[command(flatten)]
     args: RebaseArgs,
 }
 
-/// The command line `autosync_command` parses: the command's own arguments, without its name.
+// The command line `autosync_command` parses: the command's own arguments, without its name.
 #[derive(Parser)]
-#[command(no_binary_name = true)]
+#[command(
+    no_binary_name = true,
+    about = "Push a snapshot of the spec work on a `spec/*` branch to origin as `autosync/<branch>`"
+)]
 struct AutosyncLine {
     #[command(flatten)]
     args: AutosyncArgs,

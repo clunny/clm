@@ -169,7 +169,7 @@ fn conflicting() -> (TempDir, PathBuf) {
 
 #[test]
 fn a_command_called_in_a_test_writes_its_streams_and_returns_its_status() {
-    // req:sync/commands-in-crate@77d09cc0
+    // req:sync/commands-in-crate@8e0be5d8
     let (dir, work) = conflicting();
     // `--root` overrides the root the call is given.
     let elsewhere = dir.path().join("not-a-repo");
@@ -202,7 +202,7 @@ fn a_command_called_in_a_test_writes_its_streams_and_returns_its_status() {
 
 #[test]
 fn the_temporary_worktree_goes_under_the_tmpdir_the_environment_names() {
-    // req:sync/commands-in-crate@77d09cc0 req:sync/judged-by-check@bfefb55e
+    // req:sync/commands-in-crate@8e0be5d8 req:sync/judged-by-check@bfefb55e
     let (dir, work) = node_a("");
     // A `TMPDIR` that is a file: no worktree can be made under it, so the run fails as git
     // does, whatever the process's own `TMPDIR` is.
@@ -220,7 +220,7 @@ fn the_temporary_worktree_goes_under_the_tmpdir_the_environment_names() {
 
 #[test]
 fn a_failed_autosync_writes_why_and_returns_the_failures_status() {
-    // req:sync/commands-in-crate@77d09cc0
+    // req:sync/commands-in-crate@8e0be5d8
     let (dir, work) = conflicting();
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     write(&work, "specs/SPEC.md", "edited\n");
@@ -240,7 +240,7 @@ fn a_failed_autosync_writes_why_and_returns_the_failures_status() {
 
 #[test]
 fn arguments_it_cant_parse_return_2_with_the_usage_error() {
-    // req:sync/commands-in-crate@77d09cc0
+    // req:sync/commands-in-crate@8e0be5d8 req:sync/outcome-line@cac8dfb4
     let (_dir, work) = conflicting();
     for name in ["rebase", "autosync"] {
         let out = clm(&work, &[name, "--no-such-option"]);
@@ -253,8 +253,61 @@ fn arguments_it_cant_parse_return_2_with_the_usage_error() {
 }
 
 #[test]
+fn help_names_each_command() {
+    // req:sync/commands-in-crate@8e0be5d8
+    let (_dir, work) = conflicting();
+    for (name, about) in [
+        (
+            "rebase",
+            "Rebase the branch onto origin/main, regenerate applied specs and run `clm check`; \
+             exit 1 with what is left to resolve",
+        ),
+        (
+            "autosync",
+            "Push a snapshot of the spec work on a `spec/*` branch to origin as \
+             `autosync/<branch>`",
+        ),
+    ] {
+        let out = clm(&work, &[name, "--help"]);
+        assert_eq!(out.status.code(), Some(0), "{name}: {out:?}");
+        assert!(out.stderr.is_empty(), "{name}: {out:?}");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let lines: Vec<&str> = stdout.lines().collect();
+        assert_eq!(lines.first(), Some(&about), "{name}: {stdout}");
+        let usage = lines.iter().find(|l| l.starts_with("Usage:"));
+        assert_eq!(
+            usage,
+            Some(&format!("Usage: clm {name} [OPTIONS]").as_str()),
+            "{name}: {stdout}"
+        );
+        assert!(
+            lines.iter().any(|l| l.trim_start().starts_with("--root")),
+            "{name}: {stdout}"
+        );
+    }
+}
+
+#[test]
+fn help_and_usage_errors_print_no_outcome_line() {
+    // req:sync/outcome-line@cac8dfb4
+    let (_dir, work) = conflicting();
+    let outcomes = ["rebase ok", "rebase incomplete", "rebase failed"];
+    let out = clm(&work, &["rebase", "--help"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Usage: clm rebase"), "{stdout}");
+    assert!(
+        !stdout.lines().any(|l| outcomes.contains(&l)),
+        "an outcome line in the help: {stdout}"
+    );
+    let out = clm(&work, &["rebase", "--no-such-option"]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+#[test]
 fn sync_prints_what_is_left_and_exits_1_then_0() {
-    // req:sync/rebase@3ba762e9 req:sync/outcome-line@45f1fe6d
+    // req:sync/rebase@3ba762e9 req:sync/outcome-line@cac8dfb4
     let (_dir, work) = conflicting();
     write(&work, "src/lib.rs", "edited\n");
     let out = clm(&work, &["rebase"]);
@@ -285,7 +338,7 @@ fn sync_prints_what_is_left_and_exits_1_then_0() {
 
 #[test]
 fn sync_refusing_exits_1_and_git_failing_exits_2() {
-    // req:sync/rebase@3ba762e9 req:sync/outcome-line@45f1fe6d
+    // req:sync/rebase@3ba762e9 req:sync/outcome-line@cac8dfb4
     let (dir, work) = conflicting();
     git(&work, &["checkout", "-q", "main"]);
     let out = clm(&work, &["rebase"]);
@@ -396,7 +449,7 @@ fn rebase_without_user_settings(dir: &Path) -> (Option<i32>, String) {
 
 #[test]
 fn a_skipped_proposals_warning_is_written_as_clm_rebase() {
-    // req:sync/warnings-name-the-command@f6774cd0
+    // req:sync/warnings-name-the-command@92bb9d3e
     let (dir, work) = node_a("");
     let ledger = dir.path().join("ledger");
     git(dir.path(), &["init", "-q", ledger.to_str().unwrap()]);
