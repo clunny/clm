@@ -263,9 +263,21 @@ fn pushed_after_the_review() {
         repo.commits.insert("pushed".into(), pushed);
         repo.branches.insert("spec/x".into(), "pushed".into());
     }
+    // The requester's ledger is read only after the fingerprint comparison, so a failing
+    // read doesn't turn the 409 into a 502.
+    let ledger_fails = |fail: bool| {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let fails = &mut repos.get_mut("o/a").unwrap().ref_fails;
+        match fail {
+            true => fails.insert("clm/ledger/clunny/web".into()),
+            false => fails.remove("clm/ledger/clunny/web"),
+        };
+    };
+    ledger_fails(true);
     let body = json!({"fingerprint": shown}).to_string();
     assert_eq!(approve_with(&fake, &cookie, "spec/x", &body), 409);
     assert!(fake.gh.writes().is_empty(), "no write");
+    ledger_fails(false);
     // What the branch is now is approved once the person was shown it.
     assert_eq!(approve(&fake, &cookie, "spec/x"), 200);
 }
