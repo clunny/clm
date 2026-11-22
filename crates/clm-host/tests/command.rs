@@ -1766,11 +1766,17 @@ fn scenario_pr_open_the_change_the_branch_adds() {
         assert!(creates(&gh)[0].contains(&want), "{:?}", creates(&gh));
         assert_eq!(body(&gh), want_body, "{branch}");
     }
-    // `spec/x` whose change `origin/main` already holds, with one commit `edit` beyond it.
+    // `spec/x` whose change `origin/main` already holds, with one commit `edit` beyond it,
+    // which edits the change: a change edited isn't a change added.
     branch_adding(&r, "spec/x", &["x"], "Held. Already.", "the change");
     git(&r.work, &["push", "-q", "origin", "spec/x:main"]);
     git(&r.work, &["fetch", "-q", "origin"]);
-    git(&r.work, &["commit", "-q", "--allow-empty", "-m", "edit"]);
+    write(
+        &r.work,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n## Intent\nEdited. Again.\n",
+    );
+    git(&r.work, &["commit", "-qam", "edit"]);
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
     assert_eq!(code, Some(0), "{err}");
