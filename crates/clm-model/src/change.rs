@@ -1,6 +1,6 @@
 //! Changes under `changes/<id>/`: `change.md` plus `deltas/*.md` (see docs/spec-format.md).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -324,6 +324,26 @@ pub(crate) fn load_changes(files: &Files, violations: &mut Vec<Violation>) -> Ve
             .filter(|p| archived || p.file_name().is_none_or(|n| n != ARCHIVE_DIR));
         out.extend(dirs.filter_map(|d| load_change(files, &d, archived, violations)));
     }
+    // A live change and an archived one sharing an ID: the live one stays, the archived
+    // one is reported at it and left out (`unique-change-ids`).
+    let live: BTreeSet<String> = out
+        .iter()
+        .filter(|c| !c.archived)
+        .map(|c| c.id.clone())
+        .collect();
+    out.retain(|c| {
+        let pair = c.archived && live.contains(&c.id);
+        if pair {
+            let at = changes.join(&c.id).join("change.md");
+            let other = changes.join(ARCHIVE_DIR).join(&c.id).join("change.md");
+            violations.push(v(
+                &at,
+                "model/unique-change-ids",
+                format!("shares its ID with `{}`", other.display()),
+            ));
+        }
+        !pair
+    });
     out
 }
 

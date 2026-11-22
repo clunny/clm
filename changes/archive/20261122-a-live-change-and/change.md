@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-live-change-and-an-archived-one-with-the-same-id-load-as-the-archived-one-alone
 ---
