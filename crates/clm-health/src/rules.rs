@@ -10,19 +10,22 @@ use crate::requirements::requirements;
 use crate::spec::section_lines;
 use crate::{Failure, Section, finding};
 
-/// A requirement's statement: its lines above its first `####` heading, its own heading and
-/// fenced lines left out.
-fn statement(r: &Requirement) -> Vec<&str> {
+/// A requirement's statement, its lines below its heading up to its first line that starts
+/// `####` outside a fenced block, joined by line breaks: as written when `fences`, which
+/// `outside-contract` reads the code spans of, and otherwise with its fenced lines left out,
+/// which `test-placement` reads the sentences of.
+fn statement(r: &Requirement, fences: bool) -> String {
     let lines: Vec<&str> = r.text.lines().collect();
     let mask = fence_mask(&lines);
-    lines
+    let kept: Vec<&str> = lines
         .iter()
         .zip(mask)
         .skip(1)
         .take_while(|(l, fenced)| *fenced || !l.starts_with("####"))
-        .filter(|(_, fenced)| !fenced)
+        .filter(|(_, fenced)| fences || !fenced)
         .map(|(l, _)| *l)
-        .collect()
+        .collect();
+    kept.join("\n")
 }
 
 /// Whether `s` is an identifier: a letter or `_`, then letters, digits or `_`.
@@ -67,16 +70,16 @@ fn code_name(span: &str) -> Option<&str> {
     (list || name.contains("::") || camel).then_some(name)
 }
 
-/// Each distinct code name in a requirement's statement, in the order it first appears.
-fn code_names(r: &Requirement) -> Vec<&str> {
-    let mut names = Vec::new();
-    for line in statement(r) {
-        for span in line.split('`').skip(1).step_by(2) {
-            if let Some(name) = code_name(span)
-                && !names.contains(&name)
-            {
-                names.push(name);
-            }
+/// Each distinct code name in a requirement's statement, in the order it first appears, its
+/// code spans read as `check/asset-references` reads them (`clm_check::code_spans`).
+fn code_names(r: &Requirement) -> Vec<String> {
+    let statement = statement(r, true);
+    let mut names: Vec<String> = Vec::new();
+    for (_, span) in clm_check::code_spans(&statement) {
+        if let Some(name) = code_name(span)
+            && !names.iter().any(|n| n == name)
+        {
+            names.push(name.to_string());
         }
     }
     names
@@ -88,7 +91,7 @@ pub(crate) fn outside_contract(graph: &Graph) -> Section {
         .flat_map(|(n, r)| {
             code_names(r)
                 .into_iter()
-                .filter(|name| !n.contract.contains(name))
+                .filter(|name| !n.contract.contains(name.as_str()))
                 .map(move |name| {
                     finding(
                         n.path.display(),
@@ -106,7 +109,7 @@ pub(crate) fn outside_contract(graph: &Graph) -> Section {
 pub(crate) fn test_placement(graph: &Graph) -> Section {
     let lines = requirements(graph)
         .filter_map(|(n, r)| {
-            let statement = statement(r).join("\n");
+            let statement = statement(r, false);
             let phrase = clm_gate::sentences(&statement)
                 .into_iter()
                 .find_map(clm_gate::places_a_test)?;

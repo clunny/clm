@@ -8,12 +8,22 @@ fn decision(status: &str, body: &str) -> String {
 
 #[test]
 fn scenario_cited_and_uncited() {
-    // req:check.health/uncited-decisions@4dc76b14
+    // req:check.health/uncited-decisions@75eb7c81
     let dir = repo();
     let d = dir.path();
     let mut a = spec("[]", &["x"]);
     a.push_str("\nWe keep `kept` here.\n");
     write(d, "specs/a/SPEC.md", &a);
+    // `lone` only as part of a span: a path, and the name with a suffix.
+    write(
+        d,
+        "ARCHITECTURE.md",
+        "See `docs/decisions/lone.md`, `lone-ish` and `Lone`.\n",
+    );
+    // `lone` as a whole span, in a file that isn't UTF-8 text.
+    std::fs::write(d.join("CLAUDE.md"), b"Rule `lone`, \xff.\n").unwrap();
+    // A single backtick before `lone` with no backtick after it in its block opens no span.
+    write(d, "AGENTS.md", "Rule `other`, then `lone\n");
     write(d, "docs/decisions/kept.md", &decision("accepted", "Kept."));
     write(d, "docs/decisions/lone.md", &decision("accepted", "Alone."));
     write(d, "docs/decisions/old.md", &decision("superseded", "Old."));
@@ -30,7 +40,7 @@ fn scenario_cited_and_uncited() {
 
 #[test]
 fn scenario_named_only_in_a_fence() {
-    // req:check.health/uncited-decisions@4dc76b14
+    // req:check.health/uncited-decisions@75eb7c81
     let dir = repo();
     let d = dir.path();
     let mut a = spec("[]", &["x"]);
@@ -46,7 +56,7 @@ fn scenario_named_only_in_a_fence() {
 
 #[test]
 fn every_other_source_cites_a_decision() {
-    // req:check.health/uncited-decisions@4dc76b14
+    // req:check.health/uncited-decisions@75eb7c81
     let dir = repo();
     let d = dir.path();
     write(d, "ARCHITECTURE.md", "Invariant `by-arch`.\n");
