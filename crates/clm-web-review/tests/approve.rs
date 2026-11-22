@@ -425,18 +425,13 @@ fn approve_over_a_request() {
                "kind": "changes_requested", "branch": branch, "fingerprint": fingerprint,
                "text": "Split it"})
     };
-    ledger(
-        &mut repo,
-        "alice/web",
-        "LA",
-        &[
-            request("r1", "alice/web", "spec/x", &f),
-            request("r3", "alice/web", "spec/x", "g"),
-            request("r4", "alice/web", "spec/y", &f),
-            // A line of another person's in her ledger isn't hers to clear.
-            request("r5", "dana/web", "spec/x", &f),
-        ],
-    );
+    let mut alices = vec![
+        request("r3", "alice/web", "spec/x", "g"),
+        request("r4", "alice/web", "spec/y", &f),
+        // A line of another person's in her ledger isn't hers to clear.
+        request("r5", "dana/web", "spec/x", &f),
+    ];
+    ledger(&mut repo, "alice/web", "LA0", &alices);
     ledger(
         &mut repo,
         "dana/web",
@@ -448,8 +443,19 @@ fn approve_over_a_request() {
     for token in ["ta", "tb"] {
         fake.gh.grant(token, "o/a");
     }
-    let body = json!({"fingerprint": f}).to_string();
     let alice = fake.cookie_as("ta", "alice");
+    // The review caches the fold; alice's request `r1` comes after it, so only a read of
+    // her ledger at its tip finds it.
+    let review = fake.handle(get("/api/repos/o/a/branches/spec/x/review", &alice));
+    assert_eq!(review.status, 200);
+    alices.insert(0, request("r1", "alice/web", "spec/x", &f));
+    ledger(
+        fake.gh.repos.borrow_mut().get_mut("o/a").unwrap(),
+        "alice/web",
+        "LA",
+        &alices,
+    );
+    let body = json!({"fingerprint": f}).to_string();
     assert_eq!(approve_with(&fake, &alice, "spec/x", &body), 200);
     let approved = records(&fake, "clm/ledger/alice/web").pop().unwrap();
     assert_eq!(approved["kind"], "approved");

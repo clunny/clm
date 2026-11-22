@@ -388,6 +388,10 @@ fn cleared() {
             json!({"id": "a2", "writer": "carol/9f", "at": "2027-01-15T07:25:00.000Z",
                    "kind": "approved", "fingerprint": f, "branch": "spec/x", "change": "x",
                    "clears": []}),
+            // An approval written before approvals named their requests clears by time.
+            request("r4", "erin/web", "2027-01-15T07:30:00.000Z"),
+            json!({"id": "a3", "writer": "erin/7e", "at": "2027-01-15T07:40:00.000Z",
+                   "kind": "approved", "fingerprint": f, "branch": "spec/x", "change": "x"}),
         ];
         ledger(repo, "alice/web", "LA", &records);
     }
@@ -406,6 +410,11 @@ fn cleared() {
         .collect();
     assert_eq!(
         held,
-        [("r1", true, false), ("r2", true, true), ("r3", true, true)]
+        [
+            ("r1", true, false),
+            ("r2", true, true),
+            ("r3", true, true),
+            ("r4", true, false)
+        ]
     );
 }
