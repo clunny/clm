@@ -266,8 +266,11 @@ fn accepted_decision(root: &Path, sha: &str, name: &str) -> bool {
 enum Rated {
     Code,
     /// Recorded as a land of a branch the gate read as `light` (`landed-record-fields`): only
-    /// whether it needed review is recomputed.
-    Light,
+    /// whether it needed review is recomputed. `review` is what the record says, which `clm
+    /// land` writes false.
+    Light {
+        review: bool,
+    },
     Spec {
         review: bool,
     },
@@ -277,14 +280,17 @@ enum Rated {
 impl Rated {
     fn rank(self) -> u8 {
         match self {
-            Rated::Code | Rated::Light | Rated::Spec { review: false } => 0,
-            Rated::Spec { review: true } => 1,
+            Rated::Code | Rated::Light { review: false } | Rated::Spec { review: false } => 0,
+            Rated::Light { review: true } | Rated::Spec { review: true } => 1,
             Rated::Mixed => 2,
         }
     }
 
     fn needs_review(self) -> bool {
-        self == Rated::Spec { review: true }
+        matches!(
+            self,
+            Rated::Spec { review: true } | Rated::Light { review: true }
+        )
     }
 
     /// As a `landed` record states it; `None` for any other record. `review` on a code land,
@@ -294,9 +300,9 @@ impl Rated {
         match &record.body {
             Body::Landed {
                 light: true,
-                review: false,
+                review,
                 ..
-            } => Some(Rated::Light),
+            } => Some(Rated::Light { review: *review }),
             Body::Landed {
                 kind: LandKind::Code,
                 review: false,
@@ -327,7 +333,7 @@ impl std::fmt::Display for Rated {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Rated::Code => "code",
-            Rated::Light => "light",
+            Rated::Light { .. } => "light",
             Rated::Mixed => "mixed",
             Rated::Spec { review: false } => "spec",
             Rated::Spec { review: true } => "spec review",
@@ -391,12 +397,12 @@ fn audit_signed(
             // A light land is judged only by whether it needed review, as the gate's rules
             // version decides it, whatever kind the gate gives: the gate's `review` for a spec
             // branch, and whether its spec part would need review for any other.
-            Ok(outcome) if rated == Rated::Light => {
+            Ok(outcome) if matches!(rated, Rated::Light { .. }) => {
                 let review = match outcome.kind {
                     clm_gate::Kind::Spec => outcome.review,
                     _ => outcome.spec_part_review,
                 };
-                if review {
+                if review && !rated.needs_review() {
                     findings.push(finding(
                         "ledger/understated-land",
                         format!("landed {sha}: recorded light, the gate gives spec review"),

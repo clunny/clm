@@ -2683,21 +2683,21 @@ fn scenarios_added(id: &str, scenarios: usize) -> Vec<(String, String)> {
 }
 
 /// Merges branch `name` writing `files`, its merge commit ending with `ending`, and appends
-/// its land recorded as light, code and no review, signed by `key`: the merge commit, and
-/// the gate's outcome for it against its first parent under `RULES`.
+/// its land recorded as light, code and no review, signed by `key`: the merge commit, its
+/// fingerprint, and the gate's outcome for it against its first parent under `RULES`.
 fn light_land(
     dir: &Path,
     key: &Path,
     name: &str,
     files: &[(String, String)],
     ending: &str,
-) -> (String, clm_gate::Outcome) {
+) -> (String, String, clm_gate::Outcome) {
     let files: Vec<(&str, &str)> = files.iter().map(|(p, t)| (&p[..], &t[..])).collect();
     let (merge, fingerprint) = merge_files_ending(dir, name, &files, ending);
     let land = land_as(dir, &merge, &fingerprint, LandKind::Code, false).with_light(true);
     append_signed(dir, "christopher-lunny", key, "clm-land", land);
     let outcome = clm_gate::evaluate_at(dir, &format!("{merge}^1"), &merge, false).unwrap();
-    (merge, outcome)
+    (merge, fingerprint, outcome)
 }
 
 #[test]
@@ -2731,13 +2731,13 @@ fn review_a_light_land() {
     // Light: a scenario added to `a/x` with `a`'s code, under the rules that have the route.
     let mut files = scenarios_added("c1", 2);
     files.push(("crates/a/src/lib.rs".into(), "pub fn a1() {}\n".into()));
-    let (light, outcome) = light_land(root, &christopher, "light", &files, "Gate-Rules: 7");
+    let (light, _, outcome) = light_land(root, &christopher, "light", &files, "Gate-Rules: 7");
     assert_eq!(outcome.kind, clm_gate::Kind::Light, "{outcome:?}");
 
     // Mixed, its spec part needing no review: a scenario added with `b`'s code.
     let mut files = scenarios_added("c2", 3);
     files.push(("crates/b/src/lib.rs".into(), "pub fn b1() {}\n".into()));
-    let (mixed, outcome) = light_land(root, &christopher, "mixed", &files, "");
+    let (mixed, _, outcome) = light_land(root, &christopher, "mixed", &files, "");
     assert_eq!(
         (outcome.kind, outcome.spec_part_review),
         (clm_gate::Kind::Mixed, false),
@@ -2749,16 +2749,17 @@ fn review_a_light_land() {
         ("ARCHITECTURE.md".to_string(), "invariants\n".to_string()),
         ("crates/a/src/lib.rs".into(), "pub fn a2() {}\n".into()),
     ];
-    let (architecture, outcome) = light_land(root, &christopher, "architecture", &files, "");
+    let (architecture, fingerprint, outcome) =
+        light_land(root, &christopher, "architecture", &files, "");
     assert!(outcome.spec_part_review, "{outcome:?}");
 
-    let (code, findings, out) = findings(root, &["--review"]);
+    let (code, unapproved, out) = findings(root, &["--review"]);
     assert_eq!(code, Some(1), "{out}");
     let want = [
         ("ledger/understated-land", architecture.as_str()),
         ("ledger/unapproved-land", &architecture),
     ];
-    assert_eq!(findings, found(&want), "{out}");
+    assert_eq!(unapproved, found(&want), "{out}");
     assert!(
         out.lines().next().unwrap().ends_with(&format!(
             "landed {architecture}: recorded light, the gate gives spec review"
@@ -2766,4 +2767,20 @@ fn review_a_light_land() {
         "{out}"
     );
     assert!(!out.contains(&light) && !out.contains(&mixed), "{out}");
+
+    // Approved, as the land needed: the understated record alone.
+    append_signed(
+        root,
+        "christopher-lunny",
+        &christopher,
+        "clm-approve",
+        approved(&fingerprint),
+    );
+    let (code, approved_findings, out) = findings(root, &["--review"]);
+    assert_eq!(code, Some(1), "{out}");
+    assert_eq!(
+        approved_findings,
+        found(&[("ledger/understated-land", &architecture)]),
+        "{out}"
+    );
 }
