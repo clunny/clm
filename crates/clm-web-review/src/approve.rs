@@ -54,11 +54,24 @@ pub async fn branch<P: Platform>(
     if pin != fingerprint {
         return Response::empty(409);
     }
-    let record = ledger::record(
-        p,
-        login,
-        Body::approved(fingerprint, branch.into(), change_of(&changed, &trees.head)),
-    );
+    // The requests it clears are read from the requester's own web ledger at its tip, not
+    // the minute-old fold: only the web app writes a request, each to its writer's own web
+    // ledger, so that one holds every request of theirs (`ledger/request-cleared`).
+    let Some(own) = ledger::own(p, access, login).await else {
+        return Response::empty(502);
+    };
+    let clears = own
+        .change_requests
+        .get(branch)
+        .into_iter()
+        .flatten()
+        .filter(|r| clm_ledger::person(&r.writer) == login)
+        .filter(|r| matches!(&r.body, Body::ChangesRequested { fingerprint: f, .. } if *f == fingerprint))
+        .map(|r| r.id.clone())
+        .collect();
+    let body = Body::approved(fingerprint, branch.into(), change_of(&changed, &trees.head))
+        .with_clears(clears);
+    let record = ledger::record(p, login, body);
     match ledger::append(p, access, &record).await {
         Some(()) => Response::empty(200),
         None => Response::empty(502),

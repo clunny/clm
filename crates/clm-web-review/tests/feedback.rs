@@ -89,7 +89,7 @@ fn writes(fake: &Fake) -> Vec<(String, String)> {
 
 #[test]
 fn comment_on_a_requirement() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     let (fake, cookie) = setup("read");
     let f = fingerprint(&fake);
     let res = send(
@@ -134,7 +134,7 @@ fn comment_on_a_requirement() {
 
 #[test]
 fn unknown_target() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     let (fake, cookie) = setup("read");
     let f = fingerprint(&fake);
     let res = send(
@@ -190,7 +190,7 @@ fn unknown_target() {
 
 #[test]
 fn refused_bodies_and_branches() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     let (fake, cookie) = setup("write");
     for (body, field) in [
         (json!({"target": null, "text": "x"}), "fingerprint"),
@@ -238,7 +238,7 @@ fn refused_bodies_and_branches() {
 
 #[test]
 fn changes_requested() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     let (fake, cookie) = setup("write");
     {
         let mut repos = fake.gh.repos.borrow_mut();
@@ -277,7 +277,7 @@ fn changes_requested() {
 
 #[test]
 fn admins_can_hold_a_land() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     let (fake, cookie) = setup("admin");
     let f = fingerprint(&fake);
     let res = send(
@@ -291,7 +291,7 @@ fn admins_can_hold_a_land() {
 
 #[test]
 fn a_reader_cant_hold_a_land() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     for permission in ["read", "none"] {
         let (fake, cookie) = setup(permission);
         let f = fingerprint(&fake);
@@ -317,7 +317,7 @@ fn a_reader_cant_hold_a_land() {
 
 #[test]
 fn moved() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     let (fake, cookie) = setup("write");
     let res = send(
         &fake,
@@ -332,7 +332,7 @@ fn moved() {
 
 #[test]
 fn truncated_listing() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     let (fake, cookie) = setup("write");
     let f = fingerprint(&fake);
     let at = "2027-01-15T07:00:00.000Z";
@@ -365,7 +365,7 @@ fn truncated_listing() {
 
 #[test]
 fn cleared() {
-    // req:web.worker.review/review-feedback@3d004f4e
+    // req:web.worker.review/review-feedback@bb8c3fbe
     let (fake, cookie) = setup("write");
     let f = fingerprint(&fake);
     {
@@ -377,13 +377,17 @@ fn cleared() {
         };
         let records = [
             request("r1", "alice/web", "2027-01-15T07:00:00.000Z"),
-            json!({"id": "a1", "writer": "alice/1a2b3c4d", "at": "2027-01-15T07:10:00.000Z",
-                   "kind": "approved", "fingerprint": f, "branch": "spec/x", "change": "x"}),
+            // An approval that names the request clears it, whatever either clock said.
+            json!({"id": "a1", "writer": "alice/1a2b3c4d", "at": "2027-01-15T06:50:00.000Z",
+                   "kind": "approved", "fingerprint": f, "branch": "spec/x", "change": "x",
+                   "clears": ["r1"]}),
             request("r2", "bob/web", "2027-01-15T07:05:00.000Z"),
-            // An approval before the request doesn't clear it.
+            // A later approval by the requester's person that doesn't name the request
+            // leaves it held.
             request("r3", "carol/web", "2027-01-15T07:20:00.000Z"),
-            json!({"id": "a2", "writer": "carol/9f", "at": "2027-01-15T07:15:00.000Z",
-                   "kind": "approved", "fingerprint": f, "branch": "spec/x", "change": "x"}),
+            json!({"id": "a2", "writer": "carol/9f", "at": "2027-01-15T07:25:00.000Z",
+                   "kind": "approved", "fingerprint": f, "branch": "spec/x", "change": "x",
+                   "clears": []}),
         ];
         ledger(repo, "alice/web", "LA", &records);
     }
