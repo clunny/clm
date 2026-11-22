@@ -3,12 +3,46 @@
 //! branch names its fingerprint and its writer's person hasn't approved it with the request
 //! named (`ledger/request-cleared`), `clm land` refuses it, printing what the reviewers asked.
 
-use clm_ledger::{Body, Fold};
+use std::convert::Infallible;
+
+use clm_ledger::{Body, Fold, Record};
+
+use crate::{Error, Repo};
+
+impl Repo<'_> {
+    /// The refusal for `branch` at `fingerprint` when a request for changes holds it, as the
+    /// free `held` gives it, except that where `signed`, the base commit, is signed, only an
+    /// approval whose signature checks there clears a request (`ledger`'s `cleared_at`).
+    pub fn held(
+        &self,
+        fold: &Fold,
+        branch: &str,
+        fingerprint: &str,
+        signed: Option<&str>,
+    ) -> Result<Option<String>, Error> {
+        refusal(fold, branch, fingerprint, |request| match signed {
+            Some(base) => Ok(fold.cleared_at(&self.root, base, request)?),
+            None => Ok(fold.cleared(request)),
+        })
+    }
+}
 
 /// The refusal for `branch` at `fingerprint` when a request for changes holds it: one
 /// `land/changes-requested` line per holding request, one `land/comment` line per comment
-/// at the fingerprint, and what clears it. None when nothing holds it.
+/// at the fingerprint, and what clears it. None when nothing holds it. Checks no signature.
 pub fn held(fold: &Fold, branch: &str, fingerprint: &str) -> Option<String> {
+    let cleared = |request: &Record| Ok::<_, Infallible>(fold.cleared(request));
+    let Ok(out) = refusal(fold, branch, fingerprint, cleared);
+    out
+}
+
+/// `held`'s refusal, with whether a request is cleared asked of `cleared`.
+fn refusal<E>(
+    fold: &Fold,
+    branch: &str,
+    fingerprint: &str,
+    mut cleared: impl FnMut(&Record) -> Result<bool, E>,
+) -> Result<Option<String>, E> {
     // Under a heading of their own, as the gate's violations print in a refusal, so each
     // violation line starts its line in `check`'s format.
     let mut lines = vec!["a request for changes holds the land:".to_string()];
@@ -22,7 +56,7 @@ pub fn held(fold: &Fold, branch: &str, fingerprint: &str) -> Option<String> {
             continue;
         };
         // Whether the requester cleared it is ledger's rule, the one the web app shows too.
-        if at_fp == fingerprint && !fold.cleared(request) {
+        if at_fp == fingerprint && !cleared(request)? {
             lines.push(format!(
                 "{branch}: land/changes-requested: {} at {}: {}",
                 request.writer,
@@ -32,7 +66,7 @@ pub fn held(fold: &Fold, branch: &str, fingerprint: &str) -> Option<String> {
         }
     }
     if lines.len() == 1 {
-        return None;
+        return Ok(None);
     }
     for comment in fold.comments.get(branch).into_iter().flatten() {
         if let Body::Commented {
@@ -56,7 +90,7 @@ pub fn held(fold: &Fold, branch: &str, fingerprint: &str) -> Option<String> {
         "a reviewer asked for changes to this diff ({fingerprint}): push a change to \
          `{branch}`, or have the requester run `clm approve {branch}`"
     ));
-    Some(lines.join("\n"))
+    Ok(Some(lines.join("\n")))
 }
 
 /// `text` trimmed, each run of whitespace that holds a line break made one space.
@@ -85,7 +119,7 @@ mod tests {
 
     #[test]
     fn text_flattened() {
-        // req:land.approval/request-refusal@62c49c32
+        // req:land.approval/request-refusal@8d639b0f
         assert_eq!(flat("  a\n  b\r\n\tc  d\t e \n"), "a b c  d\t e");
         assert_eq!(flat("one"), "one");
     }

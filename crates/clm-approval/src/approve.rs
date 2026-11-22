@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use clm_ledger::Body;
+use clm_ledger::{Body, person};
 
 use crate::{Env, Error, Output, Repo, sign};
 
@@ -40,14 +40,41 @@ pub fn approve(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, E
         )));
     }
     let change = repo.changes(&head)?.into_iter().next();
-    let body = Body::approved(fingerprint.clone(), branch.clone(), change);
+    let clears = repo.clears(&branch, &fingerprint)?;
+    let body = Body::approved(fingerprint.clone(), branch.clone(), change).with_clears(clears);
     // Signed when the `main` fetched holds `docs/allowed_signers` (`signed-approve`).
-    match repo.signed(&base)? {
+    let appended = match repo.signed(&base)? {
         true => repo.append(repo.sign(body, sign::APPROVE)?)?,
         false => repo.append(body)?,
     };
+    let mut warnings = Vec::new();
+    if !appended.pushed {
+        warnings.push(format!(
+            "the approval isn't on origin yet, so no other clone counts it: git push origin \
+             clm/ledger/{}",
+            appended.record.writer
+        ));
+    }
     Ok(Output {
         lines: vec![format!("approved {fingerprint} {branch}")],
-        warnings: Vec::new(),
+        warnings,
     })
+}
+
+impl Repo<'_> {
+    /// The `id` of every `changes_requested` record the fold holds, after the fetch, for
+    /// `branch` at `fingerprint` whose writer's person is the approver's, cleared before or
+    /// not: the requests the approval clears (`ledger/request-cleared`).
+    fn clears(&self, branch: &str, fingerprint: &str) -> Result<Vec<String>, Error> {
+        let fold = clm_ledger::fold(&self.root)?;
+        let approver = clm_ledger::writer(&self.root, self.env)?;
+        let requests = fold.change_requests.get(branch).into_iter().flatten();
+        Ok(requests
+            .filter(|r| {
+                matches!(&r.body, Body::ChangesRequested { fingerprint: f, .. } if f == fingerprint)
+                    && person(&r.writer) == person(&approver)
+            })
+            .map(|r| r.id.clone())
+            .collect())
+    }
 }
