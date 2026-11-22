@@ -322,6 +322,42 @@ const PUSH_TO_MAIN_FAILS: &str = "if [ \"$1\" = push ]; then for a in \"$@\"; do
      case \"$a\" in *:refs/heads/main) echo 'fake refusal' >&2; exit 1;; esac; done; fi";
 
 #[test]
+fn main_moved_and_said() {
+    // req:land/land@db059c83
+    let f = Fixture::new("");
+    let head = f.branch("impl/a", &[("b.txt", "b\n")]);
+    // Before the first push to `main`, another commit lands on `origin`'s `main`; the real
+    // push then fails its lease.
+    let (mark, other, moved) = (f.path("main-moved"), f.path("other"), f.path("moved-to"));
+    let before = format!(
+        "if [ \"$1\" = push ] && [ ! -e '{m}' ]; then for a in \"$@\"; do \
+         case \"$a\" in *:refs/heads/main) touch '{m}'; \
+         \"$REAL\" -C '{o}' pull -q --ff-only origin main; \
+         \"$REAL\" -C '{o}' commit -q --allow-empty -m 'main moved'; \
+         \"$REAL\" -C '{o}' push -q origin HEAD:main; \
+         \"$REAL\" -C '{o}' rev-parse HEAD > '{t}';; esac; done; fi",
+        m = mark.display(),
+        o = other.display(),
+        t = moved.display()
+    );
+    let path = fake_git(&f, &before, "");
+    let out = with_var("PATH", &path, || {
+        land(&f, &f.work(), &["impl/a"], &[("PATH", &path)])
+    });
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let moved = f.lines("moved-to").remove(0);
+    let main = f.remote("main");
+    assert_eq!(f.parents(&f.path("origin.git"), &main), [moved, head]);
+    let said = "clm land: warning: main moved during attempt 1; trying again";
+    assert_eq!(
+        out.stderr.lines().filter(|l| *l == said).count(),
+        1,
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn refetch_fails() {
     // req:land/land-push-retry@8a065338
     let f = Fixture::new("");
