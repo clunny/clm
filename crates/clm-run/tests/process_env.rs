@@ -75,7 +75,7 @@ fn scenario_claimed_elsewhere() {
 #[cfg(unix)]
 #[test]
 fn scenario_worktree_git_cant_remove() {
-    // req:orchestrator.run/run-finish@d5712fa9
+    // req:orchestrator.run/run-finish@17d6dafb
     let _env = into_process();
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
