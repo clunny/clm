@@ -503,6 +503,22 @@ impl<'a> Repo<'a> {
     ) -> Result<Vec<clm_ledger::Appended>, Error> {
         Ok(clm_ledger::append_all(&self.root, entries, self.env)?)
     }
+
+    /// `append_all` of a land's records once `main` holds its merge commit: a failure is git's,
+    /// exit 2, and says that `main` holds the land and that landing `branch` again records it
+    /// (`land/land-push-retry`, `land/unrecorded-land-finished`).
+    fn append_landed(
+        &self,
+        entries: Vec<clm_ledger::Entry>,
+        branch: &str,
+    ) -> Result<Vec<clm_ledger::Appended>, Error> {
+        clm_ledger::append_all(&self.root, entries, self.env).map_err(|e| {
+            Error::Git(format!(
+                "{e}\n`main` holds the land, but its records weren't written: run \
+                 `clm land {branch}` again to record it"
+            ))
+        })
+    }
 }
 
 /// The times a passing `[land] check` took, for the `landed` record (`land/step-times`).

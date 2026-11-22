@@ -37,7 +37,7 @@ fn landed_commits(f: &Fixture) -> Vec<String> {
 
 #[test]
 fn one_transient_refusal() {
-    // req:land/land-push-retry@94d61d9c
+    // req:land/land-push-retry@8a065338
     let f = Fixture::new("");
     f.hook(Some(&main_hook("[ \"$n\" -eq 1 ]")));
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -53,7 +53,7 @@ fn one_transient_refusal() {
 
 #[test]
 fn refused_every_time_then_rerun() {
-    // req:land/land-push-retry@94d61d9c
+    // req:land/land-push-retry@8a065338
     let f = Fixture::new("");
     f.hook(Some(&main_hook("true")));
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -94,7 +94,7 @@ fn refused_every_time_then_rerun() {
 
 #[test]
 fn ledger_push_refused() {
-    // req:land/land-push-retry@94d61d9c
+    // req:land/land-push-retry@8a065338
     let f = Fixture::new("");
     f.hook(Some(
         r#"

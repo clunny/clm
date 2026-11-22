@@ -323,7 +323,7 @@ const PUSH_TO_MAIN_FAILS: &str = "if [ \"$1\" = push ]; then for a in \"$@\"; do
 
 #[test]
 fn refetch_fails() {
-    // req:land/land-push-retry@94d61d9c
+    // req:land/land-push-retry@8a065338
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
@@ -346,7 +346,7 @@ fn refetch_fails() {
 
 #[test]
 fn pushed_though_git_failed() {
-    // req:land/land-push-retry@94d61d9c
+    // req:land/land-push-retry@8a065338
     let f = Fixture::new("");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
     // A `git` that pushes to `main` and then reports a failure whatever happened.
@@ -365,6 +365,77 @@ fn pushed_though_git_failed() {
         .filter(|b| matches!(b, Body::Landed { commit, .. } if *commit == main))
         .collect();
     assert_eq!(landed.len(), 1);
+}
+
+#[test]
+fn pushed_and_built_on() {
+    // req:land/land-push-retry@8a065338
+    let f = Fixture::new("");
+    let head = f.branch("impl/a", &[("b.txt", "b\n")]);
+    // A `git` whose push to `main` goes through, and then another land builds on it before
+    // the push is reported refused.
+    let built_on = "if [ \"$1\" = push ] && [ $status = 0 ]; then for a in \"$@\"; do \
+         case \"$a\" in *:refs/heads/main) m=${a%%:*}; \
+         next=$(\"$REAL\" commit-tree \"$m^{tree}\" -p \"$m\" -m 'built on'); \
+         \"$REAL\" push -q origin \"$next:refs/heads/main\"; exit 1;; esac; done; fi";
+    let path = fake_git(&f, "", built_on);
+    let out = with_var("PATH", &path, || {
+        land(&f, &f.work(), &["impl/a"], &[("PATH", &path)])
+    });
+    let stdout = out.stdout;
+    assert_eq!(out.code, 0, "{stdout}{}", out.stderr);
+    let main = f.remote("main");
+    let merge = f.parents(&f.path("origin.git"), &main)[0].clone();
+    assert_eq!(f.parents(&f.path("origin.git"), &merge)[1], head);
+    assert_eq!(
+        stdout.lines().next(),
+        Some(&*format!("landed {merge} code"))
+    );
+    let landed: Vec<_> = f
+        .landed()
+        .into_iter()
+        .filter(|b| matches!(b, Body::Landed { commit, .. } if *commit == merge))
+        .collect();
+    assert_eq!(landed.len(), 1);
+}
+
+#[test]
+fn append_fails_after_the_push() {
+    // req:land/land-push-retry@8a065338
+    let f = Fixture::new("");
+    let head = f.branch("impl/a", &[("b.txt", "b\n")]);
+    // Once a push to `main` has gone through, every write to a ledger ref fails.
+    let mark = f.path("pushed");
+    let before = format!(
+        "if [ -e '{m}' ] && [ \"$1\" = update-ref ]; then case \"$2\" in *clm/ledger/*) \
+         echo 'fake ledger failure' >&2; exit 1;; esac; fi",
+        m = mark.display()
+    );
+    let after = format!(
+        "if [ \"$1\" = push ] && [ $status = 0 ]; then for a in \"$@\"; do \
+         case \"$a\" in *:refs/heads/main) touch '{m}';; esac; done; fi",
+        m = mark.display()
+    );
+    let path = fake_git(&f, &before, &after);
+    let out = with_var("PATH", &path, || {
+        land(&f, &f.work(), &["impl/a"], &[("PATH", &path)])
+    });
+    let stderr = out.stderr;
+    assert_eq!(out.code, 2, "{stderr}");
+    assert!(stderr.contains("fake ledger failure"), "{stderr}");
+    assert!(stderr.contains("`main` holds the land"), "{stderr}");
+    assert!(stderr.contains("`clm land impl/a`"), "{stderr}");
+    let merge = f.remote("main");
+    assert_eq!(f.parents(&f.path("origin.git"), &merge)[1], head);
+    assert!(f.landed().is_empty());
+    // Again, the script gone: the land is finished, nothing merged.
+    let out = land(&f, &f.work(), &["impl/a"], &[]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(
+        out.stdout.lines().next(),
+        Some(&*format!("landed {merge} code"))
+    );
+    assert_eq!(f.remote("main"), merge);
 }
 
 #[test]

@@ -217,7 +217,7 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
     let Some(found) = found else {
         return Err(refuse("it isn't a land `clm land` would have made"));
     };
-    let appended = repo.append_all(entries)?;
+    let appended = repo.append_landed(entries, ctx.branch)?;
     if let Some(last) = appended.last()
         && !last.pushed
     {

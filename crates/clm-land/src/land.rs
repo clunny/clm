@@ -696,7 +696,7 @@ pub(crate) fn land_into(
         let mut entries: Vec<clm_ledger::Entry> = effort.iter().cloned().map(Into::into).collect();
         entries.push(landed);
         let appended = repo
-            .append_all(entries)?
+            .append_landed(entries, &branch)?
             .pop()
             .expect("the landed record was appended last");
 
