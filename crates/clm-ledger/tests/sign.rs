@@ -12,11 +12,7 @@ use common::{clone_with_origin, commit, env, git_alone, repo, sh};
 use serde_json::{Map, Value};
 
 fn approved(fingerprint: &str) -> Body {
-    Body::Approved {
-        fingerprint: fingerprint.into(),
-        branch: "spec/x".into(),
-        change: Some("x".into()),
-    }
+    Body::approved(fingerprint.into(), "spec/x".into(), Some("x".into()))
 }
 
 /// A fresh ed25519 key pair at `dir/<name>`: the private key's path and the public key.
@@ -158,6 +154,7 @@ fn signed_message_keeps_the_line_as_written() {
         commit: "c".into(),
         branch: "impl/x".into(),
         kind: clm_ledger::LandKind::Code,
+        light: false,
         review: false,
         fingerprint: "f".into(),
         code_key: None,
@@ -528,7 +525,7 @@ fn no_tool() {
 
 #[test]
 fn one_person_part() {
-    // req:ledger/request-cleared@3e4c06c9
+    // req:ledger/request-cleared@8069ffc9
     // An approval by the writer `dana`, with no `/`, signed with dana's key, clears dana/web's
     // earlier request, and `signed_by` checks it for `dana`.
     let dir = tempfile::tempdir().unwrap();
@@ -564,4 +561,104 @@ fn one_person_part() {
     let fold = clm_ledger::fold_records(&[("origin/clm/ledger/dana/web", &text)]);
     assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
     assert!(fold.cleared(&fold.change_requests["spec/x"][0]));
+}
+
+/// `approved(fingerprint)` whose `clears` is `clears`.
+fn clearing(fingerprint: &str, clears: &[&str]) -> Body {
+    approved(fingerprint).with_clears(clears.iter().map(|c| c.to_string()).collect())
+}
+
+#[test]
+fn clears_written_and_read() {
+    // req:ledger/request-cleared@8069ffc9
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let clone = clone_with_origin(home, "a", "Ann");
+    let keys = tempfile::tempdir().unwrap();
+    let (key, public) = keygen(keys.path(), "ann");
+    let signers = format!("ann {public}\n");
+    let with = commit(&clone, &[("docs/allowed_signers", &signers)], "signers");
+    use_key(&clone, &key);
+    let owned = vars(home);
+    let vars: Vec<(&str, &str)> = owned.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let env = env(home, &vars);
+
+    let signed = clm_ledger::sign(&clone, clearing("f", &["r1"]), "clm-approve", &env).unwrap();
+    clm_ledger::append(&clone, signed.clone(), &env).unwrap();
+    clm_ledger::append(&clone, clearing("g", &[]), &env).unwrap();
+    clm_ledger::append(&clone, approved("h"), &env).unwrap();
+    let branch = format!("clm/ledger/{}", signed.record.writer);
+    let text = sh(&clone, &["show", &format!("{branch}:records.jsonl")]);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 3, "{text}");
+    assert!(lines[0].contains(r#""clears":["r1"]"#), "{}", lines[0]);
+    assert!(lines[1].contains(r#""clears":[]"#), "{}", lines[1]);
+    assert!(!lines[2].contains("clears"), "{}", lines[2]);
+    let first: Map<String, Value> = serde_json::from_str(lines[0]).unwrap();
+    assert!(clm_ledger::signed_by(&clone, &with, &first, "clm-approve").unwrap());
+
+    let odd = |id: &str, clears: &str| {
+        format!(
+            r#"{{"id":"{id}","kind":"approved","writer":"ann/1","at":"2026-01-01T00:00:00.000Z","fingerprint":"f","branch":"spec/x","change":null,"clears":{clears}}}"#
+        )
+    };
+    let read = format!("{text}\n{}\n{}\n", odd("o1", r#""r1""#), odd("o2", "null"));
+    let fold = clm_ledger::fold_records(&[("origin/clm/ledger/ann/1", &read)]);
+    assert_eq!(fold.records.len(), 3, "{:?}", fold.records);
+    assert_eq!(fold.warnings.len(), 2, "{:?}", fold.warnings);
+    for (warning, n) in fold.warnings.iter().zip([4, 5]) {
+        let start = format!("origin/clm/ledger/ann/1 line {n}: skipped, not a record: ");
+        assert!(warning.starts_with(&start), "{warning}");
+    }
+    let clears = |f: &str| match &fold.approvals[f][0].body {
+        Body::Approved { clears, .. } => clears.clone(),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(clears("f"), Some(vec!["r1".to_string()]));
+    assert_eq!(clears("g"), Some(vec![]));
+    assert_eq!(clears("h"), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_signed_repository() {
+    // req:ledger/request-cleared@8069ffc9
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let s = signers(root);
+    let request = r#"{"id":"r1","kind":"changes_requested","writer":"dana/web","at":"2026-10-30T07:10:00.000Z","branch":"spec/x","fingerprint":"f","text":"t"}"#;
+    let unsigned = serde_json::to_string(&clm_ledger::Record {
+        id: "a1".into(),
+        writer: "dana/1a2b3c4d".into(),
+        at: "2026-10-30T07:11:00.000Z".into(),
+        body: clearing("f", &["r1"]),
+    })
+    .unwrap();
+    let signed = signed_line(root, "dana", &s.dana, "clm-approve", clearing("f", &["r1"]));
+    let fold_with = |approval: &str| {
+        let text = format!("{request}\n{approval}\n");
+        let fold = clm_ledger::fold_records(&[("origin/clm/ledger/dana/web", &text)]);
+        assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
+        fold
+    };
+    let (unsigned, signed) = (
+        fold_with(&unsigned),
+        fold_with(&Value::Object(signed).to_string()),
+    );
+    let cleared_at = |fold: &clm_ledger::Fold, rev: &str| {
+        fold.cleared_at(root, rev, &fold.change_requests["spec/x"][0])
+            .unwrap()
+    };
+    assert!(!cleared_at(&unsigned, &s.with));
+    assert!(cleared_at(&signed, &s.with));
+    assert!(cleared_at(&unsigned, &s.without));
+    assert!(cleared_at(&signed, &s.without));
+    // Signed at the commit, with no `ssh-keygen` to check a signature: the caller's error.
+    let git = git_alone();
+    let path = [("PATH", git.path().as_os_str())];
+    let request = &signed.change_requests["spec/x"][0];
+    match on_the_process(&path, || signed.cleared_at(root, &s.with, request)) {
+        Err(clm_ledger::Error::Signing(_)) => {}
+        other => panic!("{other:?}"),
+    }
 }

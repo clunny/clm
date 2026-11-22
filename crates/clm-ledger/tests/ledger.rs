@@ -207,6 +207,7 @@ fn approved(fingerprint: &str) -> Body {
         fingerprint: fingerprint.into(),
         branch: "spec/x".into(),
         change: Some("x".into()),
+        clears: None,
     }
 }
 
@@ -225,6 +226,7 @@ fn landed(commit: &str, fingerprint: &str, key: Option<&str>) -> Body {
         commit: commit.into(),
         branch: "impl/x".into(),
         kind: LandKind::Code,
+        light: false,
         review: false,
         fingerprint: fingerprint.into(),
         code_key: key.map(str::to_string),
@@ -993,6 +995,7 @@ fn hard_land(dir: &Path, commit: &str, fingerprint: &str) -> Body {
         commit: commit.into(),
         branch: "spec/x".into(),
         kind: LandKind::Spec,
+        light: false,
         review: true,
         fingerprint: fingerprint.into(),
         code_key: Some(key),
@@ -1330,6 +1333,7 @@ fn compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched() {
         commit: missing.into(),
         branch: "spec/x".into(),
         kind: LandKind::Spec,
+        light: false,
         review: true,
         fingerprint: "f".into(),
         code_key: Some("m".into()),
@@ -1517,6 +1521,7 @@ fn land_as(dir: &Path, commit: &str, fingerprint: &str, kind: LandKind, review: 
         commit: commit.into(),
         branch: "x".into(),
         kind,
+        light: false,
         review,
         fingerprint: fingerprint.into(),
         code_key: Some(key),
@@ -1544,7 +1549,7 @@ fn requirement_added(dir: &Path) -> (String, String) {
 
 #[test]
 fn review_recorded_as_none() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1570,7 +1575,7 @@ fn review_recorded_as_none() {
 
 #[test]
 fn review_spec_recorded_as_code() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1597,7 +1602,7 @@ fn review_spec_recorded_as_code() {
 
 #[test]
 fn review_honest_and_over_stated_lands() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1631,7 +1636,7 @@ fn review_honest_and_over_stated_lands() {
 
 #[test]
 fn review_highest_signed_record_is_the_recorded_one() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     // Two signed records name the land, `code` and `spec review`: the higher one is recorded.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1654,7 +1659,7 @@ fn review_highest_signed_record_is_the_recorded_one() {
 
 #[test]
 fn review_not_recomputed_without_the_flag() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1667,7 +1672,7 @@ fn review_not_recomputed_without_the_flag() {
 
 #[test]
 fn review_before_the_switch() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let _keys = signed_main_with_specs(root, false);
@@ -1680,7 +1685,7 @@ fn review_before_the_switch() {
 
 #[test]
 fn review_ranks_code_with_spec() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     // A backlog-only diff, `spec` to the gate, recorded as a code land: no finding.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1695,7 +1700,7 @@ fn review_ranks_code_with_spec() {
 
 #[test]
 fn review_unsigned_land_is_not_recomputed() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     // On a signed `main`, an unsigned record understating a diff that needs review is only
     // unsigned.
     let dir = tempfile::tempdir().unwrap();
@@ -1757,7 +1762,7 @@ fn found(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
 
 #[test]
 fn review_a_removal_before_the_rule() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1770,7 +1775,7 @@ fn review_a_removal_before_the_rule() {
 
 #[test]
 fn review_a_removal_under_the_rule() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1795,7 +1800,7 @@ fn review_a_removal_under_the_rule() {
 
 #[test]
 fn review_the_highest_whole_trailer_counts() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     // Of these trailers only `  1 ` is, trimmed, a whole number of at least 1: version 1.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1825,7 +1830,7 @@ fn review_the_highest_whole_trailer_counts() {
 
 #[test]
 fn review_a_lower_trailer_after_a_higher_one() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1847,7 +1852,7 @@ fn review_a_lower_trailer_after_a_higher_one() {
 
 #[test]
 fn review_a_floor_counts_only_a_signed_land() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     // An earlier land no signed record names raises no floor: it is only unsigned.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1882,7 +1887,7 @@ fn rules_newer_than_this_clm(root: &Path, christopher: &Path) -> (String, u32) {
 
 #[test]
 fn review_rules_newer_than_this_clm() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1901,7 +1906,7 @@ fn review_rules_newer_than_this_clm() {
 
 #[test]
 fn review_a_land_after_rules_newer_than_this_clm() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1921,7 +1926,7 @@ fn review_a_land_after_rules_newer_than_this_clm() {
 
 #[test]
 fn review_a_capped_floor_still_rates_later_lands() {
-    // req:ledger/verify-recomputes-review@730d0917
+    // req:ledger/verify-recomputes-review@91011a05
     // After a land under rules newer than this clm the floor is `RULES`: a later removal is
     // rated under `RULES`, not reported as unrated.
     let dir = tempfile::tempdir().unwrap();
@@ -2606,4 +2611,176 @@ fn compact_keeps_the_basis_of_a_composed_check_newer_than_every_land() {
     assert_eq!(code, Some(0), "{out}{err}");
     let fold = clm_ledger::fold(dir.path()).unwrap();
     assert!(fold.checks.contains_key("n1") && fold.checks.contains_key("n2"));
+}
+
+// `verify-recomputes-review`'s light lands: a spec graph whose branches the gate's light route
+// (`gate/light`) reads.
+
+const LIGHT_CAPABILITIES: &str = "# Capabilities\n\n## Capabilities\n\n### Capability: see\nA person can see.\n\n#### Why\nW.\n\n#### Scenario: s\n- ok\n";
+
+const LIGHT_ROOT: &str = "---\ntitle: Root\nstatus: active\nowners: []\nwiring: []\n---\n\n## Contract\nroot\n\n## Design\nroot design\n\n## Requirements\n";
+
+/// The scenarios `a/x` gains, one per land.
+const SCENARIOS: [&str; 3] = [
+    "\n#### Scenario: first\n- GIVEN a thing\n- WHEN it runs\n- THEN it holds\n",
+    "\n#### Scenario: second\n- GIVEN another thing\n- WHEN it runs\n- THEN it holds too\n",
+    "\n#### Scenario: third\n- GIVEN a third thing\n- WHEN it runs\n- THEN it holds as well\n",
+];
+
+/// Component `id`, owning `crates/<id>/**`, whose one requirement `slug` holds the first
+/// `scenarios` of `SCENARIOS` and serves `capability/see`.
+fn light_component(id: &str, slug: &str, scenarios: usize) -> String {
+    format!(
+        "---\ntitle: {id}\nstatus: active\nowners: []\npaths: [\"crates/{id}/**\"]\n---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n\n### Requirement: {slug}\nIt SHALL hold.\n{}\n#### Serves\n- capability/see\n",
+        SCENARIOS[..scenarios].concat()
+    )
+}
+
+/// The version of `spec`'s requirement `slug` as a marker cites it: the first 8 hex digits of
+/// the SHA-256 of its block, less its `#### Serves` block, each line's trailing white space
+/// trimmed and the whole trimmed at its end (`model/content-hash`). The test asserts the gate
+/// reads the light land as `light`, which it does only with the version right.
+fn light_version(spec: &str, slug: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let heading = format!("### Requirement: {slug}");
+    let block: Vec<&str> = spec
+        .lines()
+        .skip_while(|l| *l != heading)
+        .take_while(|l| *l != "#### Serves")
+        .map(str::trim_end)
+        .collect();
+    let digest = Sha256::digest(block.join("\n").trim_end().as_bytes());
+    digest[..4].iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// A test citing `a/x` at `version`, built so this file holds no marker.
+fn citing(version: &str) -> String {
+    format!(
+        "#[test]\nfn t() {{\n    // {}a/x@{version}\n}}\n",
+        concat!("req", ":")
+    )
+}
+
+/// The files of a branch that archives change `id`, `done`, with a delta to `a`, and gives
+/// `a/x` the first `scenarios` scenarios.
+fn scenarios_added(id: &str, scenarios: usize) -> Vec<(String, String)> {
+    let a = light_component("a", "x", scenarios);
+    vec![
+        (
+            format!("changes/archive/{id}/change.md"),
+            "---\nstatus: done\n---\n\n## Intent\nAdd a scenario.\n".into(),
+        ),
+        (
+            format!("changes/archive/{id}/deltas/a.md"),
+            "---\ncomponent: a\n---\n\n## MODIFIED Requirements\n".into(),
+        ),
+        (
+            "crates/a/tests/t.rs".into(),
+            citing(&light_version(&a, "x")),
+        ),
+        ("specs/a/SPEC.md".into(), a),
+    ]
+}
+
+/// Merges branch `name` writing `files`, its merge commit ending with `ending`, and appends
+/// its land recorded as light, code and no review, signed by `key`: the merge commit, its
+/// fingerprint, and the gate's outcome for it against its first parent under `RULES`.
+fn light_land(
+    dir: &Path,
+    key: &Path,
+    name: &str,
+    files: &[(String, String)],
+    ending: &str,
+) -> (String, String, clm_gate::Outcome) {
+    let files: Vec<(&str, &str)> = files.iter().map(|(p, t)| (&p[..], &t[..])).collect();
+    let (merge, fingerprint) = merge_files_ending(dir, name, &files, ending);
+    let land = land_as(dir, &merge, &fingerprint, LandKind::Code, false).with_light(true);
+    append_signed(dir, "christopher-lunny", key, "clm-land", land);
+    let outcome = clm_gate::evaluate_at(dir, &format!("{merge}^1"), &merge, false).unwrap();
+    (merge, fingerprint, outcome)
+}
+
+#[test]
+fn review_a_light_land() {
+    // req:ledger/verify-recomputes-review@91011a05
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    repo(root, "T");
+    let keys = tempfile::tempdir().unwrap();
+    let (christopher, christopher_pub) = keygen(keys.path(), "christopher");
+    let allowed = format!("christopher-lunny {christopher_pub}\n");
+    let a = light_component("a", "x", 1);
+    let b = light_component("b", "y", 1);
+    let cited = citing(&light_version(&a, "x"));
+    commit(
+        root,
+        &[
+            ("clm.toml", "host = \"none\"\n"),
+            ("docs/allowed_signers", &allowed),
+            ("CAPABILITIES.md", LIGHT_CAPABILITIES),
+            ("specs/SPEC.md", LIGHT_ROOT),
+            ("specs/a/SPEC.md", &a),
+            ("specs/b/SPEC.md", &b),
+            ("crates/a/src/lib.rs", "pub fn a() {}\n"),
+            ("crates/a/tests/t.rs", &cited),
+            ("crates/b/src/lib.rs", "pub fn b() {}\n"),
+        ],
+        "base",
+    );
+
+    // Light: a scenario added to `a/x` with `a`'s code, under the rules that have the route.
+    let mut files = scenarios_added("c1", 2);
+    files.push(("crates/a/src/lib.rs".into(), "pub fn a1() {}\n".into()));
+    let (light, _, outcome) = light_land(root, &christopher, "light", &files, "Gate-Rules: 7");
+    assert_eq!(outcome.kind, clm_gate::Kind::Light, "{outcome:?}");
+
+    // Mixed, its spec part needing no review: a scenario added with `b`'s code.
+    let mut files = scenarios_added("c2", 3);
+    files.push(("crates/b/src/lib.rs".into(), "pub fn b1() {}\n".into()));
+    let (mixed, _, outcome) = light_land(root, &christopher, "mixed", &files, "");
+    assert_eq!(
+        (outcome.kind, outcome.spec_part_review),
+        (clm_gate::Kind::Mixed, false),
+        "{outcome:?}"
+    );
+
+    // `ARCHITECTURE.md` and code: a spec part that needs review.
+    let files = [
+        ("ARCHITECTURE.md".to_string(), "invariants\n".to_string()),
+        ("crates/a/src/lib.rs".into(), "pub fn a2() {}\n".into()),
+    ];
+    let (architecture, fingerprint, outcome) =
+        light_land(root, &christopher, "architecture", &files, "");
+    assert!(outcome.spec_part_review, "{outcome:?}");
+
+    let (code, unapproved, out) = findings(root, &["--review"]);
+    assert_eq!(code, Some(1), "{out}");
+    let want = [
+        ("ledger/understated-land", architecture.as_str()),
+        ("ledger/unapproved-land", &architecture),
+    ];
+    assert_eq!(unapproved, found(&want), "{out}");
+    assert!(
+        out.lines().next().unwrap().ends_with(&format!(
+            "landed {architecture}: recorded light, the gate gives spec review"
+        )),
+        "{out}"
+    );
+    assert!(!out.contains(&light) && !out.contains(&mixed), "{out}");
+
+    // Approved, as the land needed: the understated record alone.
+    append_signed(
+        root,
+        "christopher-lunny",
+        &christopher,
+        "clm-approve",
+        approved(&fingerprint),
+    );
+    let (code, approved_findings, out) = findings(root, &["--review"]);
+    assert_eq!(code, Some(1), "{out}");
+    assert_eq!(
+        approved_findings,
+        found(&[("ledger/understated-land", &architecture)]),
+        "{out}"
+    );
 }

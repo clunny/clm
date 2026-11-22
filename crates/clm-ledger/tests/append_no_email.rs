@@ -23,6 +23,7 @@ fn a_clone_with_no_email_still_appends() {
         fingerprint: "f".into(),
         branch: "spec/x".into(),
         change: Some("x".into()),
+        clears: None,
     };
     let out = clm_ledger::append(&clone, body, &env(dir.path(), &[])).unwrap();
     assert!(out.pushed);

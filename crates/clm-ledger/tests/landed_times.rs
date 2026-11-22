@@ -8,6 +8,7 @@ fn landed(commit: &str, check_seconds: Option<u64>, steps: Vec<TimedStep>) -> Bo
         commit: commit.into(),
         branch: "impl/x".into(),
         kind: LandKind::Code,
+        light: false,
         review: false,
         fingerprint: "f".into(),
         code_key: None,

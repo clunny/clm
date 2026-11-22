@@ -82,6 +82,16 @@ pub enum Body {
         fingerprint: String,
         branch: String,
         change: Option<String>,
+        /// The `id`s of the `changes_requested` records the approval clears, an empty list
+        /// when it clears none (`request-cleared`). Left out of the line when `None`, as on a
+        /// record written before the field, which clears by time; a `null` or anything but a
+        /// list of strings doesn't parse.
+        #[serde(
+            default,
+            deserialize_with = "clears_list",
+            skip_serializing_if = "Option::is_none"
+        )]
+        clears: Option<Vec<String>>,
     },
     /// A tree whose code key passed the check command. A record with a `basis` is a
     /// composed check (`composed-check`).
@@ -99,6 +109,11 @@ pub enum Body {
         /// Written `land_kind`: the record's own `kind` is `landed`.
         #[serde(rename = "land_kind")]
         kind: LandKind,
+        /// Whether the land was of a branch the gate reads as `light` (`gate/light`), whose
+        /// `kind` is then `code`. Written only when true, so a `clm` that knows no `light`
+        /// reads the land as a code land; a line without it is not light.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        light: bool,
         /// Whether the land needed a human's review (`gate/needs-review`); false for a code
         /// land. Read from `tier` on a record written before review became yes or no:
         /// `HARD` is true, anything else false (`yes-no-review`).
@@ -289,6 +304,11 @@ fn full_id<E: serde::de::Error>(id: String) -> Result<String, E> {
     }
 }
 
+/// An `approved` record's `clears` when the key is present: a list of strings, never `null`.
+fn clears_list<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Vec<String>>, D::Error> {
+    Vec::<String>::deserialize(d).map(Some)
+}
+
 fn commit_id<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     full_id(String::deserialize(d)?)
 }
@@ -405,13 +425,24 @@ impl Decision {
 
 impl Body {
     /// An `approved` body, so a caller builds one without a literal of the variant and a field
-    /// the variant gains later breaks no caller (`approved-constructor`).
+    /// the variant gains later breaks no caller (`approved-constructor`). It has no `clears`,
+    /// so it clears by time (`request-cleared`).
     pub fn approved(fingerprint: String, branch: String, change: Option<String>) -> Body {
         Body::Approved {
             fingerprint,
             branch,
             change,
+            clears: None,
         }
+    }
+
+    /// An `approved` body with `clears` as the requests it clears, an empty list included, and
+    /// any other body unchanged (`request-cleared`).
+    pub fn with_clears(mut self, clears: Vec<String>) -> Body {
+        if let Body::Approved { clears: slot, .. } = &mut self {
+            *slot = Some(clears);
+        }
+        self
     }
 
     /// A `mutated` body, so a caller builds one without a literal of the variant and a field
@@ -456,6 +487,7 @@ impl Body {
             commit,
             branch,
             kind,
+            light: false,
             review,
             fingerprint,
             code_key: None,
@@ -465,6 +497,15 @@ impl Body {
             recheck: None,
             recheck_files: None,
         }
+    }
+
+    /// A `landed` body with `light` as whether it was a light land, and any other body
+    /// unchanged (`landed-record-fields`).
+    pub fn with_light(mut self, light: bool) -> Body {
+        if let Body::Landed { light: slot, .. } = &mut self {
+            *slot = light;
+        }
+        self
     }
 
     /// A `landed` body with `code_key` as its code key, and any other body unchanged.
