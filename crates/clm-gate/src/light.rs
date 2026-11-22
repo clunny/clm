@@ -40,13 +40,14 @@ pub(crate) fn judge(
             return Ok(Err(format!("the specs at {rev} don't load")));
         }
     }
+    // A cut makes a spec part need review too, so it is named first, as the more telling.
+    if let Some(cut) = read.cuts.first() {
+        return Ok(Err(format!("its spec part cuts: {cut}")));
+    }
     if read.review {
         return Ok(Err(
             "its spec part would need review as a `spec` branch".to_string()
         ));
-    }
-    if let Some(cut) = read.cuts.first() {
-        return Ok(Err(format!("its spec part cuts: {cut}")));
     }
     let added = match scenarios_added(&c, &graphs.base.0, &graphs.head.0) {
         Ok(added) => added,

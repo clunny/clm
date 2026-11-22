@@ -349,3 +349,100 @@ fn results_are_sorted_by_path_and_read_from_the_revision_not_the_checkout() {
         ["Cargo.lock", "crates/b/src/a.rs", "crates/b/src/z.rs"]
     );
 }
+
+/// `clm gate --base main` in `d`: its status and what it prints.
+fn gate(d: &Path) -> (u8, String) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let status = clm_gate::command(["--base", "main"], d, &|_| None, &mut out, &mut err);
+    assert!(err.is_empty(), "{}", String::from_utf8_lossy(&err));
+    (status, String::from_utf8(out).unwrap())
+}
+
+/// The kind, the component and the gate's status and output, for `HEAD` in `d`.
+fn read(d: &Path) -> (Kind, Option<String>, u8, String) {
+    let outcome = evaluate_at(d, "main", "HEAD", false).unwrap();
+    let (status, out) = gate(d);
+    (outcome.kind, outcome.component, status, out)
+}
+
+// req:gate/own-files@a2deb7ec
+#[test]
+fn scenario_the_component_read_from_the_files() {
+    let a = Some("a".to_string());
+    // `crates/a/src/lib.rs` alone
+    let dir = base(Some("[\"Cargo.lock\"]"));
+    let d = dir.path();
+    write(d, "crates/a/src/lib.rs", "pub fn a2() {}\n");
+    commit(d, "a");
+    assert_eq!(read(d), (Kind::Code, a.clone(), 0, "code\n".into()));
+    // and the capability test `a/x` serves, modified
+    write(
+        d,
+        "tests/capability/see.rs",
+        &cite("capability/see", "fn see() { /* moved */ }\n"),
+    );
+    commit(d, "see");
+    assert_eq!(read(d), (Kind::Code, a.clone(), 0, "code\n".into()));
+    // the wiring alone
+    let dir = base(Some("[\"Cargo.lock\"]"));
+    let d = dir.path();
+    write(d, "Cargo.lock", "# lock 2\n");
+    commit(d, "lock");
+    assert_eq!(read(d), (Kind::Code, None, 0, "code\n".into()));
+    // two components' files in a root that sets no `wiring`
+    let dir = base(None);
+    let d = dir.path();
+    write(d, "crates/a/src/lib.rs", "pub fn a2() {}\n");
+    write(d, "crates/b/src/lib.rs", "pub fn b2() {}\n");
+    commit(d, "a and b");
+    assert_eq!(read(d), (Kind::Code, None, 0, "code\n".into()));
+    // a CLM root below the top, and a file outside it
+    let dir = TempDir::new().unwrap();
+    let top = dir.path();
+    git(top, &["init", "-q", "-b", "main"]);
+    write(top, "tool/specs/SPEC.md", &root("wiring: []\n"));
+    write(
+        top,
+        "tool/specs/a/SPEC.md",
+        &component("A", "paths: [\"crates/a/**\"]\n", X),
+    );
+    write(top, "tool/crates/a/src/lib.rs", "pub fn a() {}\n");
+    write(top, "b", "b\n");
+    commit(top, "base");
+    git(top, &["checkout", "-q", "-b", "pr"]);
+    write(top, "tool/crates/a/src/lib.rs", "pub fn a2() {}\n");
+    write(top, "b", "b2\n");
+    commit(top, "a and b");
+    assert_eq!(read(&top.join("tool")), (Kind::Code, a, 0, "code\n".into()));
+}
+
+// req:gate/own-files@a2deb7ec
+#[test]
+fn scenario_specs_that_dont_load_at_the_merge_base() {
+    for (spec, component) in [("specs/b/SPEC.md", Some("a")), ("specs/SPEC.md", None)] {
+        let dir = base(Some("[]"));
+        let d = dir.path();
+        git(d, &["checkout", "-q", "main"]);
+        write(
+            d,
+            spec,
+            "---\ntitle: [\nstatus: active\n---\n\n## Contract\nx\n",
+        );
+        commit(d, "broken");
+        git(d, &["checkout", "-q", "impl/a"]);
+        git(d, &["merge", "-q", "main"]);
+        write(d, "crates/a/src/lib.rs", "pub fn a2() {}\n");
+        write(d, "crates/b/src/lib.rs", "pub fn b2() {}\n");
+        commit(d, "a and b");
+        assert_eq!(
+            read(d),
+            (
+                Kind::Code,
+                component.map(str::to_string),
+                0,
+                "code\n".into()
+            ),
+            "{spec}"
+        );
+    }
+}

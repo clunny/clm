@@ -208,3 +208,22 @@ fn arguments_it_cant_parse_return_2() {
     assert!(err.contains("--no-such-option"), "{err}");
     assert!(err.contains("Usage: clm gate"), "{err}");
 }
+
+#[test]
+fn scenario_help() {
+    // req:gate/commands-in-crate@80d095b0
+    let dir = TempDir::new().unwrap();
+    let out = call(dir.path(), &["--help"].map(OsStr::new));
+    assert_eq!(out.status.code(), Some(0));
+    assert!(out.stderr.is_empty());
+    let help = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        help.starts_with(
+            "Decide whether HEAD may merge into a base ref; exit 1 to block\n\nUsage: clm gate [OPTIONS] --base <BASE>\n"
+        ),
+        "{help}"
+    );
+    for option in ["--base", "--approved", "--root"] {
+        assert!(help.contains(option), "{option}: {help}");
+    }
+}

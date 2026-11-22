@@ -326,17 +326,34 @@ fn a_lost_sentence_and_a_reworded_one() {
 #[test]
 fn list_lines_read_file_and_name() {
     // req:gate/cuts@53fe4864
-    let text = "# tests to delete\n\nDELETE tests/t.rs::two\tmerged into a/y\r\nremove the old ones\nDELETE b.rs::mod::three\n";
+    let text = "# tests to delete\n\nDELETE tests/t.rs::two\tmerged into a/y\r\nremove the old ones\nDELETE b.rs::mod::three\r\nDELETE f::\nDELETE ::n\n  # note\nDELETE tests/t.rs::two\n";
     let found: Vec<(String, String)> = list_lines(text)
         .into_iter()
         .map(|l| (l.file, l.name))
         .collect();
+    // empty parts and an indented `#` give no list line; a repeat is read again
     assert_eq!(
         found,
         [
             ("tests/t.rs".to_string(), "two".to_string()),
             ("b.rs".to_string(), "mod::three".to_string()),
+            ("tests/t.rs".to_string(), "two".to_string()),
         ]
+    );
+}
+
+#[test]
+fn scenario_odd_list_lines() {
+    // req:gate/cuts@53fe4864
+    let g = graph(&[("a", "", requirement("x", X, &["s"]))]);
+    let lists = [TestList {
+        path: "changes/c/deleted-tests.txt",
+        head: "DELETE tests/t.rs::one\tanother reason\nDELETE tests/t.rs::two\nDELETE tests/t.rs::two\n",
+        base: Some("DELETE tests/t.rs::one\tthe first reason\n"),
+    }];
+    assert_eq!(
+        lines(&cuts(&g, &g, &lists)),
+        ["changes/c/deleted-tests.txt: gate/cut: test tests/t.rs::two is to be deleted"]
     );
 }
 

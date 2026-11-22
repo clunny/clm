@@ -70,7 +70,7 @@ fn an_exemption_whose_item_is_missing_blocks() {
         .violations
         .iter()
         .filter(|v| v.rule == "gate/exemption-names-its-item")
-        .map(|v| format!("{}: {}: {}", v.path.display(), v.rule, v.message))
+        .map(|v| v.to_string())
         .collect();
     assert_eq!(
         lines,

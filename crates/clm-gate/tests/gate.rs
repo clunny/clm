@@ -111,20 +111,35 @@ fn code_only_pr_is_code() {
 #[test]
 fn every_spec_path_counts_as_spec() {
     // req:gate/classify@872b6875
-    let dir = repo();
-    for rel in [
+    let paths = [
         "specs/b/SPEC.md",
         "changes/c/change.md",
+        "backlog/x.md",
         "docs/x.md",
         "ARCHITECTURE.md",
+        "CAPABILITIES.md",
         "CLAUDE.md",
-    ] {
+        "AGENTS.md",
+        "docs/naïve.md",
+        "specs/é/SPEC.md",
+    ];
+    for rel in paths {
+        let dir = repo();
+        if rel == "backlog/x.md" {
+            git(dir.path(), &["checkout", "-q", "main"]);
+            write(dir.path(), rel, "---\ntitle: X\nkind: idea\n---\n");
+            commit_all(dir.path(), "item");
+            git(dir.path(), &["checkout", "-q", "pr"]);
+            git(dir.path(), &["merge", "-q", "main"]);
+        }
         write(dir.path(), rel, "x\n");
+        commit_all(dir.path(), "spec");
+        let out = evaluate_at(dir.path(), "main", "HEAD", true).unwrap();
+        assert_eq!(out.kind, Kind::Spec, "{rel}");
+        assert!(clm_gate::is_spec_path(rel), "{rel}");
     }
-    commit_all(dir.path(), "spec");
-
-    let out = evaluate_at(dir.path(), "main", "HEAD", true).unwrap();
-    assert_eq!((out.kind, out.review), (Kind::Spec, true));
+    assert!(!clm_gate::is_spec_path("crates/x/src/lib.rs"));
+    assert!(!clm_gate::is_spec_path("../CLAUDE.md"));
 }
 
 #[test]
@@ -2388,6 +2403,17 @@ fn scenario_a_status_flip_alone() {
         "{:?}",
         out.violations
     );
+    // a status flip of a spec whose graph doesn't load reads no cuts (`cuts`)
+    let dir = tier_repo(&[("specs/a/SPEC.md", SPEC)]);
+    let flipped = SPEC.replace("status: specd", "status: active");
+    let out = tier_after(&dir, &[("specs/a/SPEC.md", Some(&flipped))], false);
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, false, true),
+        "{:?}",
+        out.violations
+    );
+    assert!(out.cuts.is_empty(), "{:?}", out.cuts);
 }
 
 #[test]
@@ -2506,4 +2532,43 @@ fn scenario_entries_judged_on_odd_names() {
     let broken = "---\nstatus: [\nresolves: [nope]\n---\n";
     let out = tier_after(&dir, &[("changes/c/change.md", Some(broken))], true);
     assert!(unnamed(&out).is_empty(), "{:?}", out.violations);
+}
+
+#[test]
+fn scenario_a_base_git_cant_resolve() {
+    // req:gate/evaluate-at@a51bf198
+    let dir = repo();
+    assert!(evaluate_at(dir.path(), "no-such-ref", "HEAD", false).is_err());
+}
+
+#[test]
+fn scenario_the_range_a_line_names() {
+    // req:gate/evaluate-at@a51bf198
+    let dir = repo();
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        &SPEC.replace("c\n", "changed\n"),
+    );
+    write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
+    commit_all(dir.path(), "both");
+    let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
+    let lines: Vec<String> = out.violations.iter().map(ToString::to_string).collect();
+    assert!(
+        lines[0].starts_with("main..HEAD: gate/classify: "),
+        "{lines:?}"
+    );
+
+    let dir = repo();
+    diverge(
+        dir.path(),
+        &[("crates/x/src/lib.rs", "pub fn y() {}\n")],
+        &[("crates/x/src/lib.rs", "pub fn z() {}\n")],
+    );
+    let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
+    let lines: Vec<String> = out.violations.iter().map(ToString::to_string).collect();
+    assert!(
+        lines[0].starts_with("main..HEAD: gate/up-to-date: "),
+        "{lines:?}"
+    );
 }
