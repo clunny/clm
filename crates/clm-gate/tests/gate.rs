@@ -53,7 +53,7 @@ fn rules(outcome: &clm_gate::Outcome) -> Vec<&str> {
 
 #[test]
 fn mixed_pr_is_blocked() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     let dir = repo();
     write(
         dir.path(),
@@ -70,7 +70,7 @@ fn mixed_pr_is_blocked() {
 
 #[test]
 fn mixed_build_branch_says_to_leave_it_unbuilt() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     let dir = repo();
     git(dir.path(), &["checkout", "-q", "-b", "impl/a"]);
     write(
@@ -98,7 +98,7 @@ fn mixed_build_branch_says_to_leave_it_unbuilt() {
 
 #[test]
 fn code_only_pr_is_code() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     let dir = repo();
     write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
     commit_all(dir.path(), "code");
@@ -110,7 +110,7 @@ fn code_only_pr_is_code() {
 
 #[test]
 fn every_spec_path_counts_as_spec() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     let dir = repo();
     for rel in [
         "specs/b/SPEC.md",
@@ -129,7 +129,7 @@ fn every_spec_path_counts_as_spec() {
 
 #[test]
 fn paths_git_would_quote_are_classified() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     // `git diff --name-status` quotes non-ASCII paths unless `-z` is used.
     for file in ["docs/naïve.md", "specs/é/SPEC.md"] {
         let dir = repo();
@@ -142,7 +142,7 @@ fn paths_git_would_quote_are_classified() {
 
 #[test]
 fn status_only_spec_change_does_not_make_code_pr_mixed() {
-    // req:gate/status-only-exemption@aa4f5b5c
+    // req:gate/status-only-exemption@618fa96d
     let dir = repo();
     write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
     write(
@@ -159,7 +159,7 @@ fn status_only_spec_change_does_not_make_code_pr_mixed() {
 
 #[test]
 fn status_plus_other_edit_is_a_spec_change() {
-    // req:gate/status-only-exemption@aa4f5b5c
+    // req:gate/status-only-exemption@618fa96d
     let dir = repo();
     write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
     write(
@@ -177,7 +177,7 @@ fn status_plus_other_edit_is_a_spec_change() {
 
 #[test]
 fn unapproved_spec_pr_is_blocked() {
-    // req:gate/approval@492f6a25
+    // req:gate/approval@0b9e62cb
     let dir = repo();
     write(dir.path(), "ARCHITECTURE.md", "invariants\n");
     commit_all(dir.path(), "spec");
@@ -190,7 +190,7 @@ fn unapproved_spec_pr_is_blocked() {
 
 #[test]
 fn approved_spec_pr_passes() {
-    // req:gate/approval@492f6a25
+    // req:gate/approval@0b9e62cb
     let dir = repo();
     write(dir.path(), "ARCHITECTURE.md", "invariants\n");
     commit_all(dir.path(), "spec");
@@ -216,7 +216,7 @@ fn diverge(d: &Path, on_pr: &[(&str, &str)], on_main: &[(&str, &str)]) {
 
 #[test]
 fn behind_branch_that_merges_cleanly_passes() {
-    // req:gate/up-to-date@6cf6950e
+    // req:gate/up-to-date@185f6d0f
     let dir = repo();
     diverge(
         dir.path(),
@@ -231,7 +231,7 @@ fn behind_branch_that_merges_cleanly_passes() {
 
 #[test]
 fn code_file_changed_on_both_sides_that_merges_cleanly_passes() {
-    // req:gate/up-to-date@6cf6950e
+    // req:gate/up-to-date@185f6d0f
     let dir = repo();
     let d = dir.path();
     let base = "fn one() {}\n\nfn two() {}\n\nfn three() {}\n";
@@ -251,7 +251,7 @@ fn code_file_changed_on_both_sides_that_merges_cleanly_passes() {
 
 #[test]
 fn up_to_date_branch_has_no_violation() {
-    // req:gate/up-to-date@6cf6950e
+    // req:gate/up-to-date@185f6d0f
     let dir = repo();
     write(dir.path(), "crates/b.rs", "b\n");
     commit_all(dir.path(), "code");
@@ -262,7 +262,7 @@ fn up_to_date_branch_has_no_violation() {
 
 #[test]
 fn conflicting_branch_is_blocked() {
-    // req:gate/up-to-date@6cf6950e
+    // req:gate/up-to-date@185f6d0f
     let dir = repo();
     diverge(
         dir.path(),
@@ -282,7 +282,7 @@ const TWO_REQS: &str = "---\ntitle: A\nstatus: specd\nowners: []\n---\n\n## Cont
 
 #[test]
 fn spec_changed_on_both_sides_is_blocked_though_it_merges() {
-    // req:gate/up-to-date@6cf6950e
+    // req:gate/up-to-date@185f6d0f
     let dir = repo();
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -308,7 +308,7 @@ fn spec_changed_on_both_sides_is_blocked_though_it_merges() {
 
 #[test]
 fn each_spec_file_changed_on_both_sides_is_reported_in_order() {
-    // req:gate/up-to-date@6cf6950e
+    // req:gate/up-to-date@185f6d0f
     let dir = repo();
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -341,7 +341,7 @@ fn each_spec_file_changed_on_both_sides_is_reported_in_order() {
 
 #[test]
 fn specs_changed_in_different_files_are_not_blocked() {
-    // req:gate/up-to-date@6cf6950e
+    // req:gate/up-to-date@185f6d0f
     let dir = repo();
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -364,7 +364,7 @@ fn specs_changed_in_different_files_are_not_blocked() {
 
 #[test]
 fn removed_line_starting_with_dashes_is_not_mistaken_for_a_header() {
-    // req:gate/status-only-exemption@aa4f5b5c
+    // req:gate/status-only-exemption@618fa96d
     let dir = repo();
     write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
     // Status flip plus deleting a line that begins with `--`.
@@ -461,7 +461,7 @@ fn archive_move_with_other_edits_is_a_spec_change() {
 
 #[test]
 fn editing_or_deleting_archived_files_is_blocked() {
-    // req:gate/archive-immutable@e5a6c8c1
+    // req:gate/archive-immutable@ed0c1a6d
     let dir = repo_with_changes();
     let d = dir.path();
     write(
@@ -485,7 +485,7 @@ fn editing_or_deleting_archived_files_is_blocked() {
 
 #[test]
 fn code_pr_may_add_backlog_items() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_changes();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -502,7 +502,7 @@ fn code_pr_may_add_backlog_items() {
 
 #[test]
 fn editing_or_deleting_backlog_items_is_a_spec_change() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_changes();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -540,7 +540,7 @@ fn repo_with_blocks() -> TempDir {
 
 #[test]
 fn scenario_impl_pr_adds_a_block() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_blocks();
     let d = dir.path();
     write(
@@ -555,7 +555,7 @@ fn scenario_impl_pr_adds_a_block() {
 
 #[test]
 fn a_block_added_to_an_item_without_blocks_is_code() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_changes();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -571,7 +571,7 @@ fn a_block_added_to_an_item_without_blocks_is_code() {
 
 #[test]
 fn scenario_impl_pr_removes_a_block() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_blocks();
     let d = dir.path();
     write(
@@ -589,7 +589,7 @@ fn scenario_impl_pr_removes_a_block() {
 
 #[test]
 fn a_block_added_with_another_edit_is_a_spec_change() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_blocks();
     let d = dir.path();
     for text in [
@@ -614,7 +614,7 @@ fn a_block_added_with_another_edit_is_a_spec_change() {
 
 #[test]
 fn reordering_blocks_adds_nothing_so_it_is_a_spec_change() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_changes();
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -640,7 +640,7 @@ fn reordering_blocks_adds_nothing_so_it_is_a_spec_change() {
 
 #[test]
 fn a_block_added_to_a_nested_backlog_file_is_a_spec_change() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_changes();
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -684,7 +684,7 @@ const X_DONE: &str = "---\nstatus: done\nresolves: [x]\n---\n\n# x\n";
 
 #[test]
 fn impl_pr_may_delete_the_items_its_change_resolves() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_resolves();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -698,7 +698,7 @@ fn impl_pr_may_delete_the_items_its_change_resolves() {
 
 #[test]
 fn impl_pr_may_not_delete_unrelated_items() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_resolves();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -712,7 +712,7 @@ fn impl_pr_may_not_delete_unrelated_items() {
 
 #[test]
 fn impl_pr_may_not_edit_the_items_its_change_resolves() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_resolves();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -725,8 +725,8 @@ fn impl_pr_may_not_edit_the_items_its_change_resolves() {
 
 #[test]
 fn task_pr_may_delete_an_item_a_live_change_resolves() {
-    // req:gate/backlog-additions@85a57cc9
-    // req:gate/resolves-named-items@84abf9a3 (item deleted by a task)
+    // req:gate/backlog-additions@1653493f
+    // req:gate/resolves-named-items@29d5b2f2 (item deleted by a task)
     let dir = repo_with_resolves();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -782,7 +782,7 @@ const FIX_A: &[Edit] = &[("crates/a/src/lib.rs", Some("pub fn a2() {}\n"))];
 
 #[test]
 fn scenario_code_fix_deletes_its_bug() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(BUG_X);
     let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
     assert_eq!((out.kind, rules(&out)), (Kind::Code, vec![]));
@@ -790,7 +790,7 @@ fn scenario_code_fix_deletes_its_bug() {
 
 #[test]
 fn scenario_code_fix_outside_the_bugs_nodes() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(BUG_X);
     let out = fix_with_trailer(
         &dir,
@@ -802,7 +802,7 @@ fn scenario_code_fix_outside_the_bugs_nodes() {
 
 #[test]
 fn scenario_trailer_naming_an_idea() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(&BUG_X.replace("kind: bug", "kind: idea"));
     let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
     assert_eq!(out.kind, Kind::Mixed, "{:?}", out.violations);
@@ -810,7 +810,7 @@ fn scenario_trailer_naming_an_idea() {
 
 #[test]
 fn scenario_trailer_naming_deferred_work() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(&BUG_X.replace("kind: bug", "kind: deferred"));
     let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
     assert_eq!((out.kind, rules(&out)), (Kind::Code, vec![]));
@@ -818,7 +818,7 @@ fn scenario_trailer_naming_deferred_work() {
 
 #[test]
 fn scenario_trailer_naming_a_question() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(&BUG_X.replace("kind: bug", "kind: question"));
     let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
     assert_eq!(out.kind, Kind::Mixed, "{:?}", out.violations);
@@ -826,7 +826,7 @@ fn scenario_trailer_naming_a_question() {
 
 #[test]
 fn trailer_naming_a_human_item_is_mixed() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(&BUG_X.replace("kind: bug", "kind: human-task"));
     let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
     assert_eq!(out.kind, Kind::Mixed, "{:?}", out.violations);
@@ -834,7 +834,7 @@ fn trailer_naming_a_human_item_is_mixed() {
 
 #[test]
 fn scenario_trailer_naming_another_item() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(BUG_X);
     let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/y");
     assert_eq!(out.kind, Kind::Mixed, "{:?}", out.violations);
@@ -842,7 +842,7 @@ fn scenario_trailer_naming_another_item() {
 
 #[test]
 fn deleting_a_code_file_of_the_bugs_node_counts() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(BUG_X);
     let out = fix_with_trailer(
         &dir,
@@ -854,7 +854,7 @@ fn deleting_a_code_file_of_the_bugs_node_counts() {
 
 #[test]
 fn trailer_value_must_be_exactly_backlog_slug() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     for trailer in [
         "Resolves: x",
         "Resolves: backlog/x.md",
@@ -873,7 +873,7 @@ fn trailer_value_must_be_exactly_backlog_slug() {
 
 #[test]
 fn trailer_in_an_earlier_commit_of_the_branch_counts() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_bug(BUG_X);
     let d = dir.path();
     write(d, "crates/a/src/lib.rs", "pub fn a2() {}\n");
@@ -887,7 +887,7 @@ fn trailer_in_an_earlier_commit_of_the_branch_counts() {
 
 #[test]
 fn trailer_on_the_base_side_does_not_count() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     // A trailer in a commit the merge base already holds names nothing for this branch.
     let dir = repo_with_bug(BUG_X);
     let d = dir.path();
@@ -907,7 +907,7 @@ fn trailer_on_the_base_side_does_not_count() {
 
 #[test]
 fn bug_items_that_do_not_qualify_are_not_exempt() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     for item in [
         // frontmatter that doesn't parse
         "---\ntitle: X\nkind: bug\ncomponents: [a\n---\n",
@@ -926,7 +926,7 @@ fn bug_items_that_do_not_qualify_are_not_exempt() {
 
 #[test]
 fn a_spec_file_matching_the_nodes_paths_does_not_count() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     // Only code files (outside the spec paths) count; a status-only spec edit is no fix.
     let dir = repo_with_bug(&BUG_X.replace("components: [a]", "components: [b]"));
     let d = dir.path();
@@ -974,7 +974,7 @@ fn repo_with_test(item: &str, test: &[u8]) -> TempDir {
 
 #[test]
 fn scenario_code_fix_to_a_test_that_cites_the_bugs_node() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_test(BUG_X, CITES_A.as_bytes());
     let edited = format!("{CITES_A}fn helper() {{}}\n");
     let out = fix_with_trailer(&dir, &[(TEST_T, Some(&edited))], "Resolves: backlog/x");
@@ -983,7 +983,7 @@ fn scenario_code_fix_to_a_test_that_cites_the_bugs_node() {
 
 #[test]
 fn scenario_code_fix_to_a_test_that_cites_a_child_of_the_bugs_node() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_test(BUG_X, CITES_A_B.as_bytes());
     let edited = format!("{CITES_A_B}fn helper() {{}}\n");
     let out = fix_with_trailer(&dir, &[(TEST_T, Some(&edited))], "Resolves: backlog/x");
@@ -992,7 +992,7 @@ fn scenario_code_fix_to_a_test_that_cites_a_child_of_the_bugs_node() {
 
 #[test]
 fn a_marker_on_either_side_counts() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     // The fix removes the file's last marker: the merge base's text still counts.
     let dir = repo_with_test(BUG_X, CITES_A.as_bytes());
     let out = fix_with_trailer(
@@ -1017,7 +1017,7 @@ fn a_marker_on_either_side_counts() {
 
 #[test]
 fn a_file_that_is_not_utf8_is_searched_as_bytes() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let mut test = b"\xff\xfe latin-1 \xe9\n".to_vec();
     test.extend_from_slice(CITES_A.as_bytes());
     let dir = repo_with_test(BUG_X, &test);
@@ -1031,7 +1031,7 @@ fn a_file_that_is_not_utf8_is_searched_as_bytes() {
 
 #[test]
 fn a_side_that_cannot_be_read_holds_no_marker() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     // A submodule's commit isn't in this repository, so neither side of it can be read;
     // the citing test still counts and the gate doesn't fail.
     let dir = repo_with_test(BUG_X, CITES_A.as_bytes());
@@ -1057,7 +1057,7 @@ fn a_side_that_cannot_be_read_holds_no_marker() {
 
 #[test]
 fn a_node_without_paths_qualifies_through_markers() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     // The root `clm` has no `paths` in this repo.
     let cites_root = concat!("// req", ":clm/y@1234abcd\n");
     let dir = repo_with_test(
@@ -1071,7 +1071,7 @@ fn a_node_without_paths_qualifies_through_markers() {
 
 #[test]
 fn a_marker_of_a_node_missing_at_the_merge_base_does_not_count() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let cites_zz = concat!("// req", ":zz/y@1234abcd\n");
     let dir = repo_with_test(
         &BUG_X.replace("components: [a]", "components: [zz]"),
@@ -1100,7 +1100,7 @@ fn unnamed(out: &clm_gate::Outcome) -> Vec<&clm_gate::Violation> {
 
 #[test]
 fn entries_listed_at_the_merge_base_are_not_tested() {
-    // req:gate/resolves-named-items@84abf9a3 (item deleted by a task)
+    // req:gate/resolves-named-items@29d5b2f2 (item deleted by a task)
     let dir = repo_with_resolves();
     let d = dir.path();
     // An earlier task deleted the item it fixed; a later PR edits the change.
@@ -1118,7 +1118,7 @@ fn entries_listed_at_the_merge_base_are_not_tested() {
 
 #[test]
 fn scenario_typo_in_a_new_change() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_resolves();
     let d = dir.path();
     write(
@@ -1137,7 +1137,7 @@ fn scenario_typo_in_a_new_change() {
 
 #[test]
 fn a_non_ascii_slug_names_its_item() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     // Names are read unquoted, whatever `core.quotePath` says.
     let dir = repo_with_resolves();
     let d = dir.path();
@@ -1158,7 +1158,7 @@ fn a_non_ascii_slug_names_its_item() {
 
 #[test]
 fn scenario_entry_written_as_a_claim_path() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     // `backlog/y.md` exists, yet none of these names an item.
     for entry in [
         "backlog/y",
@@ -1189,7 +1189,7 @@ fn scenario_entry_written_as_a_claim_path() {
 
 #[test]
 fn typo_in_a_code_pr_is_reported() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_resolves();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -1205,7 +1205,7 @@ fn typo_in_a_code_pr_is_reported() {
 
 #[test]
 fn scenario_typo_added_to_a_live_change() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_resolves();
     let d = dir.path();
     // With `backlog/x.md` already deleted by a task, testing `x` again would report it.
@@ -1232,7 +1232,7 @@ fn scenario_typo_added_to_a_live_change() {
 
 #[test]
 fn scenario_item_deleted_in_the_same_pr() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_changes();
     let d = dir.path();
     write(
@@ -1248,7 +1248,7 @@ fn scenario_item_deleted_in_the_same_pr() {
 
 #[test]
 fn archived_changes_are_not_tested() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_resolves();
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -1265,7 +1265,7 @@ fn archived_changes_are_not_tested() {
 
 #[test]
 fn scenario_typo_in_a_change_archived_in_its_spec_pr() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_resolves();
     let d = dir.path();
     write(
@@ -1285,7 +1285,7 @@ fn scenario_typo_in_a_change_archived_in_its_spec_pr() {
 
 #[test]
 fn scenario_live_change_moved_to_the_archive_with_edits() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_resolves();
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -1301,7 +1301,7 @@ fn scenario_live_change_moved_to_the_archive_with_edits() {
 
 #[test]
 fn a_new_archived_change_adds_entries_beyond_its_live_version() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     // Moved with edits, adding `nope`: only the added entry is tested.
     let dir = repo_with_resolves();
     let d = dir.path();
@@ -1324,7 +1324,7 @@ fn a_new_archived_change_adds_entries_beyond_its_live_version() {
 
 #[test]
 fn nested_files_are_not_backlog_items() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_changes();
     let d = dir.path();
     write(
@@ -1340,7 +1340,7 @@ fn nested_files_are_not_backlog_items() {
 
 #[test]
 fn item_added_in_the_same_pr_counts() {
-    // req:gate/resolves-named-items@84abf9a3
+    // req:gate/resolves-named-items@29d5b2f2
     let dir = repo_with_changes();
     let d = dir.path();
     write(
@@ -1356,7 +1356,7 @@ fn item_added_in_the_same_pr_counts() {
 
 #[test]
 fn resolves_added_in_the_same_pr_dont_count() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_changes();
     let d = dir.path();
     write(d, "crates/x/src/lib.rs", "pub fn y() {}\n");
@@ -1373,7 +1373,7 @@ fn resolves_added_in_the_same_pr_dont_count() {
 
 #[test]
 fn archived_changes_resolves_dont_count() {
-    // req:gate/backlog-additions@85a57cc9
+    // req:gate/backlog-additions@1653493f
     let dir = repo_with_changes();
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -1438,7 +1438,7 @@ fn verdict(out: &clm_gate::Outcome) -> (Kind, bool, bool) {
 
 #[test]
 fn spec_pr_that_needs_no_review_needs_no_approval() {
-    // req:gate/approval@492f6a25
+    // req:gate/approval@0b9e62cb
     let dir = tier_repo(&[ROOT_SPEC, ("specs/a/SPEC.md", NODE)]);
     let edited = NODE.replace("\nc\n", "\nnew contract\n");
     let out = tier_after(&dir, &[("specs/a/SPEC.md", Some(&edited))], false);
@@ -1482,14 +1482,14 @@ const A_NODE: &str =
 
 #[test]
 fn scenario_specs_marked_export_ignore() {
-    // req:gate/base-specs-as-checkout@a340ed25
+    // req:gate/base-specs-as-checkout@fa7aa061
     let out = fix_after_main(&[(".gitattributes", Some("specs/** export-ignore\n"))]);
     assert_eq!((out.kind, rules(&out)), (Kind::Code, vec![]));
 }
 
 #[test]
 fn scenario_a_spec_marked_export_subst() {
-    // req:gate/base-specs-as-checkout@a340ed25
+    // req:gate/base-specs-as-checkout@fa7aa061
     let node = A_NODE.replace("## Contract\nc\n", "## Contract\nc $Format:%H$\n");
     let out = fix_after_main(&[
         (".gitattributes", Some("specs/** export-subst\n")),
@@ -1500,7 +1500,7 @@ fn scenario_a_spec_marked_export_subst() {
 
 #[test]
 fn branch_without_specs_at_the_merge_base() {
-    // req:gate/base-specs-as-checkout@a340ed25
+    // req:gate/base-specs-as-checkout@fa7aa061
     // `main` has no `specs/`, which loads empty: node `a` is missing, so the fix isn't exempt.
     let out = fix_after_main(&[("specs/SPEC.md", None), ("specs/a/SPEC.md", None)]);
     assert_eq!(out.kind, Kind::Mixed, "{:?}", out.violations);
@@ -1523,7 +1523,7 @@ fn scenario_key_declared_on_main() {
 #[cfg(unix)]
 #[test]
 fn a_change_named_by_bytes_that_are_not_utf8_is_skipped() {
-    // req:gate/base-specs-as-checkout@a340ed25
+    // req:gate/base-specs-as-checkout@fa7aa061
     use std::os::unix::ffi::OsStrExt;
     let dir = repo_with_bug(BUG_X);
     let d = dir.path();
@@ -1541,7 +1541,7 @@ fn a_change_named_by_bytes_that_are_not_utf8_is_skipped() {
 
 #[test]
 fn archived_changes_alone_load_no_change_files() {
-    // req:gate/base-specs-as-checkout@a340ed25
+    // req:gate/base-specs-as-checkout@fa7aa061
     // `main` has neither `specs/` nor a live change, only the archive: nothing to extract.
     let out = fix_after_main(&[
         ("specs/SPEC.md", None),
@@ -1570,7 +1570,7 @@ fn rev_parse(dir: &Path, rev: &str) -> String {
 
 #[test]
 fn scenario_another_commit() {
-    // req:gate/evaluate-at@86fdcdf3
+    // req:gate/evaluate-at@a51bf198
     let dir = tier_repo(&[ROOT_SPEC, ("specs/a/SPEC.md", NODE)]);
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &format!("{NODE}{ADDED_REQ}"));
@@ -1594,7 +1594,7 @@ fn scenario_another_commit() {
 
 #[test]
 fn scenario_a_merge_commit_against_its_first_parent() {
-    // req:gate/evaluate-at@86fdcdf3
+    // req:gate/evaluate-at@a51bf198
     let dir = tier_repo(&[ROOT_SPEC, ("specs/a/SPEC.md", NODE)]);
     let d = dir.path();
     write(d, "ARCHITECTURE.md", "invariants\n");
@@ -1623,7 +1623,7 @@ fn policy_after(base: Option<&str>, edits: &[Edit], approved: bool) -> clm_gate:
 
 #[test]
 fn scenario_code_branch_weakens_the_policy() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(Some(POLICY), &[("clm.toml", Some(&weakened))], false);
     assert_eq!((out.kind, out.review), (Kind::Spec, true));
@@ -1632,7 +1632,7 @@ fn scenario_code_branch_weakens_the_policy() {
 
 #[test]
 fn scenario_the_gate_agrees() {
-    // req:gate/approval-changed@bd437cee
+    // req:gate/approval-changed@af4eae32
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(Some(POLICY), &[("clm.toml", Some(&weakened))], false);
     assert_eq!((out.kind, out.review), (Kind::Spec, true));
@@ -1644,7 +1644,7 @@ fn scenario_the_gate_agrees() {
 
 #[test]
 fn scenario_policy_set_where_it_was_unset() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let unset = "[land]\ncheck = \"a\"\n";
     let set = format!("approval = \"other\"\n{unset}");
     let out = policy_after(Some(unset), &[("clm.toml", Some(&set))], false);
@@ -1653,7 +1653,7 @@ fn scenario_policy_set_where_it_was_unset() {
 
 #[test]
 fn scenario_approved_policy_change() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(Some(POLICY), &[("clm.toml", Some(&weakened))], true);
     assert_eq!(
@@ -1666,7 +1666,7 @@ fn scenario_approved_policy_change() {
 
 #[test]
 fn scenario_policy_change_with_code() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(
         Some(POLICY),
@@ -1682,7 +1682,7 @@ fn scenario_policy_change_with_code() {
 
 #[test]
 fn scenario_other_setting_changed() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let edited = POLICY
         .replace("# who approves", "# who may approve")
         .replace("check = \"a\"", "check = \"b\"");
@@ -1704,7 +1704,7 @@ fn scenario_other_setting_changed() {
 
 #[test]
 fn scenario_unparseable_clm_toml() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let out = policy_after(
         Some(POLICY),
         &[("clm.toml", Some("approval = \"other\"\n[land\n"))],
@@ -1715,7 +1715,7 @@ fn scenario_unparseable_clm_toml() {
 
 #[test]
 fn editing_an_unparseable_clm_toml_is_a_spec_change() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let out = policy_after(
         Some("approval = \"other\"\n[land\n"),
         &[("clm.toml", Some("approval = \"any\"\n[land\n"))],
@@ -1726,14 +1726,14 @@ fn editing_an_unparseable_clm_toml_is_a_spec_change() {
 
 #[test]
 fn deleting_a_clm_toml_that_set_the_policy_is_a_spec_change() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let out = policy_after(Some(POLICY), &[("clm.toml", None)], false);
     assert_eq!(verdict(&out), (Kind::Spec, true, false));
 }
 
 #[test]
 fn adding_a_clm_toml_without_the_policy_is_code() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let out = policy_after(
         None,
         &[
@@ -1752,7 +1752,7 @@ fn adding_a_clm_toml_without_the_policy_is_code() {
 
 #[test]
 fn a_clm_toml_that_isnt_utf8_is_a_spec_change() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let dir = tier_repo(&[("clm.toml", POLICY)]);
     fs::write(
         dir.path().join("clm.toml"),
@@ -1765,7 +1765,7 @@ fn a_clm_toml_that_isnt_utf8_is_a_spec_change() {
 
 #[test]
 fn a_value_config_would_reject_is_compared_as_a_value() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let same = policy_after(
         Some("approval = 1\n"),
         &[
@@ -1785,7 +1785,7 @@ fn a_value_config_would_reject_is_compared_as_a_value() {
 
 #[test]
 fn evaluate_at_reads_changes_and_the_policy_at_the_head() {
-    // req:gate/evaluate-at@86fdcdf3
+    // req:gate/evaluate-at@a51bf198
     // `HEAD` stays on `main`; the head commit adds a change with a burden and, separately,
     // a policy.
     let dir = tier_repo(&[("specs/a/SPEC.md", NODE), ("clm.toml", POLICY)]);
@@ -1812,7 +1812,7 @@ fn evaluate_at_reads_changes_and_the_policy_at_the_head() {
 
 #[test]
 fn a_nested_clm_toml_is_not_the_policy() {
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     let out = policy_after(
         None,
         &[("sub/clm.toml", Some("approval = \"any\"\n"))],
@@ -1828,7 +1828,7 @@ fn a_nested_clm_toml_is_not_the_policy() {
 
 #[test]
 fn architecture_needs_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/approval@0b9e62cb
     let dir = tier_repo(&[("ARCHITECTURE.md", "invariants\n")]);
     let out = tier_after(&dir, &[("ARCHITECTURE.md", Some("changed\n"))], true);
     assert_eq!(
@@ -1841,7 +1841,7 @@ fn architecture_needs_review() {
 
 #[test]
 fn capabilities_file_needs_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let dir = tier_repo(&[]);
     let out = tier_after(
         &dir,
@@ -1854,7 +1854,7 @@ fn capabilities_file_needs_review() {
 
 #[test]
 fn trusted_keys_need_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let dir = tier_repo(&[("docs/allowed_signers", "alice ssh-ed25519 AAAA\n")]);
     let out = tier_after(
         &dir,
@@ -1875,7 +1875,7 @@ fn trusted_keys_need_review() {
 
 #[test]
 fn trusted_keys_need_review_however_edited() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     // A line that reads as a status edit, a deletion, and a directory in the file's place.
     let keys = "alice ssh-ed25519 AAAA\n";
     let status_line = format!("{keys}status: ssh-ed25519 BBBB\n");
@@ -1903,7 +1903,7 @@ fn trusted_keys_need_review_however_edited() {
 
 #[test]
 fn approval_setting_needs_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(Some(POLICY), &[("clm.toml", Some(&weakened))], false);
     assert_eq!(verdict(&out), (Kind::Spec, true, false));
@@ -1911,7 +1911,7 @@ fn approval_setting_needs_review() {
 
 #[test]
 fn burdens_need_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let dir = tier_repo(&[]);
     let change = change_md("human_burdens: [a paid model run on every land]\n");
     let out = tier_after(&dir, &[("changes/x/change.md", Some(&change))], false);
@@ -1921,7 +1921,7 @@ fn burdens_need_review() {
 
 #[test]
 fn burdens_of_a_modified_change_need_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let change = change_md("human_burdens: [b]\n");
     let dir = tier_repo(&[("changes/x/change.md", &change)]);
     let edited = change.replace("\nx\n", "\nx, reworded\n");
@@ -1931,7 +1931,7 @@ fn burdens_of_a_modified_change_need_review() {
 
 #[test]
 fn burdens_of_a_new_archived_change_need_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let dir = tier_repo(&[]);
     let change = "---\nstatus: done\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
     let out = tier_after(
@@ -1944,7 +1944,7 @@ fn burdens_of_a_new_archived_change_need_review() {
 
 #[test]
 fn unparsable_change_needs_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     for text in ["---\nstatus: [\n---\n", "no frontmatter\n"] {
         let dir = tier_repo(&[]);
         let out = tier_after(&dir, &[("changes/x/change.md", Some(text))], false);
@@ -1963,7 +1963,7 @@ fn unparsable_change_needs_review() {
 
 #[test]
 fn contract_change_needs_no_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     // The Contract changes and `r2` is reworded, keeping its scenario and its one stating
     // sentence.
     let stated = "\n### Requirement: r2\nR2 SHALL hold.\n\n#### Scenario: s\n- ok\n";
@@ -1997,7 +1997,7 @@ fn contract_change_needs_no_review() {
 
 #[test]
 fn review_blocked_without_approval() {
-    // req:gate/approval@492f6a25
+    // req:gate/approval@0b9e62cb
     let dir = tier_repo(&[]);
     let out = tier_after(&dir, &[("ARCHITECTURE.md", Some("x\n"))], false);
     assert_eq!(rules(&out), ["gate/approval"]);
@@ -2005,7 +2005,7 @@ fn review_blocked_without_approval() {
 
 #[test]
 fn review_passes_with_approval() {
-    // req:gate/approval@492f6a25
+    // req:gate/approval@0b9e62cb
     let dir = tier_repo(&[]);
     let out = tier_after(&dir, &[("ARCHITECTURE.md", Some("x\n"))], true);
     assert_eq!(
@@ -2020,7 +2020,7 @@ const HUMAN_ITEM: &str = "---\ntitle: H\nkind: human-task\n---\nMake a key.\n";
 
 #[test]
 fn undeclared_human_item_blocked() {
-    // req:gate/undeclared-burden@aba2c63f
+    // req:gate/undeclared-burden@2d817b7e
     let dir = tier_repo(&[]);
     let out = tier_after(
         &dir,
@@ -2036,7 +2036,7 @@ fn undeclared_human_item_blocked() {
 
 #[test]
 fn declared_human_item_passes() {
-    // req:gate/undeclared-burden@aba2c63f
+    // req:gate/undeclared-burden@2d817b7e
     let dir = tier_repo(&[]);
     let out = tier_after(
         &dir,
@@ -2061,7 +2061,7 @@ fn declared_human_item_passes() {
 
 #[test]
 fn a_code_branch_may_add_a_human_item() {
-    // req:gate/undeclared-burden@aba2c63f
+    // req:gate/undeclared-burden@2d817b7e
     let dir = tier_repo(&[]);
     let out = tier_after(
         &dir,
@@ -2081,8 +2081,8 @@ fn a_code_branch_may_add_a_human_item() {
 
 #[test]
 fn status_only_edit_of_a_change_with_burdens_needs_review() {
-    // req:gate/needs-review@2373a9ad
-    // req:gate/needs-review-of@60afa4d1
+    // req:gate/needs-review@3946ac29
+    // req:gate/needs-review-of@a4b7f8da
     // The status-only edit isn't a spec change, but it modifies a file of the change, so the
     // change's frontmatter reaches `needs_review_of` as the Worker's does.
     let change = "---\nstatus: proposed\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
@@ -2101,7 +2101,7 @@ fn status_only_edit_of_a_change_with_burdens_needs_review() {
 
 #[test]
 fn deltas_of_a_change_with_burdens_need_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let change = "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
     let dir = tier_repo(&[
         ("changes/x/change.md", change),
@@ -2118,7 +2118,7 @@ fn deltas_of_a_change_with_burdens_need_review() {
 
 #[test]
 fn scenario_a_bug_filed_under_the_new_key() {
-    // req:gate/item-components@dd579233
+    // req:gate/item-components@c70518a7
     let dir = repo_with_bug(&BUG_X.replace("nodes:", "components:"));
     let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
     assert_eq!((out.kind, rules(&out)), (Kind::Code, vec![]));
@@ -2126,7 +2126,7 @@ fn scenario_a_bug_filed_under_the_new_key() {
 
 #[test]
 fn an_item_setting_both_keys_is_not_exempt() {
-    // req:gate/item-components@dd579233
+    // req:gate/item-components@c70518a7
     let dir = repo_with_bug(&BUG_X.replace("components: [a]", "nodes: [a]\ncomponents: [a]"));
     let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
     assert_eq!(out.kind, Kind::Mixed, "{:?}", out.violations);
@@ -2134,7 +2134,7 @@ fn an_item_setting_both_keys_is_not_exempt() {
 
 #[test]
 fn scenario_the_old_words() {
-    // req:gate/undeclared-burden@aba2c63f
+    // req:gate/undeclared-burden@2d817b7e
     let dir = tier_repo(&[]);
     let out = tier_after(
         &dir,
@@ -2181,7 +2181,7 @@ const STAMPED: &str = "approval = \"other\"\nupgraded = \"0.17.0\"\n[land]\nchec
 
 #[test]
 fn scenario_notes_taken() {
-    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    // req:gate/upgrade-stamp-left-out@b3b01420
     let dir = tier_repo(&[("CLAUDE.md", "old\n"), ("clm.toml", STAMPED)]);
     let stamped = "approval = \"other\"\nupgraded = \"0.18.0\"\ndeclined_migrations = [\"m\"]\n[land]\ncheck = \"a\"\n";
     let out = tier_after(
@@ -2199,7 +2199,7 @@ fn scenario_notes_taken() {
 
 #[test]
 fn the_stamp_alone_classifies_as_spec_without_review() {
-    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    // req:gate/upgrade-stamp-left-out@b3b01420
     let dir = tier_repo(&[("clm.toml", STAMPED)]);
     let stamped = STAMPED.replace("0.17.0", "0.18.0");
     let out = tier_after(&dir, &[("clm.toml", Some(&stamped))], false);
@@ -2213,7 +2213,7 @@ fn the_stamp_alone_classifies_as_spec_without_review() {
 
 #[test]
 fn scenario_mechanical_migrations_taken() {
-    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    // req:gate/upgrade-stamp-left-out@b3b01420
     let dir = tier_repo(&[(".gitignore", "a\n"), ("clm.toml", STAMPED)]);
     let stamped = STAMPED.replace("0.17.0", "0.18.0");
     let out = tier_after(
@@ -2231,7 +2231,7 @@ fn scenario_mechanical_migrations_taken() {
 
 #[test]
 fn scenario_the_stamp_and_another_key() {
-    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    // req:gate/upgrade-stamp-left-out@b3b01420
     let dir = tier_repo(&[("CLAUDE.md", "old\n"), ("clm.toml", STAMPED)]);
     let edited = STAMPED
         .replace("0.17.0", "0.18.0")
@@ -2247,7 +2247,7 @@ fn scenario_the_stamp_and_another_key() {
 
 #[test]
 fn agents_md_edit_is_a_spec_edit() {
-    // req:gate/agents-md-spec-path@165bf739
+    // req:gate/agents-md-spec-path@3b4c17bb
     let dir = repo();
     write(dir.path(), "AGENTS.md", "x\n");
     commit_all(dir.path(), "instructions");
@@ -2257,7 +2257,7 @@ fn agents_md_edit_is_a_spec_edit() {
 
 #[test]
 fn nested_agents_md_is_code() {
-    // req:gate/agents-md-spec-path@165bf739
+    // req:gate/agents-md-spec-path@3b4c17bb
     let dir = repo();
     write(dir.path(), "sub/AGENTS.md", "x\n");
     commit_all(dir.path(), "nested");

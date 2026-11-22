@@ -52,7 +52,7 @@ fn base() -> TempDir {
     dir
 }
 
-// req:gate/files-outside-spec-paths@dabe9dde
+// req:gate/files-outside-spec-paths@f992afb5
 #[test]
 fn a_code_file_among_spec_files() {
     let dir = base();
@@ -71,7 +71,7 @@ fn a_code_file_among_spec_files() {
     assert_eq!(files, ["crates/b/src/lib.rs", "crates/x/src/lib.rs"]);
 }
 
-// req:gate/files-outside-spec-paths@dabe9dde
+// req:gate/files-outside-spec-paths@f992afb5
 #[test]
 fn only_a_new_backlog_item() {
     let dir = base();
@@ -86,7 +86,7 @@ fn only_a_new_backlog_item() {
     );
 }
 
-// req:gate/files-outside-spec-paths@dabe9dde
+// req:gate/files-outside-spec-paths@f992afb5
 #[test]
 fn a_rename_branch() {
     let dir = base();
@@ -106,7 +106,7 @@ fn a_rename_branch() {
     );
 }
 
-// req:gate/files-outside-spec-paths@dabe9dde
+// req:gate/files-outside-spec-paths@f992afb5
 #[test]
 fn a_rename_branch_with_an_extra_code_edit() {
     let dir = base();
@@ -125,7 +125,7 @@ fn a_rename_branch_with_an_extra_code_edit() {
     );
 }
 
-// req:gate/files-outside-spec-paths@dabe9dde
+// req:gate/files-outside-spec-paths@f992afb5
 #[test]
 fn an_approval_change() {
     let dir = base();
@@ -143,7 +143,7 @@ fn an_approval_change() {
     );
 }
 
-// req:gate/files-outside-spec-paths@dabe9dde
+// req:gate/files-outside-spec-paths@f992afb5
 #[test]
 fn another_setting_changed() {
     let dir = base();
@@ -167,7 +167,7 @@ fn another_setting_changed() {
     );
 }
 
-// req:gate/files-outside-spec-paths@dabe9dde
+// req:gate/files-outside-spec-paths@f992afb5
 #[test]
 fn an_unparseable_clm_toml_is_read_from_the_revision() {
     let dir = base();
@@ -185,7 +185,7 @@ fn an_unparseable_clm_toml_is_read_from_the_revision() {
     );
 }
 
-// req:gate/files-outside-spec-paths@dabe9dde
+// req:gate/files-outside-spec-paths@f992afb5
 #[test]
 fn only_the_upgrade_stamp_changed() {
     let dir = base();

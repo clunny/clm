@@ -257,7 +257,7 @@ fn scenario_a_code_fix_in_a_subdirectory_root() {
 #[test]
 fn reads_at_a_revision_name_the_roots_file() {
     // req:gate/paths-under-the-root@6ac586a5
-    // req:gate/approval-setting@937b3676
+    // req:gate/approval-setting@fec3d7ef
     // the root's `clm.toml` is the policy, read at each revision as the root's file
     let dir = repo("");
     let d = dir.path();

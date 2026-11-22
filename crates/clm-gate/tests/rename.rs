@@ -73,7 +73,7 @@ const TERM_RENAME: &str = "  - term: spine\n    to: trunk\n";
 
 #[test]
 fn a_rename_branch_is_a_spec_branch() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     let dir = renamed(ID_RENAME, "");
     assert_marker_rewritten(dir.path());
     let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
@@ -94,7 +94,7 @@ fn assert_marker_rewritten(d: &Path) {
 
 #[test]
 fn a_rename_branch_with_a_code_edit_is_mixed() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     let dir = renamed(ID_RENAME, "");
     assert_marker_rewritten(dir.path());
     write(dir.path(), "crates/a/src/lib.rs", "pub fn b() {}\n");
@@ -106,7 +106,7 @@ fn a_rename_branch_with_a_code_edit_is_mixed() {
 
 #[test]
 fn an_id_rename_through_the_human_layers_needs_no_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let dir = renamed(ID_RENAME, "");
     let arch = fs::read_to_string(dir.path().join("ARCHITECTURE.md")).unwrap();
     assert!(arch.contains("- a/y"), "the rename rewrote ARCHITECTURE.md");
@@ -118,7 +118,7 @@ fn an_id_rename_through_the_human_layers_needs_no_review() {
 
 #[test]
 fn a_term_rename_needs_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let dir = renamed(TERM_RENAME, "");
     let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
     assert_eq!(out.kind, Kind::Spec, "{:?}", out.violations);
@@ -128,7 +128,7 @@ fn a_term_rename_needs_review() {
 
 #[test]
 fn a_rename_that_declares_burdens_needs_review() {
-    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review@3946ac29
     let dir = renamed(ID_RENAME, "human_burdens: [a paid run]\n");
     let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
     assert_eq!(out.kind, Kind::Spec, "{:?}", out.violations);

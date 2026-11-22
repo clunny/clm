@@ -1463,7 +1463,7 @@ mod tests {
 
     #[test]
     fn resolves_are_read_at_the_merge_base() {
-        // req:gate/backlog-additions@85a57cc9
+        // req:gate/backlog-additions@1653493f
         let dir = tempfile::TempDir::new().unwrap();
         let d = dir.path();
         clm_git::git(d, &["init", "-q", "-b", "main"]).unwrap();

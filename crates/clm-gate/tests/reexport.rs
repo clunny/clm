@@ -1,17 +1,6 @@
-//! `clm-gate` re-exports `clm-fingerprint` and defines none of it (gate/fingerprint-reexported).
+//! `clm-gate` offers `clm-fingerprint`'s items under the same names (gate/fingerprint-reexported).
 
-use std::path::{Path, PathBuf};
-
-fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
-        if path.is_dir() {
-            rust_files(&path, out);
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            out.push(path);
-        }
-    }
-}
+use std::path::Path;
 
 fn listing(second_blob: &str) -> Vec<u8> {
     format!(
@@ -23,7 +12,7 @@ fn listing(second_blob: &str) -> Vec<u8> {
 
 #[test]
 fn same_function_through_the_gate() {
-    // req:gate/fingerprint-reexported@a216e732
+    // req:gate/fingerprint-reexported@f5d8facf
     let base: Vec<clm_gate::Entry> = clm_gate::parse_ls_tree(&listing(&"2".repeat(40)));
     let head = clm_gate::parse_ls_tree(&listing(&"3".repeat(40)));
     assert_eq!(base.len(), 2);
@@ -43,37 +32,4 @@ fn same_function_through_the_gate() {
         clm_gate::adds_change(&base, &head),
         clm_fingerprint::adds_change(&base, &head)
     );
-}
-
-#[test]
-fn no_copy_left() {
-    // req:gate/fingerprint-reexported@a216e732
-    let krate = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let manifest: toml::Table = std::fs::read_to_string(krate.join("Cargo.toml"))
-        .unwrap()
-        .parse()
-        .unwrap();
-    let deps = manifest["dependencies"].as_table().unwrap();
-    assert!(deps.contains_key("clm-fingerprint"));
-    assert!(!deps.contains_key("sha2"));
-    let mut files = Vec::new();
-    rust_files(&krate.join("src"), &mut files);
-    assert!(!files.is_empty());
-    let defs = [
-        "struct Entry",
-        "fn parse_ls_tree",
-        "fn fingerprint_of",
-        "fn adds_change",
-        "fn added_changes",
-        "fn fingerprint(",
-    ];
-    let found: Vec<String> = files
-        .iter()
-        .filter(|f| {
-            let text = std::fs::read_to_string(f).unwrap();
-            defs.iter().any(|d| text.contains(d))
-        })
-        .map(|f| f.display().to_string())
-        .collect();
-    assert!(found.is_empty(), "copies left: {found:?}");
 }

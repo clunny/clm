@@ -95,7 +95,7 @@ fn mixed_repo() -> TempDir {
 
 #[test]
 fn gate_prints_kind_and_blocks_mixed_pr() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     let dir = mixed_repo();
     let (code, stdout) = clm(dir.path(), &["--base", "main", "--approved"]);
     assert_eq!(code, Some(1), "{stdout}");
@@ -105,8 +105,8 @@ fn gate_prints_kind_and_blocks_mixed_pr() {
 
 #[test]
 fn first_line() {
-    // req:gate/approval@492f6a25
-    // req:gate/needs-review@2373a9ad
+    // req:gate/approval@0b9e62cb
+    // req:gate/needs-review@3946ac29
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     git(d, &["init", "-q", "-b", "main"]);
@@ -140,7 +140,7 @@ fn first_line() {
 
 #[test]
 fn the_call_writes_what_clm_gate_prints() {
-    // req:gate/commands-in-crate@66389c3a
+    // req:gate/commands-in-crate@80d095b0
     let dir = mixed_repo();
     let d = dir.path();
     let outcome = clm_gate::evaluate_at(d, "main", "HEAD", false).unwrap();
@@ -195,7 +195,7 @@ fn the_call_writes_what_clm_gate_prints() {
 
 #[test]
 fn arguments_it_cant_parse_return_2() {
-    // req:gate/commands-in-crate@66389c3a
+    // req:gate/commands-in-crate@80d095b0
     let dir = mixed_repo();
     let out = call(
         dir.path(),
