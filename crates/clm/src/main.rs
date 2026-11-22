@@ -75,7 +75,9 @@ enum Command {
     /// Claim a component, or pick up its unfinished build, write the prompt for a session that
     /// builds and lands its pending requirements to `.clm/prompts/<component>.md`, and print a
     /// launcher naming that file. With `--finish`, free the component's build place instead and,
-    /// once its branch has landed, remove its clean worktrees under `.claude/worktrees/`.
+    /// once its branch has landed, remove its clean worktrees under `.claude/worktrees/`, keeping
+    /// one whose lock a running process holds unless `--returned` says the build's subagent has
+    /// handed back.
     Run(clm_run::RunArgs),
     /// List the changes that hold or propose backlog items, and the live backlog claims.
     Proposals(clm_orchestrator::ProposalsArgs),
