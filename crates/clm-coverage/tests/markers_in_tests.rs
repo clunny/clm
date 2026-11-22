@@ -46,7 +46,7 @@ fn cite(dir: &TempDir) -> String {
 
 #[test]
 fn scenario_a_marker_in_code_that_is_no_test() {
-    // req:check.coverage/markers-in-tests@c0070f92
+    // req:check.coverage/markers-in-tests@a126a993
     let dir = repo();
     let text = format!("fn helper() {{\n    // {}\n}}\n", cite(&dir));
     assert_eq!(line(&dir, &[("src/lib.rs", text)]), "a/x unbuilt");
@@ -54,7 +54,7 @@ fn scenario_a_marker_in_code_that_is_no_test() {
 
 #[test]
 fn scenario_a_marker_in_a_test() {
-    // req:check.coverage/markers-in-tests@c0070f92
+    // req:check.coverage/markers-in-tests@a126a993
     let dir = repo();
     let text = format!("#[test]\nfn t() {{\n    // {}\n}}\n", cite(&dir));
     assert_eq!(
@@ -65,7 +65,7 @@ fn scenario_a_marker_in_a_test() {
 
 #[test]
 fn scenario_a_file_header_marker() {
-    // req:check.coverage/markers-in-tests@c0070f92
+    // req:check.coverage/markers-in-tests@a126a993
     let dir = repo();
     let text = format!(
         "// {}\n\ndescribe('g', () => {{\n  it('works', () => {{}});\n}});\n",
@@ -76,7 +76,7 @@ fn scenario_a_file_header_marker() {
 
 #[test]
 fn scenario_a_language_clm_doesnt_read() {
-    // req:check.coverage/markers-in-tests@c0070f92
+    // req:check.coverage/markers-in-tests@a126a993
     let dir = repo();
     let text = format!("// {}\n", cite(&dir));
     assert_eq!(
@@ -87,7 +87,7 @@ fn scenario_a_language_clm_doesnt_read() {
 
 #[test]
 fn python_and_group_markers_follow_the_same_rule() {
-    // req:check.coverage/markers-in-tests@c0070f92
+    // req:check.coverage/markers-in-tests@a126a993
     let dir = repo();
     let c = cite(&dir);
     let py = format!("def test_x():\n    # {c}\n\n# {c}\n");
@@ -106,7 +106,7 @@ fn python_and_group_markers_follow_the_same_rule() {
 
 #[test]
 fn a_marker_in_a_test_beside_one_outside_counts_once() {
-    // req:check.coverage/markers-in-tests@c0070f92
+    // req:check.coverage/markers-in-tests@a126a993
     let dir = repo();
     let c = cite(&dir);
     let text = format!("fn h() {{\n    // {c}\n}}\n#[test]\nfn t() {{\n    // {c}\n}}\n");
@@ -116,7 +116,7 @@ fn a_marker_in_a_test_beside_one_outside_counts_once() {
 #[cfg(feature = "checkout")]
 #[test]
 fn scenario_same_as_the_files() {
-    // req:check.coverage/markers-in-tests@c0070f92
+    // req:check.coverage/markers-in-tests@a126a993
     let dir = repo();
     let c = cite(&dir);
     let files = [
@@ -157,4 +157,20 @@ fn scenario_same_as_the_files() {
     };
     assert_eq!(one(&scan.req), one(&from_files));
     assert_eq!(scan.outside.len(), 2);
+}
+
+#[test]
+fn only_the_extension_md_exactly_holds_no_markers() {
+    // req:check.coverage/markers-in-tests@a126a993
+    let dir = repo();
+    let text = format!("{}\n", cite(&dir));
+    assert!(markers_in(Path::new("notes.md"), &text).is_empty());
+    assert_eq!(
+        line(&dir, &[("notes.MD", text.clone())]),
+        "a/x current notes.MD:1"
+    );
+    assert_eq!(
+        line(&dir, &[("notes.markdown", text)]),
+        "a/x current notes.markdown:1"
+    );
 }

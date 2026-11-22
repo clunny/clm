@@ -346,7 +346,8 @@ pub fn read_files(root: &Path) -> Vec<(PathBuf, String)> {
 }
 
 /// The `req:<id>[@<version>]` markers in one file, `path` repo-relative: what `scan` finds
-/// in it. None for Markdown, where markers are examples rather than claims.
+/// in it. None for a file whose extension is exactly `md`, where markers are examples
+/// rather than claims (`markers-in-tests`).
 pub fn markers_in(path: &Path, text: &str) -> Vec<Marker> {
     let mut scan = Scan {
         req: Vec::new(),
