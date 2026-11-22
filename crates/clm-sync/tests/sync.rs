@@ -303,14 +303,16 @@ fn an_edit_to_a_file_main_changed_stops_it() {
 fn an_unrelated_edit_is_carried_through() {
     // req:sync/rebase@3ba762e9
     let r = repo("spec/x");
+    // On `main`, so the branch holds no code of its own and isn't a build's.
     write(&r.work, ".claude/settings.json", "{}\n");
     commit(&r.work, "settings");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, ".claude/settings.json", "{\"mine\": 1}\n");
     let stashes = git(&r.work, &["stash", "list"]);
 
     assert_eq!(synced(&r), Vec::<String>::new());
-    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), origin_main(&r));
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), origin_main(&r));
     assert_eq!(read(&r.work, ".claude/settings.json"), "{\"mine\": 1}\n");
     assert_eq!(
         git(&r.work, &["status", "--porcelain"]),
@@ -373,15 +375,19 @@ fn without_a_merge_base_every_edit_stops_it() {
 fn an_edit_is_set_aside_during_a_conflict() {
     // req:sync/rebase@3ba762e9
     let r = repo("spec/x");
+    // The settings on `main` and the conflict in a doc, so the branch isn't a build's.
     write(&r.work, ".claude/settings.json", "{}\n");
-    write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
+    write(&r.work, "docs/guide.md", "one\ntwo\nthree\n");
+    commit(&r.work, "settings");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    write(&r.work, "docs/guide.md", "one\nTWO\nthree\n");
     commit(&r.work, "work");
-    main_moves(&r, &[("src/lib.rs", "one\n2\nthree\n")]);
+    main_moves(&r, &[("docs/guide.md", "one\n2\nthree\n")]);
     write(&r.work, ".claude/settings.json", "{\"mine\": 1}\n");
 
-    assert_eq!(unfinished(&r), ["conflict src/lib.rs"]);
-    write(&r.work, "src/lib.rs", "one\nTWO and 2\nthree\n");
-    git(&r.work, &["add", "src/lib.rs"]);
+    assert_eq!(unfinished(&r), ["conflict docs/guide.md"]);
+    write(&r.work, "docs/guide.md", "one\nTWO and 2\nthree\n");
+    git(&r.work, &["add", "docs/guide.md"]);
     assert_eq!(synced(&r), Vec::<String>::new());
     assert_eq!(read(&r.work, ".claude/settings.json"), "{\"mine\": 1}\n");
     assert_eq!(
@@ -1289,12 +1295,16 @@ fn nothing_archived_or_activated_off_impl_branches() {
     for branch in ["spec/y", "topic"] {
         let r = with_applied_x(branch, "");
         let (p, x) = (version(&r, "a/p"), version(&r, "a/x"));
-        write(
-            &r.work,
-            "src/test.rs",
-            &format!("{}{}", citing("a/p", &p), citing("a/x", &x)),
+        // The tests on `main` and only a doc on the branch, which isn't then a build's.
+        main_moves(
+            &r,
+            &[(
+                "src/test.rs",
+                &format!("{}{}", citing("a/p", &p), citing("a/x", &x)),
+            )],
         );
-        commit(&r.work, "tests");
+        write(&r.work, "docs/guide.md", "guide\n");
+        commit(&r.work, "guide");
 
         assert_eq!(synced(&r), Vec::<String>::new(), "{branch}");
         assert!(r.work.join("changes/x/change.md").exists(), "{branch}");
@@ -1343,14 +1353,11 @@ fn settings_cant_be_loaded() {
 #[test]
 fn the_settings_error_comes_before_the_check() {
     // req:sync/judged-by-check@bfefb55e
-    let r = repo("topic");
-    write(
-        &r.work,
-        "src/test.rs",
-        &format!("// {}\n#[test]\nfn t() {{}}\n", concat!("req", ":a/p")),
-    );
-    commit(&r.work, "test a/p");
-    main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", "c", &[]))]);
+    let r = repo("spec/x");
+    // On `main`, so the branch holds no code of its own.
+    write(&r.work, "src/test.rs", &cites_missing());
+    commit(&r.work, "cite a/missing");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
 
     let report =
         clm_sync::sync(&r.work, &|_| None, |_: &Path| Err("settings: bad".into())).unwrap();
@@ -1420,8 +1427,10 @@ fn an_uncommitted_marker_is_not_judged() {
 fn a_committed_fault_is_judged_despite_an_uncommitted_fix() {
     // req:sync/judged-by-check@bfefb55e
     let r = repo("spec/x");
+    // The fault on `main`, as the merge base and `origin/main` both hold it.
     write(&r.work, "src/lib.rs", &cites_missing());
     commit(&r.work, "cite a/missing");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "src/lib.rs", "fixed\n");
 
@@ -3164,8 +3173,10 @@ fn uncommitted_spec_edit_in_a_subdirectory_root() {
 fn a_top_level_specs_directory_is_outside_the_root() {
     // req:sync/paths-under-the-root@6e985447
     let r = repo_at("spec/x", TOOL);
+    // On `main`: a file outside the root is code, which would make the branch a build's.
     write(&r.work, "specs/notes.md", "notes\n");
     commit(&r.work, "notes");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "specs/notes.md", "notes, edited\n");
 
@@ -3176,7 +3187,7 @@ fn a_top_level_specs_directory_is_outside_the_root() {
         "{:?}",
         report.lines
     );
-    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), origin_main(&r));
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), origin_main(&r));
     assert_eq!(read(&r.work, "specs/notes.md"), "notes, edited\n");
     assert_eq!(
         git(&r.work, &["status", "--porcelain"]),
