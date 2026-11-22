@@ -378,16 +378,141 @@ fn sync_refusing_exits_1_and_git_failing_exits_2() {
 
 #[test]
 fn a_refused_sync_keeps_its_output() {
-    // req:sync/shared-plumbing@0453c1dd
+    // req:sync/rebase@789d48ec
     let (_dir, work) = conflicting();
     git(&work, &["checkout", "-q", "main"]);
     let out = clm(&work, &["rebase"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.starts_with("clm rebase: "), "{out:?}");
-    assert!(stderr.len() > "clm rebase: \n".len(), "no reason: {out:?}");
+    assert!(stderr.contains("`main`"), "the reason names main: {out:?}");
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(stdout.lines().last(), Some("rebase incomplete"), "{out:?}");
+
+    git(&work, &["checkout", "-q", "--detach", "HEAD"]);
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.starts_with("clm rebase: "), "{out:?}");
+    assert!(stderr.contains("detached"), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase incomplete\n");
+}
+
+/// `git <args>` in `dir`, whatever its status: its stdout.
+fn git_out(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_EDITOR", "true")
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// What a refusal must leave as it was: the refs, the status, both diffs and git's own
+/// rebase state.
+fn untouched(work: &Path) -> [String; 5] {
+    let state = |dir: &str| {
+        let path = work.join(git_out(work, &["rev-parse", "--git-path", dir]).trim());
+        path.exists()
+    };
+    [
+        git_out(work, &["for-each-ref"]),
+        git_out(work, &["status", "--porcelain"]),
+        git_out(work, &["diff"]),
+        git_out(work, &["diff", "--cached"]),
+        format!("{} {}", state("rebase-merge"), state("rebase-apply")),
+    ]
+}
+
+/// Runs `clm rebase` in `work`, asserting it refused naming `continue` and `abort` and left
+/// everything as it was.
+fn refused_naming(work: &Path, continue_: &str, abort: &str) {
+    let before = untouched(work);
+    let out = clm(work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.starts_with("clm rebase: "), "{out:?}");
+    assert!(stderr.contains("in progress"), "{out:?}");
+    assert!(
+        stderr.contains(continue_) && stderr.contains(abort),
+        "{out:?}"
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase incomplete\n");
+    assert_eq!(untouched(work), before);
+}
+
+#[test]
+fn a_rebase_started_by_hand_is_refused() {
+    // req:sync/rebase@789d48ec
+    let (_dir, work) = conflicting();
+    git(&work, &["fetch", "-q", "origin"]);
+    git_out(&work, &["rebase", "origin/main"]);
+    assert!(git_out(&work, &["status"]).contains("rebase in progress"));
+    refused_naming(&work, "git rebase --continue", "git rebase --abort");
+}
+
+#[test]
+fn a_hand_rebase_after_its_own_finished_with_git_is_refused() {
+    // req:sync/rebase@789d48ec
+    let (dir, work) = conflicting();
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "conflict src/lib.rs\nrebase incomplete\n"
+    );
+    write(&work, "src/lib.rs", "both\n");
+    git(&work, &["add", "src/lib.rs"]);
+    git_out(&work, &["rebase", "--continue"]);
+    assert!(!git_out(&work, &["status"]).contains("rebase in progress"));
+
+    // `main` moves again, and a rebase by hand onto it stops.
+    let other = dir.path().join("other");
+    git(
+        dir.path(),
+        &[
+            "clone",
+            "-q",
+            dir.path().join("origin").to_str().unwrap(),
+            "other",
+        ],
+    );
+    write(&other, "src/lib.rs", "theirs again\n");
+    git(
+        &other,
+        &[
+            "-c",
+            "user.name=o",
+            "-c",
+            "user.email=o@o",
+            "commit",
+            "-qam",
+            "again",
+        ],
+    );
+    git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    write(&work, "src/lib.rs", "mine again\n");
+    commit(&work, "again");
+    git(&work, &["fetch", "-q", "origin"]);
+    git_out(&work, &["rebase", "origin/main"]);
+    assert!(git_out(&work, &["status"]).contains("rebase in progress"));
+    refused_naming(&work, "git rebase --continue", "git rebase --abort");
+}
+
+#[test]
+fn a_git_am_in_progress_is_refused() {
+    // req:sync/rebase@789d48ec
+    let (dir, work) = conflicting();
+    // `main`'s commit, which doesn't apply on `pr`'s `src/lib.rs`.
+    let patch = dir.path().join("p.patch");
+    fs::write(
+        &patch,
+        git_out(&work, &["format-patch", "-1", "--stdout", "main"]),
+    )
+    .unwrap();
+    git_out(&work, &["am", patch.to_str().unwrap()]);
+    refused_naming(&work, "git am --continue", "git am --abort");
 }
 
 /// `conflicting()`'s work clone on a new branch `spec/x` with an uncommitted edit to

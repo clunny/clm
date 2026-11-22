@@ -328,6 +328,38 @@ fn an_unrelated_edit_is_carried_through() {
 }
 
 #[test]
+fn a_set_aside_edit_that_cant_be_put_back_is_kept_in_the_stash() {
+    // req:sync/rebase@789d48ec
+    let r = repo("spec/x");
+    write(&r.work, ".claude/settings.json", "{}\n");
+    commit(&r.work, "settings");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    write(&r.work, "docs/guide.md", "guide\n");
+    commit(&r.work, "guide");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    write(&r.work, ".claude/settings.json", "{\"mine\": 1}\n");
+    // Once the rebase has rewritten the branch, and before git puts the edit back, the file
+    // changes under it.
+    let hooks = r
+        .work
+        .join(git(&r.work, &["rev-parse", "--git-path", "hooks"]));
+    fs::create_dir_all(&hooks).unwrap();
+    write_exec(
+        &hooks.join("post-rewrite"),
+        "#!/bin/sh\necho '{\"hook\": 1}' > .claude/settings.json\n",
+    );
+
+    let Err(Error::Git(why)) = sync(&r.work) else {
+        panic!("not a git failure");
+    };
+    let entry = git(&r.work, &["rev-parse", "refs/stash"]);
+    assert!(why.contains(&entry), "{why}");
+    assert!(why.contains(&format!("git stash apply {entry}")), "{why}");
+    let kept = git(&r.work, &["stash", "show", "-p", &entry]);
+    assert!(kept.contains("\"mine\": 1"), "{kept}");
+}
+
+#[test]
 fn an_uncommitted_spec_edit_stops_it() {
     // req:sync/rebase@3ba762e9
     let r = repo("spec/x");
@@ -2923,6 +2955,159 @@ fn a_branch_that_regenerates_nothing_merges_no_other_delta() {
     assert_eq!(read(&r.work, "changes/o/deltas/a.md"), stale);
 }
 
+/// *An edit taken back*: `origin/main` with `a`'s Design `one\ntwo\nthree` and a `proposed`
+/// change `o` whose delta rewrites its last line with `origin/main`'s hash as its base, and
+/// branch `spec/x` applying `x`, whose delta rewrites the first line, on which a `clm rebase`
+/// committed `Merge x into o`. With `origin/main`'s Design hash.
+fn merged_into_o() -> (Repo, String) {
+    let r = repo("spec/x");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_design("one\ntwo\nthree", &["p"]))],
+    );
+    pull(&r);
+    let main_hash = design_hash(&r);
+    let o_delta = modifies_design(&r, "one\ntwo\nTHREE");
+    main_moves(
+        &r,
+        &[
+            ("changes/o/change.md", "---\nstatus: proposed\n---\n\n# o\n"),
+            ("changes/o/deltas/a.md", &o_delta),
+        ],
+    );
+    pull(&r);
+    apply_change(&r, "x", "", &modifies_design(&r, "ONE\ntwo\nthree"));
+    assert_eq!(
+        synced(&r),
+        ["merged design of a into changes/o/deltas/a.md"]
+    );
+    assert_eq!(subject(&r), "Merge x into o");
+    (r, main_hash)
+}
+
+/// Sets the branch's `specs/` back to `origin/main`'s.
+fn specs_as_main(r: &Repo) {
+    git(&r.work, &["rm", "-rq", "--", "specs"]);
+    git(&r.work, &["checkout", "origin/main", "--", "specs"]);
+}
+
+/// Runs `clm rebase` and asserts it took `o`'s edit back to `main_hash`.
+fn took_back_o(r: &Repo, main_hash: &str) {
+    let lines = synced(r);
+    assert!(
+        has(
+            &lines,
+            &format!("took back design of a in changes/o/deltas/a.md to base {main_hash}")
+        ),
+        "{lines:?}"
+    );
+    assert!(!lines.iter().any(|l| l.contains("stale-base")), "{lines:?}");
+    assert_eq!(subject(r), "Take back what this branch merged into o");
+    assert_eq!(
+        read(&r.work, "changes/o/deltas/a.md"),
+        git(&r.work, &["show", "origin/main:changes/o/deltas/a.md"]) + "\n"
+    );
+}
+
+#[test]
+fn an_edit_is_taken_back_when_the_change_no_longer_makes_it() {
+    // req:sync/reapply@5dc2a995
+    let (r, main_hash) = merged_into_o();
+    specs_as_main(&r);
+    write(
+        &r.work,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n# x\n",
+    );
+    write(&r.work, "changes/x/deltas/a.md", &adds_x());
+    clm_apply::apply(&r.work, "x").unwrap();
+    commit(&r.work, "x adds a requirement instead");
+
+    took_back_o(&r, &main_hash);
+}
+
+#[test]
+fn an_edit_is_taken_back_on_a_branch_that_regenerates_nothing() {
+    // req:sync/reapply@5dc2a995
+    let (r, main_hash) = merged_into_o();
+    specs_as_main(&r);
+    git(&r.work, &["rm", "-rq", "--", "changes/x"]);
+    commit(&r.work, "drop x");
+
+    took_back_o(&r, &main_hash);
+}
+
+#[test]
+fn a_hand_resolution_is_taken_back_too() {
+    // req:sync/reapply@5dc2a995
+    let (r, main_hash) = merged_into_o();
+    // The same edit, made by hand under another message.
+    git(&r.work, &["reset", "-q", "--soft", "HEAD~1"]);
+    git(&r.work, &["commit", "-qm", "fix o"]);
+    specs_as_main(&r);
+    git(&r.work, &["rm", "-rq", "--", "changes/x"]);
+    commit(&r.work, "drop x");
+
+    took_back_o(&r, &main_hash);
+}
+
+#[test]
+fn the_branchs_own_change_is_taken_back() {
+    // req:sync/reapply@5dc2a995
+    let r = repo("spec/x");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_design("one\ntwo\nthree", &["p"]))],
+    );
+    pull(&r);
+    let main_hash = design_hash(&r);
+    let p_delta = modifies_design(&r, "one\ntwo\nTHREE");
+    write(
+        &r.work,
+        "changes/p/change.md",
+        "---\nstatus: proposed\n---\n\n# p\n",
+    );
+    write(&r.work, "changes/p/deltas/a.md", &p_delta);
+    commit(&r.work, "Propose p");
+    apply_change(&r, "x", "", &modifies_design(&r, "ONE\ntwo\nthree"));
+    assert_eq!(
+        synced(&r),
+        ["merged design of a into changes/p/deltas/a.md"]
+    );
+    assert_eq!(subject(&r), "Merge x into p");
+    specs_as_main(&r);
+    write(
+        &r.work,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n# x\n",
+    );
+    commit(&r.work, "x back to proposed");
+
+    let lines = synced(&r);
+    assert!(
+        has(
+            &lines,
+            &format!("took back design of a in changes/p/deltas/a.md to base {main_hash}")
+        ),
+        "{lines:?}"
+    );
+    assert_eq!(read(&r.work, "changes/p/deltas/a.md"), p_delta);
+}
+
+#[test]
+fn nothing_is_taken_back_with_nothing_changed() {
+    // req:sync/reapply@5dc2a995
+    let (r, _) = merged_into_o();
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    let lines = synced(&r);
+    assert!(
+        !starts(&lines, "merged") && !starts(&lines, "took back"),
+        "{lines:?}"
+    );
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
 const RENAME_P: &str =
     "---\nstatus: proposed\nrenames:\n  - requirement: a/p\n    to: q\n---\n\n## Intent\nRename.\n";
 
@@ -3656,7 +3841,12 @@ fn a_branch_adding_scenarios_with_their_code_archives_its_change() {
     );
     commit(&r.work, "a");
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
-    let base = clm_model::load(&r.work).0.requirement("a/q").unwrap().hash.clone();
+    let base = clm_model::load(&r.work)
+        .0
+        .requirement("a/q")
+        .unwrap()
+        .hash
+        .clone();
     let scenario = "#### Scenario: y's\n- GIVEN y\n- WHEN it runs\n- THEN it holds\n";
     apply_change(
         &r,
