@@ -165,9 +165,10 @@ pub(crate) struct Ctx<'a> {
 
 impl<'a> Ctx<'a> {
     /// The context for `root`, or, in `Err(source)`, the name of the committed `clm.toml` whose
-    /// settings hold no `[verify]`. Every setting, `host` included, comes from the `clm.toml`
-    /// committed at `origin/main`, after fetching it; the working tree's `clm.toml` is never
-    /// loaded (`settings-from-main`).
+    /// settings hold no `[verify]`. Every setting, `host` included, is loaded after fetching
+    /// `origin`, with the `clm.toml` committed at `origin/main` as the repository layer, under
+    /// the clone's `clm.local.toml` and the user's layers as everywhere; the working tree's
+    /// `clm.toml` is never loaded (`settings-from-main`).
     fn open(root: &Path, env: &'a Env) -> Result<Result<Self, String>, Error> {
         let root = std::fs::canonicalize(root)?;
         clm_git::fetch(&root)?;
