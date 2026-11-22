@@ -153,7 +153,7 @@ fn scenario_arguments_it_cant_parse() {
 
 #[test]
 fn orchestrator_commands_exit_2_when_git_fails() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/claim@026fab7a
+    // req:orchestrator/next@cc111fbd req:orchestrator/claim@026fab7a
     // req:orchestrator/backlog-claim@50959cb7 req:orchestrator/proposals@ba5ce6a8
     // req:orchestrator/claim-fix@5a3c119e
     let dir = change_repo("---\ncomponent: clm\n---\n");
@@ -252,7 +252,7 @@ fn next_with(dir: &Path, max_builds: &str) -> Output {
 
 #[test]
 fn next_is_capped_by_the_max_builds_setting() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = repo();
     let (code, out, err) = next_with(&r.work, "3");
     assert_eq!((code, out.as_str()), (Some(0), "a\nb\nc\n"), "{err}");
@@ -330,7 +330,7 @@ fn proposals_lines_filter_and_warning_through_the_call() {
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_ready() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = repo();
     write(
         &r.work,

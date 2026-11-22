@@ -71,7 +71,7 @@ fn same_as_next() -> Graph {
 
 #[test]
 fn scenario_same_as_next() {
-    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@fd7e1025
+    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@cc111fbd
     let g = same_as_next();
     let q = queue(&g, &[current(&g, "b/x")], &[claim("e", 1)]);
     assert_eq!(state(&q, "b"), &State::Converged);
@@ -220,7 +220,7 @@ fn a_change_whose_addition_a_later_change_removed_completes() {
 
 #[test]
 fn lapsed_and_merged_claims_are_released() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/next@cc111fbd req:orchestrator/queue-from-refs@cbcfd325
     let g = graph(&[
         ROOT,
         ("specs/b/SPEC.md", &node("", &["x"])),
@@ -257,7 +257,7 @@ fn scenario_archive_branch_in_the_queue() {
 
 #[test]
 fn scenario_behind_requirement() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let g = graph(&[ROOT, ("specs/b/SPEC.md", &node("", &["x"]))]);
     let q = queue(&g, &[marker("b/x", Some("11111111"), 1)], &[]);
     assert_eq!(q.next(), ["b"]);
@@ -265,7 +265,7 @@ fn scenario_behind_requirement() {
 
 #[test]
 fn scenario_dependency_doesnt_order() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &node("b", &["x"])),
@@ -306,7 +306,7 @@ fn with_changes(nodes: &[(&str, &str)], changes: Vec<Vec<(String, String)>>) -> 
 
 #[test]
 fn scenario_higher_priority_first() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/next@cc111fbd req:orchestrator/priority-orders-components@147ea0bf
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("", &["x"])),
@@ -373,7 +373,7 @@ fn scenario_passes_through_a_claimed_node() {
 
 #[test]
 fn scenario_dependency_lends_no_priority() {
-    // req:orchestrator/priority-orders-components@147ea0bf req:orchestrator/next@fd7e1025
+    // req:orchestrator/priority-orders-components@147ea0bf req:orchestrator/next@cc111fbd
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("b", &["x"])),
@@ -486,7 +486,7 @@ fn scenario_blocked_requirement_does_not_lend_its_priority() {
 
 #[test]
 fn priority_never_makes_a_node_ready() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -502,7 +502,7 @@ fn priority_never_makes_a_node_ready() {
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_ready() {
-    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@fd7e1025
+    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@cc111fbd
     let g = graph(&[
         ROOT,
         (
@@ -653,7 +653,7 @@ fn scenario_blocked_by_a_need() {
 
 #[test]
 fn scenario_needed_requirement_first_then_current() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -665,14 +665,14 @@ fn scenario_needed_requirement_first_then_current() {
 
 #[test]
 fn scenario_need_against_the_node_graph() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &["w"])),
         ("specs/b/SPEC.md", &node("a", &["y"])),
     ]);
     let q = queue(&g, &[], &[]);
-    assert_eq!(q.next(), ["a", "b"]);
+    assert_eq!(q.next(), ["b", "a"], "`a` waits on `b/y`, so it comes last");
     let State::Ready { pending } = state(&q, "a") else {
         panic!("{q:?}");
     };
@@ -685,8 +685,36 @@ fn scenario_need_against_the_node_graph() {
 }
 
 #[test]
+fn scenario_a_component_that_waits_comes_last_at_equal_priority() {
+    // req:orchestrator/next@cc111fbd
+    let g = graph(&[
+        ROOT,
+        ("specs/a/SPEC.md", &needing("", "c/y", &["w"])),
+        ("specs/b/SPEC.md", &node("", &["z"])),
+        ("specs/c/SPEC.md", &node("", &["y"])),
+    ]);
+    assert_eq!(queue(&g, &[], &[]).next(), ["b", "c", "a"]);
+}
+
+#[test]
+fn a_component_that_waits_still_sorts_by_priority_first() {
+    // req:orchestrator/next@cc111fbd
+    // `a` waits on `c/y`, but its unblocked `a/w` carries P2, so it comes before `b` and
+    // `c` at no priority; `a/x`, which waits, has no priority to lend `c`.
+    let g = with_changes(
+        &[
+            ("specs/a/SPEC.md", &needing("", "c/y", &["w"])),
+            ("specs/b/SPEC.md", &node("", &["z"])),
+            ("specs/c/SPEC.md", &node("", &["y"])),
+        ],
+        vec![adds("20260101-a", "P2", "a", "w")],
+    );
+    assert_eq!(queue(&g, &[], &[]).next(), ["a", "b", "c"]);
+}
+
+#[test]
 fn scenario_blocked_node_holds_nothing_up() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -698,7 +726,7 @@ fn scenario_blocked_node_holds_nothing_up() {
 
 #[test]
 fn scenario_need_pulls_priority() {
-    // req:orchestrator/priority-orders-components@147ea0bf req:orchestrator/next@fd7e1025
+    // req:orchestrator/priority-orders-components@147ea0bf req:orchestrator/next@cc111fbd
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -751,7 +779,7 @@ fn a_need_blocked_by_an_item_too_still_seeds_and_lists_both() {
 
 #[test]
 fn scenario_split_in_flight() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &node("", &["w"])),

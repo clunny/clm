@@ -40,7 +40,7 @@ fn scenario_one_remote_name() {
 
 #[test]
 fn scenario_dependency_doesnt_order_then_converged() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = repo();
     // `a` depends on `b`; `c` is on its own. Nothing is cited yet.
     assert_eq!(ready(&r), ["a", "b", "c"]);
@@ -51,7 +51,7 @@ fn scenario_dependency_doesnt_order_then_converged() {
 
 #[test]
 fn next_reads_origin_main_not_the_checkout() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = repo();
     cite(&r.work, "c.rs", &["c/s"]);
     write(&r.work, "specs/a/SPEC.md", "garbage");
@@ -64,7 +64,7 @@ fn next_reads_origin_main_not_the_checkout() {
 
 #[test]
 fn scenario_live_and_lapsed_claims() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = repo();
     push_claim(&r.work, "b", 1);
     push_claim(&r.work, "c", 5);
@@ -74,7 +74,7 @@ fn scenario_live_and_lapsed_claims() {
 
 #[test]
 fn scenario_merged_claim() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = repo();
     push_claim(&r.work, "b", 1);
     merge_claim(&r.work, "b");
@@ -96,7 +96,7 @@ fn hold(root: &std::path::Path, node: &str) {
 
 #[test]
 fn scenario_capped_by_places() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = repo();
     write(&r.work, "specs/d/SPEC.md", &node("", &["t"]));
     write(&r.work, "specs/e/SPEC.md", &node("", &["u"]));
@@ -109,8 +109,30 @@ fn scenario_capped_by_places() {
 }
 
 #[test]
+fn scenario_a_component_that_waits_comes_last_at_equal_priority() {
+    // req:orchestrator/next@cc111fbd
+    let r = repo();
+    // Only the scenario's `a`, `b` and `c`, with no `depends_on` and no change.
+    fs::remove_dir_all(r.work.join("changes")).unwrap();
+    write(
+        &r.work,
+        "specs/a/SPEC.md",
+        &node_with(
+            "",
+            "",
+            &[("w", "It SHALL."), ("x", "It SHALL.\n\n#### Needs\n- c/y")],
+        ),
+    );
+    write(&r.work, "specs/b/SPEC.md", &node("", &["z"]));
+    write(&r.work, "specs/c/SPEC.md", &node("", &["y"]));
+    push_main(&r.work, "a waits on c");
+    assert_eq!(next(&r.work, 4, 9).unwrap(), ["b", "c", "a"]);
+    assert_eq!(next(&r.work, 4, 2).unwrap(), ["b", "c"]);
+}
+
+#[test]
 fn scenario_no_place_free() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/claim@026fab7a
+    // req:orchestrator/next@cc111fbd req:orchestrator/claim@026fab7a
     let r = repo();
     hold(&r.work, "z");
     assert_eq!(next(&r.work, 4, 1).unwrap(), Vec::<String>::new());
@@ -133,7 +155,7 @@ fn scenario_no_place_free() {
 
 #[test]
 fn scenario_full_cap_empty_queue() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = converged();
     hold(&r.work, "z");
     let look = next_look(&r.work, 4, 1).unwrap();
@@ -143,7 +165,7 @@ fn scenario_full_cap_empty_queue() {
 
 #[test]
 fn scenario_same_as_next_on_a_repo() {
-    // req:orchestrator/queue-matches-next@b56edb27 req:orchestrator/next@fd7e1025
+    // req:orchestrator/queue-matches-next@b56edb27 req:orchestrator/next@cc111fbd
     // The tree of `queue.rs`'s *same as next*: `a` depends on `b`, `c` on `d`, `b` is
     // converged, `e` claimed an hour ago, and `backlog/h.md` blocks `f/x`.
     let r = repo();
@@ -191,7 +213,7 @@ fn scenario_same_as_next_on_a_repo() {
 
 #[test]
 fn scenario_places_shared_by_worktrees() {
-    // req:orchestrator/next@fd7e1025
+    // req:orchestrator/next@cc111fbd
     let r = repo();
     hold(&r.work, "z");
     let tmp = tempfile::TempDir::new().unwrap();
@@ -211,7 +233,7 @@ fn scenario_places_shared_by_worktrees() {
 
 #[test]
 fn nested_branches_claim_no_node() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/status-claims@726cb7c5
+    // req:orchestrator/next@cc111fbd req:orchestrator/status-claims@726cb7c5
     // req:orchestrator/nested-branches-not-claims@a7ec57b2
     let r = repo();
     push_claim(&r.work, "b/x", 1);
@@ -232,7 +254,7 @@ fn scenario_archive_branch_beside_a_claim() {
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_listed_and_claimed() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/claim@026fab7a
+    // req:orchestrator/next@cc111fbd req:orchestrator/claim@026fab7a
     let r = repo();
     write(
         &r.work,

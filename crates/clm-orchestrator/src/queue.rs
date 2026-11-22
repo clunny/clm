@@ -176,7 +176,7 @@ pub struct Queue {
 }
 
 impl Queue {
-    /// What `clm next` prints: the `ready` nodes, by effective priority then ID.
+    /// What `clm next` prints: the `ready` nodes, in [`Queue::in_order`]'s order.
     pub fn next(&self) -> Vec<String> {
         self.in_order()
             .filter(|n| matches!(n.state, State::Ready { .. }))
@@ -188,10 +188,21 @@ impl Queue {
         self.nodes.iter().find(|n| n.node == id)
     }
 
+    /// The nodes by effective priority, then each with no pending requirement that waits
+    /// before each that has one, then by ID: at equal priority the places go first to work
+    /// that waits for nothing (`priority-orders-nodes`, `needs-alone-order`).
     fn in_order(&self) -> impl Iterator<Item = &Node> {
         let mut nodes: Vec<&Node> = self.nodes.iter().collect();
-        nodes.sort_by(|a, b| (a.priority, &a.node).cmp(&(b.priority, &b.node)));
+        nodes.sort_by_key(|n| (n.priority, has_wait(n), &n.node));
         nodes.into_iter()
+    }
+}
+
+/// Whether one of `node`'s pending requirements waits: has an entry in its `waits_on`.
+fn has_wait(node: &Node) -> bool {
+    match &node.state {
+        State::Ready { pending } => pending.iter().any(|p| !p.waits_on.is_empty()),
+        _ => false,
     }
 }
 
