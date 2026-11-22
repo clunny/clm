@@ -89,7 +89,11 @@ pub fn sync(
     // `rebase`: a rebase it started is one whose `rebase-merge` directory holds the file it
     // writes there when its rebase stops; git removes the directory, and the file with it,
     // however that rebase is finished or given up, so a later rebase by hand never holds it.
-    let ours = merging.join(OURS).exists();
+    // A run killed before it could write the file, or a marker an older `clm` wrote, is
+    // read from the marker (`claims`).
+    let kept = fs::read_to_string(&marker).ok();
+    let ours = merging.join(OURS).exists()
+        || merging.is_dir() && kept.as_deref().is_some_and(|t| claims(t, &merging));
     if !ours {
         if applying.join("applying").exists() {
             return Err(Error::Refused(
@@ -113,33 +117,38 @@ pub fn sync(
     // regenerate against the same `main` the rebase used, not a newer one, and read the branch
     // as it was. A change counts as added only if it is also absent at the fresh merge base,
     // so one that `main` archived or removed since the branch was cut isn't re-applied. The
-    // marker holds `onto`, the build line, then a line per added change: its ID when it is
-    // regenerated, `added <id>` when it isn't.
+    // marker holds `onto`, the `HEAD` it rebases (`=head <commit>`), the build line, then a
+    // line per added change: its ID when it is regenerated, `added <id>` when it isn't.
     let (onto, build, added, fresh) = if ours {
-        let text = fs::read_to_string(&marker).map_err(|e| io(&marker, e))?;
-        let mut lines = text.lines().peekable();
+        let text = kept.unwrap_or_default();
+        let mut lines = text.lines();
         let onto = lines.next().unwrap_or_default().to_string();
-        let build = match lines.peek().and_then(|l| Build::parse(l)) {
-            Some(build) => {
-                lines.next();
-                build
+        let mut build = None;
+        let mut added = Vec::new();
+        for line in lines {
+            if line.starts_with('=') {
+                build = build.or_else(|| Build::parse(line));
+            } else {
+                added.push(match line.strip_prefix("added ") {
+                    Some(id) => (id.to_string(), false),
+                    None => (line.to_string(), true),
+                });
             }
+        }
+        let build = match build {
+            Some(build) => build,
             // A marker an older `clm` wrote: asked again, of the branch the rebase replays.
             None => {
-                let name = fs::read_to_string(merging.join("head-name")).unwrap_or_default();
-                let name = name.trim().trim_start_matches("refs/heads/");
-                let tip = fs::read_to_string(merging.join("orig-head")).unwrap_or_default();
+                let read = |f: &str| fs::read_to_string(merging.join(f)).unwrap_or_default();
+                let name = read("head-name");
+                let name = name.trim();
+                let name = name.strip_prefix("refs/heads/").unwrap_or(name);
+                let tip = read("orig-head");
                 let tip = tip.trim();
-                let base = merge_base(root, tip, &onto)?;
-                Build::of(root, name, &onto, tip, base.is_some())?
+                let merged = !tip.is_empty() && merge_base(root, tip, &onto)?.is_some();
+                Build::of(root, name, &onto, tip, merged)?
             }
         };
-        let added = lines
-            .map(|l| match l.strip_prefix("added ") {
-                Some(id) => (id.to_string(), false),
-                None => (l.to_string(), true),
-            })
-            .collect();
         (onto, build, added, None)
     } else {
         let Some(branch) = clm_git::current_branch(root)? else {
@@ -246,7 +255,8 @@ pub fn sync(
     ];
     let mut continuing = ours;
     if !ours {
-        let mut text = format!("{onto}\n{}", build.line());
+        let head = git(root, &["rev-parse", "HEAD"])?;
+        let mut text = format!("{onto}\n=head {head}\n{}", build.line());
         for (id, applied) in &added {
             text.push('\n');
             if !applied {
@@ -351,6 +361,19 @@ pub fn sync(
 
 /// The file `clm rebase` writes into git's `rebase-merge` directory when its rebase stops.
 const OURS: &str = "clm-rebase";
+
+/// Whether the marker `text` claims the rebase in `merging`, which lacks [`OURS`]: one it
+/// began and was stopped before it could write that file, as by a kill, replays the `HEAD`
+/// the marker records (`=head <commit>`, git's `orig-head`); a rebase begun by hand after
+/// its own finished replays the rebased branch, another commit. A marker an older `clm`
+/// wrote records no `=` line and claims it, as that `clm` read it.
+fn claims(text: &str, merging: &Path) -> bool {
+    let mut equals = text.lines().filter(|l| l.starts_with('='));
+    let Some(head) = text.lines().find_map(|l| l.strip_prefix("=head ")) else {
+        return equals.next().is_none();
+    };
+    fs::read_to_string(merging.join("orig-head")).is_ok_and(|o| o.trim() == head)
+}
 
 /// `build-branches`: whether the branch is a build's, and its component, asked of the gate
 /// once per run.

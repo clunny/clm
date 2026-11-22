@@ -515,6 +515,39 @@ fn a_git_am_in_progress_is_refused() {
     refused_naming(&work, "git am --continue", "git am --abort");
 }
 
+/// `conflicting()` after a `clm rebase` stopped on its conflict, which is then resolved and
+/// staged, with the file it writes into git's `rebase-merge` gone, as when the run is killed
+/// before it can write it.
+fn stopped_without_its_file() -> (TempDir, PathBuf) {
+    let (dir, work) = conflicting();
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let merging = work.join(git_out(&work, &["rev-parse", "--git-path", "rebase-merge"]).trim());
+    fs::remove_file(merging.join("clm-rebase")).unwrap();
+    write(&work, "src/lib.rs", "both\n");
+    git(&work, &["add", "src/lib.rs"]);
+    (dir, work)
+}
+
+#[test]
+fn a_rebase_it_began_is_its_own_without_its_file() {
+    // req:sync/rebase@789d48ec
+    let (_dir, work) = stopped_without_its_file();
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase ok\n");
+
+    // A marker an older `clm` wrote, `onto` and the added changes alone, likewise.
+    let (_dir, work) = stopped_without_its_file();
+    let marker = work.join(git_out(&work, &["rev-parse", "--git-path", "clm/sync-rebase"]).trim());
+    let text = fs::read_to_string(&marker).unwrap();
+    let old: Vec<&str> = text.lines().filter(|l| !l.starts_with('=')).collect();
+    fs::write(&marker, old.join("\n")).unwrap();
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase ok\n");
+}
+
 /// `conflicting()`'s work clone on a new branch `spec/x` with an uncommitted edit to
 /// `specs/SPEC.md`, whose `origin` is `url` when given.
 fn spec_branch_with_an_edit(url: Option<&str>) -> (TempDir, PathBuf) {
@@ -745,6 +778,8 @@ fn rebase_leaving_a_worktree(violation: bool) -> (Option<i32>, String, String, P
     let [made] = &made[..] else {
         panic!("{made:?}: {out:?}");
     };
+    let name = made.file_name().unwrap().to_string_lossy();
+    assert!(name.starts_with("sync-"), "{name}");
     // Writable again, so the test's directory can go.
     Command::new("chmod")
         .args(["-R", "u+w"])

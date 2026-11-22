@@ -357,6 +357,24 @@ fn a_set_aside_edit_that_cant_be_put_back_is_kept_in_the_stash() {
     assert!(why.contains(&format!("git stash apply {entry}")), "{why}");
     let kept = git(&r.work, &["stash", "show", "-p", &entry]);
     assert!(kept.contains("\"mine\": 1"), "{kept}");
+
+    // Through the command: its outcome line and status.
+    git(&r.work, &["reset", "-q", "--hard", "HEAD"]);
+    main_moves(&r, &[("src/more.rs", "more\n")]);
+    write(&r.work, ".claude/settings.json", "{\"mine\": 2}\n");
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_sync::rebase_command(
+        Vec::<String>::new(),
+        &r.work,
+        &|_| None,
+        &mut out,
+        &mut err,
+        |_: &Path| Ok(health()),
+    );
+    let err = String::from_utf8(err).unwrap();
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("git stash apply "), "{err}");
+    assert_eq!(String::from_utf8(out).unwrap(), "rebase failed\n");
 }
 
 #[test]

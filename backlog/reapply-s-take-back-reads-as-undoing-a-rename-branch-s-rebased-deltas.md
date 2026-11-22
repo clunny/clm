@@ -3,7 +3,7 @@ title: "`sync/reapply`'s take-back on a branch that regenerates nothing reads as
 kind: question
 components: [sync]
 choices:
-  - "State that a rename branch takes nothing back"
+  - "A rename branch takes nothing back"
   - "Say otherwise"
 ---
 
