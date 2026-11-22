@@ -23,7 +23,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 
 #[test]
 fn a_clone_the_environment_names() {
-    // req:host/none-keeps-a-remote@7c60711b
+    // req:host/none-keeps-a-remote@ce3af5bf
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path().canonicalize().unwrap();
     let w = base.join("w");

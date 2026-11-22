@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
-use crate::{Error, adapter, delete_pushed_branch, pr_open, push_branch};
+use crate::{Error, adapter, delete_pushed_branch, pr_open, push_branch, take_said};
 
 /// The environment, as a lookup.
 type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
@@ -118,21 +118,36 @@ enum Branch {
 }
 
 #[derive(Parser)]
-#[command(name = "clm pr", bin_name = "clm pr", no_binary_name = true)]
+#[command(
+    name = "clm pr",
+    bin_name = "clm pr",
+    no_binary_name = true,
+    about = "A branch's pull request on the host the `host` setting names"
+)]
 struct PrLine {
     #[command(flatten)]
     args: PrArgs,
 }
 
 #[derive(Parser)]
-#[command(name = "clm issue", bin_name = "clm issue", no_binary_name = true)]
+#[command(
+    name = "clm issue",
+    bin_name = "clm issue",
+    no_binary_name = true,
+    about = "File an issue where the host the `host` setting names keeps them and print its URL; without a host, print the report and exit 1"
+)]
 struct IssueLine {
     #[command(flatten)]
     args: IssueArgs,
 }
 
 #[derive(Parser)]
-#[command(name = "clm branch", bin_name = "clm branch", no_binary_name = true)]
+#[command(
+    name = "clm branch",
+    bin_name = "clm branch",
+    no_binary_name = true,
+    about = "Remote branches, through the host adapter the `host` setting names"
+)]
 struct BranchLine {
     #[command(flatten)]
     args: BranchArgs,
@@ -268,7 +283,12 @@ fn hosted(
         Err(e) => writeln!(err, "clm {command}: {e}").map(|()| 2),
         Ok(settings) => {
             let host = settings.host.value;
-            report(command, host, op(host, root), out, err)
+            take_said();
+            let result = op(host, root);
+            take_said()
+                .iter()
+                .try_for_each(|line| writeln!(err, "{line}"))
+                .and_then(|()| report(command, host, result, out, err))
         }
     };
     written.unwrap_or(2)

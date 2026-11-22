@@ -49,6 +49,14 @@ fn json(what: &str, text: &str) -> Result<Value, Error> {
     serde_json::from_str(text).map_err(|e| Error::Git(format!("{what}: bad JSON: {e}")))
 }
 
+/// The items of `what`'s answer, which must be a JSON list.
+fn list_of(what: &str, text: &str) -> Result<Vec<Value>, Error> {
+    match json(what, text)? {
+        Value::Array(items) => Ok(items),
+        _ => Err(Error::Git(format!("{what}: the answer is not a list"))),
+    }
+}
+
 fn text(v: &Value) -> String {
     v.as_str().unwrap_or_default().to_string()
 }
@@ -144,11 +152,9 @@ fn listed(root: &Path, kind: &str) -> Result<Vec<Listed>, Error> {
         "--limit",
         "1000",
     ];
-    let items = json(&format!("gh {kind} list"), &gh(root, &args)?)?;
+    let items = list_of(&format!("gh {kind} list"), &gh(root, &args)?)?;
     Ok(items
-        .as_array()
-        .into_iter()
-        .flatten()
+        .iter()
         .filter(|item| kind != "pr" || item["isCrossRepository"].as_bool() == Some(true))
         .filter_map(|item| {
             Some(Listed {
@@ -233,13 +239,8 @@ impl Host for GitHub {
             "--json",
             "databaseId,headSha,status,conclusion,url",
         ];
-        let items = json("gh run list", &gh(root, &args)?)?;
-        Ok(items
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(run)
-            .collect())
+        let items = list_of("gh run list", &gh(root, &args)?)?;
+        Ok(items.iter().filter_map(run).collect())
     }
 
     fn alerts(&self, root: &Path) -> Result<Vec<Alert>, Error> {
@@ -312,12 +313,11 @@ impl Host for GitHub {
             "--json",
             "url,headRepositoryOwner",
         ];
-        let open = json("gh pr list", &gh(root, &listed)?)?;
+        let open = list_of("gh pr list", &gh(root, &listed)?)?;
         let fork_owner = owner(&view)?;
-        let mine =
-            open.as_array().into_iter().flatten().find(|pr| {
-                pr["headRepositoryOwner"]["login"].as_str() == Some(fork_owner.as_str())
-            });
+        let mine = open
+            .iter()
+            .find(|pr| pr["headRepositoryOwner"]["login"].as_str() == Some(fork_owner.as_str()));
         if let Some(url) = mine.and_then(|pr| pr["url"].as_str()) {
             return Ok(url.to_string());
         }

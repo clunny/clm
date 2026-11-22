@@ -85,6 +85,22 @@ pub struct Run {
     pub url: String,
 }
 
+thread_local! {
+    /// What an adapter says beside its answer, such as that it cut a body to fit
+    /// (`azure-body-limit`), for the command that called it to write on its own error stream.
+    static SAID: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Leaves `line` for the command calling the adapter to write on its error stream.
+fn say(line: String) {
+    SAID.with(|said| said.borrow_mut().push(line));
+}
+
+/// What adapters said on this thread since the last call, taken.
+fn take_said() -> Vec<String> {
+    SAID.with(|said| std::mem::take(&mut *said.borrow_mut()))
+}
+
 fn no_host<T>() -> Result<T, Error> {
     Err(Error::Refused("there is no host".into()))
 }
@@ -181,25 +197,32 @@ pub trait Host {
         Err(Error::Refused("the host lists no pipeline runs".into()))
     }
 
-    /// Deletes [`REMOTE`]'s `branch` when its tip is still `lease`: plain git on every host,
-    /// and nothing to do without that remote or when the branch is already gone.
+    /// Deletes [`REMOTE`]'s `branch` when its tip is still `lease` (`branch-delete-call`):
+    /// plain git on every host, reading no record of who pushed it. Refuses `main` and the
+    /// `clm/` branches before any git call; nothing to do without that remote or when it has
+    /// no branch of exactly that name; a moved tip, a refused push and an `origin` that
+    /// can't be reached are each a refusal.
     fn branch_delete(&self, root: &Path, branch: &str, lease: &str) -> Result<(), Error> {
-        if !git(root, &["remote"])?.lines().any(|r| r == REMOTE) {
+        refuse_protected(branch)?;
+        if !has_remote(root)? {
             return Ok(());
         }
         let refname = format!("refs/heads/{branch}");
+        if remote_tip(root, &refname)?.is_none() {
+            return Ok(());
+        }
         let with_lease = format!("--force-with-lease={refname}:{lease}");
         match git(root, &["push", &with_lease, REMOTE, &format!(":{refname}")]) {
             Ok(_) => Ok(()),
-            // A failed lease: the tip moved, or the branch is gone, which leaves nothing to do.
-            Err(clm_git::Error::Failed { stderr, .. }) if stderr.contains("stale info") => {
-                if git(root, &["ls-remote", REMOTE, &refname])?.is_empty() {
-                    return Ok(());
-                }
-                Err(Error::Refused(format!(
+            // Asking `origin` again tells a tip that moved or went, and a push `origin`
+            // refused, from an `origin` that can't be reached.
+            Err(clm_git::Error::Failed { stderr, .. }) => match remote_tip(root, &refname)? {
+                None => Ok(()),
+                Some(_) if stderr.contains("stale info") => Err(Error::Refused(format!(
                     "`{branch}` on origin is no longer at {lease}; left it"
-                )))
-            }
+                ))),
+                Some(_) => Err(Error::Refused(stderr)),
+            },
             Err(e) => Err(e.into()),
         }
     }
@@ -341,14 +364,23 @@ pub(crate) fn delete_pushed_branch(
 }
 
 /// The tip of `origin`'s `refname`, read with `ls-remote`, whose pattern also matches refs
-/// that merely end in it, so only the line naming `refname` itself counts.
+/// that merely end in it, so only the line naming `refname` itself counts. An `origin` that
+/// can't be asked is CLM's offline case, a refusal, as `clm land` reads it
+/// (`land/offline-land`).
 fn remote_tip(root: &Path, refname: &str) -> Result<Option<String>, Error> {
-    Ok(git(root, &["ls-remote", REMOTE, refname])?
-        .lines()
-        .find_map(|line| match line.split_once('\t') {
-            Some((sha, name)) if name == refname => Some(sha.to_string()),
-            _ => None,
-        }))
+    let listed = match git(root, &["ls-remote", REMOTE, refname]) {
+        Ok(listed) => listed,
+        Err(clm_git::Error::Failed { stderr, .. }) => {
+            return Err(Error::Refused(format!(
+                "offline: origin can't be reached; {stderr}"
+            )));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    Ok(listed.lines().find_map(|line| match line.split_once('\t') {
+        Some((sha, name)) if name == refname => Some(sha.to_string()),
+        _ => None,
+    }))
 }
 
 /// `clm branch push` (`branch-push`): pushes the checked-out branch to [`REMOTE`] as a

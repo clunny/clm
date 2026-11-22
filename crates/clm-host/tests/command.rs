@@ -166,7 +166,7 @@ fn clm(dir: &Path, gh: &Gh, args: &[&str], env: &[(&str, &str)]) -> (Option<i32>
 
 #[test]
 fn scenario_a_command_called_in_a_test() {
-    // req:host/commands-in-crate@80eed79d
+    // req:host/commands-in-crate@f798e133
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
     assert_eq!(
@@ -192,7 +192,7 @@ fn scenario_a_command_called_in_a_test() {
 
 #[test]
 fn scenario_arguments_it_cant_parse() {
-    // req:host/commands-in-crate@80eed79d
+    // req:host/commands-in-crate@f798e133
     let (r, gh) = (checkout("github"), fake_gh());
     for args in [
         &["pr", "open", "--nope"][..],
@@ -209,7 +209,7 @@ fn scenario_arguments_it_cant_parse() {
 
 #[test]
 fn the_given_root_overrides_the_found_one() {
-    // req:host/commands-in-crate@80eed79d
+    // req:host/commands-in-crate@f798e133
     let (r, gh) = (checkout("none"), fake_gh());
     let elsewhere = TempDir::new().unwrap();
     write(elsewhere.path(), "clm.toml", "host = \"nowhere\"\n");
@@ -259,7 +259,93 @@ fn the_given_root_overrides_the_found_one() {
     let err = String::from_utf8(err).unwrap();
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("config.toml"), "{err}");
-    drop(gh);
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn scenario_settings_that_dont_load() {
+    // req:host/commands-in-crate@f798e133
+    let user = TempDir::new().unwrap();
+    write(user.path(), "clm/config.toml", "host = \"git\"\n");
+    let xdg = user.path().display().to_string();
+    let commands: [(&str, &[&str]); 5] = [
+        ("pr open", &["pr", "open"]),
+        ("pr body", &["pr", "body", "body.md"]),
+        ("issue", &ISSUE_ARGS),
+        ("branch push", &["branch", "push"]),
+        ("branch delete", &["branch", "delete", "impl/a"]),
+    ];
+    for (command, args) in commands {
+        // A `clm.toml` naming no host CLM knows.
+        let (r, gh) = (checkout("nowhere"), fake_gh());
+        let (code, out, err) = clm(&r.work, &gh, args, &[]);
+        assert_eq!((code, out.as_str()), (Some(2), ""), "{command}: {err}");
+        assert!(err.starts_with(&format!("clm {command}: ")), "{err}");
+        assert!(err.contains("clm.toml"), "{command}: {err}");
+        assert!(gh.calls().is_empty(), "{command}: {:?}", gh.calls());
+        // A user settings file that sets `host`.
+        let (r, gh) = (checkout("github"), fake_gh());
+        let tip_before = on_origin(&r, "spec/x");
+        let (code, out, err) = clm(&r.work, &gh, args, &[("XDG_CONFIG_HOME", &xdg)]);
+        assert_eq!((code, out.as_str()), (Some(2), ""), "{command}: {err}");
+        assert!(err.starts_with(&format!("clm {command}: ")), "{err}");
+        assert!(err.contains("config.toml"), "{command}: {err}");
+        assert!(gh.calls().is_empty(), "{command}: {:?}", gh.calls());
+        assert_eq!(on_origin(&r, "spec/x"), tip_before, "{command}");
+    }
+}
+
+#[test]
+fn scenario_help() {
+    // req:host/commands-in-crate@f798e133
+    let pr = "Open the branch's pull request against `main` on the host, or find the open one, and print its URL, or `none` without a host";
+    let cases: [(&[&str], &str, &str); 7] = [
+        (
+            &["pr", "--help"],
+            "A branch's pull request on the host the `host` setting names",
+            "Usage: clm pr <COMMAND>",
+        ),
+        (&["pr", "open", "--help"], pr, "Usage: clm pr open "),
+        (
+            &["pr", "body", "--help"],
+            "Set the body of the current branch's open pull request to a file's contents",
+            "Usage: clm pr body ",
+        ),
+        (
+            &["issue", "--help"],
+            "File an issue where the host the `host` setting names keeps them and print its URL; without a host, print the report and exit 1",
+            "Usage: clm issue ",
+        ),
+        (
+            &["branch", "--help"],
+            "Remote branches, through the host adapter the `host` setting names",
+            "Usage: clm branch <COMMAND>",
+        ),
+        (
+            &["branch", "push", "--help"],
+            "Push the checked-out branch to `origin`, overwriting only what this clone last saw",
+            "Usage: clm branch push ",
+        ),
+        (
+            &["branch", "delete", "--help"],
+            "Delete `origin`'s branch when its tip is still `--lease` (default: the tip last fetched) and this clone pushed it, on every host",
+            "Usage: clm branch delete ",
+        ),
+    ];
+    let (r, gh) = (checkout("github"), fake_gh());
+    for (args, about, usage) in cases {
+        let (code, out, err) = clm(&r.work, &gh, args, &[]);
+        assert_eq!((code, err.as_str()), (Some(0), ""), "{args:?}");
+        let mut lines = out.lines();
+        assert_eq!(lines.next(), Some(about), "{args:?}: {out}");
+        assert_eq!(lines.next(), Some(""), "{args:?}: {out}");
+        let line = lines.next().unwrap_or_default();
+        assert!(line.starts_with(usage), "{args:?}: {out}");
+        if usage.ends_with('>') {
+            assert_eq!(line, usage, "{args:?}");
+        }
+    }
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
 }
 
 /// A fake `gh` whose `pr view` prints `$FAKE_PR_VIEW` (failing when it is unset), whose
@@ -373,7 +459,7 @@ fn on_origin(r: &Repo, branch: &str) -> String {
 
 #[test]
 fn scenario_branch_deleted() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     for host in ["github", "git", "none"] {
         let (r, gh) = (checkout(host), fake_gh());
         let s = push_impl_a(&r, "a.txt");
@@ -443,7 +529,7 @@ fn pushed_record(r: &Repo, branch: &str) -> String {
 
 #[test]
 fn scenario_branch_another_sessions() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let u = other_clone_push(&r, "impl/b", "b.txt");
     let v = other_clone_push(&r, "spec/y", "y.txt");
@@ -465,7 +551,7 @@ fn scenario_branch_another_sessions() {
 
 #[test]
 fn branch_delete_takes_an_abbreviated_lease_of_the_pushed_tip() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let tip = push_impl_a(&r, "a.txt");
     let (code, _, err) = clm(
@@ -480,7 +566,7 @@ fn branch_delete_takes_an_abbreviated_lease_of_the_pushed_tip() {
 
 #[test]
 fn branch_delete_refuses_a_lease_that_names_no_pushed_tip() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let old = push_impl_a(&r, "a.txt");
     let new = push_impl_a(&r, "b.txt");
@@ -499,7 +585,7 @@ fn branch_delete_refuses_a_lease_that_names_no_pushed_tip() {
 
 #[test]
 fn branch_delete_names_a_lease_that_is_not_the_pushed_tip() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let old = push_impl_a(&r, "a.txt");
     let new = push_impl_a(&r, "b.txt");
@@ -516,7 +602,7 @@ fn branch_delete_names_a_lease_that_is_not_the_pushed_tip() {
 
 #[test]
 fn scenario_branch_never_fetched() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let z = other_clone_push(&r, "spec/z", "z.txt");
     let (code, _, err) = clm(&r.work, &gh, &["branch", "delete", "spec/z"], &[]);
@@ -528,7 +614,7 @@ fn scenario_branch_never_fetched() {
 
 #[test]
 fn scenario_branch_main_refused() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let m = on_origin(&r, "main");
     let (code, _, err) = clm(
@@ -544,7 +630,7 @@ fn scenario_branch_main_refused() {
 
 #[test]
 fn branch_delete_refuses_a_ledger_branch() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     git(
         &r.work,
@@ -558,7 +644,7 @@ fn branch_delete_refuses_a_ledger_branch() {
 
 #[test]
 fn scenario_branch_moved() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let s = push_impl_a(&r, "a.txt");
     let t = other_clone_push(&r, "impl/a", "b.txt");
@@ -575,24 +661,156 @@ fn scenario_branch_moved() {
 
 #[test]
 fn branch_moved_keeps_its_message() {
-    // req:host/shared-plumbing@02348618
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let s = push_impl_a(&r, "a.txt");
     other_clone_push(&r, "impl/a", "b.txt");
-    let (code, _, err) = clm(
-        &r.work,
-        &gh,
-        &["branch", "delete", "impl/a", "--lease", &s],
-        &[],
-    );
+    // A lease given whole, and in turn abbreviated: the message names the full hash.
+    for lease in [s.as_str(), &s[..8]] {
+        let (code, _, err) = clm(
+            &r.work,
+            &gh,
+            &["branch", "delete", "impl/a", "--lease", lease],
+            &[],
+        );
+        assert_eq!(code, Some(1), "{err}");
+        let message = format!("`impl/a` on origin is no longer at {s}; left it");
+        assert!(err.contains(&message), "{err}");
+    }
+}
+
+/// `impl/a` checked out at a new commit and pushed with `clm branch push`: its sha.
+fn branch_push_impl_a(r: &Repo, gh: &Gh) -> String {
+    git(&r.work, &["checkout", "-q", "-b", "impl/a"]);
+    commit_file(r, "a.txt");
+    let (code, _, err) = clm(&r.work, gh, &["branch", "push"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    let s = tip(&r.work, "HEAD");
+    assert_eq!(pushed_record(r, "impl/a"), s);
+    s
+}
+
+#[test]
+fn scenario_branch_delete_the_remote_refuses_the_delete() {
+    // req:host/branch-delete@f8e36cf0
+    let (r, gh) = (checkout("github"), fake_gh());
+    let s = branch_push_impl_a(&r, &gh);
+    pre_receive(&r, "echo 'remote says no' >&2\nexit 1\n");
+    let (code, _, err) = clm(&r.work, &gh, &["branch", "delete", "impl/a"], &[]);
     assert_eq!(code, Some(1), "{err}");
-    let message = format!("`impl/a` on origin is no longer at {s}; left it");
-    assert!(err.contains(&message), "{err}");
+    assert!(err.contains("remote says no"), "{err}");
+    assert!(!err.contains("offline"), "{err}");
+    assert_eq!(on_origin(&r, "impl/a"), s);
+    assert_eq!(pushed_record(&r, "impl/a"), s);
+}
+
+#[test]
+fn scenario_branch_delete_origin_cant_be_reached() {
+    // req:host/branch-delete@f8e36cf0
+    let (r, gh) = (checkout("github"), fake_gh());
+    let s = branch_push_impl_a(&r, &gh);
+    let gone = r.origin.join("no-such-dir");
+    git(
+        &r.work,
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    );
+    let (code, _, err) = clm(&r.work, &gh, &["branch", "delete", "impl/a"], &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("offline: origin can't be reached; "), "{err}");
+    assert_eq!(pushed_record(&r, "impl/a"), s);
+    assert_eq!(on_origin(&r, "impl/a"), s);
+}
+
+#[test]
+fn scenario_branch_delete_call_the_call_land_makes() {
+    // req:host/branch-delete-call@eb352a4b
+    use clm_config::Host as Setting;
+    for (host, setting) in [
+        ("github", Setting::Github),
+        ("azure", Setting::Azure),
+        ("git", Setting::Git),
+        ("none", Setting::None),
+    ] {
+        let adapter = clm_host::adapter(setting);
+        let r = checkout(host);
+        // `impl/a`, pushed by another clone: no record here, and none is read.
+        let s = other_clone_push(&r, "impl/a", "a.txt");
+        // `impl/b`, moved on origin from `s` to `t`.
+        git(&r.origin, &["update-ref", "refs/heads/impl/b", &s]);
+        let t = other_clone_push(&r, "impl/b", "b.txt");
+        // A ref that merely ends in `refs/heads/impl/gone`.
+        git(
+            &r.origin,
+            &["update-ref", "refs/x/refs/heads/impl/gone", &s],
+        );
+        let m = on_origin(&r, "main");
+        git(&r.origin, &["update-ref", "refs/heads/clm/ledger/p/c", &m]);
+        git(&r.origin, &["update-ref", "refs/heads/impl/c", &m]);
+        pre_receive(
+            &r,
+            "while read -r old new name; do\n\
+             [ \"$name\" = refs/heads/impl/c ] && { echo 'remote says no' >&2; exit 1; }\n\
+             done\nexit 0\n",
+        );
+        let delete = |branch: &str, lease: &str| adapter.branch_delete(&r.work, branch, lease);
+        assert!(delete("impl/a", &s).is_ok(), "{host}");
+        assert_eq!(on_origin(&r, "impl/a"), "", "{host}");
+        match delete("impl/b", &s) {
+            Err(clm_host::Error::Refused(why)) => assert_eq!(
+                why,
+                format!("`impl/b` on origin is no longer at {s}; left it"),
+                "{host}"
+            ),
+            other => panic!("{host}: {other:?}"),
+        }
+        assert_eq!(on_origin(&r, "impl/b"), t, "{host}");
+        assert!(delete("impl/gone", &s).is_ok(), "{host}");
+        for (branch, lease, reason) in [
+            ("main", m.as_str(), "moves only through `clm land`"),
+            ("clm/ledger/p/c", m.as_str(), "is a ledger branch"),
+        ] {
+            let got = delete(branch, lease);
+            assert!(
+                matches!(&got, Err(clm_host::Error::Refused(why)) if why.contains(reason)),
+                "{host}: {got:?}"
+            );
+            assert_eq!(on_origin(&r, branch), m, "{host} {branch}");
+        }
+        match delete("impl/c", &m) {
+            Err(clm_host::Error::Refused(why)) => {
+                assert!(why.contains("remote says no"), "{host}: {why}");
+                assert!(!why.contains("offline"), "{host}: {why}");
+            }
+            other => panic!("{host}: {other:?}"),
+        }
+        assert_eq!(on_origin(&r, "impl/c"), m, "{host}");
+        // A clone with no `origin`.
+        git(&r.work, &["remote", "remove", "origin"]);
+        assert!(delete("impl/a", &s).is_ok(), "{host}");
+        let got = delete("main", &m);
+        assert!(
+            matches!(got, Err(clm_host::Error::Refused(_))),
+            "{host}: {got:?}"
+        );
+        // A clone whose `origin` can't be reached.
+        let gone = r.origin.join("no-such-dir");
+        git(
+            &r.work,
+            &["remote", "add", "origin", gone.to_str().unwrap()],
+        );
+        match delete("impl/a", &s) {
+            Err(clm_host::Error::Refused(why)) => assert!(
+                why.starts_with("offline: origin can't be reached"),
+                "{host}: {why}"
+            ),
+            other => panic!("{host}: {other:?}"),
+        }
+    }
 }
 
 #[test]
 fn branch_delete_without_origin_has_nothing_to_do() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("none"), fake_gh());
     git(&r.work, &["update-ref", "refs/clm/pushed/impl/a", "HEAD"]);
     git(&r.work, &["remote", "remove", "origin"]);
@@ -608,7 +826,7 @@ fn branch_delete_without_origin_has_nothing_to_do() {
 
 #[test]
 fn branch_delete_of_a_branch_already_gone_has_nothing_to_do() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let s = tip(&r.work, "HEAD");
     let (code, _, err) = clm(
@@ -622,7 +840,7 @@ fn branch_delete_of_a_branch_already_gone_has_nothing_to_do() {
 
 #[test]
 fn branch_delete_of_a_branch_found_gone_drops_its_record() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &["branch", "push"], &[]);
     assert_eq!(code, Some(0), "{err}");
@@ -865,18 +1083,81 @@ fn page_open_after_a_merged_page_opens_another() {
 #[test]
 fn page_open_exits_2_when_gh_fails() {
     // req:host/pr-open@f06b4b0e
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     // req:host/host-tool-failure@5ca96db4
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_CREATE_EXIT", "1")]);
     assert_eq!(code, Some(2), "{err}");
     assert!(err.contains("create failed"), "{err}");
-    assert!(err.trim_end().ends_with("pr-bodies/spec-x.md"), "{err}");
+    assert!(
+        err.trim_end().ends_with("pr-bodies/spec-x.markdown"),
+        "{err}"
+    );
+}
+
+/// `branch` made from `main` with a commit beyond it holding `file`, checked out.
+fn branch_beyond_main(r: &Repo, branch: &str, file: &str) {
+    git(&r.work, &["checkout", "-q", "-B", branch, "main"]);
+    commit_file(r, file);
+}
+
+#[test]
+fn scenario_keep_two_branches_two_copies() {
+    // req:host/keep-unopened-body@471ee956
+    let (r, gh) = (checkout("github"), fake_gh());
+    let bodies = r.work.join(".git/clm/pr-bodies");
+    write(&bodies, "spec-a-b.md", "old");
+    write(&r.work, "one.md", "one");
+    write(&r.work, "two.md", "two");
+    let fail = [("FAKE_CREATE_EXIT", "1")];
+    for (branch, file) in [("spec/a-b", "one.md"), ("spec-a/b", "two.md")] {
+        branch_beyond_main(&r, branch, &format!("{}.txt", branch.replace('/', "_")));
+        let args = ["pr", "open", branch, "--title", "x", "--body-file", file];
+        let (code, _, err) = clm(&r.work, &gh, &args, &fail);
+        assert_eq!(code, Some(2), "{branch}: {err}");
+        assert!(err.contains("the body is kept at"), "{branch}: {err}");
+    }
+    let read = |name: &str| fs::read_to_string(bodies.join(name)).unwrap();
+    assert_eq!(read("spec-a~b.markdown"), "one");
+    assert_eq!(read("spec~a-b.markdown"), "two");
+    assert_eq!(read("spec-a-b.md"), "old");
+}
+
+#[test]
+fn scenario_keep_nothing_worth_keeping() {
+    // req:host/keep-unopened-body@471ee956
+    let (r, gh) = (checkout("github"), fake_gh());
+    branch_beyond_main(&r, "impl/a", "a.txt");
+    let args = [
+        "pr",
+        "open",
+        "impl/a",
+        "--title",
+        "x",
+        "--body-file",
+        "body.md",
+    ];
+    let fail = [("FAKE_CREATE_EXIT", "1")];
+    let kept = r.work.join(".git/clm/pr-bodies/impl-a.markdown");
+    write(&r.work, "body.md", "  \n\n \t\n");
+    let (code, _, err) = clm(&r.work, &gh, &args, &fail);
+    assert_eq!(code, Some(2), "{err}");
+    assert!(err.contains("create failed"), "{err}");
+    assert!(!err.contains("the body is kept at"), "{err}");
+    assert!(!kept.exists());
+    // A good body, with a file where the copies' directory would be.
+    write(&r.work, "body.md", "## Review\n");
+    write(&r.work, ".git/clm/pr-bodies", "in the way");
+    let (code, _, err) = clm(&r.work, &gh, &args, &fail);
+    assert_eq!(code, Some(2), "{err}");
+    assert!(err.contains("create failed"), "{err}");
+    assert!(!err.contains("the body is kept at"), "{err}");
+    assert!(!kept.exists());
 }
 
 #[test]
 fn scenario_page_open_no_host() {
-    // req:host/pr-open@f06b4b0e
+    // req:host/pr-open-defaults@17fa5999
     for host in ["none", "git"] {
         let (r, gh) = (checkout(host), fake_gh());
         let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
@@ -959,7 +1240,7 @@ fn scenario_pr_open_a_branch_without_cuts() {
 #[test]
 fn pr_open_exits_1_when_the_gate_cant_be_evaluated() {
     // req:host/pr-open@f06b4b0e
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     let (r, gh) = (checkout("github"), fake_gh());
     let args = [
         "pr",
@@ -1013,7 +1294,7 @@ fn the_gate_waits_for_the_checks_before_it() {
 #[test]
 fn a_body_that_fails_to_open_is_kept_with_its_cuts() {
     // req:host/pr-open@f06b4b0e
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_CREATE_EXIT", "1")]);
     assert_eq!(code, Some(2), "{err}");
@@ -1075,7 +1356,7 @@ fn a_stale_section_goes_from_a_branch_without_cuts() {
 
 #[test]
 fn a_kept_body_holds_the_section_once() {
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     // req:host/pr-open@f06b4b0e
     // A kept copy sent again, whose host fails before the gate runs: kept with one section.
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
@@ -1201,7 +1482,7 @@ fn a_commands_own_refusals_stay_exit_1() {
 
 #[test]
 fn a_body_kept_before_the_gate_ran_holds_its_cuts() {
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     // `gh pr view` fails before the body is sent: the kept copy still starts with the cuts.
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
     let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
@@ -1214,7 +1495,7 @@ fn a_body_kept_before_the_gate_ran_holds_its_cuts() {
 
 #[test]
 fn a_body_whose_gate_cant_be_evaluated_is_not_kept_after_a_host_failure() {
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["update-ref", "-d", "refs/remotes/origin/main"]);
     let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
@@ -1276,7 +1557,7 @@ fn body(gh: &Gh) -> String {
 
 #[test]
 fn scenario_pr_open_a_spec_branchs_change() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -1293,7 +1574,7 @@ fn scenario_pr_open_a_spec_branchs_change() {
 
 #[test]
 fn pr_open_title_is_the_first_sentence_of_the_first_paragraph() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     for (intent, title) in [
         ("Is it so? Yes.\n", "Is it so?"),
         (
@@ -1301,6 +1582,7 @@ fn pr_open_title_is_the_first_sentence_of_the_first_paragraph() {
             "No stop here across lines",
         ),
         ("Version 1.2 ships. More.\n", "Version 1.2 ships."),
+        ("First line\n   \nNext. Para.\n", "First line"),
     ] {
         let r = spec_branch(intent);
         let gh = fake_gh();
@@ -1313,7 +1595,7 @@ fn pr_open_title_is_the_first_sentence_of_the_first_paragraph() {
 
 #[test]
 fn pr_open_blank_intent_falls_back_to_commits() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("  \n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -1324,7 +1606,7 @@ fn pr_open_blank_intent_falls_back_to_commits() {
 
 #[test]
 fn scenario_pr_open_a_branch_without_a_change() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "fix/y"]);
     for subject in ["first", "second"] {
@@ -1338,7 +1620,7 @@ fn scenario_pr_open_a_branch_without_a_change() {
 
 #[test]
 fn pr_open_describes_the_branch_it_is_given() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("Skills fail. They name a bare command.\n");
     git(&r.work, &["checkout", "-q", "-b", "fix/y", "origin/main"]);
     git(&r.work, &["commit", "-q", "--allow-empty", "-m", "other"]);
@@ -1352,7 +1634,7 @@ fn pr_open_describes_the_branch_it_is_given() {
 
 #[test]
 fn pr_open_spec_branch_without_a_change_uses_commits() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "spec/nochange"]);
     git(&r.work, &["commit", "-q", "--allow-empty", "-m", "only"]);
@@ -1364,7 +1646,7 @@ fn pr_open_spec_branch_without_a_change_uses_commits() {
 
 #[test]
 fn scenario_pr_open_given_arguments_override() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(
@@ -1382,7 +1664,7 @@ fn scenario_pr_open_given_arguments_override() {
 
 #[test]
 fn pr_open_each_argument_overrides_alone() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open", "--title", "mine"], &[]);
@@ -1401,7 +1683,7 @@ fn pr_open_each_argument_overrides_alone() {
 
 #[test]
 fn scenario_pr_open_nothing_to_describe() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "fix/z"]);
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -1411,7 +1693,7 @@ fn scenario_pr_open_nothing_to_describe() {
 
 #[test]
 fn scenario_pr_open_detached_head() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "--detach"]);
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -1421,15 +1703,141 @@ fn scenario_pr_open_detached_head() {
 
 #[test]
 fn scenario_pr_open_defaults_no_host() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     for host in ["none", "git"] {
         let (r, gh) = (checkout(host), fake_gh());
         git(&r.work, &["checkout", "-q", "--detach"]);
-        let (code, out, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
-        assert_eq!(code, Some(0), "{host}: {err}");
-        assert_eq!(out, "none\n");
+        for args in [&["pr", "open"][..], &OPEN_ARGS] {
+            let (code, out, err) = clm(&r.work, &gh, args, &[]);
+            assert_eq!(code, Some(0), "{host} {args:?}: {err}");
+            assert_eq!(out, "none\n");
+        }
         assert!(gh.calls().is_empty(), "{:?}", gh.calls());
     }
+}
+
+/// `branch` from `main`, checked out, with one commit `subject` adding a change for each of
+/// `changes`, whose `## Intent` reads `intent`.
+fn branch_adding(r: &Repo, branch: &str, changes: &[&str], intent: &str, subject: &str) {
+    git(&r.work, &["checkout", "-q", "-B", branch, "main"]);
+    for id in changes {
+        write(
+            &r.work,
+            &format!("changes/{id}/change.md"),
+            &format!("---\nstatus: proposed\n---\n\n## Intent\n{intent}\n"),
+        );
+    }
+    git(&r.work, &["add", "changes"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", subject]);
+}
+
+#[test]
+fn scenario_pr_open_the_change_the_branch_adds() {
+    // req:host/pr-open-defaults@17fa5999
+    /// A branch, the changes it adds, their intent, then the title and body `gh` gets and
+    /// the branch's one commit's subject.
+    type Case<'a> = (&'a str, &'a [&'a str], &'a str, &'a str, &'a str, &'a str);
+    let r = checkout("github");
+    let cases: [Case; 3] = [
+        (
+            "fix/y",
+            &["y"],
+            "Fix it. Now.",
+            "Fix it.",
+            "Fix it. Now.",
+            "y",
+        ),
+        (
+            "spec/x",
+            &["other"],
+            "Other. Words.",
+            "Other.",
+            "Other. Words.",
+            "x",
+        ),
+        (
+            "fix/w",
+            &["w1", "w2"],
+            "W. Words.",
+            "both",
+            "- both\n",
+            "both",
+        ),
+    ];
+    for (branch, changes, intent, title, want_body, subject) in cases {
+        branch_adding(&r, branch, changes, intent, subject);
+        let gh = fake_gh();
+        let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+        assert_eq!(code, Some(0), "{branch}: {err}");
+        let want = format!("--head {branch} --title {title} --body-file ");
+        assert!(creates(&gh)[0].contains(&want), "{:?}", creates(&gh));
+        assert_eq!(body(&gh), want_body, "{branch}");
+    }
+    // `spec/x` whose change `origin/main` already holds, with one commit `edit` beyond it,
+    // which edits the change: a change edited isn't a change added.
+    branch_adding(&r, "spec/x", &["x"], "Held. Already.", "the change");
+    git(&r.work, &["push", "-q", "origin", "spec/x:main"]);
+    git(&r.work, &["fetch", "-q", "origin"]);
+    write(
+        &r.work,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n## Intent\nEdited. Again.\n",
+    );
+    git(&r.work, &["commit", "-qam", "edit"]);
+    let gh = fake_gh();
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(creates(&gh)[0].contains("--title edit --body-file "));
+    assert_eq!(body(&gh), "- edit\n");
+}
+
+#[test]
+fn scenario_pr_open_no_origin_main() {
+    // req:host/pr-open-defaults@17fa5999
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["checkout", "-q", "-b", "fix/z"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", "z"]);
+    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("origin/main"), "{err}");
+    assert!(err.contains("fatal"), "{err}");
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn pr_open_a_branch_sharing_no_history_with_origin_main() {
+    // req:host/pr-open-defaults@17fa5999
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["checkout", "-q", "--orphan", "fix/o"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", "o"]);
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("origin/main"), "{err}");
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn pr_open_an_archived_change_is_not_the_change_added() {
+    // req:host/pr-open-defaults@17fa5999
+    let r = checkout("github");
+    branch_adding(
+        &r,
+        "fix/a",
+        &["archive/old", "y"],
+        "Live one. Words.",
+        "two",
+    );
+    let gh = fake_gh();
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(creates(&gh)[0].contains("--title Live one. --body-file "));
+    // An archived change alone is no change: the commits describe the branch.
+    branch_adding(&r, "fix/b", &["archive/old"], "Old. Words.", "archived");
+    let gh = fake_gh();
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(creates(&gh)[0].contains("--title archived --body-file "));
 }
 
 const PR_7: &str = r#"{"number":7,"state":"OPEN","headRefName":"spec/x"}"#;
@@ -1495,7 +1903,7 @@ fn page_body_without_an_open_page_exits_1() {
 fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
     // req:host/pr-body@42b28fb0
     // req:host/pr-open@f06b4b0e
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     let (r, gh) = (checkout("github"), fake_gh());
     let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
     let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &env);
@@ -1505,7 +1913,10 @@ fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
     assert_eq!(code, Some(2), "{err}");
     assert!(err.contains("Bad credentials"), "{err}");
-    assert!(err.trim_end().ends_with("pr-bodies/spec-x.md"), "{err}");
+    assert!(
+        err.trim_end().ends_with("pr-bodies/spec-x.markdown"),
+        "{err}"
+    );
     assert!(
         !gh.calls().iter().any(|c| !c.starts_with("pr view")),
         "{:?}",
@@ -1536,7 +1947,7 @@ const ISSUE_ARGS: [&str; 7] = [
 
 #[test]
 fn scenario_issue_filed() {
-    // req:host/issue@02ae5818
+    // req:host/issue@f4bf6ce7
     let (r, gh) = (checkout("github"), fake_gh());
     write(&r.work, "r.md", "The report\n");
     let (code, out, err) = clm(&r.work, &gh, &ISSUE_ARGS, &[]);
@@ -1550,7 +1961,7 @@ fn scenario_issue_filed() {
 
 #[test]
 fn scenario_issue_nowhere_to_file() {
-    // req:host/issue@02ae5818
+    // req:host/issue@f4bf6ce7
     for host in ["git", "none"] {
         let (r, gh) = (checkout(host), fake_gh());
         write(&r.work, "r.md", "The report\n");
@@ -1559,6 +1970,18 @@ fn scenario_issue_nowhere_to_file() {
         assert_eq!(out, "The report\n");
         assert!(err.contains("nowhere to file it"), "{err}");
         assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+    }
+}
+
+#[test]
+fn scenario_issue_an_unreadable_report() {
+    // req:host/issue@f4bf6ce7
+    for host in ["git", "none"] {
+        let (r, gh) = (checkout(host), fake_gh());
+        let (code, out, err) = clm(&r.work, &gh, &ISSUE_ARGS, &[]);
+        assert_eq!((code, out.as_str()), (Some(1), ""), "{host}: {err}");
+        assert!(err.contains("r.md"), "{host}: {err}");
+        assert!(!err.contains("nowhere to file"), "{host}: {err}");
     }
 }
 
@@ -1588,7 +2011,7 @@ fn az_calls(gh: &Gh) -> Vec<String> {
 
 #[test]
 fn scenario_azure_pull_request_through_the_setting() {
-    // req:host/azure-selected@9030c61f
+    // req:host/azure-selected@0ab29923
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
@@ -1604,7 +2027,7 @@ fn scenario_azure_pull_request_through_the_setting() {
 
 #[test]
 fn scenario_azure_not_signed_in() {
-    // req:host/azure-selected@9030c61f
+    // req:host/azure-selected@0ab29923
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     let env = [("FAKE_AZ_FAIL", "Please run 'az login'")];
@@ -1615,7 +2038,7 @@ fn scenario_azure_not_signed_in() {
 
 #[test]
 fn scenario_azure_issue_through_the_setting() {
-    // req:host/azure-selected@9030c61f
+    // req:host/azure-selected@0ab29923
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     write(&r.work, "r.md", "The report\n");

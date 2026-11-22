@@ -26,12 +26,22 @@ pub fn keep_remote(root: &Path, host: Host) -> Result<Option<PathBuf>, Error> {
 }
 
 /// Where the body of `branch`'s pull request is kept outside every worktree:
-/// `<common git dir>/clm/pr-bodies/<branch>.md`, each `/` of the name written as `-`.
+/// `<common git dir>/clm/pr-bodies/<name>.markdown`, `<name>` the branch's with each `-`
+/// written as `~` and each `/` as `-`. Git allows no `~` in a branch name, so no two branches
+/// share a name, and the `.markdown` ending keeps it apart from an older `clm`'s `.md` copy.
 pub(crate) fn body_path(root: &Path, branch: &str) -> Result<PathBuf, Error> {
+    let name: String = branch
+        .chars()
+        .map(|c| match c {
+            '-' => '~',
+            '/' => '-',
+            c => c,
+        })
+        .collect();
     Ok(common_dir(root)?
         .join("clm")
         .join("pr-bodies")
-        .join(format!("{}.md", branch.replace('/', "-"))))
+        .join(format!("{name}.markdown")))
 }
 
 /// Writes `body` to [`body_path`], replacing an earlier copy, and gives the path.

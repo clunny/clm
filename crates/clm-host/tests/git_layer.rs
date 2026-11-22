@@ -1,41 +1,12 @@
-//! `clm-host` runs `git` and `gh` only through `clm-git`; no crate but `clm-git`,
-//! `clm-host` and `clm-guard` runs `gh`, and `clm-guard` runs `gh` once, for the
-//! release guard's run lookup (host/git-through-layer).
+//! No crate but `clm-git`, `clm-host` and `clm-guard` runs `gh`, and `clm-guard` runs `gh`
+//! once, for the release guard's run lookup; no crate but `clm-git` and `clm-host` holds
+//! `"az"` (host/git-through-layer).
 
 use std::path::{Path, PathBuf};
-
-/// Built from parts, so this file never holds the calls it looks for. The scenario's
-/// `Command::new("git")` and `Command::new("gh")` are both caught by the first;
-/// the second catches `Command` imported to be run under another name.
-const CALLS: [&str; 2] = [concat!("Command", "::new"), concat!("process", "::Command")];
 
 /// The crates that may call `gh`: the layer, this adapter and `clm-guard`, whose one call
 /// `the_release_guard_lookup_only` checks.
 const MAY_CALL_GH: [&str; 3] = ["clm-git", "clm-host", "clm-guard"];
-
-#[test]
-fn runs_processes_only_through_the_layer() {
-    // req:host/git-through-layer@3a18542f
-    let krate = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let manifest: toml::Table = std::fs::read_to_string(krate.join("Cargo.toml"))
-        .unwrap()
-        .parse()
-        .unwrap();
-    assert!(
-        manifest["dependencies"]
-            .as_table()
-            .unwrap()
-            .contains_key("clm-git"),
-        "clm-host doesn't list clm-git"
-    );
-    let files = rust_files(&krate.join("src"));
-    assert!(!files.is_empty(), "no source files read");
-    let found: Vec<_> = files
-        .iter()
-        .filter(|file| runs_process(&std::fs::read_to_string(file).unwrap()))
-        .collect();
-    assert!(found.is_empty(), "processes run outside clm-git: {found:?}");
-}
 
 /// The crates that may run the Azure CLI: the layer and this adapter.
 const MAY_CALL_AZ: [&str; 2] = ["clm-git", "clm-host"];
@@ -45,7 +16,7 @@ const AZ: &str = concat!("\"a", "z\"");
 
 #[test]
 fn no_other_crate_holds_az() {
-    // req:host/git-through-layer@3a18542f
+    // req:host/git-through-layer@6c8b70b2
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let (mut expected, mut scanned) = (0, 0);
     let mut found = Vec::new();
@@ -76,7 +47,7 @@ fn holds_az(text: &str) -> bool {
 
 #[test]
 fn the_az_matcher_sees_every_use() {
-    // req:host/git-through-layer@3a18542f
+    // req:host/git-through-layer@6c8b70b2
     assert!(holds_az(concat!(
         "clm_git::run(&dir, \"a",
         "z\", &args, o)"
@@ -88,7 +59,7 @@ fn the_az_matcher_sees_every_use() {
 
 #[test]
 fn no_other_crate_calls_gh() {
-    // req:host/git-through-layer@3a18542f
+    // req:host/git-through-layer@6c8b70b2
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let (mut expected, mut scanned) = (0, 0);
     let mut found = Vec::new();
@@ -115,12 +86,6 @@ fn no_other_crate_calls_gh() {
 /// `text` with its whitespace removed, so a call rustfmt splits across lines still matches.
 fn squeezed(text: &str) -> String {
     text.split_whitespace().collect()
-}
-
-/// Whether `text` runs a process itself.
-fn runs_process(text: &str) -> bool {
-    let text = squeezed(text);
-    CALLS.iter().any(|call| text.contains(call))
 }
 
 /// The literal `"gh"`, built so this file doesn't hold it.
@@ -227,7 +192,7 @@ fn names_gh(text: &str) -> bool {
 
 #[test]
 fn the_release_guard_lookup_only() {
-    // req:host/git-through-layer@3a18542f
+    // req:host/git-through-layer@6c8b70b2
     let hooks = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -246,7 +211,7 @@ fn the_release_guard_lookup_only() {
 
 #[test]
 fn a_run_of_gh_is_caught() {
-    // req:host/git-through-layer@3a18542f
+    // req:host/git-through-layer@6c8b70b2
     let one_line = concat!("clm_git::run(&dir, \"g", "h\", &args, options)");
     let split = concat!(
         "let _ = tx.send(clm_git::run(\n",
@@ -287,6 +252,7 @@ fn a_run_of_gh_is_caught() {
 
 #[test]
 fn the_matchers_see_split_renamed_and_globbed_calls() {
+    // req:host/git-through-layer@6c8b70b2
     assert!(calls_gh(concat!("let x = clm_git", "::gh(root, &[]);")));
     assert!(calls_gh(concat!("clm_git ", ":: gh(root, &[]);")));
     assert!(calls_gh(concat!(
@@ -302,15 +268,6 @@ fn the_matchers_see_split_renamed_and_globbed_calls() {
         "clm_git",
         "::run(root, \"git\", &[], o)"
     )));
-    assert!(runs_process(concat!(
-        "std::process::Command\n    ",
-        "::new(\"gh\")"
-    )));
-    assert!(runs_process(concat!(
-        "use std::{\n    process",
-        "::Command,\n};"
-    )));
-    assert!(!runs_process(concat!("std::process", "::exit(1)")));
 }
 
 /// Every `.rs` file under `dir`, recursively; none when `dir` doesn't exist.
