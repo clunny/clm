@@ -515,12 +515,15 @@ pub(crate) fn parse_markers(line: &str) -> Vec<MarkerSpan> {
 }
 
 /// Change IDs of `clm:remove-by <change-id>` markers in `line`: the regex
-/// `clm:remove-by (\d{8}-[a-z0-9-]+)`, where `clm:` doesn't follow a word character.
+/// `clm:remove-by (\d{8}-[a-z0-9-]+)`, its digits ASCII, where `clm:` doesn't follow an
+/// ASCII letter, digit or `_`: a non-ASCII letter before it leaves a marker, as
+/// `clm unreferenced` reads one (`removal-markers`).
 fn parse_removal_markers(line: &str) -> Vec<String> {
     const PREFIX: &str = "clm:remove-by ";
     let mut ids = Vec::new();
     for (at, _) in line.match_indices(PREFIX) {
-        if follows_word(line, at) {
+        let before = line.as_bytes()[..at].last();
+        if before.is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_') {
             continue;
         }
         let rest = &line[at + PREFIX.len()..];
