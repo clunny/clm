@@ -2858,21 +2858,26 @@ fn the_mutation_script_is_in_no_land_check_or_workflow() {
     // req:ci/mutate-script@4dcc02cc
     let tree = Tree::new();
     executable(&tree.work().join(".github/scripts/mutate.sh"), FAKE);
-    let (ok, log) = tree.run(None, "");
-    assert!(ok, "{log:?}");
-    assert!(
-        !log.iter()
-            .any(|l| l.contains("cargo mutants") || l.contains("stryker")),
-        "{log:?}"
-    );
-    assert!(
-        !log.iter().any(|l| l.starts_with("mutate.sh")),
-        "the stand-in ran: {log:?}"
-    );
+    // Outside CI, as `clm land` runs it, and in CI, as the release workflow does.
+    for ci in [None, Some("true")] {
+        let (ok, log) = tree.run(ci, "");
+        assert!(ok, "{ci:?}: {log:?}");
+        assert!(
+            !log.iter()
+                .any(|l| l.contains("cargo mutants") || l.contains("stryker")),
+            "{ci:?}: {log:?}"
+        );
+        assert!(
+            !log.iter().any(|l| l.starts_with("mutate.sh")),
+            "the stand-in ran ({ci:?}): {log:?}"
+        );
+    }
     for (file, job, step) in crate::workflow_steps() {
         let run = step["run"].as_str().unwrap_or("");
-        for word in ["mutate.sh", "cargo mutants", "stryker"] {
-            assert!(!run.contains(word), "{file} `{job}`: {run}");
+        for line in run.lines().filter(|l| !l.trim_start().starts_with('#')) {
+            for word in ["mutate.sh", "cargo mutants", "stryker"] {
+                assert!(!line.contains(word), "{file} `{job}`: {line}");
+            }
         }
     }
 }
