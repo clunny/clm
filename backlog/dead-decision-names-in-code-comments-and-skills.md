@@ -1,7 +1,7 @@
 ---
 title: "Code comments, tests, skills and prompts still cite decisions and requirements that are deleted"
 kind: deferred
-components: [plugin, plugin.hooks.guard, ledger, sync, clm]
+components: [plugin, plugin.hooks.guard, ledger, clm]
 origin: 20261113-phase-2-delete
 ---
 
@@ -11,8 +11,7 @@ origin: 20261113-phase-2-delete
 - `pinned-approval` → `approve-pins-the-review`: `crates/clm-ledger/src/record.rs`.
 - `light-ci-for-doc-prs` → `land-locally`: `crates/clm-ledger/src/doc_only.rs`.
 - `forced-fixes-cover-additions` → `coupled-changes-sequence`: the paragraph of `plugin/skills/propose/SKILL.md` that still teaches the withdrawn rule; the tests in `crates/clm/tests/plugin.rs` that require the name go with `plugin/builder-check`'s obsolete markers.
-- `regenerate-applied-live-changes`, which never named a decision → `regenerate-applied-specs`: `crates/clm-sync/src/lib.rs`.
 - The skills cite removed requirements by name in parentheses, such as `skills-follow-agent-harness`, `recommend-the-right-design`, `architecture-audit`, `unattended-permissions-check`, `propose-harness-only-work`, `propose-elaborates-ideas` and the `triage-*` names in the triage skill. The sentences stay; the names go, or become the decision of the same subject where one exists.
 - The prompt `clm run` writes names `capability-tests-follow-rule` and `template-migration-fix`, and the prompt `clm draft` writes names `draft-backlog-only-change` and `draft-code-fix-written-rule`, as requirement names; `crates/clm-run/src/lib.rs` also names `background-work-stopped`, `prompt-doc-readers` and `prompt-recorded-check` in comments. Those requirements are deleted; the sentences stay, without the names.
 
-Each component's next build can take its lines; none changes what a requirement states. The lines of `gate` (`crates/clm-gate/src/lib.rs`), `land` (`crates/clm-land/src/derived.rs`) and `land.approval` (`crates/clm-approval/src/approve.rs`) are mended by their builds of `20261121-wave-3-land-by-the-rule`.
+Each component's next build can take its lines; none changes what a requirement states. The lines of `gate` (`crates/clm-gate/src/lib.rs`), `land` (`crates/clm-land/src/derived.rs`) and `land.approval` (`crates/clm-approval/src/approve.rs`) are mended by their builds of `20261121-wave-3-land-by-the-rule`, and `sync`'s (`regenerate-applied-live-changes` → `regenerate-applied-specs` in `crates/clm-sync/src/lib.rs`) by its build of `20261121-wave-3-sync-by-the-rule`.

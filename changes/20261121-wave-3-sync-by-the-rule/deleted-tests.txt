@@ -1,0 +1,8 @@
+DELETE crates/clm-sync/tests/git_layer.rs::runs_git_and_gh_only_through_the_layer	sync/git-through-layer is cut: vcs/one-git-layer reads every crate for processes it starts; the retry is proven by rebase's scenario "lock met at every commit it makes"
+DELETE crates/clm-sync/tests/plumbing.rs::no_copy_of_the_remote_name	sync/shared-plumbing is cut: a scan of source for the remote's name
+DELETE crates/clm-sync/tests/plumbing.rs::the_error_is_the_shared_failure	sync/shared-plumbing is cut: the type no caller reads
+DELETE crates/clm-sync/tests/plumbing.rs::one_mapping_in_the_dispatcher	sync/shared-plumbing is cut: a scan of the root's main.rs for a sentence that is false
+DELETE crates/clm-sync/tests/extract.rs::no_extract_of_its_own	a scan of source; the hook scenarios prove no checkout outside the two worktrees
+DELETE crates/clm-sync/tests/sync.rs::a_skipped_proposals_warning_carries_no_command_name	states what clm_sync::sync's report holds, no Contract call; command.rs proves the printed prefix
+DELETE crates/clm-regenerate/tests/git_layer.rs::covered_by_the_scan	sync.regenerate/git-through-layer is cut: vcs/one-git-layer reads every crate; the other needles are source scans (extract, "origin) cut with it
+DELETE crates/clm-regenerate/tests/git_layer.rs::no_copy_left_in_clm_sync	a name scan of clm-sync's source, cut with sync.regenerate/git-through-layer

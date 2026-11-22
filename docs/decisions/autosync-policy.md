@@ -22,3 +22,5 @@ Spec-work snapshots SHALL go only to `autosync/<branch>`, never to the spec bran
 - GIVEN a session editing specs on `spec/x`
 - WHEN its turn ends
 - THEN a snapshot is pushed to `autosync/spec/x`, and `spec/x` is unchanged
+
+Amended by `20261121-wave-3-sync-by-the-rule`: when the spec paths hold nothing uncommitted the snapshot is `HEAD` itself, not a commit on top of it (`sync/autosync`). "A turn that changed nothing pushes nothing" holds because a snapshot whose tree is already `origin/<branch>`'s or `origin/autosync/<branch>`'s is never pushed: a clean branch whose committed `HEAD` neither ref holds is pushed as it is, which is the spec work the turn committed. Off a `spec/*` branch, on a detached `HEAD` and outside a repository it does nothing and says nothing, since the hook runs it every turn.
