@@ -1,7 +1,7 @@
 //! A reviewer's request for changes holds a branch (`request-refusal`,
 //! `web-review-feedback-as-ledger-records`): while a `changes_requested` record for the
-//! branch names its fingerprint and its writer's person hasn't approved that fingerprint
-//! since, `clm land` refuses it, printing what the reviewers asked.
+//! branch names its fingerprint and its writer's person hasn't approved it with the request
+//! named (`ledger/request-cleared`), `clm land` refuses it, printing what the reviewers asked.
 
 use clm_ledger::{Body, Fold};
 

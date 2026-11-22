@@ -58,7 +58,7 @@ fn main_refused() {
 
 #[test]
 fn refused_under_codex() {
-    // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
+    // req:land.approval/approve-refuses-unconfirming-agent-harness@93b62f91
     let f = Fixture::new("");
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
     let env = f.env(&[(clm_agent_harness::CODEX_MARKER, "t1")]);
@@ -71,7 +71,7 @@ fn refused_under_codex() {
 
 #[test]
 fn refusal_comes_before_any_git_work() {
-    // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
+    // req:land.approval/approve-refuses-unconfirming-agent-harness@93b62f91
     let f = Fixture::new("");
     let env = f.env(&[(clm_agent_harness::CODEX_MARKER, "t1")]);
     let missing = f.path("no-such-root");
@@ -81,7 +81,7 @@ fn refusal_comes_before_any_git_work() {
 
 #[test]
 fn approves_in_the_humans_terminal() {
-    // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
+    // req:land.approval/approve-refuses-unconfirming-agent-harness@93b62f91
     let f = Fixture::new("");
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
     clm_approval::approve(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
@@ -90,7 +90,7 @@ fn approves_in_the_humans_terminal() {
 
 #[test]
 fn approves_under_claude_code() {
-    // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
+    // req:land.approval/approve-refuses-unconfirming-agent-harness@93b62f91
     let f = Fixture::new("");
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
     clm_approval::approve(&f.work(), Some("spec/x"), &f.env(&[("CLAUDECODE", "1")])).unwrap();

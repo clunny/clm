@@ -41,7 +41,12 @@ fn rev(f: &Fixture, r: &str) -> String {
 
 /// The head for an approve and for a land.
 fn both(f: &Fixture, branch: &str) -> [Result<BranchHead, clm_approval::Error>; 2] {
-    f.with_repo(|repo| [repo.branch_head(branch, false), repo.branch_head(branch, true)])
+    f.with_repo(|repo| {
+        [
+            repo.branch_head(branch, false),
+            repo.branch_head(branch, true),
+        ]
+    })
 }
 
 fn head(r: &Result<BranchHead, clm_approval::Error>) -> (String, Option<String>) {
@@ -163,7 +168,10 @@ fn a_branchs_change_ids() {
     let f = Fixture::new("");
     let work = f.work();
     f.commit_files(
-        &[("changes/a/change.md", "a\n"), ("changes/c/change.md", "c\n")],
+        &[
+            ("changes/a/change.md", "a\n"),
+            ("changes/c/change.md", "c\n"),
+        ],
         "changes on main",
     );
     f.git(&work, &["push", "-q", "origin", "main"]);

@@ -72,7 +72,7 @@ pub struct Output {
     pub warnings: Vec<String>,
 }
 
-const OFFLINE: &str = "offline: origin can't be reached; push and land when it can";
+const OFFLINE: &str = "offline: origin can't be reached; run `clm approve` again when it can";
 
 /// The branches pushed deliberately, so a local one ahead of `origin` isn't landed.
 fn is_pushed_deliberately(branch: &str) -> bool {
@@ -117,18 +117,19 @@ impl<'a> Repo<'a> {
     }
 
     /// The ref `main` is landed on: `origin/main`.
-    pub fn base(&self) -> &str {
+    pub(crate) fn base(&self) -> &str {
         &self.base
     }
 
-    pub fn git(&self, args: &[&str]) -> Result<String, Error> {
+    pub(crate) fn git(&self, args: &[&str]) -> Result<String, Error> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, tried again after a failure (`approve-retries-fetch`): offline when
-    /// `origin` can't be reached, else refused with git's message from the last fetch.
-    pub fn fetch(&self) -> Result<(), Error> {
-        match clm_git::fetch_retrying(&self.root, &["fetch", REMOTE]) {
+    /// `git fetch --prune origin`, tried again after a failure (`approve-retries-fetch`):
+    /// offline when `origin` can't be reached, else refused with git's message from the last
+    /// fetch. It prunes, so a tracking ref of a branch `origin` deleted gives no head.
+    pub(crate) fn fetch(&self) -> Result<(), Error> {
+        match clm_git::fetch_retrying(&self.root, &["fetch", "--prune", REMOTE]) {
             Ok(()) => Ok(()),
             Err(clm_git::FetchError::Offline) => Err(Error::Refused(OFFLINE.into())),
             Err(clm_git::FetchError::Git(e)) => Err(Error::Refused(e.to_string())),
@@ -215,7 +216,7 @@ impl<'a> Repo<'a> {
     }
 
     /// The merge base of the base and `head`.
-    pub fn merge_base(&self, head: &str) -> Result<String, Error> {
+    pub(crate) fn merge_base(&self, head: &str) -> Result<String, Error> {
         self.git(&["merge-base", self.base(), head])
     }
 

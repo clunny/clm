@@ -58,7 +58,7 @@ fn count(
 
 #[test]
 fn an_authors_own_approval() {
-    // req:land.approval/approvals-counted@ebdf5eea
+    // req:land.approval/approvals-counted@5c0aa435
     let f = Fixture::new("");
     let (head, fp) = branch(&f, "Christopher Lunny");
     let records = fold(&[line(
@@ -83,7 +83,7 @@ fn an_authors_own_approval() {
 
 #[test]
 fn another_person() {
-    // req:land.approval/approvals-counted@ebdf5eea
+    // req:land.approval/approvals-counted@5c0aa435
     let f = Fixture::new("");
     let (head, fp) = branch(&f, "Christopher Lunny");
     let records = fold(&[line("a1", "dana/9f9f9f9f", AT, approved(&fp), None)]);
@@ -93,7 +93,7 @@ fn another_person() {
 
 #[test]
 fn unsigned_in_a_signed_repository() {
-    // req:land.approval/approvals-counted@ebdf5eea
+    // req:land.approval/approvals-counted@5c0aa435
     let f = Fixture::new("");
     let (base, _) = signed_base(&f);
     let (head, fp) = branch(&f, "Christopher Lunny");
@@ -109,7 +109,7 @@ fn unsigned_in_a_signed_repository() {
 
 #[test]
 fn a_forged_name() {
-    // req:land.approval/approvals-counted@ebdf5eea
+    // req:land.approval/approvals-counted@5c0aa435
     let f = Fixture::new("");
     let (base, christopher) = signed_base(&f);
     let (head, fp) = branch(&f, "Zed");
@@ -137,7 +137,7 @@ fn a_forged_name() {
 
 #[test]
 fn the_landers_own_approval() {
-    // req:land.approval/approvals-counted@ebdf5eea
+    // req:land.approval/approvals-counted@5c0aa435
     let f = Fixture::new("");
     let (base, christopher) = signed_base(&f);
     let (head, fp) = branch(&f, "Zed");
@@ -159,7 +159,7 @@ fn the_landers_own_approval() {
 
 #[test]
 fn no_approval() {
-    // req:land.approval/approvals-counted@ebdf5eea
+    // req:land.approval/approvals-counted@5c0aa435
     let f = Fixture::new("");
     let (head, fp) = branch(&f, "Christopher Lunny");
     let records = fold(&[line("a1", "dana/9f9f9f9f", AT, approved("another"), None)]);

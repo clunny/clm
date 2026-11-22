@@ -8,7 +8,7 @@ use crate::{Env, Error, Output, Repo, sign};
 
 /// Appends the human's approval of `branch`'s (default: the current one's) diff against
 /// `origin/main`, pinned to its fingerprint. The guard asks the human to confirm the command
-/// (`approve-in-session`); this doesn't ask again.
+/// (`approval-policy`); this doesn't ask again.
 pub fn approve(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Error> {
     // Before anything is fetched or appended (`approve-refuses-unconfirming-agent-harness`).
     let harness = clm_agent_harness::detect(env);
@@ -27,7 +27,7 @@ pub fn approve(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, E
     let repo = Repo::new(&root, env, &settings);
     let branch = repo.branch_name(branch, "approved")?;
     repo.fetch()?;
-    let (head, _) = repo.head(&branch, false)?;
+    let head = repo.branch_head(&branch, false)?.head;
     // One commit of the `main` fetched, for the fingerprint and for whether to sign.
     let base = repo
         .rev(repo.base())?

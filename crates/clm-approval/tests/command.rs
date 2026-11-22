@@ -35,7 +35,7 @@ fn approve(f: &Fixture, root: &Path, cwd: &Path, args: &[&str]) -> Out {
 
 #[test]
 fn approve_prints_the_fingerprint() {
-    // req:land.approval/commands-in-crate@1f31b577
+    // req:land.approval/commands-in-crate@534dcbbe
     let f = Fixture::new("");
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
     let fp = f.fingerprint("spec/x");
@@ -48,7 +48,7 @@ fn approve_prints_the_fingerprint() {
 
 #[test]
 fn root_option_overrides_the_root_given() {
-    // req:land.approval/commands-in-crate@1f31b577
+    // req:land.approval/commands-in-crate@534dcbbe
     let f = Fixture::new("");
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
     let elsewhere = f.path("missing");
@@ -59,19 +59,21 @@ fn root_option_overrides_the_root_given() {
 
 #[test]
 fn a_refusal_exits_1_on_the_error_stream() {
-    // req:land.approval/commands-in-crate@1f31b577
+    // req:land.approval/commands-in-crate@534dcbbe
     let f = Fixture::new("");
-    let out = approve(&f, &f.work(), &f.work(), &[]);
-    assert_eq!(out.code, 1, "{out:?}");
-    assert_eq!(out.stdout, "");
-    assert!(out.stderr.starts_with("clm approve: "), "{out:?}");
-    assert!(out.stderr.contains("`main`"), "{out:?}");
+    for args in [&[][..], &["main"][..]] {
+        let out = approve(&f, &f.work(), &f.work(), args);
+        assert_eq!(out.code, 1, "{out:?}");
+        assert_eq!(out.stdout, "");
+        assert!(out.stderr.starts_with("clm approve: "), "{out:?}");
+        assert!(out.stderr.contains("`main`"), "{out:?}");
+    }
     assert!(f.records().is_empty());
 }
 
 #[test]
 fn reads_the_environment_it_is_given() {
-    // req:land.approval/commands-in-crate@1f31b577
+    // req:land.approval/commands-in-crate@534dcbbe
     let f = Fixture::new("");
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
@@ -91,16 +93,17 @@ fn reads_the_environment_it_is_given() {
 
 #[test]
 fn a_failure_exits_2() {
-    // req:land.approval/commands-in-crate@1f31b577
+    // req:land.approval/commands-in-crate@534dcbbe
     let f = Fixture::new("");
     let out = approve(&f, &f.path("missing"), &f.path(""), &["spec/x"]);
     assert_eq!(out.code, 2, "{out:?}");
+    assert_eq!(out.stdout, "");
     assert!(out.stderr.starts_with("clm approve: "), "{out:?}");
 }
 
 #[test]
 fn arguments_it_cant_parse() {
-    // req:land.approval/commands-in-crate@1f31b577
+    // req:land.approval/commands-in-crate@534dcbbe
     let f = Fixture::new("");
     let out = approve(&f, &f.work(), &f.work(), &["--frobnicate"]);
     assert_eq!(out.code, 2, "{out:?}");
@@ -111,10 +114,19 @@ fn arguments_it_cant_parse() {
 
 #[test]
 fn help_goes_to_the_out_stream() {
-    // req:land.approval/commands-in-crate@1f31b577
+    // req:land.approval/commands-in-crate@534dcbbe
     let f = Fixture::new("");
     let out = approve(&f, &f.work(), &f.work(), &["--help"]);
     assert_eq!(out.code, 0, "{out:?}");
-    assert!(out.stdout.contains("Usage: clm approve"), "{out:?}");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(
+        lines[..3],
+        [
+            "Record your approval of a branch's current diff in the ledger",
+            "",
+            "Usage: clm approve [OPTIONS] [BRANCH]",
+        ],
+        "{out:?}"
+    );
     assert_eq!(out.stderr, "");
 }

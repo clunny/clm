@@ -46,7 +46,7 @@ fn approvals(f: &Fixture) -> Vec<Record> {
 
 #[test]
 fn signed_approval() {
-    // req:land.approval/signed-approve@a96763ed
+    // req:land.approval/signed-approve@a3a0658d
     let (f, christopher) = signed_repo(true);
     let f = &f;
     use_key(f, &f.work(), &christopher);
@@ -68,7 +68,7 @@ fn signed_approval() {
 
 #[test]
 fn approve_with_no_key() {
-    // req:land.approval/signed-approve@a96763ed
+    // req:land.approval/signed-approve@a3a0658d
     let (f, _) = signed_repo(true);
     let f = &f;
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
@@ -83,7 +83,7 @@ fn approve_with_no_key() {
 
 #[test]
 fn unsigned_repository() {
-    // req:land.approval/signed-approve@a96763ed
+    // req:land.approval/signed-approve@a3a0658d
     let (f, _) = signed_repo(false);
     let f = &f;
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);

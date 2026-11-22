@@ -10,7 +10,7 @@ use crate::{Error, Repo};
 pub struct Policy {
     /// `approval = "other"`: only an approval by someone other than the authors counts.
     pub other: bool,
-    /// `origin/main:clm.toml`, `main:clm.toml` or `clm.local.toml`.
+    /// `origin/main:clm.toml` or `clm.local.toml`.
     pub source: String,
 }
 
