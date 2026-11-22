@@ -307,9 +307,12 @@ impl Batch<'_, '_, '_> {
     fn build(&self, wanted: &[Wanted]) -> Result<Option<Chain>, Error> {
         let (ctx, repo) = (self.ctx, self.ctx.repo);
         repo.fetch()?;
-        let base = repo
-            .rev(repo.base())?
-            .ok_or_else(|| Error::Refused(format!("no `{}` to land on", repo.base())))?;
+        let base = repo.rev(repo.base())?.ok_or_else(|| {
+            Error::Refused(format!(
+                "no `{}` to land on: push `main` to `origin` with `clm reconnect`, then land",
+                repo.base()
+            ))
+        })?;
         let fold = clm_ledger::fold(&repo.root)?;
         let signed = repo.approval.signed(&base)?;
         if signed {

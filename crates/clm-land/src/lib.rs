@@ -164,9 +164,11 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, tried again after a failure (`land/offline-land`).
+    /// `git fetch --prune origin`, tried again after a failure (`land/offline-land`): pruned,
+    /// since every landed branch is deleted from `origin`, and a tracking ref left behind would
+    /// stand for a branch `origin` no longer holds (`land.approval/branch-head`).
     fn fetch(&self) -> Result<(), Error> {
-        self.fetch_with(&["fetch", clm_git::REMOTE])
+        self.fetch_with(&["fetch", "--prune", clm_git::REMOTE])
     }
 
     /// The fetch `args` through the layer's retrying fetch: `Offline` is the offline refusal,

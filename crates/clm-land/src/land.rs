@@ -94,9 +94,12 @@ pub(crate) fn land_into(
                 on_origin,
             });
         }
-        let base = repo
-            .rev(repo.base())?
-            .ok_or_else(|| Error::Refused(format!("no `{}` to land on", repo.base())))?;
+        let base = repo.rev(repo.base())?.ok_or_else(|| {
+            Error::Refused(format!(
+                "no `{}` to land on: push `main` to `origin` with `clm reconnect`, then land",
+                repo.base()
+            ))
+        })?;
         // The head judged before the lock, the merge and any check: the claim its name makes,
         // the tests it loses and the components waiting for a fix (`judge`).
         let warnings = crate::judge::judge_head(&repo, &branch, &base, &head, &fold)?;

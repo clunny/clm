@@ -694,7 +694,7 @@ fn fetch_loses_race(f: &Fixture, always: bool) -> String {
 
 #[test]
 fn fetch_loses_a_ref_race() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let path = fetch_loses_race(&f, false);
@@ -710,7 +710,7 @@ fn fetch_loses_a_ref_race() {
 
 #[test]
 fn fetch_keeps_failing_with_origin_reachable() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
