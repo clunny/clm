@@ -99,6 +99,11 @@ fn a_failure_exits_2() {
     assert_eq!(out.code, 2, "{out:?}");
     assert_eq!(out.stdout, "");
     assert!(out.stderr.starts_with("clm approve: "), "{out:?}");
+    // A `--root` that doesn't exist, the root given being a real one.
+    let out = approve(&f, &f.work(), &f.path(""), &["spec/x", "--root", "missing"]);
+    assert_eq!(out.code, 2, "{out:?}");
+    assert_eq!(out.stdout, "");
+    assert!(out.stderr.starts_with("clm approve: "), "{out:?}");
 }
 
 #[test]

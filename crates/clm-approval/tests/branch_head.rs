@@ -203,4 +203,10 @@ fn the_fingerprint_is_against_the_base_given() {
     let tip = rev(&f, "origin/spec/x");
     let got = f.with_repo(|repo| repo.fingerprint(&base, &tip)).unwrap();
     assert_eq!(got, fp);
+    // A base other than `origin/main`: the branch's own first commit, so only the second
+    // commit's diff is fingerprinted.
+    let first = commit_local(&f, "spec/x", "second.txt");
+    let against_first = f.with_repo(|repo| repo.fingerprint(&tip, &first)).unwrap();
+    let against_main = f.with_repo(|repo| repo.fingerprint(&base, &first)).unwrap();
+    assert_ne!(against_first, against_main);
 }
