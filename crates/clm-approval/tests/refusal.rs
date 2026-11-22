@@ -170,9 +170,18 @@ fn repo_held_without_a_signed_base() {
     let open = held_fold(&[]);
     let cleared = held_fold(&[approval("alice/1a2b3c4d")]);
     let other = held_fold(&[approval("dana/9f9f9f9f")]);
-    let [open, cleared, other] = f.with_repo(|repo| {
-        [&open, &cleared, &other].map(|fold| repo.held(fold, "spec/x", "f", None).unwrap())
+    let multiline = fold(&[request("a\n  b")]);
+    let ([open, cleared, other, multiline], elsewhere) = f.with_repo(|repo| {
+        let at = |fold: &clm_ledger::Fold| repo.held(fold, "spec/x", "f", None).unwrap();
+        (
+            [&open, &cleared, &other, &multiline].map(at),
+            repo.held(&open, "spec/x", "g", None).unwrap(),
+        )
     });
+    assert_eq!(elsewhere, None, "another fingerprint");
+    let line = multiline.expect("held");
+    assert!(line.contains("alice/web at"), "{line}");
+    assert!(line.lines().nth(1).unwrap().ends_with(": a b"), "{line}");
     let why = open.expect("held");
     assert!(why.contains("land/changes-requested: alice/web"), "{why}");
     assert!(why.contains("land/comment: bob/web on n/r"), "{why}");

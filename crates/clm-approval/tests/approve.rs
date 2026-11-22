@@ -231,18 +231,17 @@ fn request(id: &str, writer: &str, branch: &str, fingerprint: &str) -> String {
     line(id, writer, "2026-11-17T10:00:00.000Z", body, None)
 }
 
-/// The `clears` of the last `approved` record for `branch` the work clone sees.
-fn clears(f: &Fixture, branch: &str) -> Option<Vec<String>> {
+/// The `clears` of each `approved` record for `branch` the work clone sees.
+fn clears(f: &Fixture, branch: &str) -> Vec<Option<Vec<String>>> {
     approvals(f)
         .into_iter()
-        .rev()
-        .find_map(|r| match r.body {
+        .filter_map(|r| match r.body {
             Body::Approved {
                 branch: b, clears, ..
             } if b == branch => Some(clears),
             _ => None,
         })
-        .expect("an approval of the branch")
+        .collect()
 }
 
 #[test]
@@ -267,12 +266,13 @@ fn approve_over_a_request() {
     clm_approval::approve(&work, Some("spec/x"), &f.env(&[])).unwrap();
     let approver = approvals(&f)[0].writer.clone();
     assert!(approver.starts_with("christopher-lunny/"), "{approver}");
-    assert_eq!(clears(&f, "spec/x"), Some(vec!["r1".to_string()]));
+    let r1 = Some(vec!["r1".to_string()]);
+    assert_eq!(clears(&f, "spec/x"), vec![r1.clone()]);
     // Named again, though an earlier approval cleared it.
     clm_approval::approve(&work, Some("spec/x"), &f.env(&[])).unwrap();
-    assert_eq!(clears(&f, "spec/x"), Some(vec!["r1".to_string()]));
+    assert_eq!(clears(&f, "spec/x"), [r1.clone(), r1]);
     clm_approval::approve(&work, Some("spec/z"), &f.env(&[])).unwrap();
-    assert_eq!(clears(&f, "spec/z"), Some(Vec::new()));
+    assert_eq!(clears(&f, "spec/z"), [Some(Vec::new())]);
 }
 
 #[test]
