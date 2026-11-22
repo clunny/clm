@@ -4,7 +4,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// The newest `lib<name>-*.rlib` beside this test's binary: the one this build linked.
+/// The newest `lib<name>-*.rlib` beside this test's binary. Building this test rebuilds the
+/// crate's rlib from the source as it stands, so the newest holds that source; an older one,
+/// another profile's or feature set's, may not.
 fn rlib(deps: &Path, name: &str) -> PathBuf {
     let prefix = format!("lib{name}-");
     std::fs::read_dir(deps)
