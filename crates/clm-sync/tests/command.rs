@@ -712,6 +712,77 @@ fn a_skipped_proposals_warning_is_written_as_clm_rebase() {
     );
 }
 
+/// `clm rebase` on `spec/x` of [`node_a`], `violation` committed on `main` when given, where
+/// a `post-checkout` hook leaves, in the temporary worktree, a directory its owner can't
+/// write, holding a file: its status, stdout, stderr, and the `sync-*` directory it made.
+fn rebase_leaving_a_worktree(violation: bool) -> (Option<i32>, String, String, PathBuf) {
+    let (dir, work) = node_a("");
+    if violation {
+        write(
+            &work,
+            "src/a/t.rs",
+            concat!("// req", ":a/missing\n#[test]\nfn t() {}\n"),
+        );
+        commit(&work, "a violation");
+        git(&work, &["push", "-q", "origin", "HEAD:main"]);
+    }
+    git(&work, &["checkout", "-q", "-b", "spec/x"]);
+    let hooks = work.join(".git/hooks");
+    fs::create_dir_all(&hooks).unwrap();
+    exec::write_exec(
+        &hooks.join("post-checkout"),
+        "#!/bin/sh\ncase \"$PWD\" in */sync-*) mkdir -p stuck && : > stuck/f && chmod a-w stuck \
+         ;; esac\n",
+    );
+    let tmp = dir.path().join("tmp");
+    fs::create_dir_all(&tmp).unwrap();
+    let env = |key: &str| (key == "TMPDIR").then(|| tmp.to_string_lossy().into_owned());
+    let out = clm_with(&work, &["rebase"], &env);
+    let made: Vec<PathBuf> = fs::read_dir(&tmp)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    let [made] = &made[..] else {
+        panic!("{made:?}: {out:?}");
+    };
+    // Writable again, so the test's directory can go.
+    Command::new("chmod")
+        .args(["-R", "u+w"])
+        .arg(made)
+        .status()
+        .unwrap();
+    (
+        out.status.code(),
+        String::from_utf8(out.stdout).unwrap(),
+        String::from_utf8(out.stderr).unwrap(),
+        made.clone(),
+    )
+}
+
+#[test]
+fn a_worktree_left_behind_keeps_the_outcome() {
+    // req:sync/judged-by-check@04b187e7
+    let (code, stdout, stderr, made) = rebase_leaving_a_worktree(false);
+    assert_eq!(code, Some(0), "{stdout}{stderr}");
+    assert_eq!(stdout.lines().last(), Some("rebase ok"), "{stdout}");
+    assert!(
+        stderr.contains(&format!(
+            "clm rebase: couldn't remove the temporary worktree {}: ",
+            made.display()
+        )),
+        "{stderr}"
+    );
+
+    let (code, stdout, stderr, _) = rebase_leaving_a_worktree(true);
+    assert_eq!(code, Some(1), "{stdout}{stderr}");
+    assert!(stdout.contains("check/dangling-markers"), "{stdout}");
+    assert_eq!(stdout.lines().last(), Some("rebase incomplete"), "{stdout}");
+    assert!(
+        stderr.contains("couldn't remove the temporary worktree"),
+        "{stderr}"
+    );
+}
+
 #[test]
 fn sync_leaves_no_temporary_worktree() {
     // req:sync/judged-by-check@bfefb55e

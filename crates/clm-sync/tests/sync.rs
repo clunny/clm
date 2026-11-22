@@ -846,11 +846,10 @@ fn quiet_on_the_next_run() {
 fn a_run_stopped_by_a_stale_delta_still_owes_the_report() {
     // req:sync/spec-changed@14245755
     let r = repo("impl/a");
+    let old = version(&r, "a/p");
     apply_change(&r, "y", "", &modifies_contract(&r, "mine"));
-    main_moves(
-        &r,
-        &[("specs/a/SPEC.md", &node_a("specd", "theirs", &["p"]))],
-    );
+    let theirs = node_a("specd", "theirs", &["p"]).replace("It SHALL p.", "It SHALL p, and more.");
+    main_moves(&r, &[("specs/a/SPEC.md", &theirs)]);
     let left = unfinished(&r);
     assert!(
         left.iter().any(|l| l.contains("apply/stale-base")),
@@ -867,6 +866,36 @@ fn a_run_stopped_by_a_stale_delta_still_owes_the_report() {
     commit(&r.work, "drop y");
     let left = unfinished(&r);
     assert_eq!(left[..2], ["spec changed a", "changed specs/a/SPEC.md"]);
+    let new = version(&r, "a/p");
+    assert!(has(&left, &format!("requirement a/p {old} -> {new}")), "{left:?}");
+}
+
+#[test]
+fn a_rebase_finished_with_plain_git_still_owes_the_report() {
+    // req:sync/spec-changed@0e05c40a
+    let r = repo("impl/a");
+    let old = version(&r, "a/p");
+    write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
+    commit(&r.work, "work");
+    main_moves(
+        &r,
+        &[
+            ("specs/a/SPEC.md", &a_with_p_modified(&r)),
+            ("src/lib.rs", "one\n2\nthree\n"),
+        ],
+    );
+    assert_eq!(unfinished(&r), ["conflict src/lib.rs"]);
+
+    // The caller resolves it and finishes the rebase with plain git.
+    write(&r.work, "src/lib.rs", "one\nTWO and 2\nthree\n");
+    git(&r.work, &["add", "src/lib.rs"]);
+    git(&r.work, &["-c", "core.editor=true", "rebase", "--continue"]);
+    assert!(!rebasing(&r));
+
+    let left = unfinished(&r);
+    let new = version(&r, "a/p");
+    assert_eq!(left[0], "spec changed a", "{left:?}");
+    assert!(has(&left, &format!("requirement a/p {old} -> {new}")), "{left:?}");
 }
 
 #[test]
@@ -4019,4 +4048,73 @@ fn a_lock_met_at_a_rename_commit_is_waited_out() {
     let log = stand_in_git(&r);
     synced(&r);
     waited_out(&r, &log, "Rename r");
+}
+
+/// `main` applying `w` and `x`, each adding a requirement of that name to `a`, and branch
+/// `impl/a` with a test citing every requirement of `a`, which is `unbuilt`, at its version.
+fn w_and_x_complete() -> Repo {
+    let r = repo("impl/a");
+    apply_change(&r, "x", "", &adds_x());
+    apply_change(
+        &r,
+        "w",
+        "",
+        &format!(
+            "---\ncomponent: a\n---\n## ADDED Requirements\n{}",
+            requirement("w")
+        ),
+    );
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    let tests: String = ["a/p", "a/w", "a/x"]
+        .iter()
+        .map(|id| citing(id, &version(&r, id)))
+        .collect();
+    write(&r.work, "src/test.rs", &tests);
+    commit(&r.work, "tests");
+    r
+}
+
+#[test]
+fn an_archive_place_taken_leaves_that_change_alone() {
+    // req:sync/archive-complete@26a8a9ff
+    let r = w_and_x_complete();
+    write(&r.work, ".git/info/exclude", "changes/archive/x\n");
+    write(&r.work, "changes/archive/x", "in the way\n");
+
+    let lines = unfinished(&r);
+    assert!(has(&lines, "archived w"), "{lines:?}");
+    assert!(has(&lines, "activated a"), "{lines:?}");
+    assert!(
+        has(
+            &lines,
+            "changes/archive/x: sync/archive-complete: `changes/archive/x` already exists"
+        ),
+        "{lines:?}"
+    );
+    assert!(r.work.join("changes/x/change.md").exists());
+    assert!(r.work.join("changes/archive/w/change.md").exists());
+    assert!(read(&r.work, "specs/a/SPEC.md").contains("status: active"));
+}
+
+#[test]
+fn a_graph_that_doesnt_load_archives_and_activates_nothing() {
+    // req:sync/archive-complete@26a8a9ff
+    let r = w_and_x_complete();
+    main_moves(
+        &r,
+        &[(
+            "specs/b/SPEC.md",
+            "---\ntitle: B\nstatus: active\nowners: []\ndepends_on: [nowhere]\n---\n\n## Contract\nc\n",
+        )],
+    );
+
+    let lines = unfinished(&r);
+    assert!(
+        !starts(&lines, "archived") && !starts(&lines, "activated"),
+        "{lines:?}"
+    );
+    assert!(lines.iter().any(|l| l.contains("nowhere")), "{lines:?}");
+    assert_eq!(subject(&r), "tests");
+    assert!(r.work.join("changes/x/change.md").exists());
+    assert!(read(&r.work, "specs/a/SPEC.md").contains("status: specd"));
 }
