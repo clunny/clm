@@ -3,6 +3,7 @@
 //! deleted. The computing and the reading of the working tree's files are `clm-coverage`'s;
 //! this reads the base revision's files and formats.
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Violation};
@@ -91,7 +92,13 @@ pub(crate) fn deleted_tests_lines(root: &Path, base: &str) -> Result<Vec<String>
             Some((PathBuf::from(p), String::from_utf8(bytes).ok()?))
         })
         .collect();
-    let gone = deleted_tests(&before, &read_files(root));
+    // `tree_blobs` skips the revision's links (`vcs/tree-blobs`), so the working tree's are
+    // left out too: a link's tests count on neither side, as `clm land` counts them.
+    let mut after = read_files(root);
+    after.retain(|(p, _)| {
+        !fs::symlink_metadata(root.join(p)).is_ok_and(|m| m.file_type().is_symlink())
+    });
+    let gone = deleted_tests(&before, &after);
     let mut lines = vec![format!("# tests deleted since {base}: {}", gone.len())];
     lines.extend(
         gone.iter()
