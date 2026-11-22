@@ -109,7 +109,7 @@ fn said(out: &clm_verify::Outcome, start: &str) -> bool {
 
 #[test]
 fn a_new_test_that_notices() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     land_new_test(&p);
@@ -150,7 +150,7 @@ fn a_new_test_that_notices() {
 
 #[test]
 fn a_test_that_reads_the_repositorys_files() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     // The reads markers are built so this file reads none of the paths they name.
     let reads = concat!("clm", ":reads");
     let p = pass(true, false);
@@ -193,7 +193,7 @@ fn a_test_that_reads_the_repositorys_files() {
 
 #[test]
 fn a_test_that_notices_nothing() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing survived 12\n");
     land_new_test(&p);
@@ -213,7 +213,7 @@ fn a_test_that_notices_nothing() {
 
 #[test]
 fn survived_zero_is_not_judged() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing survived 0\n");
     land_new_test(&p);
@@ -329,7 +329,7 @@ fn ids(list: &[&str]) -> Vec<String> {
 
 #[test]
 fn the_first_pass_fails_and_the_next_loses_nothing() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let (f, _) = unswitched();
     let before = f.back(0);
     f.land(&[("clm.toml", &switched_on(&f))], "switch the pass on");
@@ -383,7 +383,7 @@ fn the_first_pass_fails_and_the_next_loses_nothing() {
 
 #[test]
 fn the_command_fails_part_way() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     land_due(&p.f, true, &["other", "third"]);
     p.f.write("mutate-result", "a/thing killed\n");
@@ -414,7 +414,7 @@ fn the_command_fails_part_way() {
 
 #[test]
 fn a_line_cut_short() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     land_due(&p.f, true, &["other"]);
     // A line that doesn't parse is ignored, and the last line for a requirement holds.
@@ -432,7 +432,7 @@ fn a_line_cut_short() {
 
 #[test]
 fn a_not_judged_line_is_not_left() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     land_due(&p.f, true, &["other"]);
     p.f.write("mutate-result", "a/other not-judged\na/thing killed\n");
@@ -451,7 +451,7 @@ fn a_not_judged_line_is_not_left() {
 
 #[test]
 fn what_is_left_goes_first() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     // `a/thing` has a test at its current version, and the newest record left it.
     let (path, test) = test_of(&p.f, "thing");
@@ -484,7 +484,7 @@ fn record(f: &Fixture, commit: &str, since: Option<String>, left: &[&str]) {
 
 #[test]
 fn a_carried_diff_runs_from_the_oldest_record_that_left_it() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     let base = p.f.back(0);
     let (path, test) = test_of(&p.f, "thing");
@@ -519,7 +519,7 @@ fn a_carried_diff_runs_from_the_oldest_record_that_left_it() {
 
 #[test]
 fn a_record_on_the_verified_commit_carries_its_left() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     let base = p.f.back(0);
     let (path, test) = test_of(&p.f, "thing");
@@ -535,7 +535,7 @@ fn a_record_on_the_verified_commit_carries_its_left() {
 
 #[test]
 fn a_left_requirement_no_longer_cited_is_dropped() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, true);
     let head = p.f.back(0);
     let body = Body::mutated(head, None, vec![], vec![], vec![]).with_left(ids(&["a/thing"]));
@@ -574,7 +574,7 @@ fn call<'a>(
 
 #[test]
 fn jobs_follow_memory() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     let stop = AtomicBool::new(false);
@@ -635,7 +635,7 @@ fn wait_for(path: &std::path::Path) -> bool {
 
 #[test]
 fn the_time_limit() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     land_due(&p.f, true, &["other"]);
     p.f.land(
@@ -688,7 +688,7 @@ fn the_time_limit() {
 
 #[test]
 fn a_stop_request() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     land_due(&p.f, true, &["other"]);
     let dir = p.f.path("");
@@ -738,7 +738,7 @@ fn a_stop_request() {
 
 #[test]
 fn an_empty_setting_ends_the_run() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let (f, version) = unswitched();
     f.write("mutate-result", "a/thing killed\n");
     let set = format!("mutate = \"{}\"", f.path("bin/mutate").display());
@@ -758,7 +758,7 @@ fn an_empty_setting_ends_the_run() {
 
 #[test]
 fn the_pass_switched_on_from_the_first_commit() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let (f, version) = unswitched();
     f.write("mutate-result", "a/thing killed\n");
     f.restart(
@@ -784,7 +784,7 @@ fn the_pass_switched_on_from_the_first_commit() {
 
 #[test]
 fn a_test_only_re_cited_is_not_judged() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, true);
     p.f.land(
         &[("crates/a/tests/x.rs", &test_file(&p.version, "let _ = 1;"))],
@@ -809,7 +809,7 @@ fn a_test_only_re_cited_is_not_judged() {
 
 #[test]
 fn a_test_changed_in_more_than_its_marker_is_due() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, true);
     p.f.write("mutate-result", "a/thing killed\n");
     p.f.land(
@@ -829,7 +829,7 @@ fn a_test_changed_in_more_than_its_marker_is_due() {
 
 #[test]
 fn an_item_resolved_with_its_test_unchanged_is_not_judged_again() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, true);
     p.f.land(
         &[("crates/a/tests/x.rs", &test_file(&p.version, "let _ = 1;"))],
@@ -852,7 +852,7 @@ fn an_item_resolved_with_its_test_unchanged_is_not_judged_again() {
 
 #[test]
 fn every_citing_test_is_in_the_plan_and_a_stale_citation_is_none() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     let two = format!(
@@ -886,7 +886,7 @@ fn every_citing_test_is_in_the_plan_and_a_stale_citation_is_none() {
 
 #[test]
 fn a_stale_citation_alone_makes_nothing_due() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.land(
         &[(
@@ -901,7 +901,7 @@ fn a_stale_citation_alone_makes_nothing_due() {
 
 #[test]
 fn the_pass_starts_from_the_newest_mutated_record() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     let middle = p.f.land(&[("crates/a/src/lib.rs", "9\n")], "middle");
@@ -918,7 +918,7 @@ fn the_pass_starts_from_the_newest_mutated_record() {
 
 #[test]
 fn the_pass_has_a_slot_of_its_own() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     std::fs::write(p.f.work().join("clm.local.toml"), "max_builds = 4\n").unwrap();
@@ -929,7 +929,7 @@ fn the_pass_has_a_slot_of_its_own() {
 
 #[test]
 fn unset_runs_no_pass() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(false, false);
     land_new_test(&p);
     let out = p.f.due();
@@ -941,7 +941,7 @@ fn unset_runs_no_pass() {
 
 #[test]
 fn a_red_check_runs_no_pass() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("check-fails", "");
     land_new_test(&p);
@@ -953,7 +953,7 @@ fn a_red_check_runs_no_pass() {
 
 #[test]
 fn lands_do_not_wait_for_the_pass() {
-    // req:verify/mutation-pass@2212de80
+    // req:verify/mutation-pass@66d709f6
     let p = pass(true, false);
     p.f.write("hold", "");
     land_new_test(&p);
@@ -981,4 +981,176 @@ fn lands_do_not_wait_for_the_pass() {
         p.f.write("release", "");
         verifying.join().unwrap();
     });
+}
+
+/// A `clm.toml` for `pass` whose `mutate` is the TOML string `command`, written as given.
+fn mutating(p: &Pass, command: &str) -> String {
+    format!(
+        "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nevery = {{ lands = 1 }}\n\
+         mutate = {command}\n",
+        p.f.path("bin/check").display(),
+    )
+}
+
+#[test]
+fn the_standard_call() {
+    // req:verify/mutation-pass@66d709f6
+    let stop = AtomicBool::new(false);
+    let call = Call::standard(&stop);
+    assert_eq!(call.memory, std::path::Path::new("/proc/meminfo"));
+    assert_eq!(call.minute, Duration::from_secs(60));
+    assert_eq!(call.grace, Duration::from_secs(10));
+    assert!(std::ptr::eq(call.stop, &stop));
+}
+
+#[test]
+fn a_command_killed_by_a_signal() {
+    // req:verify/mutation-pass@66d709f6
+    let p = pass(true, false);
+    let command = r#"echo a/thing killed > "$CLM_MUTATE_RESULT"; kill -9 $$"#;
+    p.f.land(
+        &[("clm.toml", &mutating(&p, &format!("'{command}'")))],
+        "a mutate command that is killed",
+    );
+    land_due(&p.f, true, &["other"]);
+    let out = p.f.due();
+    assert!(out.line.starts_with("verify passed "), "{out:?}");
+    assert_eq!(out.code, 0);
+    let signal = out
+        .notes
+        .iter()
+        .position(|n| n == &format!("mutation: {command} was ended by signal 9 (SIGKILL)"));
+    let counts = out
+        .notes
+        .iter()
+        .position(|n| n == "mutation: 1 killed, 0 unproven, 0 not judged, 1 left");
+    assert!(
+        signal.is_some() && counts.is_some() && signal < counts,
+        "{:?}",
+        out.notes
+    );
+    let [killed, _, _, left] = lists(&p.f);
+    assert_eq!(killed, ids(&["a/thing"]));
+    assert_eq!(left, ids(&["a/other"]));
+}
+
+#[test]
+fn lines_that_arent_verdicts() {
+    // req:verify/mutation-pass@66d709f6
+    let p = pass(true, false);
+    p.f.write(
+        "mutate-result",
+        "a/q killed\na/thing maybe\na/thing survived many\n",
+    );
+    land_new_test(&p);
+    p.f.due();
+    let [killed, unproven, not_judged, left] = lists(&p.f);
+    let all = [&killed, &unproven, &not_judged, &left];
+    assert!(
+        all.iter()
+            .all(|l| l.iter().all(|id| !id.starts_with("a/q"))),
+        "{all:?}"
+    );
+    assert_eq!(left, ids(&["a/thing"]));
+}
+
+#[test]
+fn no_selection_for_the_pass() {
+    // req:verify/mutation-pass@66d709f6
+    let p = pass(true, false);
+    let script = p.f.path("bin/mutate-env");
+    write_exec(
+        &script,
+        &format!(
+            "#!/bin/sh\necho \"${{CLM_SELECTION-unset}}\" > '{sel}'\ncat > '{stdin}'\n\
+             echo a/thing killed > \"$CLM_MUTATE_RESULT\"\n",
+            sel = p.f.path("pass-selection").display(),
+            stdin = p.f.path("pass-stdin").display(),
+        ),
+    );
+    p.f.land(
+        &[(
+            "clm.toml",
+            &mutating(&p, &format!("\"{}\"", script.display())),
+        )],
+        "a mutate command that records its selection",
+    );
+    land_new_test(&p);
+    // SAFETY: the tests run one per process, and this one alone sets `CLM_SELECTION`.
+    unsafe { std::env::set_var("CLM_SELECTION", "/x") };
+    let out = p.f.due();
+    unsafe { std::env::remove_var("CLM_SELECTION") };
+    assert!(out.line.starts_with("verify passed "), "{out:?}");
+    assert_eq!(p.f.lines("pass-selection"), ["unset"]);
+    assert_eq!(std::fs::read(p.f.path("pass-stdin")).unwrap(), b"");
+    assert_eq!(lists(&p.f)[0], ids(&["a/thing"]));
+}
+
+#[test]
+fn a_capability_citation() {
+    // req:verify/mutation-pass@66d709f6
+    let p = pass(true, false);
+    p.f.land(
+        &[(
+            "CAPABILITIES.md",
+            "# Capabilities\n\n## Capabilities\n\n### Capability: c\nA person can c.\n\n#### Why\nw.\n\n\
+             #### Scenario: s\n- GIVEN a\n- WHEN b\n- THEN c\n",
+        )],
+        "a capability",
+    );
+    let version = clm_model::load(&p.f.work())
+        .0
+        .requirement("capability/c")
+        .expect("the capability loads")
+        .version()
+        .to_string();
+    let mark = concat!("req", ":capability/c@");
+    p.f.land(
+        &[(
+            "crates/a/tests/c.rs",
+            &format!("#[test]\nfn proves_c() {{\n    // {mark}{version}\n    let _ = 1;\n}}\n"),
+        )],
+        "a test citing only a capability",
+    );
+    p.f.write("mutate-result", "capability/c killed\n");
+    let out = p.f.due();
+    assert!(out.line.starts_with("verify passed "), "{out:?}");
+    assert!(!p.f.path("mutate-ran").exists());
+    assert_eq!(mutated(&p.f).len(), 2);
+    assert!(lists(&p.f).iter().all(Vec::is_empty));
+}
+
+#[test]
+fn a_pass_that_cant_run() {
+    // req:verify/mutation-pass@66d709f6
+    let p = pass(true, false);
+    p.f.write("mutate-result", "a/thing killed\n");
+    land_new_test(&p);
+    let before = mutated(&p.f).len();
+    let fixture = p.f.env();
+    let missing = p.f.path("no-such-tmp").display().to_string();
+    let env = move |key: &str| match key {
+        "TMPDIR" => Some(missing.clone()),
+        _ => fixture(key),
+    };
+    let out = common::verify(
+        &p.f.work(),
+        &clm_verify::Request::Due {
+            work_done: false,
+            dry_run: false,
+        },
+        &env,
+    )
+    .unwrap();
+    assert!(out.line.starts_with("verify passed "), "{out:?}");
+    assert_eq!(out.code, 0);
+    assert!(
+        out.notes
+            .iter()
+            .any(|n| n.starts_with("mutation: ") && n.ends_with("; nothing recorded")),
+        "{:?}",
+        out.notes
+    );
+    assert!(!p.f.path("mutate-ran").exists());
+    assert_eq!(mutated(&p.f).len(), before);
 }
