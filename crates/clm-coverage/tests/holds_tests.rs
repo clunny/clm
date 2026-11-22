@@ -19,6 +19,17 @@ fn scenario_which_paths_can_hold_a_test() {
 }
 
 #[test]
+fn every_extension_test_spans_reads_can_hold_a_test() {
+    // req:check.coverage/test-holding-paths@17606603
+    for ext in [
+        "rs", "ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "py",
+    ] {
+        let path = format!("a.{ext}");
+        assert!(holds_tests(Path::new(&path)), "{path} can hold a test");
+    }
+}
+
+#[test]
 fn a_path_that_holds_no_test_yields_nothing_whatever_its_text() {
     // req:check.coverage/test-holding-paths@17606603
     let text = format!(
@@ -30,8 +41,13 @@ fn a_path_that_holds_no_test_yields_nothing_whatever_its_text() {
         assert!(tests_in(path, &text).is_empty());
         assert!(markers_outside_tests(path, &text).is_empty());
     }
-    // The same text in a path that holds tests yields a test and a marker outside it.
+    // The same text in a path that holds tests yields its Rust test, and a marker outside it.
     let rust = Path::new("a.rs");
     assert!(holds_tests(rust));
-    assert!(!tests_in(rust, &text).is_empty());
+    let tests = tests_in(rust, &text);
+    assert_eq!(tests.len(), 1);
+    assert_eq!(tests[0].name, "proves");
+    let outside = markers_outside_tests(rust, &text);
+    assert_eq!(outside.len(), 1);
+    assert_eq!(outside[0].id, "a/y");
 }

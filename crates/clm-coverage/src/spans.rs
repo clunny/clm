@@ -40,8 +40,10 @@ fn family(path: &Path) -> Option<Family> {
     }
 }
 
-/// Whether `path`'s extension, compared as written, is one `tests_in` finds tests by: a path
-/// for which this is false holds no test, and no marker outside one, whatever its text.
+/// Whether `path`'s extension, compared as written, is one `tests_in` finds tests by: for a
+/// path for which this is false, `tests_in` and `markers_outside_tests` return nothing,
+/// whatever its text. `markers_in` still counts every marker of such a file, so this never
+/// decides which files count toward proof.
 pub fn holds_tests(path: &Path) -> bool {
     family(path).is_some()
 }
