@@ -12,6 +12,7 @@ mod deleted_tests;
 mod derived;
 mod exe;
 mod finish;
+mod judge;
 mod land;
 mod lock;
 mod own_files;

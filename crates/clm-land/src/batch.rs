@@ -366,20 +366,7 @@ impl Batch<'_, '_, '_> {
     ) -> Result<Built, Error> {
         let (ctx, repo) = (self.ctx, self.ctx.repo);
         let (head, on_origin) = repo.approval.head(&w.branch, true)?;
-        crate::own_files::check(repo, &w.branch, base, &head)?;
-        crate::deleted_tests::check(repo, Some(&w.branch), base, &head)?;
-        if w.branch.starts_with("spec/") {
-            let files = clm_gate::files_outside_spec_paths(&repo.root, base, &head)
-                .map_err(Error::Refused)?;
-            if !files.is_empty() {
-                return Err(Error::Refused(format!(
-                    "a spec branch holds only spec paths; {} changes {}",
-                    w.branch,
-                    files.join(", ")
-                )));
-            }
-        }
-        let notes = crate::verify_stop::check(repo, base, &head, fold)?;
+        let notes = crate::judge::judge_head(repo, &w.branch, base, &head, fold)?;
         let tree = unconflicted_tree(repo, tip, &head)?
             .ok_or_else(|| Error::Refused("the branch conflicts with main".into()))?;
         let merge_base = repo.git(&["merge-base", tip, &head])?;

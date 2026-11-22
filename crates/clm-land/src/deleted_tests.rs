@@ -1,12 +1,14 @@
-//! A code branch loses no citing test no approved list names (`land/deleted-tests-approved`,
-//! `removal-needs-a-yes`): a land or a `--check-only` run refuses, before anything else, a
-//! branch not named `spec/*` that, against its merge base with `base`, loses a citing test as
+//! No branch loses a citing test no approved list names (`land/deleted-tests-approved`,
+//! `removal-needs-a-yes`): a land or a `--check-only` run refuses, before the lock, a head
+//! that, against its merge base with `base`, loses a citing test as
 //! `clm_coverage::deleted_tests` counts one gone (a test moved to another file, or renamed in its
 //! own file still citing all it cited, is not), unless a change's `deleted-tests.txt` in `base`'s
-//! tree names each. It reads every file of both trees under the CLM root, as `clm coverage
-//! --deleted-tests` reads its base, so the two give one verdict on a committed branch.
+//! tree names each. Whatever the branch's name: only a replayed rename, which `rename/replay`
+//! vouches for, isn't judged. It reads the files of both trees under the CLM root that can hold
+//! a test (`check.coverage/test-holding-paths`), the rest holding none on either side, so it
+//! gives the verdict `clm coverage --deleted-tests` gives on a committed branch.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clm_gate::ListLine;
 
@@ -15,23 +17,16 @@ use crate::{Error, Repo};
 const RULE: &str = "land/deleted-tests-approved";
 
 /// Refuses when `head`, against its merge base with `base`, loses a citing test no approved
-/// list in `base`'s tree names; one line for each. A branch named `spec/*` isn't judged; a
-/// `None` branch, a detached `HEAD`, is.
-pub(crate) fn check(
-    repo: &Repo,
-    branch: Option<&str>,
-    base: &str,
-    head: &str,
-) -> Result<(), Error> {
-    if branch.is_some_and(|b| b.starts_with("spec/")) {
-        return Ok(());
-    }
+/// list in `base`'s tree names; one line for each. A head `rename/replay` accepts from the
+/// merge base isn't judged, and asking it fails as git does.
+pub(crate) fn check(repo: &Repo, base: &str, head: &str) -> Result<(), Error> {
     // With no history in common there is nothing the branch removed from it; a land is
     // refused at its merge anyway.
     let Ok(merge_base) = repo.git(&["merge-base", base, head]) else {
         return Ok(());
     };
-    // A branch that touches nothing under the CLM root loses nothing, and reads nothing.
+    // A branch that touches no file under the CLM root that can hold a test loses nothing,
+    // and reads nothing.
     let changed = repo.git(&[
         "diff",
         "--name-only",
@@ -41,7 +36,14 @@ pub(crate) fn check(
         &merge_base,
         head,
     ])?;
-    if changed.split('\0').all(str::is_empty) {
+    if !changed
+        .split('\0')
+        .any(|p| !p.is_empty() && clm_coverage::holds_tests(Path::new(p)))
+    {
+        return Ok(());
+    }
+    // A replayed rename's rewritten markers are what the replay vouches for, wherever they sit.
+    if clm_rename::replays(&repo.root, &merge_base, head).map_err(|e| Error::Git(e.to_string()))? {
         return Ok(());
     }
     let prefix = repo.git(&["rev-parse", "--show-prefix"])?;
@@ -53,16 +55,16 @@ pub(crate) fn check(
             .into_iter()
             .filter_map(|(p, bytes)| {
                 let p = p.strip_prefix(prefix.as_str())?.to_string();
+                // A file that isn't UTF-8 holds no test, as `clm coverage` reads it.
                 Some((PathBuf::from(p), String::from_utf8(bytes).ok()?))
             })
             .collect())
     };
-    // Every file of both trees, as `clm coverage --deleted-tests` reads its base: an untouched
-    // file makes no test gone, but its tests' names decide whether a touched file's is new.
-    // The head is the branch's commit, never a working tree, so an untracked file counts for
-    // nothing here.
-    let every = |_: &str| true;
-    let gone = clm_coverage::deleted_tests(&texts(&merge_base, &every)?, &texts(head, &every)?);
+    // Every file of both trees that can hold a test: an untouched file makes no test gone, but
+    // its tests' names decide whether a touched file's is new. The head is the branch's
+    // commit, never a working tree, so an untracked file counts for nothing here.
+    let tests = |p: &str| clm_coverage::holds_tests(Path::new(p));
+    let gone = clm_coverage::deleted_tests(&texts(&merge_base, &tests)?, &texts(head, &tests)?);
     if gone.is_empty() {
         return Ok(());
     }
@@ -114,7 +116,7 @@ mod tests {
 
     #[test]
     fn lists_live_and_archived() {
-        // req:land/deleted-tests-approved@3f3cdc80
+        // req:land/deleted-tests-approved@90e1578b
         assert!(is_list("changes/c/deleted-tests.txt"));
         assert!(is_list("changes/archive/c/deleted-tests.txt"));
         assert!(!is_list("changes/c/deltas/deleted-tests.txt"));

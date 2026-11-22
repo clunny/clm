@@ -97,12 +97,9 @@ pub(crate) fn land_into(
         let base = repo
             .rev(repo.base())?
             .ok_or_else(|| Error::Refused(format!("no `{}` to land on", repo.base())))?;
-        // A build holds its own files, before the lock, the merge and any check
-        // (`land/build-holds-own-files`).
-        crate::own_files::check(&repo, &branch, &base, &head)?;
-        // A code branch loses no citing test no approved list names, judged with it
-        // (`land/deleted-tests-approved`).
-        crate::deleted_tests::check(&repo, Some(&branch), &base, &head)?;
+        // The head judged before the lock, the merge and any check: the claim its name makes,
+        // the tests it loses and the components waiting for a fix (`judge`).
+        let warnings = crate::judge::judge_head(&repo, &branch, &base, &head, &fold)?;
         // A signed repository signs this land's record, so a lander without a key is
         // refused before any check runs (`land/signed-land`).
         let signed = repo.approval.signed(&base)?;
@@ -111,22 +108,6 @@ pub(crate) fn land_into(
         }
         // The policy committed at the base, read afresh each attempt.
         let policy = repo.approval.policy(&base)?;
-        // A spec branch holds spec paths only, whatever its gate says
-        // (`land/spec-branch-holds-spec-paths`).
-        if branch.starts_with("spec/") {
-            let files = clm_gate::files_outside_spec_paths(&repo.root, &base, &head)
-                .map_err(Error::Refused)?;
-            if !files.is_empty() {
-                return Err(Error::Refused(format!(
-                    "a spec branch holds only spec paths; {branch} changes {}",
-                    files.join(", ")
-                ))
-                .into());
-            }
-        }
-        // A component whose slow tests broke after a land waits for its fix; the components
-        // of a red result nobody took in yet only warn (`land/verify-stop`).
-        let warnings = crate::verify_stop::check(&repo, &base, &head, &fold)?;
         // 2. The fingerprint, and a request for changes that holds it, before the gate, the
         // lock, the merge and the checks (`land/changes-requested-holds`).
         let fingerprint = repo.approval.fingerprint(&base, &head)?;

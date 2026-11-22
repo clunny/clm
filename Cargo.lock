@@ -528,6 +528,7 @@ dependencies = [
  "clm-model",
  "clm-orchestrator",
  "clm-regenerate",
+ "clm-rename",
  "serde_json",
  "tempfile",
  "toml",

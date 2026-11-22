@@ -50,12 +50,12 @@ pub(crate) fn check_only_to(
     };
     // A build learns of a file another component owns, and of a citing test it lost, before
     // the check runs (`land/build-holds-own-files`, `land/deleted-tests-approved`).
+    // The tests it loses are judged of `HEAD` as a land judges its head, reading no name.
     if let Some(base) = repo.rev(&format!("refs/remotes/{}/main", clm_git::REMOTE))? {
-        let branch = clm_git::current_branch(&repo.root)?;
-        if let Some(branch) = &branch {
-            crate::own_files::check(&repo, branch, &base, "HEAD")?;
+        if let Some(branch) = clm_git::current_branch(&repo.root)? {
+            crate::own_files::check(&repo, &branch, &base, "HEAD")?;
         }
-        crate::deleted_tests::check(&repo, branch.as_deref(), &base, "HEAD")?;
+        crate::deleted_tests::check(&repo, &base, "HEAD")?;
     }
     let before = Tree::read(&repo)?;
     if let Some(land) = &repo.settings.land.value {
