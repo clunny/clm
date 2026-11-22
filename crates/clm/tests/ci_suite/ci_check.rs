@@ -2888,10 +2888,10 @@ fn a_bad_environment_is_named_before_anything_runs() {
     let tree = mutate_tree(RUST_BLOCK);
     let result = tree.dir.path().join("result");
     let cases: [(&str, Option<&str>, &str); 5] = [
-        ("CLM_MUTATE", None, "CLM_MUTATE"),
-        ("CLM_MUTATE", Some(""), "CLM_MUTATE"),
-        ("CLM_MUTATE_RESULT", None, "CLM_MUTATE_RESULT"),
-        ("CLM_MUTATE_RESULT", Some(""), "CLM_MUTATE_RESULT"),
+        ("CLM_MUTATE", None, "CLM_MUTATE:"),
+        ("CLM_MUTATE", Some(""), "CLM_MUTATE:"),
+        ("CLM_MUTATE_RESULT", None, "CLM_MUTATE_RESULT:"),
+        ("CLM_MUTATE_RESULT", Some(""), "CLM_MUTATE_RESULT:"),
         (
             "CLM_SLOT",
             Some("x"),
