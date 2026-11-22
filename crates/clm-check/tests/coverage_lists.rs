@@ -339,7 +339,7 @@ fn plain_coverage_fails_on_a_graph_that_doesnt_load() {
 
 #[test]
 fn coverage_writes_the_lines_clm_coverage_gives_unchanged() {
-    // req:check/commands-in-crate@ed866c99
+    // req:check/commands-in-crate@c7d289ca
     let dir = repo(&["x", "y"]);
     let d = dir.path();
     let x = cite(d, "x");

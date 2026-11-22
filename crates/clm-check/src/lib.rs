@@ -66,6 +66,8 @@ pub use imports::undeclared_imports;
 #[cfg(feature = "detectors")]
 pub use size::size;
 pub use size::{Budgets, Count, Length, Size, TestPart, size_of};
+#[cfg(feature = "checkout")]
+pub use spans::code_spans;
 
 /// Runs every rule against the repo at `root`, reading the files the index holds
 /// (`git ls-files --cached`) where a rule reads the tracked files. Outside a git work tree
@@ -141,14 +143,19 @@ fn archive_violations(graph: &clm_model::Graph) -> Vec<Violation> {
         .values()
         .filter_map(|c| {
             let finished = matches!(c.frontmatter.status, Done | Abandoned);
+            // The word `change.md` writes for the status.
+            let status = clm_model::CHANGE_STATUS_TERMS
+                .iter()
+                .find(|(s, _)| *s == c.frontmatter.status)
+                .map_or("", |(_, word)| word);
             let message = match (finished, c.archived) {
                 (true, false) => format!(
-                    "change `{}` is {:?}; run `clm archive {}`",
-                    c.id, c.frontmatter.status, c.id
+                    "change `{}` is {status}; run `clm archive {}`",
+                    c.id, c.id
                 ),
                 (false, true) => format!(
-                    "archived change `{}` is {:?}; only done or abandoned changes belong in the archive",
-                    c.id, c.frontmatter.status
+                    "archived change `{}` is {status}; only done or abandoned changes belong in the archive",
+                    c.id
                 ),
                 _ => return None,
             };

@@ -48,7 +48,7 @@ fn found(root: &Path) -> Vec<(String, String)> {
 
 #[test]
 fn marker_for_done_change_fails() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     let dir = repo(DROP_OLD);
     change(dir.path(), "changes/20261023-drop-old", "done");
     assert_eq!(
@@ -62,7 +62,7 @@ fn marker_for_done_change_fails() {
 
 #[test]
 fn marker_for_abandoned_change_fails() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     let dir = repo(DROP_OLD);
     change(dir.path(), "changes/20261023-drop-old", "abandoned");
     assert_eq!(
@@ -76,21 +76,25 @@ fn marker_for_abandoned_change_fails() {
 
 #[test]
 fn marker_for_archived_change_fails() {
-    // req:check/remove-by-markers@4ca98d5a
-    let dir = repo(DROP_OLD);
-    change(dir.path(), "changes/archive/20261023-drop-old", "done");
-    assert_eq!(
-        found(dir.path()),
-        [(
-            "src/old.rs:4".to_string(),
-            "marker names 20261023-drop-old, which is archived".to_string()
-        )]
-    );
+    // req:check/remove-by-markers@de70fd9f
+    // Archived is archived whatever the status, a live one's included.
+    for status in ["done", "applied"] {
+        let dir = repo(DROP_OLD);
+        change(dir.path(), "changes/archive/20261023-drop-old", status);
+        assert_eq!(
+            found(dir.path()),
+            [(
+                "src/old.rs:4".to_string(),
+                "marker names 20261023-drop-old, which is archived".to_string()
+            )],
+            "{status}"
+        );
+    }
 }
 
 #[test]
 fn marker_for_missing_change_fails() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     let dir = repo(NOWHERE);
     assert_eq!(
         found(dir.path()),
@@ -103,7 +107,7 @@ fn marker_for_missing_change_fails() {
 
 #[test]
 fn marker_for_directory_without_change_md_is_missing() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     let dir = repo(NOWHERE);
     write(dir.path(), "changes/20261023-nowhere/notes.txt", "draft\n");
     let found = found(dir.path());
@@ -116,7 +120,7 @@ fn marker_for_directory_without_change_md_is_missing() {
 
 #[test]
 fn marker_for_live_change_passes() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     for status in ["proposed", "approved", "applied", "implementing"] {
         let dir = repo(DROP_OLD);
         change(dir.path(), "changes/20261023-drop-old", status);
@@ -126,7 +130,7 @@ fn marker_for_live_change_passes() {
 
 #[test]
 fn markdown_and_placeholders_are_not_markers() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "docs/x.md", &format!("See {NOWHERE}.\n"));
@@ -140,7 +144,7 @@ fn markdown_and_placeholders_are_not_markers() {
 
 #[test]
 fn malformed_ids_are_not_markers() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     let text = [
@@ -157,7 +161,7 @@ fn malformed_ids_are_not_markers() {
 
 #[test]
 fn marker_id_stops_at_punctuation() {
-    // req:check/remove-by-markers@4ca98d5a
+    // req:check/remove-by-markers@de70fd9f
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "src/a.rs", &format!("// ({NOWHERE}).\n"));

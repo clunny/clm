@@ -75,7 +75,7 @@ fn found(root: &Path) -> Vec<String> {
     all
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn requirement_naming_a_removed_sibling_is_reported() {
     let dir = repo();
@@ -87,7 +87,7 @@ fn requirement_naming_a_removed_sibling_is_reported() {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn the_first_removing_change_by_id_is_named() {
     let dir = repo();
@@ -100,7 +100,7 @@ fn the_first_removing_change_by_id_is_named() {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn another_node_naming_the_full_id_is_reported() {
     let dir = repo();
@@ -121,7 +121,7 @@ fn another_node_naming_the_full_id_is_reported() {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn slug_with_a_decision_is_shared() {
     let dir = repo();
@@ -133,7 +133,7 @@ fn slug_with_a_decision_is_shared() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn slug_of_architecture_requirement_is_shared() {
     let dir = repo();
@@ -146,7 +146,7 @@ fn slug_of_architecture_requirement_is_shared() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn slug_of_capability_is_shared() {
     let dir = repo();
@@ -159,7 +159,7 @@ fn slug_of_capability_is_shared() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn slug_mentioned_in_architecture_but_not_as_an_entry_is_not_shared() {
     let dir = repo();
@@ -171,7 +171,7 @@ fn slug_mentioned_in_architecture_but_not_as_an_entry_is_not_shared() {
     assert_eq!(found(dir.path()).len(), 1);
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn slug_another_node_holds_is_shared() {
     let dir = repo();
@@ -186,7 +186,7 @@ fn slug_another_node_holds_is_shared() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn not_applied_yet_stale_delta_is_skipped() {
     let dir = pending_repo();
@@ -250,7 +250,7 @@ fn removing_keep(root: &Path, id: &str, status: &str, more: &str) {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn not_applied_yet_is_reported() {
     let dir = pending_repo();
@@ -264,7 +264,7 @@ fn not_applied_yet_is_reported() {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn not_applied_yet_name_rewritten_is_not_reported() {
     let dir = pending_repo();
@@ -294,7 +294,7 @@ fn not_applied_yet_name_rewritten_is_not_reported() {
     assert_eq!(found(d), Vec::<String>::new());
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn line_is_that_of_the_text_the_change_leaves() {
     let dir = pending_repo();
@@ -321,7 +321,7 @@ fn line_is_that_of_the_text_the_change_leaves() {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn each_pending_change_names_itself() {
     let dir = pending_repo();
@@ -337,7 +337,7 @@ fn each_pending_change_names_itself() {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn shared_slug_is_judged_on_the_graph_the_change_leaves() {
     let dir = pending_repo();
@@ -355,7 +355,7 @@ fn shared_slug_is_judged_on_the_graph_the_change_leaves() {
     assert_eq!(found(d), Vec::<String>::new());
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn archived_change_removes_nothing_whatever_its_status() {
     for status in ["done", "applied"] {
@@ -374,7 +374,7 @@ fn archived_change_removes_nothing_whatever_its_status() {
     }
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn backticks_after_a_backtick_run_open_no_fence() {
     let dir = TempDir::new().unwrap();
@@ -397,7 +397,7 @@ fn backticks_after_a_backtick_run_open_no_fence() {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn fenced_example_and_frontmatter_are_not_read() {
     let dir = TempDir::new().unwrap();
@@ -412,7 +412,7 @@ fn fenced_example_and_frontmatter_are_not_read() {
     assert_eq!(found(d), Vec::<String>::new());
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn span_must_be_the_whole_id() {
     let dir = TempDir::new().unwrap();
@@ -437,7 +437,7 @@ fn span_must_be_the_whole_id() {
     );
 }
 
-// req:check/removed-requirement-names@2a727e8a
+// req:check/removed-requirement-names@c16a1c08
 #[test]
 fn removed_capability_is_named() {
     let dir = TempDir::new().unwrap();

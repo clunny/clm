@@ -50,7 +50,7 @@ fn caps(root: &Path) -> Vec<String> {
 
 #[test]
 fn scenario_within_the_caps() {
-    // req:check/priority-caps@7f8bcea1
+    // req:check/priority-caps@d9b540c9
     let dir = repo();
     let d = dir.path();
     change(d, "x", false, "status: applied\npriority: P1");
@@ -66,29 +66,27 @@ fn scenario_within_the_caps() {
 
 #[test]
 fn scenario_two_p1s() {
-    // req:check/priority-caps@7f8bcea1
+    // req:check/priority-caps@d9b540c9
     let dir = repo();
     let d = dir.path();
     change(d, "x", false, "status: applied\npriority: P1");
     item(d, "a", Some("P1"));
-    let found = caps(d);
-    assert_eq!(found.len(), 1, "{found:?}");
-    let msg = &found[0];
-    assert!(msg.starts_with("backlog/a.md: "), "{msg}");
-    assert!(msg.contains("P1") && msg.contains("cap 1"), "{msg}");
-    assert!(
-        msg.contains("backlog/a") && msg.contains("changes/x"),
-        "{msg}"
-    );
-    assert!(
-        msg.find("backlog/a").unwrap() < msg.find("changes/x").unwrap(),
-        "holders sorted: {msg}"
+    let lines: Vec<String> = run(d)
+        .iter()
+        .filter(|v| v.rule == "check/priority-caps")
+        .map(clm_check::format)
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "backlog/a.md: check/priority-caps: 2 holders of P1, cap 1: backlog/a, changes/x; demote some"
+        ]
     );
 }
 
 #[test]
 fn each_overfull_priority_is_one_violation() {
-    // req:check/priority-caps@7f8bcea1
+    // req:check/priority-caps@d9b540c9
     let dir = repo();
     let d = dir.path();
     for slug in ["a", "b", "c"] {
@@ -118,7 +116,7 @@ fn each_overfull_priority_is_one_violation() {
 
 #[test]
 fn scenario_resolved_item_not_counted_twice() {
-    // req:check/priority-caps@7f8bcea1
+    // req:check/priority-caps@d9b540c9
     let dir = repo();
     let d = dir.path();
     change(
@@ -133,7 +131,7 @@ fn scenario_resolved_item_not_counted_twice() {
 
 #[test]
 fn scenario_archived_and_abandoned_changes() {
-    // req:check/priority-caps@7f8bcea1
+    // req:check/priority-caps@d9b540c9
     let dir = repo();
     let d = dir.path();
     change(d, "x", true, "status: done\npriority: P1");
@@ -145,7 +143,7 @@ fn scenario_archived_and_abandoned_changes() {
 
 #[test]
 fn p3_holds_three() {
-    // req:check/priority-caps@7f8bcea1
+    // req:check/priority-caps@d9b540c9
     let dir = repo();
     let d = dir.path();
     for slug in ["a", "b", "c"] {
