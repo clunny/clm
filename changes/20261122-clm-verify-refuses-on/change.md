@@ -5,7 +5,7 @@ resolves: [clm-verify-refuses-on-an-invalid-table-in-the-checkout-s-own-clm]
 
 ## Intent
 
-`clm verify` reads nothing from the working tree's `clm.toml`: it takes `host` from the `clm.toml` committed at `origin/main`, as it already takes every other setting it follows, and the ledger's writer identity, which every record it appends carries, stops loading the repository's `clm.toml`, which never sets `writer`. So a checkout whose own `[verify]`, `[affected]` or `[env]` table can't be loaded no longer stops `clm verify`, as `verify/settings-from-main` promised.
+`clm verify` loads no settings from the working tree's `clm.toml`: it takes `host` from the `clm.toml` committed at `origin/main`, as it already takes every other setting it follows, and the ledger's writer identity, which every record it appends carries, stops loading the repository's `clm.toml`, which never sets `writer`. So a checkout whose own `[verify]`, `[affected]` or `[env]` table can't be loaded no longer stops `clm verify`, as `verify/settings-from-main` promised.
 
 ## Problem
 
@@ -23,15 +23,16 @@ For the writer, `ledger`'s `writer` loads the settings through `clm_config::load
 
 ## Outcome
 
-- `verify/settings-from-main` (modified): `host` joins the settings taken from `origin/main:clm.toml`; `clm verify` never reads the working tree's `clm.toml`, so neither a value it sets nor a table in it that can't be loaded changes what `verify` does. Two scenarios are added: a checkout whose own `clm.toml` can't be loaded still has its slow tests run and recorded, and `host` is `main`'s, not the checkout's. It needs `ledger/writer-identity`.
+- `verify/settings-from-main` (modified): `host` joins the settings taken from `origin/main:clm.toml`; `clm verify` loads no settings from the working tree's `clm.toml` (the filing land aside), so neither a value it sets nor a table in it that can't be loaded changes what `verify` does. Two scenarios are added: a checkout whose own `clm.toml` can't be loaded still has its slow tests run and recorded, and `host` is `main`'s, not the checkout's. It needs `ledger/writer-identity`.
 - `ledger/writer-identity` (modified): `writer` reads `writer` from `CLM_WRITER`, `clm.local.toml` and the user's `config.toml` only, never loading the repository's `clm.toml`; a scenario shows a `clm.toml` that can't be loaded failing neither `writer` nor `append`.
-- `verify`'s Contract and Design say so, and the decision `verify-settings-from-main` is amended.
+- `verify`'s Contract and Design say so, the decision `verify-settings-from-main` is amended, and the guide's settings page says where `clm verify` takes its settings from (`method-in-the-plugin`, a gap the audit found that predates this change).
 
 The test `crates/clm-verify/tests/import.rs::the_host_comes_from_the_checkout` proves the behaviour this change reverses: `verify`'s build rewrites it in place to the scenario "the host from main" (renaming it to say so is not a deletion). Nothing else is removed, so `deleted-tests.txt` is not needed.
 
 ## Edge cases and workarounds
 
 - `config/writer-setting` still refuses `writer` in a repository's `clm.toml` wherever `load` reads that file (`clm config get`, `clm check`, every other command); only `ledger`'s `writer` no longer checks it, since it no longer reads the file.
+- The `clm land` that files unproven requirements (`files-unproven`) still reads the root's settings, as every land does (`land-policy-from-base`): with a checkout whose `clm.toml` can't be loaded it prints `unproven: not filed: <why>` after the record is made, and a later call files the items. Moving that land onto `main`'s settings would change `land`, for a step that already recovers. The `clm` binary's checks before any command (`clm/upgrade-blocks-commands`, `clm/none-remote-before-commands`) read the checkout's file too; they are the `clm` component's and tolerate a file that won't load as they always have.
 - Every other `clm` command still loads the working tree's `clm.toml` whole, as `config` says; only `clm verify`, whose requirement promises it follows `main`, stops reading it.
 
 ## What the requirements no longer state
