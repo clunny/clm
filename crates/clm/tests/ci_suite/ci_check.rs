@@ -592,15 +592,15 @@ fn detector_tool_problems(
     for d in config["detectors"].as_array().unwrap() {
         let tool = d["command"][0].as_str().unwrap();
         let hint = d["hint"].as_str().unwrap();
-        if tool == "clm" {
-            // It runs the clone's own `clm`, or the binary under test; nothing installs it.
-        } else if tool == "sh"
-            && d["command"]
-                .get(1)
-                .and_then(|p| p.as_str())
-                .is_some_and(|p| !p.starts_with('/') && !p.contains("..") && root.join(p).is_file())
-        {
-            // `sh <file in the repository>` needs only `sh` and `grep`; nothing installs it.
+        let command: Vec<&str> = d["command"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|w| w.as_str())
+            .collect();
+        if needs_no_install(&command, root) {
+            // A `clm` detector runs the clone's own `clm`, or the binary under test, and
+            // `sh <file in the repository>` needs only `sh` and `grep`: nothing installs either.
         } else if hint.split_whitespace().last() != Some(tool) {
             problems.push(format!("hint `{hint}` doesn't install `{tool}`"));
         } else if !lines.iter().any(|l| l == hint) {
@@ -614,6 +614,16 @@ fn detector_tool_problems(
         problems.push(format!("detector-tools.sh installs sh: `{line}`"));
     }
     problems
+}
+
+/// Whether a detector's `command` needs no tool installed (ci/detector-tools): its first word is
+/// `clm`, or it is `sh` and the path of a file of the repository under `root`.
+fn needs_no_install(command: &[&str], root: &std::path::Path) -> bool {
+    command.first() == Some(&"clm")
+        || (command.first() == Some(&"sh")
+            && command.get(1).is_some_and(|p| {
+                !p.starts_with('/') && !p.contains("..") && root.join(p).is_file()
+            }))
 }
 
 /// Whether a line installs `sh`: an install command naming it.
@@ -655,11 +665,7 @@ fn every_detector_has_its_tool_installed() {
             .iter()
             .map(|w| w.as_str().unwrap())
             .collect();
-        let exempt = command[0] == "clm"
-            || (command[0] == "sh"
-                && command
-                    .get(1)
-                    .is_some_and(|p| !p.starts_with('/') && repo().join(p).is_file()));
+        let exempt = needs_no_install(&command, &repo());
         if exempt {
             continue;
         }
@@ -1038,15 +1044,25 @@ fn no_validation_waits_on_a_prompt() {
         .env_remove("CLM_SELECTION")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
     {
         use std::io::Write;
         let mut stdin = child.stdin.take().unwrap();
-        stdin.write_all(b"y\n").unwrap();
+        // A script that ended before reading leaves the pipe closed: the line is then unread,
+        // and the run's status says the rest.
+        match stdin.write_all(b"y\n") {
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
+            other => other.unwrap(),
+        }
     }
-    assert!(child.wait().unwrap().success());
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let log = fs::read_to_string(&log).unwrap();
     let claude: Vec<&str> = log.lines().filter(|l| l.starts_with("claude ")).collect();
     assert_eq!(

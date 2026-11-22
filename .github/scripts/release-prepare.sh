@@ -98,14 +98,16 @@ clm_bin=$(realpath "${CARGO_TARGET_DIR:-target}")/release/clm
 failed=false
 for component in upgrade init; do
   status=0
-  out=$("$clm_bin" pending "$component") || status=$?
+  # A trailing `.` keeps the newlines `$(...)` would strip, so a blank line counts as a line.
+  out=$("$clm_bin" pending "$component" && echo .) || status=$?
+  out=${out%.}
   if [ "$status" -ne 0 ]; then
     echo "release: clm pending $component exited $status" >&2
     failed=true
   elif [ -n "$out" ]; then
     {
       echo "release: requirements of upgrade or init are pending:"
-      printf '%s\n' "$out"
+      printf '%s\n' "${out%$'\n'}"
     } >&2
     failed=true
   fi

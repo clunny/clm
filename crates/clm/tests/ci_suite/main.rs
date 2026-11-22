@@ -167,8 +167,11 @@ fn every_nextest_run_ends_a_test_after_fifteen_minutes() {
             for step in body["steps"].as_sequence().unwrap() {
                 envs.push(step["env"].clone());
                 let run = step["run"].as_str().unwrap_or("");
-                let words: Vec<&str> = run.split_whitespace().collect();
-                assert!(!picks_a_profile(&words), "{name} `{job:?}`: {run}");
+                // Only a line that runs nextest: another tool may take a flag of that name.
+                for line in run.lines().filter(|l| l.contains("nextest")) {
+                    let words: Vec<&str> = line.split_whitespace().collect();
+                    assert!(!picks_a_profile(&words), "{name} `{job:?}`: {line}");
+                }
                 for var in ["NEXTEST_PROFILE", "NEXTEST_CONFIG"] {
                     assert!(!run.contains(var), "{name} `{job:?}` sets {var}: {run}");
                 }
@@ -218,22 +221,25 @@ fn no_file_under_github_runs_the_tests_outside_nextest() {
     // req:ci/nextest-runner@b769cc74
     for (name, job, step) in workflow_steps() {
         let run = step["run"].as_str().unwrap_or("");
-        let words: Vec<&str> = run.split_whitespace().collect();
-        for (i, _) in words.iter().enumerate().filter(|(_, w)| **w == "cargo") {
-            // The subcommand is the first word after `cargo` that is no toolchain
-            // (`+stable`) or option (`--locked`).
-            // Its arguments end where the shell starts another command.
-            let rest: Vec<&str> = words[i + 1..]
-                .iter()
-                .skip_while(|w| w.starts_with('+') || w.starts_with('-'))
-                .take_while(|w| !matches!(**w, "&&" | "||" | ";" | "|"))
-                .copied()
-                .collect();
-            if rest.first() == Some(&"test") {
-                assert!(rest.contains(&"--doc"), "{name} `{job}`: {run}");
-            }
-            if rest.first() == Some(&"llvm-cov") {
-                assert_eq!(rest.get(1), Some(&"nextest"), "{name} `{job}`: {run}");
+        // Line by line: a line's end ends its command.
+        for line in run.lines() {
+            let words: Vec<&str> = line.split_whitespace().collect();
+            for (i, _) in words.iter().enumerate().filter(|(_, w)| **w == "cargo") {
+                // The subcommand is the first word after `cargo` that is no toolchain
+                // (`+stable`) or option (`--locked`).
+                // Its arguments end where the shell starts another command.
+                let rest: Vec<&str> = words[i + 1..]
+                    .iter()
+                    .skip_while(|w| w.starts_with('+') || w.starts_with('-'))
+                    .take_while(|w| !matches!(**w, "&&" | "||" | ";" | "|"))
+                    .copied()
+                    .collect();
+                if rest.first() == Some(&"test") {
+                    assert!(rest.contains(&"--doc"), "{name} `{job}`: {run}");
+                }
+                if rest.first() == Some(&"llvm-cov") {
+                    assert_eq!(rest.get(1), Some(&"nextest"), "{name} `{job}`: {run}");
+                }
             }
         }
     }

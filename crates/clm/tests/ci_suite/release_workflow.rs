@@ -1282,7 +1282,12 @@ fn a_migrations_requirement_pending_fails_before_the_lock() {
     // Each case: (component, stdout, exit status) for the runs it changes, and the lines the
     // report on stderr must hold.
     type Case<'a> = (&'a [(&'a str, &'a str, Option<i32>)], &'a [&'a str]);
-    let cases: [Case; 4] = [
+    let cases: [Case; 5] = [
+        // A line, whatever it is: a blank one too.
+        (
+            &[("upgrade", "\n", None)],
+            &["release: requirements of upgrade or init are pending:"],
+        ),
         (
             &[("upgrade", "upgrade/x 1234abcd unbuilt\n", None)],
             &[
