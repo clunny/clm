@@ -31,7 +31,7 @@ fn body(commit: char, unproven: &[&str]) -> Body {
 
 #[test]
 fn folded_and_shown() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let text = line(
         1,
         'c',
@@ -54,7 +54,7 @@ fn folded_and_shown() {
 
 #[test]
 fn shown_counts_each_list() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let text = line(
         1,
         'c',
@@ -74,7 +74,7 @@ fn shown_counts_each_list() {
 
 #[test]
 fn newest_first_by_commit() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let text = [
         plain(1, 'c', "2026-01-01T00:00:00.000Z"),
         plain(3, 'd', "2026-01-03T00:00:00.000Z"),
@@ -93,7 +93,7 @@ fn newest_first_by_commit() {
 
 #[test]
 fn bad_entry() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let at = "2026-01-01T00:00:00.000Z";
     let bad = [
         line(1, 'c', at, "[]", r#"["a/x"]"#, "[]"),
@@ -119,7 +119,7 @@ fn bad_entry() {
 
 #[test]
 fn since_may_be_a_commit() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let text = plain(1, 'c', "2026-01-01T00:00:00.000Z")
         .replace("\"since\":null", &format!("\"since\":\"{}\"", id('a')));
     let fold = fold_records(&[("one", &text)]);
@@ -129,7 +129,7 @@ fn since_may_be_a_commit() {
 
 #[test]
 fn appended_unsigned_even_in_a_signed_repository() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     std::fs::create_dir_all(a.join("docs")).unwrap();
@@ -152,7 +152,7 @@ fn appended_unsigned_even_in_a_signed_repository() {
 
 #[test]
 fn compacted() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     let b = clone_with_origin(dir.path(), "b", "B");
@@ -216,7 +216,7 @@ fn the_same_record_as_a_literal() {
 
 #[test]
 fn what_a_pass_left() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let text = line(1, 'c', "2026-01-01T00:00:00.000Z", r#"["a/x"]"#, "[]", "[]")
         .replace('}', r#","left":["a/y","a/z"]}"#);
     let fold = fold_records(&[("one", &text)]);
@@ -236,7 +236,7 @@ fn what_a_pass_left() {
 
 #[test]
 fn an_older_record() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let text = plain(1, 'c', "2026-01-01T00:00:00.000Z");
     assert!(!text.contains("left"));
     let fold = fold_records(&[("one", &text)]);
@@ -249,7 +249,7 @@ fn an_older_record() {
 
 #[test]
 fn a_bad_left() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let at = "2026-01-01T00:00:00.000Z";
     let text = [
         plain(1, 'c', at).replace('}', r#","left":"a/y"}"#),
@@ -273,7 +273,7 @@ fn a_bad_left() {
 
 #[test]
 fn left_set_through_the_constructor() {
-    // req:ledger/mutated-record@80b0aa07
+    // req:ledger/mutated-record@9b20d6a5
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     let home = dir.path();
