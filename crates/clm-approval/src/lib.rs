@@ -15,7 +15,6 @@ use std::path::{Path, PathBuf};
 
 pub use approve::approve;
 pub use command::{ApproveArgs, approve_command};
-pub use hold::held;
 pub use policy::Policy;
 pub use sign::{APPROVE, LAND};
 
@@ -73,11 +72,6 @@ pub struct Output {
 }
 
 const OFFLINE: &str = "offline: origin can't be reached; run `clm approve` again when it can";
-
-/// The branches pushed deliberately, so a local one ahead of `origin` isn't landed.
-fn is_pushed_deliberately(branch: &str) -> bool {
-    branch.starts_with("impl/") || branch.starts_with("spec/")
-}
 
 /// A branch's head, and `origin`'s tip of the branch when `origin` holds it (`branch-head`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,26 +152,6 @@ impl<'a> Repo<'a> {
             return Err(Error::Refused(format!("`main` can't be {verb}")));
         }
         Ok(name)
-    }
-
-    /// The head to use for `branch`: `origin/<branch>` when it exists and the local branch
-    /// isn't ahead of it, else the local branch. With `refuse_unpushed`, a claim branch with
-    /// commits `origin` lacks is refused. Also says whether the head is `origin`'s tip.
-    pub fn head(&self, branch: &str, refuse_unpushed: bool) -> Result<(String, bool), Error> {
-        let local = self.rev(&format!("refs/heads/{branch}"))?;
-        let remote = self.rev(&format!("refs/remotes/{REMOTE}/{branch}"))?;
-        let unpushed = || {
-            Error::Refused(format!(
-                "`{branch}` has commits origin lacks: push it, then land it"
-            ))
-        };
-        match (local, remote) {
-            (Some(l), Some(r)) if clm_git::is_ancestor(&self.root, &l, &r)? => Ok((r, true)),
-            (None, Some(r)) => Ok((r, true)),
-            (Some(_), _) if refuse_unpushed && is_pushed_deliberately(branch) => Err(unpushed()),
-            (Some(l), _) => Ok((l, false)),
-            (None, None) => Err(Error::Refused(format!("no branch `{branch}`"))),
-        }
     }
 
     /// `branch`'s head by one rule for `clm land` (`for_land`) and `clm approve`, whatever its
