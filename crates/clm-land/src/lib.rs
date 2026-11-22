@@ -113,18 +113,11 @@ impl From<std::io::Error> for Error {
     }
 }
 
-/// The branches deleted from `origin` once landed.
-const CLAIM_PREFIXES: [&str; 3] = ["impl/", "spec/", "propose/"];
-
 /// How a warning a land writes as it happens starts, as the command writes every other one
 /// after the run (`land/commands-in-crate`).
 const WARNING: &str = "clm land: warning: ";
 
 const OFFLINE: &str = "offline: origin can't be reached; push and land when it can";
-
-fn is_claim(branch: &str) -> bool {
-    CLAIM_PREFIXES.iter().any(|p| branch.starts_with(p))
-}
 
 /// The repository a command runs in, with its settings.
 pub(crate) struct Repo<'a> {

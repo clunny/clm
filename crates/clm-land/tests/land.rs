@@ -226,16 +226,17 @@ fn unpushed_impl_commits_refused() {
     let work = f.work();
     f.git(&work, &["checkout", "-q", "impl/a"]);
     f.commit_files(&[("c.txt", "c\n")], "unpushed");
+    let local = f.rev("HEAD");
     f.git(&work, &["checkout", "-q", "main"]);
-    let old = f.remote("main");
-    let why = refused(clm_land::land(&work, Some("impl/a"), &f.env(&[])));
-    assert!(why.contains("push"), "{why}");
-    assert_eq!(f.remote("main"), old);
+    // Ahead of `origin`, it lands its local tip from the clone, whatever its name
+    // (`land.approval/branch-head`).
+    clm_land::land(&work, Some("impl/a"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&f.path("origin.git"), "main")[1], local);
 }
 
 #[test]
 fn impl_branch_removed() {
-    // req:land/landed-branch-cleanup@58d9f2ab
+    // req:land/landed-branch-cleanup@d818e21d
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
@@ -248,7 +249,7 @@ fn impl_branch_removed() {
 
 #[test]
 fn moved_head_kept() {
-    // req:land/landed-branch-cleanup@58d9f2ab
+    // req:land/landed-branch-cleanup@d818e21d
     let f = Fixture::new("");
     f.write("move-head", "impl/a");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -258,13 +259,76 @@ fn moved_head_kept() {
     assert!(!branch_warnings(&out).is_empty(), "{:?}", out.warnings);
 }
 
+/// Whether `origin` holds `branch`.
+fn on_origin(f: &Fixture, branch: &str) -> bool {
+    let refname = format!("refs/heads/{branch}");
+    !f.git(&f.path("origin.git"), &["for-each-ref", &refname])
+        .is_empty()
+}
+
 #[test]
-fn other_branch_kept() {
-    // req:land/landed-branch-cleanup@58d9f2ab
+fn any_branch_removed() {
+    // req:land/landed-branch-cleanup@d818e21d
     let f = Fixture::new("");
-    let head = f.branch("feature/a", &[("b.txt", "b\n")]);
-    clm_land::land(&f.work(), Some("feature/a"), &f.env(&[])).unwrap();
-    assert_eq!(f.remote("feature/a"), head);
+    let work = f.work();
+    // `fix-x`, pushed.
+    f.branch("fix-x", &[("x.txt", "x\n")]);
+    let out = clm_land::land(&work, Some("fix-x"), &f.env(&[])).unwrap();
+    assert!(!on_origin(&f, "fix-x"));
+    assert!(branch_warnings(&out).is_empty(), "{:?}", out.warnings);
+    // `fix-w`, pushed with one more local commit: its local tip lands, and the delete is
+    // leased on `origin`'s tip.
+    f.branch("fix-w", &[("w.txt", "w\n")]);
+    f.git(&work, &["checkout", "-q", "fix-w"]);
+    let local = f.commit_files(&[("w2.txt", "w2\n")], "more");
+    f.git(&work, &["checkout", "-q", "main"]);
+    clm_land::land(&work, Some("fix-w"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&f.path("origin.git"), "main")[1], local);
+    assert!(!on_origin(&f, "fix-w"));
+    // `fix-y`, which `origin` doesn't hold.
+    f.git(&work, &["checkout", "-q", "-b", "fix-y", "main"]);
+    f.commit_files(&[("y.txt", "y\n")], "fix-y");
+    f.git(&work, &["checkout", "-q", "main"]);
+    let out = clm_land::land(&work, Some("fix-y"), &f.env(&[])).unwrap();
+    assert!(!on_origin(&f, "fix-y"));
+    assert!(
+        out.warnings.iter().all(|w| !w.contains("fix-y")),
+        "{:?}",
+        out.warnings
+    );
+}
+
+#[test]
+fn a_delete_origin_refuses() {
+    // req:land/landed-branch-cleanup@d818e21d
+    let f = Fixture::new("");
+    let head = f.branch("fix-x", &[("x.txt", "x\n")]);
+    f.hook(Some(
+        "while read old new ref; do\n  if [ \"$new\" = 0000000000000000000000000000000000000000 ]; then echo 'remote says no' >&2; exit 1; fi\ndone\nexit 0\n",
+    ));
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let code = clm_land::land_command(["fix-x"], &f.work(), &f.env(&[]), &mut stdout, &mut stderr);
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert_eq!(code, 0, "{stderr}");
+    assert_eq!(f.remote("fix-x"), head);
+    assert!(
+        stderr.contains("clm land: warning: kept `fix-x` on origin: "),
+        "{stderr}"
+    );
+    assert!(stderr.contains("remote says no"), "{stderr}");
+}
+
+#[test]
+fn the_local_branch() {
+    // req:land/landed-branch-cleanup@d818e21d
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a2.txt", "a\n")]);
+    f.branch("impl/b", &[("b.txt", "b\n")]);
+    f.linked("wt-b", "impl/b");
+    clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    clm_land::land(&f.work(), Some("impl/b"), &f.env(&[])).unwrap();
+    assert_eq!(f.git(&f.work(), &["branch", "--list", "impl/a"]), "");
+    assert_ne!(f.git(&f.work(), &["branch", "--list", "impl/b"]), "");
 }
 
 #[test]
@@ -354,6 +418,13 @@ fn origin_branch_ahead_of_local() {
     f.git(&other, &["add", "-A"]);
     f.git(&other, &["commit", "-q", "-m", "more"]);
     f.git(&other, &["push", "-q", "origin", "impl/a"]);
+    // A local branch behind `origin`'s is refused, with what to do (`land.approval/branch-head`).
+    let old = f.remote("main");
+    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
+    assert!(why.contains("behind `origin/impl/a`"), "{why}");
+    assert_eq!(f.remote("main"), old);
+    // With no local branch, `origin`'s tip lands.
+    f.git(&f.work(), &["branch", "-q", "-D", "impl/a"]);
     let newer = f.git(&other, &["rev-parse", "HEAD"]);
     clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     let main = f.remote("main");

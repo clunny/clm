@@ -188,7 +188,7 @@ type Built = (Member, Vec<(String, String)>, Vec<String>);
 struct Member {
     wanted: Wanted,
     head: String,
-    on_origin: bool,
+    on_origin: Option<String>,
     /// Its merge commit as the chain was built to be gated; the pushed one differs in its
     /// message alone.
     commit: String,
@@ -368,7 +368,10 @@ impl Batch<'_, '_, '_> {
         vars0: Option<&[(String, String)]>,
     ) -> Result<Built, Error> {
         let (ctx, repo) = (self.ctx, self.ctx.repo);
-        let (head, on_origin) = repo.approval.head(&w.branch, true)?;
+        let clm_approval::BranchHead {
+            head,
+            origin: on_origin,
+        } = repo.approval.branch_head(&w.branch, true)?;
         let notes = crate::judge::judge_head(repo, &w.branch, base, &head, fold)?;
         let tree = unconflicted_tree(repo, tip, &head)?
             .ok_or_else(|| Error::Refused("the branch conflicts with main".into()))?;
@@ -711,7 +714,13 @@ impl Batch<'_, '_, '_> {
         };
         let m = &chain.members[at];
         let commit = finals.commits[at].clone();
-        cleanup(repo, &m.wanted.branch, &m.head, m.on_origin, &mut warnings);
+        cleanup(
+            repo,
+            &m.wanted.branch,
+            &m.head,
+            m.on_origin.as_deref(),
+            &mut warnings,
+        );
         let mut out = Output {
             warnings: chain.warnings.iter().cloned().chain(warnings).collect(),
             ..Default::default()

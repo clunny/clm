@@ -13,7 +13,7 @@ use crate::lock::{Lane, Rank};
 use crate::scratch::Scratch;
 use crate::stderr::Stderr;
 use crate::{CheckHow, Selected};
-use crate::{Env, Error, Output, Repo, Verdict, is_claim};
+use crate::{Env, Error, Output, Repo, Verdict};
 use clm_approval::{Approvals, Policy};
 use clm_model::Priority;
 
@@ -76,7 +76,10 @@ pub(crate) fn land_into(
     // exists, a land knows whether its check will run.
     let prepare = |chain: Option<&str>, woke: bool| -> Result<Prepared, Bail> {
         repo.fetch()?;
-        let (head, on_origin) = repo.approval.head(&branch, true)?;
+        let clm_approval::BranchHead {
+            head,
+            origin: on_origin,
+        } = repo.approval.branch_head(&branch, true)?;
         let fold = clm_ledger::fold(&repo.root)?;
         // A land that waited for the lock may have been landed by the holder, with the lands
         // taken together on one check (`land/batched-lands`).
@@ -243,7 +246,14 @@ pub(crate) fn land_into(
                     on_origin,
                 }) => {
                     let mut done = std::mem::take(out);
-                    *out = finish_found(&repo, &branch, &head, on_origin, &found, &mut done);
+                    *out = finish_found(
+                        &repo,
+                        &branch,
+                        &head,
+                        on_origin.as_deref(),
+                        &found,
+                        &mut done,
+                    );
                     return Ok(());
                 }
                 Err(Bail::Unrecorded {
@@ -699,7 +709,13 @@ pub(crate) fn land_into(
                 appended.record.writer
             ));
         }
-        cleanup(&repo, &branch, &head, on_origin, &mut out.warnings);
+        cleanup(
+            &repo,
+            &branch,
+            &head,
+            on_origin.as_deref(),
+            &mut out.warnings,
+        );
         if branch.starts_with("spec/") {
             let added = changes_added(&repo, &base, &head, &changes);
             release_claims(&repo, &merge, &added, &claim_tips, &mut out.warnings);
@@ -734,14 +750,14 @@ enum Bail {
     Found {
         found: crate::batch::Found,
         head: String,
-        on_origin: bool,
+        on_origin: Option<String>,
     },
     /// The head is on `main` through a merge commit no `landed` record names
     /// (`land/unrecorded-land-finished`).
     Unrecorded {
         commit: String,
         head: String,
-        on_origin: bool,
+        on_origin: Option<String>,
     },
 }
 
@@ -769,7 +785,7 @@ pub(crate) fn finish_found(
     repo: &Repo,
     branch: &str,
     head: &str,
-    on_origin: bool,
+    on_origin: Option<&str>,
     found: &crate::batch::Found,
     out: &mut Output,
 ) -> Output {
@@ -987,8 +1003,8 @@ fn overlap_basis(
 /// What step 1 gathers for an attempt.
 struct Prepared {
     head: String,
-    /// Whether `head` is `origin`'s tip of the branch.
-    on_origin: bool,
+    /// `origin`'s tip of the branch as the fetch read it, when `origin` holds it.
+    on_origin: Option<String>,
     base: String,
     /// Whether the repository is signed at `base`.
     signed: bool,
@@ -1110,21 +1126,20 @@ pub(crate) fn push_main(
     }
 }
 
-/// Deletes a landed claim branch from `origin`, leased on `head`, and the local branch when
-/// it is checked out nowhere and holds nothing the land didn't; a failure warns.
+/// Deletes a landed branch from `origin`, whatever its name, when `origin` held it at the
+/// fetch, leased on `origin`'s tip as that fetch read it (`on_origin`), and the local branch
+/// when it is checked out nowhere and holds nothing the land didn't; a failure warns
+/// (`land/landed-branch-cleanup`).
 pub(crate) fn cleanup(
     repo: &Repo,
     branch: &str,
     head: &str,
-    on_origin: bool,
+    on_origin: Option<&str>,
     warnings: &mut Vec<String>,
 ) {
-    if !is_claim(branch) {
-        return;
-    }
-    if on_origin {
+    if let Some(tip) = on_origin {
         let host = clm_host::adapter(repo.settings.host.value);
-        if let Err(e) = host.branch_delete(&repo.root, branch, head) {
+        if let Err(e) = host.branch_delete(&repo.root, branch, tip) {
             let why = match e {
                 clm_host::Error::Refused(why)
                 | clm_host::Error::Git(why)

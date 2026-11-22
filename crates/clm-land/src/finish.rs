@@ -76,7 +76,7 @@ pub(crate) struct Ctx<'a, 'r> {
     pub(crate) check: Option<&'a str>,
     pub(crate) branch: &'a str,
     pub(crate) head: &'a str,
-    pub(crate) on_origin: bool,
+    pub(crate) on_origin: Option<String>,
     pub(crate) commit: &'a str,
 }
 
@@ -96,7 +96,7 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
             repo,
             ctx.branch,
             ctx.head,
-            ctx.on_origin,
+            ctx.on_origin.as_deref(),
             &found,
             &mut out,
         ));
@@ -231,7 +231,7 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
         repo,
         ctx.branch,
         ctx.head,
-        ctx.on_origin,
+        ctx.on_origin.as_deref(),
         &found,
         &mut out,
     ))
