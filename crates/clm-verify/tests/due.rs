@@ -14,7 +14,7 @@ fn local(triggers: &str, every: &str) -> Fixture {
 
 #[test]
 fn a_finished_change_is_due() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"change-done\"", "");
     f.land(&[("a.txt", "1\n")], "one");
     let green = f.land(&[("a.txt", "2\n")], "two");
@@ -30,7 +30,7 @@ fn a_finished_change_is_due() {
 
 #[test]
 fn nothing_finished() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -45,15 +45,64 @@ fn nothing_finished() {
     );
     let before = f.records().len();
     let out = f.due();
-    assert!(out.line.starts_with("verify not-due"), "{}", out.line);
+    assert_eq!(out.line, "verify not-due no trigger holds for 3 lands");
     assert_eq!(out.code, 0);
+    let dry = f.dry(false);
+    assert_eq!(
+        (dry.line.as_str(), dry.code),
+        ("verify not-due no trigger holds for 3 lands", 3)
+    );
     assert_eq!(f.records().len(), before);
     assert!(f.lines("check-pwd.log").is_empty());
 }
 
 #[test]
+fn no_trigger_holds() {
+    // req:verify/verify-due@eb23d6a6
+    let f = local("\"work-done\"", "");
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    f.land(&[("a.txt", "2\n")], "two");
+    f.land(&[("a.txt", "3\n")], "three");
+    let out = f.due();
+    assert_eq!(
+        (out.line.as_str(), out.code),
+        ("verify not-due no trigger holds for 2 lands", 0)
+    );
+    let dry = f.dry(false);
+    assert_eq!(
+        (dry.line.as_str(), dry.code),
+        ("verify not-due no trigger holds for 2 lands", 3)
+    );
+}
+
+#[test]
+fn the_first_trigger_named() {
+    // req:verify/verify-due@eb23d6a6
+    let fixture = |red: bool, archive: bool| {
+        let f = local("\"change-done\", \"work-done\"", "every = { lands = 2 }");
+        let last = f.land(&[("a.txt", "1\n")], "one");
+        f.verified(&last, !red);
+        f.land(&[("a.txt", "2\n")], "two");
+        match archive {
+            true => f.land(&[("changes/archive/x/change.md", CHANGE)], "archive x"),
+            false => f.land(&[("a.txt", "3\n")], "three"),
+        };
+        f
+    };
+    for (red, archive, want) in [
+        (true, true, "verify due red-again"),
+        (false, true, "verify due change-done"),
+        (false, false, "verify due work-done"),
+    ] {
+        let out = fixture(red, archive).dry(true);
+        assert_eq!((out.line.as_str(), out.code), (want, 0));
+    }
+}
+
+#[test]
 fn a_dry_run_that_finds_nothing_due_exits_3() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -65,7 +114,7 @@ fn a_dry_run_that_finds_nothing_due_exits_3() {
 
 #[test]
 fn work_done_only_when_asked() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"work-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -79,7 +128,7 @@ fn work_done_only_when_asked() {
 
 #[test]
 fn a_trigger_the_project_did_not_choose_does_not_fire() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -92,7 +141,7 @@ fn a_trigger_the_project_did_not_choose_does_not_fire() {
 
 #[test]
 fn backstop_by_lands() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("", "every = { lands = 3 }");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -105,7 +154,7 @@ fn backstop_by_lands() {
 
 #[test]
 fn backstop_by_days() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("", "every = { days = 2 }");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -133,7 +182,7 @@ fn backstop_by_days() {
 
 #[test]
 fn red_stays_due() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("", "");
     let red = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&red, false);
@@ -143,7 +192,7 @@ fn red_stays_due() {
 
 #[test]
 fn queue_drained_waits_for_the_last_pending_requirement() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"queue-drained\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -200,7 +249,7 @@ fn cites_thing(f: &Fixture) -> String {
 
 #[test]
 fn queue_drained_when_only_blocked_requirements_remain() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"queue-drained\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -214,7 +263,7 @@ fn queue_drained_when_only_blocked_requirements_remain() {
 
 #[test]
 fn queue_not_drained_while_a_requirement_is_ready() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"queue-drained\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -242,7 +291,7 @@ fn queue_not_drained_while_a_requirement_is_ready() {
 
 #[test]
 fn queue_drained_when_nothing_is_pending() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"queue-drained\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -253,7 +302,7 @@ fn queue_drained_when_nothing_is_pending() {
 
 #[test]
 fn queue_not_drained_when_the_spec_graph_has_violations() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"queue-drained\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -285,7 +334,7 @@ fn hash_of_thing(f: &Fixture) -> String {
 
 #[test]
 fn nothing_landed() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = local("\"work-done\"", "");
     let head = f.back(0);
     f.verified(&head, true);
@@ -303,7 +352,7 @@ fn nothing_landed() {
 
 #[test]
 fn off() {
-    // req:verify/verify-due@462c3f79
+    // req:verify/verify-due@eb23d6a6
     let f = Fixture::new(None);
     let requests = [
         clm_verify::Request::Due {
