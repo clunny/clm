@@ -30,4 +30,5 @@ Make the scan behind `check/remove-by-markers` and `clm unreferenced` agree on w
 
 ## Edge cases and workarounds
 
-- A full-width digit (`２`) is a Unicode digit; the date's digits must be ASCII, as the code already requires, and the scenario holds one so a build that loosens the date is caught.
+- A full-width digit (`２`) is a Unicode digit; the date's digits must be ASCII, as the code already requires. The scenario's full-width line catches a build that loosens the characters of the ID it reads, not one that loosens only the date check, which the ID's ASCII characters already keep ASCII.
+- `clm unreferenced` also asks where a marker sits (a comment directly before an item); `scan` lists a marker wherever its text is. The direction that matters holds: every marker `clm unreferenced` honours is one `scan` lists.
