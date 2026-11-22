@@ -1,4 +1,4 @@
-//! The stages of the regenerated tree (`stale-delta-names-movers`): `origin/main`'s
+//! The stages of the regenerated tree (`stale-delta-names-movers`): `onto`'s
 //! `specs/`, then the tree after each change the regenerate applied, in order. A stale
 //! base's text is found at the newest stage where the element hashes to it, and what moved
 //! the element since is named from the stages that follow.
@@ -14,10 +14,10 @@ use crate::Error;
 use crate::stale::{History, text};
 
 /// The graphs the regenerate loaded, one per stage, each with the change whose application
-/// made it (`None` for `origin/main`'s).
+/// made it (`None` for `onto`'s).
 pub(crate) struct Stages {
     stages: Vec<(Option<String>, Graph)>,
-    /// `origin/main`'s history of each node's `SPEC.md`, read on first use and kept, so
+    /// `onto`'s history of each node's `SPEC.md`, read on first use and kept, so
     /// its commits are parsed once a run.
     histories: RefCell<BTreeMap<String, History>>,
 }
@@ -67,7 +67,7 @@ impl Stages {
         }
     }
 
-    /// The next stage: the tree after `change` applied, or `origin/main`'s for `None`.
+    /// The next stage: the tree after `change` applied, or `onto`'s for `None`.
     pub(crate) fn push(&mut self, change: Option<&str>, graph: Graph) {
         self.stages.push((change.map(str::to_string), graph));
     }

@@ -1,9 +1,10 @@
-//! The regenerated `specs/` for `clm sync` and `clm land`, its stale-delta merges and report
+//! The regenerated `specs/` for `clm rebase` and `clm land`, its stale-delta merges and report
 //! (see specs/sync/regenerate/SPEC.md).
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use clm_model::ARCHIVE_DIR;
 use stages::Stages;
 
 mod lock;
@@ -19,14 +20,15 @@ pub use clm_git::Failure as Error;
 
 /// A regenerated `specs/` (`regenerated-tree`): the tree every change of `ids` was applied
 /// to, in a temporary directory, with the stages it went through and the `merged` lines of
-/// the deltas merged on the way.
+/// the deltas merged or taken back on the way.
 pub struct Tree {
     /// Keeps the temporary directory alive.
     _dir: tempfile::TempDir,
     /// The tree's CLM root inside the directory, which holds the repository's prefix.
     root: PathBuf,
     stages: Stages,
-    /// What `merged` printed, one line per merged element.
+    /// The `merged` lines, one per element merged, with the `took back` lines among them in
+    /// the order they were made.
     pub merged: Vec<String>,
 }
 
@@ -37,11 +39,11 @@ impl Tree {
     }
 
     /// `stale-delta-merge`: once the caller has mirrored the tree into `root`'s `specs/` and
-    /// committed it, merges the deltas of the other live `proposed` or `approved` changes
-    /// (not `ids`, the changes the tree regenerated) the tree made stale, each committed on
-    /// its own as `Merge <movers> into <change>`, against `onto`. Returns the `merged` lines
-    /// and what is left: the violations and the stale-delta report of the first change still
-    /// refused.
+    /// committed it, takes back and merges the deltas of the other live `proposed` or
+    /// `approved` changes (not `ids`, the changes the tree regenerated), in ID order, each
+    /// change committed at most once, against `onto`. Returns the `merged` and `took back`
+    /// lines and what is left: the violations and the stale-delta report of the first change
+    /// still refused.
     pub fn other_deltas(
         &mut self,
         root: &Path,
@@ -63,14 +65,16 @@ pub enum Regenerated {
     },
 }
 
-/// `regenerated-tree`, the one place that builds a regenerated `specs/`: `onto`'s `specs/`
-/// (none when it has none) with `HEAD`'s `changes/`, `backlog/`, `docs/decisions/`,
-/// `ARCHITECTURE.md` and `CAPABILITIES.md`, each taken under the
-/// CLM root's prefix in the repository, then the changes of `ids` re-applied one at a time in the order their bases give (`next_change`),
-/// stopping at the first with violations under its own directory or that doesn't apply. With
-/// `merge`, a stale delta is first merged as `stale-delta-merge` states, and the merge
-/// commits (`Merge <movers> into <id>`) are made in `root`; without it nothing in `root`'s
-/// working tree, index or history changes.
+/// `regenerated-tree`: `onto`'s `specs/` (none when it has none) with `HEAD`'s `changes/`,
+/// `backlog/`, `docs/decisions/`, `ARCHITECTURE.md` and `CAPABILITIES.md`, each taken under
+/// the CLM root's prefix in the repository, then the changes of `ids` re-applied one at a
+/// time in the order their bases give (`next_change`), stopping at the first with violations
+/// under its own directory or that doesn't apply. `clm rebase`'s regenerate step and `clm
+/// land`'s derived-specs check both build their tree here. With `merge`, each change is
+/// first taken back and merged as `stale-delta-merge` states, and its delta files committed
+/// in `root` once it is reached; without it nothing in `root`'s working tree, index or
+/// history changes. An `onto` that names no commit, and an ID `HEAD` holds no change for,
+/// are refused before anything is written.
 pub fn regenerated(
     root: &Path,
     onto: &str,
@@ -79,10 +83,35 @@ pub fn regenerated(
 ) -> Result<Regenerated, Error> {
     let prefix = git(root, &["rev-parse", "--show-prefix"])?;
     let under = |dir: &str| format!("{prefix}{dir}");
+    let commit = format!("{onto}^{{commit}}");
+    match git(root, &["rev-parse", "--verify", "--quiet", &commit]) {
+        Ok(_) => {}
+        Err(clm_git::Error::Failed { .. }) => {
+            return Err(Error::Git(format!("`{onto}` names no commit")));
+        }
+        Err(e) => return Err(e.into()),
+    }
+    // `reapply-order-follows-bases`: `ids` are a set, applied in the order the bases give.
+    let mut left_to_apply: Vec<&String> = ids.iter().collect();
+    left_to_apply.sort();
+    left_to_apply.dedup();
+    for &id in &left_to_apply {
+        let live = under(&format!("changes/{id}/change.md"));
+        let archived = under(&format!("changes/{ARCHIVE_DIR}/{id}/change.md"));
+        if !exists_at(root, "HEAD", &live)? && !exists_at(root, "HEAD", &archived)? {
+            return Err(Error::Refused(format!(
+                "`HEAD` holds no change `{id}`, live or archived"
+            )));
+        }
+    }
+    if merge {
+        merge::refuse_uncommitted(root, left_to_apply.iter().map(|id| id.as_str()))?;
+    }
     let tmp = extract_present(root, onto, &[&under("specs")])?;
-    // The rebased branch's changes, backlog, decisions and human layers, so links such as `resolves` and `after`
-    // resolve as they do in the repository. From `HEAD`, not the working tree, where an
-    // untracked backlog item may sit. Moved into the one tree `clm_model::load` reads.
+    // The rebased branch's changes, backlog, decisions and human layers, so links such as
+    // `resolves` and `after` resolve as they do in the repository. From `HEAD`, not the
+    // working tree, where an untracked backlog item may sit. Moved into the one tree
+    // `clm_model::load` reads.
     let layers = [
         "changes",
         "backlog",
@@ -107,56 +136,58 @@ pub fn regenerated(
     // `stale-delta-names-movers`: the graph loaded before each change, kept as its stage.
     let mut stages = Stages::new();
     let mut previous: Option<String> = None;
-    // `reapply-order-follows-bases`: `ids` are a set, applied in the order the bases give.
-    let mut left_to_apply: Vec<&String> = ids.iter().collect();
-    left_to_apply.sort();
-    left_to_apply.dedup();
     while !left_to_apply.is_empty() {
-        let mut merged = false;
-        let mut id = left_to_apply[0];
-        let mut first = true;
-        loop {
-            let (graph, all) = clm_model::load(&tree);
-            if first {
-                stages.push(previous.as_deref(), graph);
-                first = false;
-                id = next_change(root, &stages, &left_to_apply, onto)?;
-            } else {
+        let (graph, mut all) = clm_model::load(&tree);
+        stages.push(previous.as_deref(), graph);
+        // Ordered by the bases as committed, before any take-back.
+        let id = next_change(root, &stages, &left_to_apply, onto)?;
+        let mut edits = merge::Edits::new(id);
+        if merge && let Some(change) = stages.last().changes.get(id).cloned() {
+            // `stale-delta-merge`: a base only this branch's lost tree had, taken back.
+            if merge::take_back(root, &tree, &stages, &change, onto, &mut edits)? {
+                let (graph, reloaded) = clm_model::load(&tree);
                 stages.reload(graph);
+                all = reloaded;
             }
+        }
+        let mut merged = false;
+        let stopped: Option<Vec<String>> = loop {
             let graph = stages.last();
-            let violations = own_violations(graph, all, id);
+            let violations = own_violations(graph, all.clone(), id);
             if !violations.is_empty() {
-                let left = violations.iter().map(clm_check::format).collect();
-                return Ok(Regenerated::Stopped {
-                    merged: merged_lines,
-                    left,
-                });
+                break Some(violations.iter().map(clm_check::format).collect());
             }
-            let change = graph.changes.get(id).expect("copied above");
+            let Some(change) = graph.changes.get(id) else {
+                break Some(vec![format!("change `{id}` doesn't load")]);
+            };
             let v = match clm_apply::reapply(graph, change) {
                 Ok(ops) => {
                     for op in ops {
                         op.perform(&tree).map_err(|e| io(op.path(), e))?;
                     }
-                    break;
+                    break None;
                 }
                 Err(v) => v,
             };
             // `stale-delta-merge`: once per change refused for stale bases, what merges
-            // cleanly is committed as `Merge <movers> into <id>` and the change applied again.
+            // cleanly is written into its delta and the change applied again.
             if merge && !merged && v.iter().any(|v| v.rule == "apply/stale-base") {
                 merged = true;
-                let m = merge::merge(root, &tree, &stages, change, onto)?;
-                merged_lines.extend(m.lines.iter().cloned());
-                if !m.files.is_empty() {
-                    m.commit(root, id)?;
+                if merge::merge(root, &tree, &stages, change, onto, &mut edits)? {
+                    let (graph, reloaded) = clm_model::load(&tree);
+                    stages.reload(graph);
+                    all = reloaded;
                     continue;
                 }
             }
             // `stale-delta-diff`: what moved each element left stale, and who moved it.
             let mut left: Vec<String> = v.iter().map(clm_check::format).collect();
             left.extend(stale::report(root, &stages, change, onto)?);
+            break Some(left);
+        };
+        // One commit for the change reached, kept when an element is left.
+        merged_lines.extend(edits.finish(root, &tree)?);
+        if let Some(left) = stopped {
             return Ok(Regenerated::Stopped {
                 merged: merged_lines,
                 left,
@@ -215,7 +246,8 @@ fn own_violations(
     }
 }
 
-/// Whether `path` exists in the tree of `rev`.
+/// `shared-helpers`: whether `path` exists in the tree of `rev`; false when git says it
+/// doesn't, a `rev` that names no commit included, and an error only when git can't run.
 pub fn exists_at(root: &Path, rev: &str, path: &str) -> Result<bool, Error> {
     match git(root, &["cat-file", "-e", &format!("{rev}:{path}")]) {
         Ok(_) => Ok(true),
@@ -224,9 +256,9 @@ pub fn exists_at(root: &Path, rev: &str, path: &str) -> Result<bool, Error> {
     }
 }
 
-/// The ones of `paths` that `rev` has, written as a checkout would write them into a
-/// temporary directory by `clm-git`'s `extract_paths`, which runs no hook and leaves the
-/// working tree and the index alone. Empty when `rev` has none of them.
+/// `shared-helpers`: the ones of `paths` that `rev` has, written as a checkout would write
+/// them into a temporary directory by `clm-git`'s `extract_paths`, which runs no hook and
+/// leaves the working tree and the index alone. Empty when `rev` has none of them.
 pub fn extract_present(root: &Path, rev: &str, paths: &[&str]) -> Result<tempfile::TempDir, Error> {
     let mut present = Vec::new();
     for &path in paths {
@@ -237,7 +269,7 @@ pub fn extract_present(root: &Path, rev: &str, paths: &[&str]) -> Result<tempfil
     Ok(clm_git::extract_paths(root, rev, &present)?)
 }
 
-/// An I/O failure at `path`, as a git failure (exit 2).
+/// `shared-helpers`: an I/O failure at `path`, as a git failure (exit 2).
 pub fn io(path: &Path, e: std::io::Error) -> Error {
     Error::Git(format!("{}: {e}", path.display()))
 }

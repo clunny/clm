@@ -141,9 +141,12 @@ impl History {
     }
 }
 
-/// `path` at `commit`, `None` when the commit deleted it.
+/// `path`, relative to the CLM root `root`, at `commit`; `None` when the commit deleted it.
+/// Read as `./<path>`, which git takes from the working directory rather than the
+/// repository's top, so a CLM root in a subdirectory finds its files.
 fn show(root: &Path, commit: &str, path: &str) -> Result<Option<Vec<u8>>, Error> {
-    if !exists_at(root, commit, path)? {
+    let path = format!("./{path}");
+    if !exists_at(root, commit, &path)? {
         return Ok(None);
     }
     let spec = format!("{commit}:{path}");

@@ -443,7 +443,7 @@ fn tree_text(tree: &clm_regenerate::Tree, rel: &str) -> String {
 
 #[test]
 fn stale_delta_shows_what_main_changed_on_the_line_it_changed() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let r = repo("spec/y");
     main_moves(
         &r,
@@ -475,7 +475,7 @@ fn stale_delta_shows_what_main_changed_on_the_line_it_changed() {
 
 #[test]
 fn stale_requirement_shows_the_changed_scenario_line() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let r = repo("spec/y");
     let h1 = hash(&r, "requirement:p");
     let delta = format!(
@@ -503,7 +503,7 @@ fn stale_requirement_shows_the_changed_scenario_line() {
 
 #[test]
 fn an_element_main_removed_diffs_to_nothing() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let r = repo("spec/y");
     let h1 = hash(&r, "requirement:p");
     let delta = format!(
@@ -538,7 +538,7 @@ fn an_element_main_removed_diffs_to_nothing() {
 
 #[test]
 fn a_base_no_commit_has_is_compared_by_hand() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let r = repo("spec/y");
     let design = hash(&r, "design");
     let delta = format!(
@@ -551,7 +551,9 @@ fn a_base_no_commit_has_is_compared_by_hand() {
         "changes/y/deltas/a.md",
         &delta.replace(&design, &typed),
     );
-    commit(&r.work, "a base typed by hand");
+    // Recorded so from the start: no commit of the branch set it from another base, so
+    // there is nothing to take back.
+    git(&r.work, &["commit", "-qa", "--amend", "--no-edit"]);
     main_moves(&r, &[("src/other.rs", "other\n")]);
 
     let left = unfinished(&r, &["y"]);
@@ -566,7 +568,7 @@ fn a_base_no_commit_has_is_compared_by_hand() {
 
 #[test]
 fn only_the_sections_a_delta_modifies_are_shown() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let r = repo("spec/y");
     let (contract, design) = (hash(&r, "contract"), hash(&r, "design"));
     let delta = format!(
@@ -588,7 +590,7 @@ fn only_the_sections_a_delta_modifies_are_shown() {
 
 #[test]
 fn a_removed_requirement_main_changed_is_shown() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let r = repo("spec/y");
     let h1 = hash(&r, "requirement:p");
     let delta = format!(
@@ -612,7 +614,7 @@ fn a_removed_requirement_main_changed_is_shown() {
 
 #[test]
 fn a_stale_frontmatter_base_gets_no_report() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let r = repo("spec/y");
     let fm = hash(&r, "frontmatter");
     let delta = format!(
@@ -634,13 +636,13 @@ fn a_stale_frontmatter_base_gets_no_report() {
             .any(|l| l.starts_with("main changed") || l.starts_with("no text")),
         "{left:?}"
     );
-    // req:sync.regenerate/stale-delta-merge@57121685: nor is a frontmatter base merged.
+    // req:sync.regenerate/stale-delta-merge@88ac4186: nor is a frontmatter base merged.
     assert!(!left.iter().any(|l| l.starts_with("merged")), "{left:?}");
 }
 
 #[test]
 fn edits_apart_are_merged_into_the_delta() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     let three = "one\ntwo\nthree";
     main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", three, &["p"]))]);
@@ -679,7 +681,7 @@ fn edits_apart_are_merged_into_the_delta() {
 
 #[test]
 fn a_block_map_base_is_set_in_place() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     let three = "one\ntwo\nthree";
     main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", three, &["p"]))]);
@@ -714,7 +716,7 @@ fn a_block_map_base_is_set_in_place() {
 
 #[test]
 fn overlapping_edits_are_left_for_the_caller() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     let h1 = hash(&r, "contract");
     let delta = modifies_contract(&r, "mine");
@@ -736,7 +738,7 @@ fn overlapping_edits_are_left_for_the_caller() {
 
 #[test]
 fn one_requirement_merged_one_left() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     let architecture = "# A\n\n## Constraints\n\n### Constraint: foo\nIt SHALL foo.\n\n#### Scenario: s\n- ok\n\n#### Untested\nNo.\n";
     main_moves(
@@ -791,7 +793,7 @@ fn one_requirement_merged_one_left() {
 
 #[test]
 fn a_section_gone_from_main_is_not_merged() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     let h1 = hash(&r, "requirement:p");
     let delta = format!(
@@ -809,7 +811,7 @@ fn a_section_gone_from_main_is_not_merged() {
 
 #[test]
 fn a_removed_requirement_is_not_merged() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     let h1 = hash(&r, "requirement:p");
     let delta = format!(
@@ -827,7 +829,7 @@ fn a_removed_requirement_is_not_merged() {
 
 #[test]
 fn an_earlier_change_on_the_branch_moved_it() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let (r, h1, h2) = folded_x_and_y();
     main_moves(&r, &[("src/other.rs", "other\n")]);
 
@@ -860,7 +862,7 @@ fn an_earlier_change_on_the_branch_moved_it() {
 
 #[test]
 fn main_and_an_earlier_change_moved_it() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let (r, h1, _) = folded_x_and_y();
     main_moves(&r, &[("specs/a/SPEC.md", &a_designed("one\ntwo\nTHREE"))]);
 
@@ -886,7 +888,7 @@ fn main_and_an_earlier_change_moved_it() {
 
 #[test]
 fn a_base_from_an_earlier_change_is_merged() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     // Paragraphs, not adjacent lines: `git merge-file` takes edits to adjacent lines for a
     // conflict.
     let r = repo("spec/x");
@@ -929,7 +931,7 @@ fn with_other_deltas(r: &Repo, ids: &[&str]) -> (Vec<String>, Vec<String>) {
 
 #[test]
 fn another_changes_delta_is_merged() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let (r, _, _) = other_change_on_main("one\n\ntwo\n\nTHREE", "X1\n\ntwo\n\nthree");
 
     let (merged, left) = with_other_deltas(&r, &["x"]);
@@ -951,7 +953,7 @@ fn another_changes_delta_is_merged() {
 
 #[test]
 fn an_approved_changes_delta_is_merged() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let (r, _, _) = other_change_at("approved", "one\n\ntwo\n\nTHREE", "X1\n\ntwo\n\nthree");
 
     let (merged, left) = with_other_deltas(&r, &["x"]);
@@ -962,7 +964,7 @@ fn an_approved_changes_delta_is_merged() {
 
 #[test]
 fn another_changes_overlapping_delta_is_left_for_the_caller() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let (r, h1, o) = other_change_on_main("O1\n\ntwo\n\nthree", "X1\n\ntwo\n\nthree");
 
     let (merged, left) = with_other_deltas(&r, &["x"]);
@@ -993,7 +995,7 @@ fn another_changes_overlapping_delta_is_left_for_the_caller() {
 
 #[test]
 fn a_proposed_change_the_branch_adds_is_merged() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     main_moves(&r, &[("specs/a/SPEC.md", &a_designed(THREE))]);
     pull(&r);
@@ -1013,7 +1015,7 @@ fn a_proposed_change_the_branch_adds_is_merged() {
 
 #[test]
 fn an_applied_change_on_main_is_left_alone() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     main_moves(&r, &[("specs/a/SPEC.md", &a_designed(THREE))]);
     pull(&r);
@@ -1036,7 +1038,7 @@ fn an_applied_change_on_main_is_left_alone() {
 
 #[test]
 fn another_change_refused_for_another_reason_stops_the_run() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     main_moves(&r, &[("specs/a/SPEC.md", &a_designed(THREE))]);
     pull(&r);
@@ -1071,7 +1073,7 @@ fn another_change_refused_for_another_reason_stops_the_run() {
 
 #[test]
 fn regenerated_leaves_a_change_it_was_not_given_alone() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     // `o`'s base is in `origin/main`'s history and its edit is apart from `main`'s, so only
     // `ids` not naming it keeps it from being merged.
     let r = repo("spec/x");
@@ -1103,7 +1105,7 @@ fn regenerated_leaves_a_change_it_was_not_given_alone() {
 
 #[test]
 fn an_archived_change_is_merged() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -1153,7 +1155,7 @@ fn clone_with_staged_change() -> Repo {
 
 #[test]
 fn a_lock_lifted_before_the_retry_is_waited_out() {
-    // req:sync.regenerate/retry-index-lock@3ef84131
+    // req:sync.regenerate/retry-index-lock@1037c3c4
     let r = clone_with_staged_change();
     let lock = index_lock(&r);
     // Another process holds the lock and removes it after half a second.
@@ -1174,7 +1176,7 @@ fn a_lock_lifted_before_the_retry_is_waited_out() {
 
 #[test]
 fn run_waits_out_a_lock_lifted_before_the_retry() {
-    // req:sync.regenerate/retry-index-lock@3ef84131
+    // req:sync.regenerate/retry-index-lock@1037c3c4
     let r = clone_with_staged_change();
     let lock = index_lock(&r);
     let mut holder = Command::new("sh")
@@ -1194,7 +1196,7 @@ fn run_waits_out_a_lock_lifted_before_the_retry() {
 
 #[test]
 fn a_lock_kept_fails_the_run_in_time() {
-    // req:sync.regenerate/retry-index-lock@3ef84131
+    // req:sync.regenerate/retry-index-lock@1037c3c4
     let r = clone_with_staged_change();
     write(&r.work, &index_lock(&r).to_string_lossy(), "");
 
@@ -1209,7 +1211,7 @@ fn a_lock_kept_fails_the_run_in_time() {
 
 #[test]
 fn another_failure_is_not_retried() {
-    // req:sync.regenerate/retry-index-lock@3ef84131
+    // req:sync.regenerate/retry-index-lock@1037c3c4
     let r = repo("spec/x");
 
     let started = std::time::Instant::now();
@@ -1228,7 +1230,7 @@ fn another_failure_is_not_retried() {
 
 #[test]
 fn serves_edited_on_main_is_not_merged() {
-    // req:sync.regenerate/stale-delta-merge@57121685
+    // req:sync.regenerate/stale-delta-merge@88ac4186
     let (r, p, _) = x_modifies_p_and_q("It SHALL q, mine.", "- ok");
     // `p`'s `#### Serves` block and a scenario line of `q` the delta didn't change.
     main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_serving("- theirs"))]);
@@ -1257,7 +1259,7 @@ fn serves_edited_on_main_is_not_merged() {
 
 #[test]
 fn serves_edited_on_main_is_not_reported_stale() {
-    // req:sync.regenerate/stale-delta-diff@02701e09
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
     let (r, _, q) = x_modifies_p_and_q("It SHALL q.", "- mine");
     main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_serving("- theirs"))]);
 
@@ -1281,7 +1283,7 @@ fn serves_edited_on_main_is_not_reported_stale() {
 
 #[test]
 fn regenerated_builds_the_tree_without_touching_the_repository() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     let b = node_a("specd", "c", &["s"]).replace("title: A", "title: B");
@@ -1304,7 +1306,7 @@ fn regenerated_builds_the_tree_without_touching_the_repository() {
 
 #[test]
 fn regenerated_merges_only_when_asked() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -1364,7 +1366,7 @@ fn regenerated_merges_only_when_asked() {
 
 #[test]
 fn regenerated_reads_a_clm_root_in_a_subdirectory() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let r = repo("spec/x");
     let sub = r.work.join("sub");
     main_moves(
@@ -1403,7 +1405,7 @@ fn regenerated_reads_a_clm_root_in_a_subdirectory() {
 
 #[test]
 fn the_tree_holds_the_human_layers_and_decisions() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let r = repo("spec/x");
     let serving_e = |slug: &str| {
         format!(
@@ -1476,7 +1478,7 @@ fn contract_delta(base: &str, text: &str) -> String {
 
 #[test]
 fn a_change_built_on_another_sorts_first() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let r = repo("spec/x");
     main_moves(&r, &[("specs/a/SPEC.md", &a_designed("one\ntwo\nthree"))]);
     pull(&r);
@@ -1496,7 +1498,7 @@ fn a_change_built_on_another_sorts_first() {
 
 #[test]
 fn a_change_that_adds_what_another_modifies_goes_after_it() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     let base = hash(&r, "requirement:x");
@@ -1517,7 +1519,7 @@ fn a_change_that_adds_what_another_modifies_goes_after_it() {
 
 #[test]
 fn a_change_stale_against_main_goes_before_the_one_built_on_it() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -1563,7 +1565,7 @@ fn a_change_stale_against_main_goes_before_the_one_built_on_it() {
 
 #[test]
 fn independent_changes_keep_id_order() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let (r, h1, _) = folded_x_and_y();
 
     match regenerate_ids(&r, &["y", "x"]) {
@@ -1584,7 +1586,7 @@ fn independent_changes_keep_id_order() {
 
 #[test]
 fn when_every_change_has_an_unknown_base_the_first_in_id_order_goes() {
-    // req:sync.regenerate/regenerated-tree@03be684b
+    // req:sync.regenerate/regenerated-tree@185eaf1f
     let r = repo("spec/x");
     add_applied(&r, "w", &design_delta(&"0".repeat(64), "W1"));
     add_applied(&r, "x", &design_delta(&"1".repeat(64), "X1"));
@@ -1599,5 +1601,697 @@ fn when_every_change_has_an_unknown_base_the_first_in_id_order_goes() {
             assert!(!left.iter().any(|l| l.contains("changes/x/")), "{left:?}");
         }
         Regenerated::Tree(_) => panic!("both bases are unknown"),
+    }
+}
+
+/// Every file under `dir`'s `specs/`, by path relative to `dir`, with its bytes.
+fn specs_files(dir: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![PathBuf::from("specs")];
+    while let Some(rel) = stack.pop() {
+        let Ok(entries) = fs::read_dir(dir.join(&rel)) else {
+            continue;
+        };
+        for entry in entries {
+            let entry = entry.unwrap();
+            let child = rel.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                stack.push(child);
+            } else {
+                out.insert(child.clone(), fs::read(dir.join(&child)).unwrap());
+            }
+        }
+    }
+    out
+}
+
+/// `rev`'s `specs/`, by path, with each file's bytes.
+fn specs_at(r: &Repo, rev: &str) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    git(
+        &r.work,
+        &["ls-tree", "-r", "--name-only", rev, "--", "specs"],
+    )
+    .lines()
+    .map(|path| {
+        let spec = format!("{rev}:{path}");
+        let bytes = run(&r.work, &["cat-file", "blob", &spec], Options::default()).unwrap();
+        (PathBuf::from(path), bytes)
+    })
+    .collect()
+}
+
+/// `HEAD`, the index and the working tree of the work clone, to compare before and after.
+fn repository_state(r: &Repo) -> (String, String, String) {
+    (
+        git(&r.work, &["rev-parse", "HEAD"]),
+        git(&r.work, &["diff", "--cached"]),
+        git(&r.work, &["status", "--porcelain"]),
+    )
+}
+
+#[test]
+fn arguments_regenerated_is_given() {
+    // req:sync.regenerate/regenerated-tree@185eaf1f
+    let r = repo("spec/x");
+    apply_change(&r, "x", "", &adds_x());
+    let adds_q = format!(
+        "---\ncomponent: a\n---\n## ADDED Requirements\n{}",
+        requirement("q")
+    );
+    for (path, text) in change_files("p", "proposed", &adds_q) {
+        write(&r.work, &path, &text);
+    }
+    commit(&r.work, "propose p");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    let onto = onto(&r);
+    let before = repository_state(&r);
+    let ids = |ids: &[&str]| ids.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let specs_of = |ids: &[String]| match regenerated(&r.work, &onto, ids, false).unwrap() {
+        Regenerated::Tree(tree) => specs_files(tree.path()),
+        Regenerated::Stopped { left, .. } => panic!("{left:?}"),
+    };
+
+    let once = specs_of(&ids(&["x"]));
+    assert_eq!(specs_of(&ids(&["x", "x"])), once);
+    assert_eq!(repository_state(&r), before);
+
+    assert_eq!(specs_of(&[]), specs_at(&r, &onto));
+    assert_eq!(repository_state(&r), before);
+
+    let with_p = specs_of(&ids(&["p"]));
+    let a = String::from_utf8(with_p[Path::new("specs/a/SPEC.md")].clone()).unwrap();
+    assert!(a.contains("### Requirement: q"), "{a}");
+    assert_eq!(repository_state(&r), before);
+
+    match regenerated(&r.work, "no-such-ref", &ids(&["x"]), false) {
+        Err(Error::Git(why)) => assert!(why.contains("no-such-ref"), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("built a tree on no commit"),
+    }
+    assert_eq!(repository_state(&r), before);
+
+    match regenerated(&r.work, &onto, &ids(&["nope"]), false) {
+        Err(Error::Refused(why)) => assert!(why.contains("nope"), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("regenerated a change HEAD doesn't hold"),
+    }
+    assert_eq!(repository_state(&r), before);
+}
+
+#[test]
+fn git_failure_outside_a_repository() {
+    // req:sync.regenerate/regenerated-tree@185eaf1f
+    let dir = TempDir::new().unwrap();
+    // No repository above the temporary directory either.
+    let ceiling = dir.path().parent().unwrap();
+    let outside = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(dir.path())
+            .env("GIT_CEILING_DIRECTORIES", ceiling)
+            .output()
+            .unwrap()
+    };
+    let probe = outside(&["rev-parse", "--show-prefix"]);
+    assert!(!probe.status.success(), "{probe:?}");
+    let message = String::from_utf8_lossy(&probe.stderr).trim().to_string();
+
+    // SAFETY: nextest runs each test in a process of its own.
+    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", ceiling) };
+    match regenerated(dir.path(), "HEAD", &[], false) {
+        Err(Error::Git(why)) => assert!(why.contains(&message), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("built a tree outside a repository"),
+    }
+}
+
+/// The branch of `stale-delta-merge`'s "edits apart": change `x` rewrites the first line of
+/// `a`'s three-line Contract with base `h1`, and `main` has since changed its last line;
+/// `x`'s delta committed with CRLF line endings when `crlf`. Returns the repo and the delta.
+fn edits_apart(crlf: bool) -> (Repo, String) {
+    let r = repo("spec/x");
+    main_moves(
+        &r,
+        &[(
+            "specs/a/SPEC.md",
+            &node_a("specd", "one\ntwo\nthree", &["p"]),
+        )],
+    );
+    pull(&r);
+    let mut delta = modifies_contract(&r, "ONE\ntwo\nthree");
+    if crlf {
+        delta = delta.replace('\n', "\r\n");
+        add_applied(&r, "x", &delta);
+    } else {
+        apply_change(&r, "x", "", &delta);
+    }
+    main_moves(
+        &r,
+        &[(
+            "specs/a/SPEC.md",
+            &node_a("specd", "one\ntwo\nTHREE", &["p"]),
+        )],
+    );
+    (r, delta)
+}
+
+#[test]
+fn a_crlf_delta_is_left_alone() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, delta) = edits_apart(true);
+    let h1 = hash(&r, "contract");
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    let left = unfinished(&r, &["x"]);
+    assert!(!left.iter().any(|l| l.starts_with("merged")), "{left:?}");
+    assert!(
+        left.contains(&format!("main changed contract of a since {h1}")),
+        "{left:?}"
+    );
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        fs::read(r.work.join("changes/x/deltas/a.md")).unwrap(),
+        delta.as_bytes()
+    );
+}
+
+#[test]
+fn an_uncommitted_delta_edit_is_refused() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, _) = edits_apart(false);
+    let edited = format!("{}\n", read(&r.work, "changes/x/deltas/a.md"));
+    write(&r.work, "changes/x/deltas/a.md", &edited);
+    let before = repository_state(&r);
+
+    match regenerated(&r.work, &onto(&r), &["x".to_string()], true) {
+        Err(Error::Refused(why)) => assert!(why.contains("changes/x/deltas/a.md"), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("merged over an uncommitted edit"),
+    }
+    assert_eq!(repository_state(&r), before);
+    assert_eq!(read(&r.work, "changes/x/deltas/a.md"), edited);
+}
+
+#[test]
+fn a_staged_delta_edit_is_refused() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, _) = edits_apart(false);
+    let edited = format!("{}\n", read(&r.work, "changes/x/deltas/a.md"));
+    write(&r.work, "changes/x/deltas/a.md", &edited);
+    git(&r.work, &["add", "changes/x/deltas/a.md"]);
+    let before = repository_state(&r);
+
+    match regenerated(&r.work, &onto(&r), &["x".to_string()], true) {
+        Err(Error::Refused(why)) => assert!(why.contains("changes/x/deltas/a.md"), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("merged over a staged edit"),
+    }
+    assert_eq!(repository_state(&r), before);
+    assert_eq!(read(&r.work, "changes/x/deltas/a.md"), edited);
+}
+
+/// The three-paragraph Contract of `a` the take-back scenarios start from.
+const CONTRACT3: &str = "c1\n\nc2\n\nc3";
+
+/// Node `a` whose Contract is `contract` and Design `design`.
+fn a_with(contract: &str, design: &str) -> String {
+    node_a("specd", contract, &["p"]).replace("## Design\nd", &format!("## Design\n{design}"))
+}
+
+/// A delta of `a` modifying its Contract and Design, both bases on one frontmatter line.
+fn both_delta(contract_base: &str, design_base: &str, contract: &str, design: &str) -> String {
+    format!(
+        "---\ncomponent: a\nbase: {{ contract: \"{contract_base}\", design: \"{design_base}\" }}\n\
+         ---\n## MODIFIED Contract\n{contract}\n\n## MODIFIED Design\n{design}\n"
+    )
+}
+
+/// The hashes the take-back scenarios name: `onto`'s Contract and Design (`c1`, `h1`), and
+/// the Design and Contract after `x` applies (`hx`, `hcx`).
+struct Bases {
+    c1: String,
+    h1: String,
+    hx: String,
+    hcx: String,
+}
+
+/// The branch of "an edit taken back": `main` has `a`'s Contract `CONTRACT3` and Design
+/// `THREE`, and a `proposed` change `o` rewriting the Contract's first line and the Design's
+/// last line; the branch applies `x`, which rewrites the Design's first line (and the
+/// Contract's first line when `x_contract`), then commits `subject`, which rewrites `o`'s
+/// delta with `x`'s Design edit merged in and its design base set to `hx`.
+fn merged_into_o(x_contract: bool, subject: &str) -> (Repo, Bases) {
+    let r = repo("spec/x");
+    main_moves(&r, &[("specs/a/SPEC.md", &a_with(CONTRACT3, THREE))]);
+    pull(&r);
+    let (c1, h1) = (hash(&r, "contract"), hash(&r, "design"));
+    let o = both_delta(&c1, &h1, "OC1\n\nc2\n\nc3", "one\n\ntwo\n\nO3");
+    let files = change_files("o", "proposed", &o);
+    let files: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(p, t)| (p.as_str(), t.as_str()))
+        .collect();
+    main_moves(&r, &files);
+    pull(&r);
+    let x = if x_contract {
+        both_delta(&c1, &h1, "XC1\n\nc2\n\nc3", "X1\n\ntwo\n\nthree")
+    } else {
+        design_delta(&h1, "X1\n\ntwo\n\nthree")
+    };
+    apply_change(&r, "x", "", &x);
+    let (hx, hcx) = (hash(&r, "design"), hash(&r, "contract"));
+    let merged = both_delta(&c1, &hx, "OC1\n\nc2\n\nc3", "X1\n\ntwo\n\nO3");
+    write(&r.work, "changes/o/deltas/a.md", &merged);
+    commit(&r.work, subject);
+    let bases = Bases { c1, h1, hx, hcx };
+    (r, bases)
+}
+
+/// Rewrites `x`'s delta to `delta` and commits it.
+fn x_becomes(r: &Repo, delta: &str) {
+    write(&r.work, "changes/x/deltas/a.md", delta);
+    commit(&r.work, "x changes");
+}
+
+/// `onto`'s copy of `o`'s delta.
+fn o_on_main(r: &Repo) -> String {
+    git(&r.work, &["show", "origin/main:changes/o/deltas/a.md"]) + "\n"
+}
+
+/// The take-back line for `o`'s Design.
+fn took_back_o(h1: &str) -> String {
+    format!("took back design of a in changes/o/deltas/a.md to base {h1}")
+}
+
+#[test]
+fn a_merge_whose_mover_dropped_its_edit_is_taken_back() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(false, "Merge x into o");
+    x_becomes(&r, &adds_x());
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert_eq!(merged, [took_back_o(&b.h1)]);
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(subject(&r), "Take back what this branch merged into o");
+    assert_eq!(
+        git(&r.work, &["show", "--name-only", "--format=", "HEAD"]),
+        "changes/o/deltas/a.md"
+    );
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), o_on_main(&r));
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
+}
+
+#[test]
+fn a_later_edit_survives_the_take_back() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(false, "Merge x into o");
+    let later = read(&r.work, "changes/o/deltas/a.md").replace("\ntwo\n", "\nO2\n");
+    write(&r.work, "changes/o/deltas/a.md", &later);
+    commit(&r.work, "o rewrites two");
+    x_becomes(&r, &adds_x());
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert_eq!(merged, [took_back_o(&b.h1)]);
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(
+        read(&r.work, "changes/o/deltas/a.md"),
+        o_on_main(&r).replace("\ntwo\n", "\nO2\n")
+    );
+}
+
+#[test]
+fn a_hand_merged_base_on_the_same_line_stays() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(true, "Merge x into o");
+    // The Contract edits conflicted, so `Merge x into o` merged only the Design; a later
+    // commit merges the Contract by hand and sets its base, on the same line, after `x`.
+    let by_hand = both_delta(&b.hcx, &b.hx, "XOC1\n\nc2\n\nc3", "X1\n\ntwo\n\nO3");
+    write(&r.work, "changes/o/deltas/a.md", &by_hand);
+    commit(&r.work, "merge the Contract by hand");
+    x_becomes(&r, &contract_delta(&b.c1, "XC1\n\nc2\n\nc3"));
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert_eq!(merged, [took_back_o(&b.h1)]);
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(
+        read(&r.work, "changes/o/deltas/a.md"),
+        both_delta(&b.hcx, &b.h1, "XOC1\n\nc2\n\nc3", "one\n\ntwo\n\nO3")
+    );
+}
+
+#[test]
+fn a_merge_made_by_hand_is_taken_back_alike() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(false, "fix o");
+    x_becomes(&r, &adds_x());
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert_eq!(merged, [took_back_o(&b.h1)]);
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(subject(&r), "Take back what this branch merged into o");
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), o_on_main(&r));
+}
+
+#[test]
+fn a_base_taken_back_is_merged_again_when_main_moved() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(false, "Merge x into o");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &a_with(CONTRACT3, "one\n\nM2\n\nthree"))],
+    );
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert_eq!(merged, ["merged design of a into changes/o/deltas/a.md"]);
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(subject(&r), "Merge main and x into o");
+    // One commit for the take-back and the merge together.
+    let subjects = subjects_since_main(&r);
+    assert!(
+        !subjects.iter().any(|s| s.starts_with("Take back")),
+        "{subjects:?}"
+    );
+    let tree_design = hash(&r, "design");
+    assert_ne!(tree_design, b.hx);
+    assert_eq!(
+        read(&r.work, "changes/o/deltas/a.md"),
+        both_delta(&b.c1, &tree_design, "OC1\n\nc2\n\nc3", "X1\n\nM2\n\nO3")
+    );
+}
+
+#[test]
+fn a_merge_still_current_is_left_as_it_is() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, _) = merged_into_o(false, "Merge x into o");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    let mut t = tree(&r, &["x"]);
+    settle(&r, &t);
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    let ids = ["x".to_string()];
+    let (merged, left) = t.other_deltas(&r.work, &ids, &onto(&r)).unwrap();
+    assert!(merged.is_empty(), "{merged:?}");
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
+/// A branch adding applied changes `y`, rewriting the first line of `a`'s Design `THREE`,
+/// and `z`, rewriting its last line, both with base `h1`, where a commit `Merge y into z`
+/// rebased `z`'s delta onto the Design as `y` left it, and `y` has since stopped editing the
+/// Design; `z` archived when `archived`. Returns the repo, `h1` and `z`'s first delta.
+fn z_merged_from_y(archived: bool) -> (Repo, String, String) {
+    let r = repo("spec/y");
+    main_moves(&r, &[("specs/a/SPEC.md", &a_designed(THREE))]);
+    pull(&r);
+    let h1 = hash(&r, "design");
+    apply_change(&r, "y", "", &design_delta(&h1, "Y1\n\ntwo\n\nthree"));
+    let hy = hash(&r, "design");
+    let z = design_delta(&h1, "one\n\ntwo\n\nZ3");
+    add_applied(&r, "z", &z);
+    write(
+        &r.work,
+        "changes/z/deltas/a.md",
+        &design_delta(&hy, "Y1\n\ntwo\n\nZ3"),
+    );
+    commit(&r.work, "Merge y into z");
+    if archived {
+        archive_in(&r.work, "z", "applied");
+    }
+    write(&r.work, "changes/y/deltas/a.md", &adds_x());
+    commit(&r.work, "y changes");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    (r, h1, z)
+}
+
+#[test]
+fn a_change_of_ids_is_taken_back_live_or_archived() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    for (archived, path) in [
+        (false, "changes/z/deltas/a.md"),
+        (true, "changes/archive/z/deltas/a.md"),
+    ] {
+        let (r, h1, z) = z_merged_from_y(archived);
+
+        let t = tree(&r, &["y", "z"]);
+        assert_eq!(
+            t.merged,
+            [format!("took back design of a in {path} to base {h1}")]
+        );
+        assert_eq!(subject(&r), "Take back what this branch merged into z");
+        assert_eq!(
+            git(&r.work, &["show", "--name-only", "--format=", "HEAD"]),
+            path
+        );
+        assert_eq!(read(&r.work, path), z);
+        let spec = tree_text(&t, "specs/a/SPEC.md");
+        assert!(spec.contains("## Design\none\n\ntwo\n\nZ3\n"), "{spec}");
+    }
+}
+
+#[test]
+fn a_base_the_report_asked_for_is_kept() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let r = repo("spec/x");
+    main_moves(&r, &[("specs/a/SPEC.md", &a_designed(THREE))]);
+    pull(&r);
+    let h1 = hash(&r, "design");
+    apply_change(&r, "x", "", &design_delta(&h1, "X1\n\ntwo\n\nthree"));
+    let hx = hash(&r, "design");
+    add_applied(&r, "z", &design_delta(&h1, "Z1\n\ntwo\n\nthree"));
+    let fixed = design_delta(&hx, "XZ1\n\ntwo\n\nthree");
+    write(&r.work, "changes/z/deltas/a.md", &fixed);
+    commit(&r.work, "fix z");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    for _ in 0..2 {
+        let t = tree(&r, &["x", "z"]);
+        assert!(t.merged.is_empty(), "{:?}", t.merged);
+        assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+        assert_eq!(read(&r.work, "changes/z/deltas/a.md"), fixed);
+    }
+}
+
+#[test]
+fn the_merge_commit_waits_out_a_lock() {
+    // req:sync.regenerate/retry-index-lock@1037c3c4
+    let (r, _) = edits_apart(false);
+    let onto = onto(&r);
+    let real = Command::new("sh")
+        .args(["-c", "command -v git"])
+        .output()
+        .unwrap()
+        .stdout;
+    let real = String::from_utf8(real).unwrap().trim().to_string();
+    let bin = r.work.with_file_name("bin");
+    let calls = r.work.with_file_name("commits");
+    let failed = r.work.with_file_name("failed-once");
+    let git_dir = r.work.join(".git");
+    // Fails the first `commit` (its first argument after any `-c` pairs) as a held lock
+    // does, without running it; passes everything else to git.
+    let script = format!(
+        "#!/bin/sh\n\
+         skip=0\n\
+         for a in \"$@\"; do\n\
+           if [ $skip = 1 ]; then skip=0; continue; fi\n\
+           if [ \"$a\" = -c ]; then skip=1; continue; fi\n\
+           if [ \"$a\" = commit ]; then\n\
+             echo commit >> '{calls}'\n\
+             if [ ! -e '{failed}' ]; then\n\
+               touch '{failed}'\n\
+               echo \"fatal: Unable to create '{git_dir}/index.lock': File exists.\" >&2\n\
+               exit 128\n\
+             fi\n\
+           fi\n\
+           break\n\
+         done\n\
+         exec '{real}' \"$@\"\n",
+        calls = calls.display(),
+        failed = failed.display(),
+        git_dir = git_dir.display(),
+    );
+    write(&bin, "git", &script);
+    let chmod = Command::new("chmod")
+        .arg("+x")
+        .arg(bin.join("git"))
+        .status()
+        .unwrap();
+    assert!(chmod.success());
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    // SAFETY: nextest runs each test in a process of its own.
+    unsafe { std::env::set_var("PATH", path) };
+
+    let result = regenerated(&r.work, &onto, &["x".to_string()], true).unwrap();
+    let commits = fs::read_to_string(&calls).unwrap();
+    assert!(matches!(result, Regenerated::Tree(_)));
+    assert_eq!(commits.lines().count(), 2, "{commits}");
+    assert_eq!(subject(&r), "Merge main into x");
+    assert_eq!(
+        git(&r.work, &["show", "--name-only", "--format=", "HEAD"]),
+        "changes/x/deltas/a.md"
+    );
+}
+
+#[test]
+fn helpers() {
+    // req:sync.regenerate/shared-helpers@fd4e5cab
+    let r = repo("spec/x");
+    let status = git(&r.work, &["status", "--porcelain"]);
+    assert!(clm_regenerate::exists_at(&r.work, "HEAD", "specs/a/SPEC.md").unwrap());
+    assert!(!clm_regenerate::exists_at(&r.work, "HEAD", "backlog").unwrap());
+    assert!(!clm_regenerate::exists_at(&r.work, "no-such-ref", "specs").unwrap());
+
+    let dir = clm_regenerate::extract_present(&r.work, "HEAD", &["specs", "backlog"]).unwrap();
+    let at_head = run(
+        &r.work,
+        &["cat-file", "blob", "HEAD:specs/a/SPEC.md"],
+        Options::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(dir.path().join("specs/a/SPEC.md")).unwrap(),
+        at_head
+    );
+    assert!(!dir.path().join("backlog").exists());
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), status);
+
+    let e = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+    match clm_regenerate::io(Path::new("p"), e) {
+        Error::Git(why) => assert_eq!(why, "p: not found"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_crlf_delta_is_not_taken_back() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(false, "Merge x into o");
+    let crlf = read(&r.work, "changes/o/deltas/a.md").replace('\n', "\r\n");
+    write(&r.work, "changes/o/deltas/a.md", &crlf);
+    commit(&r.work, "o with CRLF endings");
+    x_becomes(&r, &adds_x());
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert!(merged.is_empty(), "{merged:?}");
+    assert!(
+        left.iter()
+            .any(|l| l.starts_with(&format!("no text for design of a at {}", b.hx))),
+        "{left:?}"
+    );
+    assert_eq!(
+        fs::read(r.work.join("changes/o/deltas/a.md")).unwrap(),
+        crlf.as_bytes()
+    );
+}
+
+#[test]
+fn a_base_two_commits_set_is_taken_back_past_both() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(false, "Merge x into o");
+    // `x` edits a second paragraph, and a second merge sets `o`'s base past the first one's.
+    x_becomes(&r, &design_delta(&b.h1, "X1\n\nX2\n\nthree"));
+    let hx2 = {
+        let spec = r.work.join("specs/a/SPEC.md");
+        let text = read(&r.work, "specs/a/SPEC.md").replace(
+            "## Design\nX1\n\ntwo\n\nthree",
+            "## Design\nX1\n\nX2\n\nthree",
+        );
+        fs::write(&spec, text).unwrap();
+        hash(&r, "design")
+    };
+    let merged = both_delta(&b.c1, &hx2, "OC1\n\nc2\n\nc3", "X1\n\nX2\n\nO3");
+    write(&r.work, "changes/o/deltas/a.md", &merged);
+    commit(&r.work, "Merge x into o again");
+    x_becomes(&r, &adds_x());
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert_eq!(merged, [took_back_o(&b.h1)]);
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), o_on_main(&r));
+}
+
+#[test]
+fn other_deltas_refuses_an_uncommitted_delta_edit() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, _, o) = other_change_on_main("one\n\ntwo\n\nTHREE", "X1\n\ntwo\n\nthree");
+    let mut t = tree(&r, &["x"]);
+    settle(&r, &t);
+    let edited = format!("{o}\n");
+    write(&r.work, "changes/o/deltas/a.md", &edited);
+    let before = repository_state(&r);
+
+    let ids = ["x".to_string()];
+    match t.other_deltas(&r.work, &ids, &onto(&r)) {
+        Err(Error::Refused(why)) => assert!(why.contains("changes/o/deltas/a.md"), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(lines) => panic!("merged over an uncommitted edit: {lines:?}"),
+    }
+    assert_eq!(repository_state(&r), before);
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), edited);
+}
+
+#[test]
+fn a_clm_root_in_a_subdirectory_merges_against_main_history() {
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let r = repo("spec/x");
+    let sub = r.work.join("sub");
+    main_moves(
+        &r,
+        &[
+            ("sub/specs/SPEC.md", ROOT),
+            (
+                "sub/specs/a/SPEC.md",
+                &node_a("specd", "one\ntwo\nthree", &["p"]),
+            ),
+        ],
+    );
+    pull(&r);
+    let base = clm_model::load(&sub).0.nodes["a"].hashes.contract.clone();
+    write(
+        &sub,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n# x\n",
+    );
+    write(
+        &sub,
+        "changes/x/deltas/a.md",
+        &contract_delta(&base, "ONE\ntwo\nthree"),
+    );
+    clm_apply::apply(&sub, "x").unwrap();
+    commit(&r.work, "Apply x");
+    main_moves(
+        &r,
+        &[(
+            "sub/specs/a/SPEC.md",
+            &node_a("specd", "one\ntwo\nTHREE", &["p"]),
+        )],
+    );
+
+    let onto = onto(&r);
+    match regenerated(&sub, &onto, &["x".to_string()], true).unwrap() {
+        Regenerated::Tree(t) => {
+            assert_eq!(
+                t.merged,
+                ["merged contract of a into changes/x/deltas/a.md"]
+            );
+            let spec = tree_text(&t, "specs/a/SPEC.md");
+            assert!(spec.contains("## Contract\nONE\ntwo\nTHREE\n"), "{spec}");
+        }
+        Regenerated::Stopped { left, .. } => panic!("{left:?}"),
+    }
+    assert_eq!(subject(&r), "Merge main into x");
+    let edited = read(&sub, "changes/x/deltas/a.md") + "\n";
+    write(&sub, "changes/x/deltas/a.md", &edited);
+    match regenerated(&sub, &onto, &["x".to_string()], true) {
+        Err(Error::Refused(why)) => assert!(why.starts_with("changes/x/deltas/a.md "), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("merged over an uncommitted edit"),
     }
 }
