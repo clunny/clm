@@ -118,14 +118,23 @@ fn code_spans_are_read_as_markdown_reads_them() {
             "[]",
             "It returns `UPPER(x)` and `kept_name(x)`.",
             "Plain.",
-            &[(
-                "x",
-                // A double-backtick span is one span; a lone backtick pairs with the next
-                // one in its block, so `paired_away(x)` is outside any span; a name is
-                // compared with case; a name of letters outside ASCII is none.
-                "It SHALL call ``doubled(x)``, `kept_name(x)` and `upper(x)`, not `café(x)`.\n\n\
+            &[
+                (
+                    "x",
+                    // A double-backtick span is one span; a lone backtick pairs with the next
+                    // one in its block, so `paired_away(x)` is outside any span; a name is
+                    // compared with case; a name of letters outside ASCII is none.
+                    "It SHALL call ``doubled(x)``, `kept_name(x)` and `upper(x)`, not `café(x)`.\n\n\
 Then ` lone,\nthen `paired_away(x)`.",
-            )],
+                ),
+                (
+                    "y",
+                    // The statement is read as written, its fence included: the fence ends the
+                    // block, so the backtick before `open` pairs with nothing and the one after
+                    // `shut` pairs with the one before `after_fence(x)`, leaving it outside.
+                    "It SHALL call `open\n```\nx\n```\nshut` and `after_fence(x)`.",
+                ),
+            ],
         ),
     );
     let out = report(d);
