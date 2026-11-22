@@ -147,7 +147,7 @@ fn a_probe_on_a_land_whose_table_cant_be_used_is_untestable() {
     );
     assert!(out.notes.contains(&note), "{:?}", out.notes);
     // The check ran on the head alone, never on `bad`.
-    assert_eq!(f.lines("check-head.log"), [good.clone()]);
+    assert_eq!(f.lines("check-head.log"), std::slice::from_ref(&good));
     let (commit, passed, culprit, _) = last_record(&f);
     assert_eq!((commit, passed, culprit), (good, false, None));
 }
@@ -182,7 +182,7 @@ fn a_bisect_of_a_red_commit_whose_table_cant_be_used() {
     let out = f.run(&clm_verify::Request::Bisect(bad.clone()));
     assert_eq!(out.code, 1, "{}", out.line);
     // The probe of `l1` ran with no selection, since the red commit's table can't be used.
-    assert_eq!(f.lines("check-head.log"), [l1.clone()]);
+    assert_eq!(f.lines("check-head.log"), std::slice::from_ref(&l1));
     assert_eq!(f.lines("check-selection.log"), ["unset"]);
     let (commit, passed, culprit, components) = last_record(&f);
     assert_eq!((commit, passed), (bad, false));
