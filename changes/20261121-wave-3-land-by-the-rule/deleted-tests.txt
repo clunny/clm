@@ -1,0 +1,20 @@
+DELETE crates/clm-gate/tests/layer.rs::git_runs_through_the_layer	gate/git-through-layer is removed: vcs/one-git-layer checks every crate (wave 1's yes)
+DELETE crates/clm-gate/tests/layer.rs::no_process_of_its_own	a scan of clm-gate's source for Command::new and extract_specs; the process half is vcs/one-git-layer's
+DELETE crates/clm-gate/tests/reexport.rs::no_copy_left	a scan of clm-gate's Cargo.toml and source; the re-export is proven by same_function_through_the_gate
+DELETE crates/clm-gate/tests/approval_changed.rs::approval_changed_runs_no_process	a scan of src/policy.rs; the wasm build and web.worker.review's tests prove it runs no process
+DELETE crates/clm-gate/tests/approval_changed.rs::the_gate_decides_by_approval_changed	a scan of lib.rs; scenario_the_gate_agrees proves the gate gives approval_changed's answer
+DELETE crates/clm-gate/tests/needs_review_of.rs::the_gate_decides_review_by_needs_review_of	a scan of three code lines; the new "the gate agrees" test of needs-review-of proves the behaviour
+DELETE crates/clm-land/tests/git_layer.rs::covered_by_the_scan	land/git-through-layer is removed: vcs/one-git-layer checks every crate (wave 1's yes)
+DELETE crates/clm-land/tests/git_layer.rs::fetches_retry_in_the_layer	land/fetch-retry-in-layer is removed: a source scan; offline-land's tests prove the retry by running the land
+DELETE crates/clm-land/tests/shared_plumbing.rs::no_copy_of_the_remote_name	land/shared-plumbing is removed (the agreed shared-plumbing scans)
+DELETE crates/clm-land/tests/shared_plumbing.rs::messages_keep_naming_origin	land/shared-plumbing is removed; the messages are stated and asserted from output in offline-land and reconnect-names-rebase
+DELETE crates/clm-land/tests/derived.rs::scenario_no_copy_of_the_regenerate	derived-specs' source-scan sentences are cut; the comparison scenarios stay
+DELETE crates/clm-land/tests/land.rs::other_branch_kept	route 4 reverses it: every landed branch origin holds is deleted (scenario "any branch removed")
+DELETE crates/clm-land/tests/own_files.rs::a_branch_of_another_name_is_not_refused	its scenario's outcome changes: the gate's gate/own-files now refuses the branch
+DELETE crates/clm-land/tests/deleted_tests.rs::the_pre_check_on_a_spec_branch_judges_nothing	a spec/* branch is judged now unless it is a replayed rename
+DELETE crates/clm-land/tests/land.rs::origin_branch_ahead_of_local	a local branch behind origin's copy is refused now (land.approval/branch-head); the scenario "the head it lands" states it
+DELETE crates/clm-approval/tests/git_layer.rs::covered_by_the_scan	land.approval/git-through-layer is cut: vcs/one-git-layer scans every crate for git and gh, and its clm-land half scanned another crate's source for four function names
+DELETE crates/clm-approval/tests/hold_rules.rs::decided_through_ledger_with_no_copy	request-refusal's no-copy sentence is cut: a scan of source; refusal.rs proves the refusal follows ledger/request-cleared
+DELETE crates/clm-host/tests/plumbing.rs::no_copy_of_the_remote_name	host/shared-plumbing is cut: a scan of source for the remote's name
+DELETE crates/clm-host/tests/plumbing.rs::the_scan_skips_only_comment_lines	a test of that scan's own line filter
+DELETE crates/clm-host/tests/git_layer.rs::runs_processes_only_through_the_layer	host/git-through-layer's copied sentence is cut: vcs/one-git-layer reads clm-host's src/ for every call it looked for

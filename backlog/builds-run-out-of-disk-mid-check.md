@@ -19,3 +19,7 @@ Disk use per build differs by orders of magnitude: a Rust or C++ workspace can k
 ## Since
 
 `20261112-machine-load-in-panel` adds `clm machine`, which measures each build's worktree into a clone-local record and judges free space against the largest build seen (`machine-load-measured-by-clm`). The check before starting a build can reuse that measure and judgement rather than a measure of its own.
+
+## Open question (wave 3, 2026-11-21)
+
+Read by `land`'s pass in `20261121-wave-3-land-by-the-rule`, which left it unchanged. Two questions for the human: should `clm land` check free space before its check, against what earlier lands used, and refuse or wait when it is short? And should a land free a landed build's disk through a path or clean command the project declares, rather than its worktree's `target/`, which `land/land-frees-build-target` names today against this item's rule that no clearing be hard-coded? `target/` stays until the second is answered.
