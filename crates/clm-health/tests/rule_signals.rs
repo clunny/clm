@@ -39,7 +39,7 @@ fn call(root: &Path) -> (u8, String) {
 
 #[test]
 fn scenario_a_name_the_contract_doesnt_hold() {
-    // req:check.health/rule-signals@015eed9a
+    // req:check.health/rule-signals@286d24c2
     let dir = repo();
     let d = dir.path();
     write(
@@ -69,7 +69,7 @@ it, in the file `clm.toml` names, with `walk_up(path)` again.\n\n```\n`fenced_on
 
 #[test]
 fn code_names_are_paths_lists_or_camel_case() {
-    // req:check.health/rule-signals@015eed9a
+    // req:check.health/rule-signals@286d24c2
     let dir = repo();
     let d = dir.path();
     write(
@@ -107,8 +107,42 @@ reading `human_burdens`, `origin/main`, `Settings` and `a.b(c)`.",
 }
 
 #[test]
+fn code_spans_are_read_as_markdown_reads_them() {
+    // req:check.health/rule-signals@286d24c2
+    let dir = repo();
+    let d = dir.path();
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &component(
+            "[]",
+            "It returns `UPPER(x)` and `kept_name(x)`.",
+            "Plain.",
+            &[(
+                "x",
+                // A double-backtick span is one span; a lone backtick pairs with the next
+                // one in its block, so `paired_away(x)` is outside any span; a name is
+                // compared with case; a name of letters outside ASCII is none.
+                "It SHALL call ``doubled(x)``, `kept_name(x)` and `upper(x)`, not `café(x)`.\n\n\
+Then ` lone,\nthen `paired_away(x)`.",
+            )],
+        ),
+    );
+    let out = report(d);
+    assert_eq!(
+        section(&out, "outside-contract"),
+        [
+            "health/outside-contract: 2 names",
+            "specs/a/SPEC.md: health/outside-contract: a/x names doubled",
+            "specs/a/SPEC.md: health/outside-contract: a/x names upper",
+        ],
+        "{out}"
+    );
+}
+
+#[test]
 fn scenario_a_requirement_that_places_a_test() {
-    // req:check.health/rule-signals@015eed9a
+    // req:check.health/rule-signals@286d24c2
     let dir = repo();
     let d = dir.path();
     write(
@@ -140,7 +174,7 @@ fn scenario_a_requirement_that_places_a_test() {
 
 #[test]
 fn scenario_a_phrase_in_a_sentence_of_behaviour() {
-    // req:check.health/rule-signals@015eed9a
+    // req:check.health/rule-signals@286d24c2
     let dir = repo();
     let d = dir.path();
     write(
@@ -176,7 +210,7 @@ SHALL pass.",
 
 #[test]
 fn scenario_an_exit_in_a_design() {
-    // req:check.health/rule-signals@015eed9a
+    // req:check.health/rule-signals@286d24c2
     let dir = repo();
     let d = dir.path();
     let spec = component(
@@ -205,7 +239,7 @@ Nothing exits here, nor at exit1.\n```\nexits 5\n```",
 
 #[test]
 fn scenario_a_test_that_cites_nothing() {
-    // req:check.health/rule-signals@015eed9a
+    // req:check.health/rule-signals@286d24c2
     let dir = repo();
     let d = dir.path();
     write(
@@ -225,6 +259,12 @@ fn helper() {{}}\n\n#[test]\nfn helper_rounds_up() {{\n    assert!(true);\n}}\n"
     );
     assert_eq!(t.lines().nth(8), Some("#[test]"));
     write(d, "crates/a/tests/t.rs", &t);
+    // A file `a` owns whose bytes aren't UTF-8 text is not read, its test with it.
+    std::fs::write(
+        d.join("crates/a/tests/bin.rs"),
+        b"#[test]\nfn not_text() {\n    let _ = \"\xff\";\n}\n",
+    )
+    .unwrap();
     write(
         d,
         "vendor/v.rs",
@@ -245,7 +285,7 @@ fn helper() {{}}\n\n#[test]\nfn helper_rounds_up() {{\n    assert!(true);\n}}\n"
 
 #[test]
 fn scenario_nothing_found() {
-    // req:check.health/rule-signals@015eed9a
+    // req:check.health/rule-signals@286d24c2
     let dir = repo();
     let d = dir.path();
     write(
