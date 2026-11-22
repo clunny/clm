@@ -725,11 +725,9 @@ impl Batch<'_, '_, '_> {
             warnings: chain.warnings.iter().cloned().chain(warnings).collect(),
             ..Default::default()
         };
-        if m.wanted.branch.starts_with("spec/") {
-            let added = changes_added(repo, &chain.base, &m.head, &m.judged.changes);
-            let tips = propose_tips(repo);
-            release_claims(repo, &commit, &added, &tips, &mut out.warnings);
-        }
+        let added = changes_added(repo, &chain.base, &m.head);
+        let tips = propose_tips(repo);
+        release_claims(repo, &commit, &added, &tips, &mut out.warnings);
         let target_seconds = repo
             .settings
             .land
@@ -933,7 +931,6 @@ pub(crate) struct Found {
     pub(crate) commit: String,
     pub(crate) kind: LandKind,
     pub(crate) review: bool,
-    pub(crate) changes: Vec<String>,
 }
 
 /// The `landed` record of a land of `branch` at `head` that is on `main` now: its merge commit
@@ -950,7 +947,6 @@ pub(crate) fn landed_record(
             branch: landed,
             kind,
             review,
-            changes,
             ..
         } = &record.body
         else {
@@ -968,7 +964,6 @@ pub(crate) fn landed_record(
                 commit: commit.clone(),
                 kind: *kind,
                 review: *review,
-                changes: changes.clone(),
             }));
         }
     }

@@ -210,7 +210,6 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
                 commit: commit.sha.clone(),
                 kind: judged.kind,
                 review: judged.review,
-                changes: judged.changes,
             });
         }
     }

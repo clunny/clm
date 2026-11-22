@@ -228,7 +228,6 @@ pub(crate) fn land_into(
     let mut overlap_nothing: Option<(String, String)> = None;
     // The head and base whose selection printed nothing, asked once across a restart.
     let mut selection_nothing: Option<(String, String)> = None;
-    let mut claim_tips: BTreeMap<String, String> = BTreeMap::new();
     // Whether the lock was waited for, so the next preparing looks for a land taken together
     // with the holder's (`land/batched-lands`).
     let mut woke = false;
@@ -359,11 +358,9 @@ pub(crate) fn land_into(
             env_vars,
             env_changed,
         } = p;
-        // The `propose/*` claims this attempt's last fetch read, which a spec land releases
-        // leased on them (`land/landed-change-releases-claims`).
-        if branch.starts_with("spec/") {
-            claim_tips = propose_tips(&repo);
-        }
+        // The `propose/*` claims this attempt's last fetch read, which a land that adds a
+        // change releases leased on them (`land/landed-change-releases-claims`).
+        let claim_tips = propose_tips(&repo);
         for warning in warnings {
             if !out.warnings.contains(&warning) {
                 out.warnings.push(warning);
@@ -716,10 +713,8 @@ pub(crate) fn land_into(
             on_origin.as_deref(),
             &mut out.warnings,
         );
-        if branch.starts_with("spec/") {
-            let added = changes_added(&repo, &base, &head, &changes);
-            release_claims(&repo, &merge, &added, &claim_tips, &mut out.warnings);
-        }
+        let added = changes_added(&repo, &base, &head);
+        release_claims(&repo, &merge, &added, &claim_tips, &mut out.warnings);
         if let (Some((seconds, steps)), Some(target)) = (&timed, target_seconds) {
             let past = fold.timed_lands(crate::time_report::LANDS);
             let over = slow.as_deref().map(|s| (s, steps.as_slice()));
@@ -790,11 +785,9 @@ pub(crate) fn finish_found(
     out: &mut Output,
 ) -> Output {
     cleanup(repo, branch, head, on_origin, &mut out.warnings);
-    if branch.starts_with("spec/")
-        && let Ok(base) = repo.git(&["rev-parse", &format!("{}^1", found.commit)])
-    {
+    if let Ok(base) = repo.git(&["rev-parse", &format!("{}^1", found.commit)]) {
         let tips = propose_tips(repo);
-        let added = changes_added(repo, &base, head, &found.changes);
+        let added = changes_added(repo, &base, head);
         release_claims(repo, &found.commit, &added, &tips, &mut out.warnings);
     }
     out.lines.push(format!(
@@ -1179,29 +1172,31 @@ pub(crate) fn propose_tips(repo: &Repo) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// The ones of `changes` the head adds: neither `changes/<id>/change.md` nor
-/// `changes/archive/<id>/change.md` at the merge base of `base` and `head`.
-pub(crate) fn changes_added(
-    repo: &Repo,
-    base: &str,
-    head: &str,
-    changes: &[String],
-) -> Vec<String> {
+/// The IDs of the changes `head` adds over its merge base with `base`, as
+/// `gate.fingerprint/fingerprint` counts one added: a live `changes/<id>/change.md`, or a new
+/// archived `changes/archive/<id>/change.md`, that the merge base has under neither path.
+/// None when there is no merge base or a listing fails.
+pub(crate) fn changes_added(repo: &Repo, base: &str, head: &str) -> Vec<String> {
     let Ok(merge_base) = repo.git(&["merge-base", base, head]) else {
         return Vec::new();
     };
-    let held = |path: String| {
-        repo.git(&["cat-file", "-e", &format!("{merge_base}:{path}")])
-            .is_ok()
+    let (Ok(before), Ok(after)) = (
+        repo.approval.listing(&merge_base),
+        repo.approval.listing(head),
+    ) else {
+        return Vec::new();
     };
-    changes
+    let mut ids: Vec<String> = clm_gate::added_changes(&before, &after)
         .iter()
-        .filter(|id| {
-            !held(format!("changes/{id}/change.md"))
-                && !held(format!("changes/archive/{id}/change.md"))
+        .filter_map(|path| {
+            let rest = std::str::from_utf8(path).ok()?.strip_prefix("changes/")?;
+            let rest = rest.strip_prefix("archive/").unwrap_or(rest);
+            Some(rest.strip_suffix("/change.md")?.to_string())
         })
-        .cloned()
-        .collect()
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
 }
 
 /// Deletes on `origin` the `propose/<slug>` claim of each item the changes `added` name in
