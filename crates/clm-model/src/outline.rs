@@ -20,27 +20,43 @@ pub struct RequirementSpan {
     pub lines: Range<usize>,
 }
 
-/// `true` for each line that is a fence marker or inside a fenced code block.
+/// `true` for each line that opens or closes a fenced code block or lies inside one, read
+/// as CommonMark reads fences (`code-fences`): a run of three or more backticks or tildes
+/// after leading white space opens one, unless the run is of backticks and another
+/// backtick follows it; the first later line that, trimmed, is only a run of the same
+/// character at least as long closes it; an unclosed fence runs to the end.
 pub fn fence_mask(lines: &[&str]) -> Vec<bool> {
-    let mut fence: Option<&str> = None;
+    let mut open: Option<(char, usize)> = None;
     lines
         .iter()
-        .map(|line| {
-            let trimmed = line.trim_start();
-            let marker = ["```", "~~~"].into_iter().find(|m| trimmed.starts_with(m));
-            match (fence, marker) {
-                (None, Some(m)) => {
-                    fence = Some(m);
-                    true
+        .map(|line| match open {
+            Some(fence) => {
+                if closes(line, fence) {
+                    open = None;
                 }
-                (Some(f), Some(m)) if f == m => {
-                    fence = None;
-                    true
-                }
-                (f, _) => f.is_some(),
+                true
+            }
+            None => {
+                open = fence_opener(line);
+                open.is_some()
             }
         })
         .collect()
+}
+
+/// Whether `line` closes `fence`: trimmed, it is only a run of the fence's character at
+/// least as long as the fence's opening run.
+fn closes(line: &str, (c, len): (char, usize)) -> bool {
+    let t = line.trim();
+    t.len() >= len && t.chars().all(|x| x == c)
+}
+
+/// The fence `line` opens, as (character, run length).
+fn fence_opener(line: &str) -> Option<(char, usize)> {
+    let t = line.trim_start();
+    let c = t.chars().next().filter(|&c| c == '`' || c == '~')?;
+    let len = t.len() - t.trim_start_matches(c).len();
+    (len >= 3 && !(c == '`' && t[len..].contains('`'))).then_some((c, len))
 }
 
 pub fn section_spans(lines: &[&str]) -> Vec<SectionSpan> {
@@ -160,9 +176,35 @@ pub fn join(lines: &[&str]) -> String {
     lines.iter().map(|l| format!("{l}\n")).collect()
 }
 
-/// The content of the first ```` ```yaml ```` fence in `lines`.
+/// The content of the first fence in `lines` whose info string is `yaml`, read as
+/// `fence_mask` reads fences; `None` when there is none or a fence before it never closes.
 pub(crate) fn yaml_fence(lines: &[&str]) -> Option<String> {
-    let start = lines.iter().position(|l| l.trim() == "```yaml")?;
-    let len = lines[start + 1..].iter().position(|l| l.trim() == "```")?;
-    Some(join(&lines[start + 1..start + 1 + len]))
+    let mut i = 0;
+    while i < lines.len() {
+        let Some(fence) = fence_opener(lines[i]) else {
+            i += 1;
+            continue;
+        };
+        let end = i + 1 + lines[i + 1..].iter().position(|l| closes(l, fence))?;
+        if lines[i].trim_start()[fence.1..].trim() == "yaml" {
+            return Some(join(&lines[i + 1..end]));
+        }
+        i = end + 1;
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::yaml_fence;
+
+    // req:model/code-fences@59b932df
+    #[test]
+    fn yaml_fence_reads_fences_as_fence_mask_does() {
+        let lines = [
+            "````", "```yaml", "shown: 1", "```", "````", "~~~~yaml", "a: 1", "```", "~~~~",
+            "after",
+        ];
+        assert_eq!(yaml_fence(&lines).as_deref(), Some("a: 1\n```\n"));
+    }
 }
