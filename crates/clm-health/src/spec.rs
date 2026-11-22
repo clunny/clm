@@ -24,16 +24,11 @@ const HISTORY_PHRASES: [&str; 8] = [
     "is gone",
 ];
 
-/// The text of each inline code span in `text`, outside fenced code blocks.
+/// The text of each code span in `text`, read as `check/asset-references` reads them
+/// (`clm_check::code_spans`): fenced code blocks hold none.
 fn code_spans(text: &str) -> BTreeSet<String> {
-    let lines: Vec<&str> = text.lines().collect();
-    let mask = fence_mask(&lines);
-    lines
-        .iter()
-        .zip(mask)
-        .filter(|(_, fenced)| !fenced)
-        .flat_map(|(line, _)| line.split('`').skip(1).step_by(2))
-        .map(str::to_string)
+    clm_check::code_spans(text)
+        .map(|(_, span)| span.to_string())
         .collect()
 }
 
@@ -58,8 +53,9 @@ fn markdown(dir: &Path, skip: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
-/// Each accepted decision no spec, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `AGENTS.md`, guide page, live
-/// change or other decision names in a code span.
+/// Each accepted decision whose name is the whole text of no code span in a spec,
+/// `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `AGENTS.md`, guide page, live change or
+/// other decision. A source that is missing or isn't UTF-8 text names nothing.
 pub(crate) fn uncited_decisions(root: &Path, graph: &Graph) -> Section {
     let read = |p: &Path| std::fs::read_to_string(p).unwrap_or_default();
     let mut sources: Vec<PathBuf> = markdown(&root.join("specs"), None)
