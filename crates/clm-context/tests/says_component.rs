@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use clm_context::bundle_from;
 use clm_model::{Files, Graph, load_files};
 
 /// Components `a` and `a.b` under root `clm`.
@@ -22,7 +21,8 @@ fn graph() -> Graph {
 #[test]
 fn nested_component_has_ancestors_section() {
     // req:context/bundle-contents@ffb0697c
-    let out = bundle_from(&graph(), None, "a.b").unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let out = clm_context::bundle(&graph(), dir.path(), "a.b").unwrap();
     let at = |s: &str| {
         out.find(s)
             .unwrap_or_else(|| panic!("{s} missing in {out}"))

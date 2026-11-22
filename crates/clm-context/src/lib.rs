@@ -1,6 +1,5 @@
-//! The spine-scoped context bundle (`spine-scoped-context`).
+//! The ancestor-scoped context bundle (`ancestor-scoped-context`).
 
-#[cfg(not(target_arch = "wasm32"))]
 mod command;
 
 use std::fs;
@@ -8,28 +7,21 @@ use std::path::Path;
 
 use clm_model::{Graph, Layer, Node, Requirement, Tier};
 
-#[cfg(not(target_arch = "wasm32"))]
 pub use command::{Args, command};
 
 /// The first line of the carried section.
 const CARRIED_INTRO: &str = "These are the constraints CLM carries to every project, from the `clm` that runs; `clm guide constraints` explains their tiers. Names in backticks that this section doesn't list are CLM's own decisions and constraints, kept in CLM's repository.";
 
 /// The bundle for node `id` in the checkout at `root`, or `None` if no such node exists.
+/// Reads `ARCHITECTURE.md` from `root`, its one file: the capabilities it serves come from
+/// the graph.
 pub fn bundle(graph: &Graph, root: &Path, id: &str) -> Option<String> {
-    let architecture = fs::read_to_string(root.join("ARCHITECTURE.md")).ok();
-    bundle_from(graph, architecture.as_deref(), id)
-}
-
-/// The bundle for node `id`, given the text of `ARCHITECTURE.md` (`None` when there's no
-/// such file), or `None` if no such node exists. Reads no files: the capabilities it serves
-/// come from the graph.
-pub fn bundle_from(graph: &Graph, architecture: Option<&str>, id: &str) -> Option<String> {
     let target = graph.nodes.get(id)?;
     let mut parts: Vec<String> = Vec::new();
 
-    if let Some(architecture) = architecture {
+    if let Ok(architecture) = fs::read_to_string(root.join("ARCHITECTURE.md")) {
         parts.push("# ARCHITECTURE.md".into());
-        parts.push(architecture.into());
+        parts.push(architecture);
     }
 
     if !graph.carried.source {
@@ -96,8 +88,8 @@ pub fn hash(bundle: &str) -> String {
     clm_model::content_hash(bundle)
 }
 
-/// The IDs of the nodes whose specs make up `id`'s bundle: its spine from the root down,
-/// then the dependencies off the spine, sorted. Empty if no such node exists.
+/// The IDs of the nodes whose specs make up `id`'s bundle: its ancestors from the root down,
+/// then the dependencies that aren't among them, sorted. Empty if no such node exists.
 pub fn bundle_nodes(graph: &Graph, id: &str) -> Vec<String> {
     let Some(target) = graph.nodes.get(id) else {
         return Vec::new();
@@ -126,8 +118,8 @@ pub fn served_capabilities<'g>(graph: &'g Graph, node: &Node) -> Vec<&'g Require
     capabilities.filter(|c| named.contains(&&c.id)).collect()
 }
 
-/// `target`'s direct dependencies, `depends_on`, that aren't on its
-/// spine, sorted and deduplicated.
+/// `target`'s direct dependencies, `depends_on`, that aren't among its
+/// ancestors, sorted and deduplicated.
 fn dependencies<'g>(graph: &'g Graph, target: &'g Node) -> Vec<&'g Node> {
     let on_spine: Vec<&str> = spine(graph, target).iter().map(|n| n.id.as_str()).collect();
     let mut deps: Vec<&Node> = target

@@ -44,8 +44,15 @@ const PLAIN: &str = "### Requirement: p\nIt SHALL p.\n\n#### Scenario: s\n- ok\n
 const SERVES_B: &str =
     "### Requirement: r\nIt SHALL r.\n\n#### Scenario: s\n- ok\n\n#### Serves\n- capability/b\n";
 
+/// The bundle of `id` for a checkout holding `ARCHITECTURE` and the specs `graph` loads.
+fn bundle_of(graph: &Graph, id: &str) -> String {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("ARCHITECTURE.md"), ARCHITECTURE).unwrap();
+    clm_context::bundle(graph, dir.path(), id).unwrap()
+}
+
 fn bundle(graph: &Graph) -> String {
-    clm_context::bundle_from(graph, Some(ARCHITECTURE), "n").unwrap()
+    bundle_of(graph, "n")
 }
 
 #[test]
@@ -126,9 +133,7 @@ fn holds_every_capability(out: &str) {
 fn capability_node_gets_every_capability() {
     // req:context/bundle-contents@ffb0697c
     let g = root_graph(true);
-    holds_every_capability(
-        &clm_context::bundle_from(&g, Some(ARCHITECTURE), "capability").unwrap(),
-    );
+    holds_every_capability(&bundle_of(&g, "capability"));
 }
 
 /// Root `clm` with `serves: [capability/a]` and one plain rule, capabilities `a` and `b`,
@@ -158,14 +163,14 @@ fn root_graph(with_capability_node: bool) -> Graph {
 fn root_without_capability_node_gets_every_capability() {
     // req:context/bundle-contents@ffb0697c
     let g = root_graph(false);
-    holds_every_capability(&clm_context::bundle_from(&g, Some(ARCHITECTURE), "clm").unwrap());
+    holds_every_capability(&bundle_of(&g, "clm"));
 }
 
 #[test]
 fn root_beside_a_capability_node_gets_only_what_it_serves() {
     // req:context/bundle-contents@ffb0697c
     let g = root_graph(true);
-    let out = clm_context::bundle_from(&g, Some(ARCHITECTURE), "clm").unwrap();
+    let out = bundle_of(&g, "clm");
     assert!(out.contains("A-TEXT"), "{out}");
     assert!(!out.contains("B-TEXT"), "{out}");
 }
