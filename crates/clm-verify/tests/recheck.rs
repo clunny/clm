@@ -58,7 +58,7 @@ fn culprit_notes(out: &Outcome) -> Vec<&String> {
 
 #[test]
 fn a_culprit_that_ran_no_check() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let (f, [_, l2, l3]) = breaking_lands();
     landed(&f, &l2, Some(Recheck::None), None);
     composed(&f, "h12345678901234567", "b12345678901234567");
@@ -84,7 +84,7 @@ fn a_culprit_that_ran_no_check() {
 
 #[test]
 fn a_culprit_that_ran_the_overlap() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let (f, [_, l2, _]) = breaking_lands();
     landed(&f, &l2, Some(Recheck::Overlap), Some(4));
     composed(&f, "hh", "bb");
@@ -101,7 +101,7 @@ fn a_culprit_that_ran_the_overlap() {
 
 #[test]
 fn an_overlap_that_ran_every_test() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let (f, [_, l2, _]) = breaking_lands();
     landed(&f, &l2, Some(Recheck::Overlap), None);
     composed(&f, "hh", "bb");
@@ -118,7 +118,7 @@ fn an_overlap_that_ran_every_test() {
 
 #[test]
 fn keys_are_unknown_without_a_composed_record() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let (f, [_, l2, _]) = breaking_lands();
     landed(&f, &l2, Some(Recheck::None), None);
     let out = f.due();
@@ -134,7 +134,7 @@ fn keys_are_unknown_without_a_composed_record() {
 
 #[test]
 fn a_culprit_that_ran_its_own_selection() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let (f, [_, l2, _]) = breaking_lands();
     landed(&f, &l2, Some(Recheck::Selected), Some(2));
     composed(&f, "hh", "bb");
@@ -143,7 +143,7 @@ fn a_culprit_that_ran_its_own_selection() {
 
 #[test]
 fn a_culprit_checked_whole_or_unrecorded_says_nothing() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let (f, [_, l2, _]) = breaking_lands();
     // No `landed` record at all, as for a land of an older `clm`.
     assert!(culprit_notes(&f.due()).is_empty());
@@ -156,7 +156,7 @@ fn a_culprit_checked_whole_or_unrecorded_says_nothing() {
 
 #[test]
 fn a_bisect_of_an_imported_failure_says_it_too() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let f = Fixture::new(Some("mode = \"import\"\nworkflow = \"slow\""));
     let g = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&g, true);
@@ -179,7 +179,7 @@ fn a_bisect_of_an_imported_failure_says_it_too() {
 
 #[test]
 fn the_record_and_stdout_are_unchanged() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let (f, [_, l2, l3]) = breaking_lands();
     landed(&f, &l2, Some(Recheck::None), None);
     let out = f.due();
@@ -207,8 +207,35 @@ fn the_record_and_stdout_are_unchanged() {
 }
 
 #[test]
+fn the_newest_records_count() {
+    // req:verify/culprit-recheck@7093c1b0
+    let (f, [_, l2, _]) = breaking_lands();
+    // An older land of the same commit that re-checked nothing, then a newer one that ran its
+    // own selection: the newer says nothing.
+    landed(&f, &l2, Some(Recheck::None), None);
+    landed(&f, &l2, Some(Recheck::Selected), Some(2));
+    composed(&f, "hh", "bb");
+    assert!(culprit_notes(&f.due()).is_empty());
+    // The other way round, and of two composed records the newer one's keys.
+    let (f, [_, l2, _]) = breaking_lands();
+    landed(&f, &l2, Some(Recheck::Selected), Some(2));
+    landed(&f, &l2, Some(Recheck::None), None);
+    composed(&f, "old-head", "old-base");
+    composed(&f, "new-head", "new-base");
+    let out = f.due();
+    assert_eq!(
+        culprit_notes(&out),
+        [&format!(
+            "culprit {} re-checked nothing at land; its branch's check and main's were \
+             composed from new-head and new-base",
+            &l2[..7]
+        )]
+    );
+}
+
+#[test]
 fn a_whole_check_beside_the_composed_one_is_ignored() {
-    // req:verify/culprit-recheck@ea199b60
+    // req:verify/culprit-recheck@7093c1b0
     let (f, [_, l2, _]) = breaking_lands();
     landed(&f, &l2, Some(Recheck::None), None);
     composed(&f, "hh", "bb");

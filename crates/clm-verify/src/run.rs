@@ -39,9 +39,11 @@ pub(crate) fn env_of(
         Err(_) => None,
     };
     let label = format!("{}:{}clm.toml", ctx.short(commit)?, ctx.prefix);
-    Ok(clm_config::committed_env(&ctx.root, text.as_deref(), &label)
-        .map(|vars| vars.into_iter().map(|(k, s)| (k, s.value)).collect())
-        .map_err(|e| e.to_string()))
+    Ok(
+        clm_config::committed_env(&ctx.root, text.as_deref(), &label)
+            .map(|vars| vars.into_iter().map(|(k, s)| (k, s.value)).collect())
+            .map_err(|e| e.to_string()),
+    )
 }
 
 /// Whether the `[env]` of `verifying` differs from that of `green`, one that can't be used

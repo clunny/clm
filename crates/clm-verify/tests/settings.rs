@@ -111,7 +111,11 @@ fn a_ledger_write_that_fails_is_a_git_failure() {
     // A lock held in place on the clone's own ledger branch.
     let own = f.git(
         &f.work(),
-        &["for-each-ref", "--format=%(refname)", "refs/heads/clm/ledger/"],
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads/clm/ledger/",
+        ],
     );
     assert_eq!(own.lines().count(), 1, "{own}");
     let lock = f.work().join(".git").join(format!("{own}.lock"));
