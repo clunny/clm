@@ -3800,6 +3800,47 @@ fn a_rename_in_a_subdirectory_root_keeps_its_items_and_follows_main_outside() {
 }
 
 #[test]
+fn a_rename_keeps_the_deltas_it_rebased() {
+    // req:sync/regenerate-renames@bab1ba9e req:sync/reapply@5dc2a995
+    let r = repo("spec/r");
+    main_moves(
+        &r,
+        &[(
+            "specs/a/SPEC.md",
+            &node_a("specd", "Print the sprocket.", &["p"]),
+        )],
+    );
+    pull(&r);
+    main_moves(
+        &r,
+        &[
+            ("changes/o/change.md", "---\nstatus: proposed\n---\n\n# o\n"),
+            (
+                "changes/o/deltas/a.md",
+                &modifies_contract(&r, "Print the sprocket.\n\nExit 0."),
+            ),
+        ],
+    );
+    pull(&r);
+    write(
+        &r.work,
+        "changes/r/change.md",
+        "---\nstatus: proposed\nrenames:\n  - term: sprocket\n    to: cogs\n---\n\n## Intent\nRename.\n",
+    );
+    git(&r.work, &["add", "-A"]);
+    clm_rename::rename(&r.work, "r").unwrap();
+    commit(&r.work, "Rename r");
+    let rebased = read(&r.work, "changes/o/deltas/a.md");
+    assert!(rebased.contains("Print the cogs."), "{rebased}");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let lines = synced(&r);
+    assert!(!starts(&lines, "took back"), "{lines:?}");
+    assert_eq!(subject(&r), "Rename r");
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), rebased);
+}
+
+#[test]
 fn an_untracked_file_main_adds_stops_a_rename() {
     // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
