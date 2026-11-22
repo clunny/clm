@@ -105,7 +105,7 @@ For a `requirement` rename `clm rename` SHALL give the requirement's component a
 - model/human-layers
 
 ### Requirement: references
-`clm rename` SHALL rewrite every reference to a renamed ID: whole values in `depends_on`, `serves`, `#### Serves`, `#### Needs` and `#### Enforced by` and in backlog items' `components`, `blocks` and `requirement`, each item of a list a value whether the list is written in flow style (`[a, b]`) or, in a backlog item, in block style (a `- a` line per item), and a quoted value as a bare one, keeping its quotes; and, in spec text, each code span whose whole text is an old requirement or entry ID, or an old slug that no other requirement, entry or decision has. A component's ID in a code span is a word and stays, and no reference is rewritten on a line of fenced code, a line after one that starts, after any indentation, with ```` ``` ```` or `~~~` and before the next line that does. Beyond these references, the terms `term-swap` swaps, the markers `marker-rewrite` rewrites, the versions `flag-rerecord` re-records and the other changes' delta elements `other-deltas` rebases, it SHALL rewrite nothing else, the value of any other frontmatter key, such as `successor`, included, and it SHALL edit no file under `changes/archive/` or `docs/decisions/` but to rewrite a marker there as `marker-rewrite` does, which `check/dangling-markers` would otherwise report as naming no requirement.
+`clm rename` SHALL rewrite every reference to a renamed ID: whole values in `depends_on`, `serves`, `#### Serves`, `#### Needs` and `#### Enforced by` and in backlog items' `components`, `blocks` and `requirement`, each item of a list a value whether the list is written in flow style (`[a, b]`) or, in a backlog item, in block style (a `- a` line per item), and a quoted value as a bare one, keeping its quotes; and, in spec text, each code span whose whole text is an old requirement or entry ID, or an old slug that no other requirement, entry or decision has. A component's ID in a code span is a word and stays, and no reference is rewritten on a line of fenced code, a line that opens or closes a code fence or lies inside one as `model/code-fences` reads fences. Beyond these references, the terms `term-swap` swaps, the markers `marker-rewrite` rewrites, the versions `flag-rerecord` re-records and the other changes' delta elements `other-deltas` rebases, it SHALL rewrite nothing else, the value of any other frontmatter key, such as `successor`, included, and it SHALL edit no file under `changes/archive/` or `docs/decisions/` but to rewrite a marker there as `marker-rewrite` does, which `check/dangling-markers` would otherwise report as naming no requirement.
 
 #### Scenario: references across the repository
 - GIVEN requirement `a/x` renamed to `a/y`, component `b` whose requirement `z` holds `#### Needs` `- a/x` and the text ``(`a/x`, `x`)``, no other requirement or decision with slug `x`, `ARCHITECTURE.md` naming `a/x` under `#### Enforced by`, and `backlog/q.md` with `blocks: [a/x]`
@@ -128,7 +128,7 @@ For a `requirement` rename `clm rename` SHALL give the requirement's component a
 - THEN `backlog/x.md` holds `components: [a.c]`
 
 #### Scenario: a reference in fenced code
-- GIVEN requirement `a/x` renamed to `a/y`, and component `b` whose Design holds a fenced code block with the line `` see `a/x` `` and, outside it, the line `` see `a/x` ``
+- GIVEN requirement `a/x` renamed to `a/y`, and component `b` whose Design holds a block fenced by four backticks with the lines ```` ``` ````, `` see `a/x` `` and `~~~`, and, outside it, the line `` see `a/x` ``
 - WHEN `clm rename` runs
 - THEN the line in the block is unchanged, and the line outside it reads `` see `a/y` ``
 
@@ -146,6 +146,9 @@ For a `requirement` rename `clm rename` SHALL give the requirement's component a
 - GIVEN requirement `a/x`, an archived change `old` whose `changes/archive/old/assets/a/t.rs` holds a test citing `a/x` with no version, `docs/decisions/d.txt` reading `` `a/x` ``, and change `r`, `proposed`, with `renames` holding `requirement: a/x` and `to: y`
 - WHEN `clm rename r` runs
 - THEN `changes/archive/old/assets/a/t.rs` differs from before only in that its marker cites `a/y`, `docs/decisions/d.txt` is unchanged, and every marker the coverage reads in the tree names a requirement the spec holds
+
+#### Needs
+- model/code-fences
 
 ### Requirement: term-swap
 For a `term` rename `clm rename` SHALL replace, case-sensitively, with the new text, each occurrence of the term in spec text (each component's requirements with their scenarios, Contract and Design, and the entries of `ARCHITECTURE.md` and `CAPABILITIES.md`) whose neighbours don't continue an ID or a path: the character before it is absent, or is neither a letter, a digit nor one of `-`, `_`, `/`, `.` and `:`; and the character after it is absent, or is `.` or `:` followed by whitespace or the line's end, or is neither a letter, a digit nor one of `-`, `_`, `/`, `.` and `:`. It SHALL leave alone every heading, a line outside fenced code (as `references` gives it) that starts with `#`, and the lines of `#### Needs`, `#### Serves` and `#### Enforced by` blocks, a block's lines being those outside fenced code after its heading and before the next heading; SHALL swap a term on a line of fenced code as on any other line, one starting with `#` included, since a line of fenced code is no heading and starts or ends no block; and SHALL give each component whose text changes a delta modifying each changed element.
