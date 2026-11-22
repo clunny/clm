@@ -30,9 +30,8 @@ pub fn fence_mask(lines: &[&str]) -> Vec<bool> {
     lines
         .iter()
         .map(|line| match open {
-            Some((c, len)) => {
-                let t = line.trim();
-                if t.len() >= len && t.chars().all(|x| x == c) {
+            Some(fence) => {
+                if closes(line, fence) {
                     open = None;
                 }
                 true
@@ -43,6 +42,13 @@ pub fn fence_mask(lines: &[&str]) -> Vec<bool> {
             }
         })
         .collect()
+}
+
+/// Whether `line` closes `fence`: trimmed, it is only a run of the fence's character at
+/// least as long as the fence's opening run.
+fn closes(line: &str, (c, len): (char, usize)) -> bool {
+    let t = line.trim();
+    t.len() >= len && t.chars().all(|x| x == c)
 }
 
 /// The fence `line` opens, as (character, run length).
@@ -170,9 +176,34 @@ pub fn join(lines: &[&str]) -> String {
     lines.iter().map(|l| format!("{l}\n")).collect()
 }
 
-/// The content of the first ```` ```yaml ```` fence in `lines`.
+/// The content of the first fence in `lines` whose info string is `yaml`, read as
+/// `fence_mask` reads fences; `None` when there is none or a fence before it never closes.
 pub(crate) fn yaml_fence(lines: &[&str]) -> Option<String> {
-    let start = lines.iter().position(|l| l.trim() == "```yaml")?;
-    let len = lines[start + 1..].iter().position(|l| l.trim() == "```")?;
-    Some(join(&lines[start + 1..start + 1 + len]))
+    let mut i = 0;
+    while i < lines.len() {
+        let Some(fence) = fence_opener(lines[i]) else {
+            i += 1;
+            continue;
+        };
+        let end = i + 1 + lines[i + 1..].iter().position(|l| closes(l, fence))?;
+        if lines[i].trim_start()[fence.1..].trim() == "yaml" {
+            return Some(join(&lines[i + 1..end]));
+        }
+        i = end + 1;
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::yaml_fence;
+
+    // req:model/code-fences@59b932df
+    #[test]
+    fn yaml_fence_reads_fences_as_fence_mask_does() {
+        let lines = [
+            "````", "```yaml", "shown: 1", "```", "````", "~~~yaml", "a: 1", "```", "~~~~", "after",
+        ];
+        assert_eq!(yaml_fence(&lines).as_deref(), Some("a: 1\n```\n"));
+    }
 }

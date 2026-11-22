@@ -4,15 +4,11 @@ use std::path::PathBuf;
 
 use clm_model::{Files, load_files, outline::fence_mask};
 
-fn marked(lines: &[&str]) -> Vec<bool> {
-    fence_mask(lines)
-}
-
 // req:model/code-fences@59b932df
 #[test]
 fn a_backtick_run_with_a_backtick_after_it_opens_no_fence() {
     assert_eq!(
-        marked(&["```x```", "#### Scenario: s", "text"]),
+        fence_mask(&["```x```", "#### Scenario: s", "text"]),
         [false, false, false]
     );
 }
@@ -21,7 +17,7 @@ fn a_backtick_run_with_a_backtick_after_it_opens_no_fence() {
 #[test]
 fn a_fence_closes_only_on_a_bare_run_at_least_as_long() {
     assert_eq!(
-        marked(&[
+        fence_mask(&[
             "````",
             "```",
             "```rust",
@@ -37,7 +33,7 @@ fn a_fence_closes_only_on_a_bare_run_at_least_as_long() {
 #[test]
 fn a_tilde_fence_closes_only_on_tildes() {
     assert_eq!(
-        marked(&["~~~", "```", "~~~ not a close", "~~~~", "after"]),
+        fence_mask(&["~~~", "```", "~~~ not a close", "~~~~", "after"]),
         [true, true, true, true, false]
     );
 }
@@ -46,7 +42,7 @@ fn a_tilde_fence_closes_only_on_tildes() {
 #[test]
 fn a_tilde_run_opens_whatever_follows_it() {
     assert_eq!(
-        marked(&["~~~ a `b` ~", "x", "~~~", "after"]),
+        fence_mask(&["~~~ a `b` ~", "x", "~~~", "after"]),
         [true, true, true, false]
     );
 }
@@ -55,7 +51,7 @@ fn a_tilde_run_opens_whatever_follows_it() {
 #[test]
 fn a_close_may_carry_leading_and_trailing_white_space() {
     assert_eq!(
-        marked(&["  ```", "x", "  ````  ", "after"]),
+        fence_mask(&["  ```", "x", "  ````  ", "after"]),
         [true, true, true, false]
     );
 }
@@ -63,13 +59,13 @@ fn a_close_may_carry_leading_and_trailing_white_space() {
 // req:model/code-fences@59b932df
 #[test]
 fn a_run_of_two_opens_no_fence() {
-    assert_eq!(marked(&["``", "~~", "text"]), [false, false, false]);
+    assert_eq!(fence_mask(&["``", "~~", "text"]), [false, false, false]);
 }
 
 // req:model/code-fences@59b932df
 #[test]
 fn a_fence_never_closed() {
-    assert_eq!(marked(&["```", "## Design"]), [true, true]);
+    assert_eq!(fence_mask(&["```", "## Design"]), [true, true]);
 }
 
 // req:model/code-fences@59b932df
