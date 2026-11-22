@@ -992,18 +992,19 @@ const PROOF_ID: &str = "20261114-proof-is-real";
 const PROOF_TITLE: &str =
     "A marker now counts only inside a test: see what stops counting before the next build";
 
-/// Every file under `root` but `clm.toml`, with its text, sorted by path.
-fn files_but_clm_toml(root: &std::path::Path) -> Vec<(std::path::PathBuf, String)> {
+/// Every directory and file under `root` but `clm.toml`, each file with its bytes, sorted by path.
+fn files_but_clm_toml(root: &std::path::Path) -> Vec<(std::path::PathBuf, Option<Vec<u8>>)> {
     let mut out = Vec::new();
     let mut dirs = vec![root.to_path_buf()];
     while let Some(dir) = dirs.pop() {
         for entry in fs::read_dir(&dir).unwrap() {
             let path = entry.unwrap().path();
             if path.is_dir() {
+                out.push((path.clone(), None));
                 dirs.push(path);
             } else if path != root.join("clm.toml") {
-                let text = fs::read_to_string(&path).unwrap();
-                out.push((path, text));
+                let bytes = fs::read(&path).unwrap();
+                out.push((path, Some(bytes)));
             }
         }
     }
@@ -1068,7 +1069,8 @@ fn the_proof_note_names_what_a_project_needs_to_know() {
         "`clm check`",
         "`tests-cite-their-owner`",
         "a file the rule doesn't count as its own",
-        "Naming `wiring` also has `clm check` report",
+        "naming `wiring` also has `clm check` report",
+        "in any file a component owns",
         "cites a requirement of a component other than the file's owner",
         "[verify] mutate",
         "off until the project sets them",
