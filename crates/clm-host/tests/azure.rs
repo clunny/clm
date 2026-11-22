@@ -426,7 +426,7 @@ fn common_dir(root: &Path) -> String {
 }
 
 fn kept_path(root: &Path) -> String {
-    format!("{}/clm/pr-bodies/spec-x.md", common_dir(root))
+    format!("{}/clm/pr-bodies/spec-x.markdown", common_dir(root))
 }
 
 #[test]

@@ -991,13 +991,76 @@ fn page_open_after_a_merged_page_opens_another() {
 #[test]
 fn page_open_exits_2_when_gh_fails() {
     // req:host/pr-open@f06b4b0e
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     // req:host/host-tool-failure@5ca96db4
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_CREATE_EXIT", "1")]);
     assert_eq!(code, Some(2), "{err}");
     assert!(err.contains("create failed"), "{err}");
-    assert!(err.trim_end().ends_with("pr-bodies/spec-x.md"), "{err}");
+    assert!(
+        err.trim_end().ends_with("pr-bodies/spec-x.markdown"),
+        "{err}"
+    );
+}
+
+/// `branch` made from `main` with a commit beyond it holding `file`, checked out.
+fn branch_beyond_main(r: &Repo, branch: &str, file: &str) {
+    git(&r.work, &["checkout", "-q", "-B", branch, "main"]);
+    commit_file(r, file);
+}
+
+#[test]
+fn scenario_keep_two_branches_two_copies() {
+    // req:host/keep-unopened-body@471ee956
+    let (r, gh) = (checkout("github"), fake_gh());
+    let bodies = r.work.join(".git/clm/pr-bodies");
+    write(&bodies, "spec-a-b.md", "old");
+    write(&r.work, "one.md", "one");
+    write(&r.work, "two.md", "two");
+    let fail = [("FAKE_CREATE_EXIT", "1")];
+    for (branch, file) in [("spec/a-b", "one.md"), ("spec-a/b", "two.md")] {
+        branch_beyond_main(&r, branch, &format!("{}.txt", branch.replace('/', "_")));
+        let args = ["pr", "open", branch, "--title", "x", "--body-file", file];
+        let (code, _, err) = clm(&r.work, &gh, &args, &fail);
+        assert_eq!(code, Some(2), "{branch}: {err}");
+        assert!(err.contains("the body is kept at"), "{branch}: {err}");
+    }
+    let read = |name: &str| fs::read_to_string(bodies.join(name)).unwrap();
+    assert_eq!(read("spec-a~b.markdown"), "one");
+    assert_eq!(read("spec~a-b.markdown"), "two");
+    assert_eq!(read("spec-a-b.md"), "old");
+}
+
+#[test]
+fn scenario_keep_nothing_worth_keeping() {
+    // req:host/keep-unopened-body@471ee956
+    let (r, gh) = (checkout("github"), fake_gh());
+    branch_beyond_main(&r, "impl/a", "a.txt");
+    let args = [
+        "pr",
+        "open",
+        "impl/a",
+        "--title",
+        "x",
+        "--body-file",
+        "body.md",
+    ];
+    let fail = [("FAKE_CREATE_EXIT", "1")];
+    let kept = r.work.join(".git/clm/pr-bodies/impl-a.markdown");
+    write(&r.work, "body.md", "  \n\n \t\n");
+    let (code, _, err) = clm(&r.work, &gh, &args, &fail);
+    assert_eq!(code, Some(2), "{err}");
+    assert!(err.contains("create failed"), "{err}");
+    assert!(!err.contains("the body is kept at"), "{err}");
+    assert!(!kept.exists());
+    // A good body, with a file where the copies' directory would be.
+    write(&r.work, "body.md", "## Review\n");
+    write(&r.work, ".git/clm/pr-bodies", "in the way");
+    let (code, _, err) = clm(&r.work, &gh, &args, &fail);
+    assert_eq!(code, Some(2), "{err}");
+    assert!(err.contains("create failed"), "{err}");
+    assert!(!err.contains("the body is kept at"), "{err}");
+    assert!(!kept.exists());
 }
 
 #[test]
@@ -1085,7 +1148,7 @@ fn scenario_pr_open_a_branch_without_cuts() {
 #[test]
 fn pr_open_exits_1_when_the_gate_cant_be_evaluated() {
     // req:host/pr-open@f06b4b0e
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     let (r, gh) = (checkout("github"), fake_gh());
     let args = [
         "pr",
@@ -1139,7 +1202,7 @@ fn the_gate_waits_for_the_checks_before_it() {
 #[test]
 fn a_body_that_fails_to_open_is_kept_with_its_cuts() {
     // req:host/pr-open@f06b4b0e
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_CREATE_EXIT", "1")]);
     assert_eq!(code, Some(2), "{err}");
@@ -1201,7 +1264,7 @@ fn a_stale_section_goes_from_a_branch_without_cuts() {
 
 #[test]
 fn a_kept_body_holds_the_section_once() {
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     // req:host/pr-open@f06b4b0e
     // A kept copy sent again, whose host fails before the gate runs: kept with one section.
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
@@ -1327,7 +1390,7 @@ fn a_commands_own_refusals_stay_exit_1() {
 
 #[test]
 fn a_body_kept_before_the_gate_ran_holds_its_cuts() {
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     // `gh pr view` fails before the body is sent: the kept copy still starts with the cuts.
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
     let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
@@ -1340,7 +1403,7 @@ fn a_body_kept_before_the_gate_ran_holds_its_cuts() {
 
 #[test]
 fn a_body_whose_gate_cant_be_evaluated_is_not_kept_after_a_host_failure() {
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["update-ref", "-d", "refs/remotes/origin/main"]);
     let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
@@ -1621,7 +1684,7 @@ fn page_body_without_an_open_page_exits_1() {
 fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
     // req:host/pr-body@42b28fb0
     // req:host/pr-open@f06b4b0e
-    // req:host/keep-unopened-body@c77d0cda
+    // req:host/keep-unopened-body@471ee956
     let (r, gh) = (checkout("github"), fake_gh());
     let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
     let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &env);
@@ -1631,7 +1694,10 @@ fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
     assert_eq!(code, Some(2), "{err}");
     assert!(err.contains("Bad credentials"), "{err}");
-    assert!(err.trim_end().ends_with("pr-bodies/spec-x.md"), "{err}");
+    assert!(
+        err.trim_end().ends_with("pr-bodies/spec-x.markdown"),
+        "{err}"
+    );
     assert!(
         !gh.calls().iter().any(|c| !c.starts_with("pr view")),
         "{:?}",
