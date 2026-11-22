@@ -1,6 +1,7 @@
 //! The repository's front page: `README.md`.
 
 // clm:reads README.md
+// clm:reads docs/guide/why-clm.md
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -63,5 +64,25 @@ fn readme_links_the_site_first_and_credits_its_sources() {
         "https://claude.com/blog/the-ai-native-sdlc-playbook",
     ] {
         assert!(readme.contains(needle), "README.md links {needle}");
+    }
+    // Every work the guide's "Where it comes from" credits is linked too.
+    let why = fs::read_to_string(repo().join("docs/guide/why-clm.md")).expect("why-clm.md exists");
+    let credits = why
+        .split("## Where it comes from")
+        .nth(1)
+        .expect("why-clm.md credits its sources");
+    let credits = credits.split("\n## ").next().unwrap();
+    let urls: Vec<&str> = credits
+        .split("](")
+        .skip(1)
+        .map(|part| part.split(')').next().unwrap())
+        .filter(|target| target.starts_with("https://"))
+        .collect();
+    assert!(!urls.is_empty(), "why-clm.md links the works it credits");
+    for url in urls {
+        assert!(
+            readme.contains(url),
+            "README.md links {url}, which why-clm.md credits"
+        );
     }
 }
