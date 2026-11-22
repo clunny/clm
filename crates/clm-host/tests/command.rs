@@ -1727,8 +1727,11 @@ fn branch_adding(r: &Repo, branch: &str, changes: &[&str], intent: &str, subject
 #[test]
 fn scenario_pr_open_the_change_the_branch_adds() {
     // req:host/pr-open-defaults@17fa5999
+    /// A branch, the changes it adds, their intent, then the title and body `gh` gets and
+    /// the branch's one commit's subject.
+    type Case<'a> = (&'a str, &'a [&'a str], &'a str, &'a str, &'a str, &'a str);
     let r = checkout("github");
-    let cases: [(&str, &[&str], &str, &str, &str, &str); 3] = [
+    let cases: [Case; 3] = [
         (
             "fix/y",
             &["y"],
