@@ -23,9 +23,16 @@ No requirement states what a fence is: the model's requirements say only that a 
 
 `model/code-fences` states the fence rule and that `outline::fence_mask` marks by it, with scenarios for each case the item names: a ```` ```x``` ```` line opens nothing, a fence closes only on a bare run of its character at least as long, a tilde fence closes only on tildes, an unclosed fence runs to the end, and a heading inside a longer fence starts no requirement. The model's Contract names the requirement beside `outline`. Its build changes `fence_mask` alone; `gate/cuts` and `check.health/rule-signals` read the corrected fences through it unchanged.
 
-Two pieces of work stay out, each a backlog item: `clm_check::code_spans` keeps its own copy of the rule, now the same as the model's, until it reads fences through the model's outline (`the-code-span-reader-keeps-a-fence-reader-of-its-own`, deferred); and `clm rename`'s text rewriting flips a fence on any marker line, a third reading (`clm-rename-reads-fences-by-a-toggle-of-its-own`, a bug of `rename`).
+`clm rename` holds a third reading: `rename/references` states that a fence runs from any line starting ```` ``` ```` or `~~~` to the next such line, and its code flips a fence on each. `rename/references` now reads fenced code as `model/code-fences` reads fences, with its scenario `a reference in fenced code` given a four-backtick fence holding ```` ``` ```` and `~~~` lines, and a `#### Needs` on `model/code-fences`; `term-swap` reads fenced code "as `references` gives it", so it follows unchanged. Its build reads fences through `outline::fence_mask`.
+
+One piece of work stays out: `clm_check::code_spans` keeps its own copy of the rule, now the same as the model's, until it reads fences through the model's outline (`the-code-span-reader-keeps-a-fence-reader-of-its-own`, deferred).
 
 ## Constraints
 
 - The rule is CommonMark's as far as a spec's text needs it: indentation before a fence marker is not limited to three spaces, as neither reader limits it now, and a fence inside a list item or block quote is read as any other line.
 - No edge cases or workarounds are known.
+- `outline::yaml_fence`, which takes a frontmatter section's ```` ```yaml ```` block out of a delta, keeps its own exact-line reading: it reads a block's content, not which lines are fenced, and `docs/spec-format.md` fixes that block's shape.
+
+## Open questions
+
+- A rename's fenced-code clause now counts a fence's own marker lines as fenced code, which the old wording left out; a marker line holds no code span, so no reference reads differently, and `term-swap` now swaps a term in a fence's info string as in its body.
