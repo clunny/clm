@@ -7,7 +7,7 @@ const BEFORE: &[u8] = b"approval = \"other\"\nupgraded = \"0.17.0\"\n[land]\nche
 
 #[test]
 fn only_the_notes_differ() {
-    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    // req:gate/upgrade-stamp-left-out@b3b01420
     let after = b"# stamped\napproval = \"other\"\nupgraded = \"0.18.0\"\ndeclined_migrations = [\"m\"]\n[land]\ncheck = \"a\"\n";
     assert!(upgrade_stamp_only(Some(BEFORE), Some(after)));
     // a missing file or key counts as unset
@@ -17,7 +17,7 @@ fn only_the_notes_differ() {
 
 #[test]
 fn any_other_key_differing_is_not_the_stamp() {
-    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    // req:gate/upgrade-stamp-left-out@b3b01420
     let other_setting = b"approval = \"other\"\nupgraded = \"0.18.0\"\n[land]\ncheck = \"b\"\n";
     assert!(!upgrade_stamp_only(Some(BEFORE), Some(other_setting)));
     let policy = b"approval = \"any\"\nupgraded = \"0.18.0\"\n[land]\ncheck = \"a\"\n";
@@ -26,7 +26,7 @@ fn any_other_key_differing_is_not_the_stamp() {
 
 #[test]
 fn a_comment_only_edit_is_not_the_stamp() {
-    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    // req:gate/upgrade-stamp-left-out@b3b01420
     let after =
         b"# who approves\napproval = \"other\"\nupgraded = \"0.17.0\"\n[land]\ncheck = \"a\"\n";
     assert!(!upgrade_stamp_only(Some(BEFORE), Some(after)));
@@ -35,7 +35,7 @@ fn a_comment_only_edit_is_not_the_stamp() {
 
 #[test]
 fn a_side_that_doesnt_parse_is_not_the_stamp() {
-    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    // req:gate/upgrade-stamp-left-out@b3b01420
     assert!(!upgrade_stamp_only(Some(BEFORE), Some(b"upgraded = [\n")));
     assert!(!upgrade_stamp_only(Some(BEFORE), Some(&[0xff, 0xfe])));
 }

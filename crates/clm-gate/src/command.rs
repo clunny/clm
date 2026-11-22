@@ -1,5 +1,5 @@
 //! `clm gate` as a call: its arguments, what it prints and its exit status
-//! (`commands-in-crate`). Native only: the web app calls `evaluate_at`.
+//! (`commands-in-crate`). Native only.
 
 use std::ffi::OsString;
 use std::io::{self, Write};
@@ -27,7 +27,7 @@ pub struct Args {
 #[command(
     name = "clm gate",
     no_binary_name = true,
-    about = "Decide whether HEAD may merge into a base ref; exit 1 to block."
+    about = "Decide whether HEAD may merge into a base ref; exit 1 to block"
 )]
 struct Line {
     #[command(flatten)]

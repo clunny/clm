@@ -70,7 +70,7 @@ fn an_exemption_whose_item_is_missing_blocks() {
         .violations
         .iter()
         .filter(|v| v.rule == "gate/exemption-names-its-item")
-        .map(|v| format!("{}: {}: {}", v.path.display(), v.rule, v.message))
+        .map(|v| v.to_string())
         .collect();
     assert_eq!(
         lines,
@@ -242,7 +242,7 @@ fn review_of(d: &Path) -> (Kind, bool) {
     (out.kind, out.review)
 }
 
-// req:gate/needs-review@2373a9ad
+// req:gate/needs-review@3946ac29
 #[test]
 fn an_added_exemption_needs_review() {
     let dir = base();
@@ -253,7 +253,7 @@ fn an_added_exemption_needs_review() {
     assert_eq!(review_of(d), (Kind::Spec, true));
 }
 
-// req:gate/needs-review@2373a9ad
+// req:gate/needs-review@3946ac29
 #[test]
 fn a_new_component_or_another_rule_needs_review() {
     let dir = base();
@@ -279,7 +279,7 @@ fn a_new_component_or_another_rule_needs_review() {
     assert_eq!(review_of(d), (Kind::Spec, true));
 }
 
-// req:gate/needs-review@2373a9ad
+// req:gate/needs-review@3946ac29
 #[test]
 fn a_widened_exemption_needs_review_but_a_narrowed_or_removed_one_does_not() {
     let dir = base();

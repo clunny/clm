@@ -1,5 +1,6 @@
 //! Merge gate: decides whether `HEAD` may merge into a base ref (see specs/gate/SPEC.md).
 
+use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -9,6 +10,7 @@ pub use clm_model::Violation;
 #[cfg(not(target_arch = "wasm32"))]
 mod command;
 mod cuts;
+mod light;
 mod policy;
 
 pub use cuts::{
@@ -42,6 +44,9 @@ const POLICY: &str = "clm.toml";
 pub enum Kind {
     Spec,
     Code,
+    /// Scenarios added to one component's requirements with the code that proves them
+    /// (`light`).
+    Light,
     Mixed,
 }
 
@@ -50,6 +55,7 @@ impl fmt::Display for Kind {
         f.write_str(match self {
             Kind::Spec => "spec",
             Kind::Code => "code",
+            Kind::Light => "light",
             Kind::Mixed => "mixed",
         })
     }
@@ -61,10 +67,17 @@ pub struct Outcome {
     /// Whether the branch needs a human's review (`needs-review`); false unless `kind` is
     /// `Spec`.
     pub review: bool,
+    /// Whether a `light` or `mixed` branch would need review were it a `spec` branch, by
+    /// `needs-review`'s rule under the version applied; `review` for any other kind
+    /// (`evaluate-at`).
+    pub spec_part_review: bool,
     pub violations: Vec<Violation>,
     /// What a `spec` branch cuts (`cuts`), each printing as its `gate/cut` line; empty for
     /// any other kind.
     pub cuts: Vec<Cut>,
+    /// The component whose work the branch is: a `light` branch's, and a `code` branch's
+    /// that one component accounts for (`own-files`, `light`); `None` otherwise.
+    pub component: Option<String>,
 }
 
 pub fn is_spec_path(path: &str) -> bool {
@@ -84,8 +97,9 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
 /// needs review (`rules-version`): 1 before `cuts` made a branch need review, 2 before a
 /// changed outcome did, 3 before a sentence holding a placement phrase and not the word
 /// `test` counted as stating, 4 before paths were read relative to the CLM root, 5 before a
-/// placement phrase matched across a line break, 6 since.
-pub const RULES: u32 = 6;
+/// placement phrase matched across a line break, 6 before the light route, and 7 adds the
+/// light route.
+pub const RULES: u32 = 7;
 
 /// `evaluate_at` as the gate decided under the rules of version `rules` (`rules-version`):
 /// the reading of paths and the review, and with it `gate/approval`, depend on the version.
@@ -104,7 +118,6 @@ pub fn evaluate_by(
     }
     let here = PathBuf::from(format!("{base}..{head}"));
     let mut violations = Vec::new();
-    let build_branch = is_build_branch(repo, head);
 
     // Every read sees the one commit `head` names now, however the name moves meanwhile.
     let head = &clm_git::git(
@@ -120,11 +133,13 @@ pub fn evaluate_by(
     let range = format!("{base}...{head}");
     let merge_base = clm_git::git(repo, &["merge-base", base, head]).map_err(|e| e.to_string())?;
     let root = Root::of(repo, rules)?;
+    let base_specs = OnceCell::new();
     let at = At {
         repo,
         merge_base: &merge_base,
         head,
         root: &root,
+        base_specs: &base_specs,
     };
     violations.extend(up_to_date(&at, base, &here)?);
     let changed = changed_files(repo, &root, &range)?;
@@ -167,7 +182,7 @@ pub fn evaluate_by(
         None => None,
     };
     let (mut spec, mut code) = (Vec::new(), Vec::new());
-    let mut stamp_only = None;
+    let mut stamp_only = false;
     // IDs of changes archived in their own spec PR (`archive-in-spec-pr`): their
     // `change.md` is added under `changes/archive/<id>/` other than by an archive move.
     let mut new_archived = BTreeSet::new();
@@ -180,6 +195,13 @@ pub fn evaluate_by(
                     message: "archived changes are history and can't be modified or deleted".into(),
                 });
             } else if !is_archive_move(&format!("{CHANGES}{rest}"), file)? {
+                if archived_at_base(&at, rest)? {
+                    violations.push(Violation {
+                        path: PathBuf::from(file),
+                        rule: "gate/archive-immutable",
+                        message: "archived changes are history and can't be added to".into(),
+                    });
+                }
                 if let Some(id) = rest
                     .strip_suffix("/change.md")
                     .filter(|id| !id.contains('/'))
@@ -203,7 +225,7 @@ pub fn evaluate_by(
             spec.push((status, file));
         } else if file == POLICY && policy == Some(PolicyChange::Stamp) {
             // left out of the classification (`upgrade-stamp-left-out`)
-            stamp_only = Some((status, file));
+            stamp_only = true;
         } else if !is_spec_path(file) {
             code.push(file);
         } else if path_needs_review(file)
@@ -239,71 +261,73 @@ pub fn evaluate_by(
         spec.extend(code.drain(..).map(|f| ('M', f)));
     }
 
-    // Alone, the upgrade notes are a spec branch that needs no review.
     let setting_changed = policy == Some(PolicyChange::Approval);
-    if let Some(entry) = stamp_only
-        && spec.is_empty()
-        && code.is_empty()
-    {
-        spec.push(entry);
-    }
-
-    let kind = match (spec.is_empty(), code.is_empty()) {
-        (false, false) => Kind::Mixed,
-        (false, true) => Kind::Spec,
-        _ => Kind::Code,
+    // The kind is read from the files (`classify`): no code file is a spec branch, an empty
+    // diff and one whose every file is left out included.
+    let spec_change = !spec.is_empty();
+    let mut kind = match (spec_change, code.is_empty()) {
+        (_, true) => Kind::Spec,
+        (false, false) => Kind::Code,
+        (true, false) => Kind::Mixed,
+    };
+    let part = SpecPart {
+        at: &at,
+        entries: &entries,
+        new_archived: &new_archived,
+        replayed: replayed.as_deref(),
+        setting_changed,
+        rules,
     };
 
-    let mut review = false;
-    let mut cut = Vec::new();
-    if kind == Kind::Spec {
-        // Every path the diff touches, and every change one of whose files it adds or
-        // modifies, a status-only edit included, as the Worker passes them.
-        let changes = change_frontmatters(&at, &entries, &new_archived)?;
-        let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
-        let (listed, widened, shortened_then) = read_cuts(&at, &entries, rules, &mut violations)?;
-        cut = listed;
-        // Under versions 2 to 5 a shortened requirement is counted as that version counted
-        // its sentences, `shortened_then`, rather than by today's cut; version 1 counts none.
-        let counted_before_v6 = |c: &Cut| !matches!(c, Cut::Shortened { .. });
-        let added = added_exemptions(&at, &entries)?;
-        // Read from the two graphs, or from the text when they don't load, under every
-        // version, so the versions differ only by the cuts.
-        let widened = widened.unwrap_or(!added.is_empty());
-        review = match &replayed {
-            // Its replayed edits to the human layers change no intent (`needs-review`).
-            Some(text) => {
-                records_term_rename(text)
-                    || changes
-                        .iter()
-                        .any(|fm| fm.as_ref().is_none_or(change_needs_review))
+    let (mut review, mut spec_part_review, mut cut) = (false, false, Vec::new());
+    let mut component = None;
+    let mut why_not_light = None;
+    match kind {
+        Kind::Spec if spec_change => {
+            let read = part.read(&mut violations)?;
+            (review, cut) = (read.review, read.cuts);
+            spec_part_review = review;
+            violations.extend(undeclared_burdens(&at, &entries, &read.changes));
+            violations.extend(exemptions_name_their_items(&at, &read.added)?);
+        }
+        // A `spec` branch with no spec change needs nothing (`needs-review`); its upgrade notes
+        // still carry the burdens it files (`undeclared-burden`).
+        Kind::Spec => {
+            if stamp_only {
+                let changes = change_frontmatters(&at, &entries, &new_archived)?;
+                violations.extend(undeclared_burdens(&at, &entries, &changes));
             }
-            // Version 1, before a cut needed review.
-            None if rules == 1 => needs_review_of(&paths, setting_changed, &changes) || widened,
-            // Version 2, before a changed outcome needed review.
-            None if rules == 2 => {
-                needs_review_of(&paths, setting_changed, &changes)
-                    || widened
-                    || shortened_then
-                    || cut
-                        .iter()
-                        .any(|c| counted_before_v6(c) && !matches!(c, Cut::Outcome { .. }))
+        }
+        Kind::Code => {
+            let files = code_entries(&entries, &code);
+            let (owned, found) = own_files(&at, &files)?;
+            component = found;
+            if component.is_none() {
+                violations.extend(owned.into_iter().map(|f| Violation {
+                    path: PathBuf::from(f.path),
+                    rule: "gate/own-files",
+                    message: format!(
+                        "owned by {}; a code branch changes one component's files, the wiring and a capability test that component serves",
+                        f.owner
+                    ),
+                }));
             }
-            // Versions 3 to 5, before a placement phrase matched across a line; version 3
-            // also before a sentence holding a phrase and no word `test` stated.
-            None if rules < 6 => {
-                needs_review_of(&paths, setting_changed, &changes)
-                    || widened
-                    || shortened_then
-                    || cut.iter().any(counted_before_v6)
+        }
+        Kind::Light | Kind::Mixed => {
+            let mut scratch = Vec::new();
+            let read = part.read(&mut scratch)?;
+            spec_part_review = read.review;
+            if rules >= 7 {
+                let files = code_entries(&entries, &code);
+                match light::judge(&at, &spec, &files, &new_archived, &read)? {
+                    Ok(c) => {
+                        kind = Kind::Light;
+                        component = Some(c);
+                    }
+                    Err(why) => why_not_light = Some(why),
+                }
             }
-            // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
-            None => {
-                needs_review_of(&paths, setting_changed, &changes) || widened || !cut.is_empty()
-            }
-        };
-        violations.extend(undeclared_burdens(&at, &entries, &changes));
-        violations.extend(exemptions_name_their_items(&at, &added)?);
+        }
     }
 
     match kind {
@@ -313,14 +337,14 @@ pub fn evaluate_by(
                 path: here,
                 rule: "gate/classify",
                 message: format!(
-                    "PR mixes spec changes ({}) with code changes ({}); split it into a spec PR and a code PR{}",
+                    "PR mixes spec changes ({}) with code changes ({}); split it into a spec PR and a code PR; a build edits no spec path: it leaves a requirement that needs a spec edit unbuilt and adds a `question` backlog item whose `blocks` names it{}",
                     spec.join(", "),
                     code.join(", "),
-                    if build_branch {
-                        "; a build edits no spec path: it leaves a requirement that needs a spec edit unbuilt and adds a `question` backlog item whose `blocks` names it"
-                    } else {
-                        ""
-                    }
+                    why_not_light
+                        .map(|why| format!(
+                            "; spec and code land together only on a light branch (gate/light): {why}"
+                        ))
+                        .unwrap_or_default()
                 ),
             })
         }
@@ -336,9 +360,114 @@ pub fn evaluate_by(
     Ok(Outcome {
         kind,
         review,
+        spec_part_review,
         violations,
         cuts: cut,
+        component,
     })
+}
+
+/// What `evaluate_by` reads a branch's spec part by: the diff, the changes it adds, whether
+/// `rename/replay` accepts it and how `clm.toml` changes, under rules version `rules`.
+struct SpecPart<'a> {
+    at: &'a At<'a>,
+    entries: &'a [(char, &'a str)],
+    new_archived: &'a BTreeSet<&'a str>,
+    replayed: Option<&'a str>,
+    setting_changed: bool,
+    rules: u32,
+}
+
+/// A branch's spec part, read as a `spec` branch's (`needs-review`, `cuts`).
+pub(crate) struct ReadPart {
+    /// Whether it needs review were the branch a `spec` branch.
+    pub(crate) review: bool,
+    pub(crate) cuts: Vec<Cut>,
+    changes: Vec<Option<clm_model::ChangeFrontmatter>>,
+    added: Vec<AddedExemption>,
+    /// The spec graphs at the merge base and the head with their load violations, when the
+    /// cuts were read from them.
+    pub(crate) graphs: Option<Graphs>,
+}
+
+/// The spec graphs at the merge base and at the head, loaded as `cuts` loads them, each with
+/// the violations its loading gave.
+pub(crate) struct Graphs {
+    pub(crate) base: (clm_model::Graph, Vec<Violation>),
+    pub(crate) head: (clm_model::Graph, Vec<Violation>),
+}
+
+impl SpecPart<'_> {
+    /// Reads the spec part, adding a `gate/deleted-tests` violation to `violations` for each
+    /// list line that names no test (`cuts`).
+    fn read(&self, violations: &mut Vec<Violation>) -> Result<ReadPart, String> {
+        let SpecPart {
+            at,
+            entries,
+            new_archived,
+            replayed,
+            setting_changed,
+            rules,
+        } = *self;
+        // Every path the diff touches, and every change one of whose files it adds or
+        // modifies, a status-only edit included, as the Worker passes them.
+        let changes = change_frontmatters(at, entries, new_archived)?;
+        let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
+        let read = read_cuts(at, entries, rules, violations)?;
+        let cut = read.listed;
+        // Under versions 2 to 5 a shortened requirement is counted as that version counted
+        // its sentences, `shortened_then`, rather than by today's cut; version 1 counts none.
+        let counted_before_v6 = |c: &Cut| !matches!(c, Cut::Shortened { .. });
+        let added = added_exemptions(at, entries)?;
+        // Read from the two graphs, or from the text when they don't load, under every
+        // version, so the versions differ only by the cuts.
+        let widened = read.widened.unwrap_or(!added.is_empty());
+        let shortened_then = read.shortened_then;
+        let by_paths = || needs_review_of(&paths, setting_changed, &changes);
+        let review = match replayed {
+            // Its replayed edits to the human layers change no intent (`needs-review`).
+            Some(text) => {
+                records_term_rename(text)
+                    || changes
+                        .iter()
+                        .any(|fm| fm.as_ref().is_none_or(change_needs_review))
+            }
+            // Version 1, before a cut needed review.
+            None if rules == 1 => by_paths() || widened,
+            // Version 2, before a changed outcome needed review.
+            None if rules == 2 => {
+                by_paths()
+                    || widened
+                    || shortened_then
+                    || cut
+                        .iter()
+                        .any(|c| counted_before_v6(c) && !matches!(c, Cut::Outcome { .. }))
+            }
+            // Versions 3 to 5, before a placement phrase matched across a line; version 3
+            // also before a sentence holding a phrase and no word `test` stated.
+            None if rules < 6 => {
+                by_paths() || widened || shortened_then || cut.iter().any(counted_before_v6)
+            }
+            // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
+            None => by_paths() || widened || !cut.is_empty(),
+        };
+        Ok(ReadPart {
+            review,
+            cuts: cut,
+            changes,
+            added,
+            graphs: read.graphs,
+        })
+    }
+}
+
+/// The code files among `entries`, with their status, in the diff's order.
+fn code_entries<'a>(entries: &[(char, &'a str)], code: &[&str]) -> Vec<(char, &'a str)> {
+    entries
+        .iter()
+        .filter(|(_, f)| code.contains(f))
+        .copied()
+        .collect()
 }
 
 /// A change's `deleted-tests.txt`, live or archived: `changes/[archive/]<id>/deleted-tests.txt`.
@@ -362,14 +491,19 @@ fn read_cuts(
     entries: &[(char, &str)],
     rules: u32,
     violations: &mut Vec<Violation>,
-) -> Result<(Vec<Cut>, Option<bool>, bool), String> {
+) -> Result<ReadCuts, String> {
     let lists: Vec<&str> = entries
         .iter()
         .filter(|(status, file)| matches!(status, 'A' | 'M') && test_list(file).is_some())
         .map(|&(_, file)| file)
         .collect();
     if lists.is_empty() && !entries.iter().any(|(_, f)| f.starts_with(SPECS)) {
-        return Ok((Vec::new(), Some(false), false));
+        return Ok(ReadCuts {
+            listed: Vec::new(),
+            widened: Some(false),
+            shortened_then: false,
+            graphs: None,
+        });
     }
     let mut texts = Vec::new();
     for path in lists {
@@ -444,7 +578,23 @@ fn read_cuts(
     let loaded = !listed.iter().any(|c| matches!(c, Cut::Unloaded { .. }));
     let widened = loaded.then(|| !widened_exemptions(&base, &head).is_empty());
     let shortened_then = loaded && rules < 6 && cuts::shortened_under(&base, &head, rules);
-    Ok((listed, widened, shortened_then))
+    Ok(ReadCuts {
+        listed,
+        widened,
+        shortened_then,
+        graphs: Some(Graphs {
+            base: (base, base_violations),
+            head: (head, head_violations),
+        }),
+    })
+}
+
+/// What `read_cuts` reads.
+struct ReadCuts {
+    listed: Vec<Cut>,
+    widened: Option<bool>,
+    shortened_then: bool,
+    graphs: Option<Graphs>,
 }
 
 /// The text of the root's file at `path` at `rev`, invalid UTF-8 replaced, or `None` when
@@ -486,11 +636,13 @@ pub fn files_outside_spec_paths(
             continue;
         }
         if path == POLICY {
+            let base_specs = OnceCell::new();
             let at = At {
                 repo,
                 merge_base: &merge_base,
                 head: &head,
                 root: &root,
+                base_specs: &base_specs,
             };
             if policy_change(&at, status)? != PolicyChange::Other {
                 continue;
@@ -783,26 +935,39 @@ struct At<'a> {
     merge_base: &'a str,
     head: &'a str,
     root: &'a Root,
+    /// The specs at the merge base, loaded once when first read (`base_specs`).
+    base_specs: &'a OnceCell<clm_model::Graph>,
 }
 
 impl At<'_> {
+    /// The specs at the merge base, as `load_specs_at` loads them, loaded once.
+    fn base_specs(&self) -> Result<&clm_model::Graph, String> {
+        if let Some(graph) = self.base_specs.get() {
+            return Ok(graph);
+        }
+        let graph = load_specs_at(self, self.merge_base)?;
+        Ok(self.base_specs.get_or_init(|| graph))
+    }
+
     /// The object naming the root's file at `path` at `rev`.
     fn object(&self, rev: &str, path: &str) -> String {
         self.root.object(rev, path)
     }
 }
 
-/// Whether `head` is a build branch, `impl/<component>`, as `HEAD` names the checked-out one.
-fn is_build_branch(repo: &Path, head: &str) -> bool {
-    let name = if head == "HEAD" {
-        clm_git::current_branch(repo).ok().flatten()
-    } else {
-        Some(head.to_string())
+/// Whether the archived change holding `rest` (`<id>/<file>` under `changes/archive/`)
+/// held a file at the merge base, so a file added to it adds to history (`archive-immutable`).
+fn archived_at_base(at: &At, rest: &str) -> Result<bool, String> {
+    let Some((id, _)) = rest.split_once('/') else {
+        return Ok(false);
     };
-    name.is_some_and(|n| {
-        let n = n.strip_prefix("refs/heads/").unwrap_or(&n);
-        n.strip_prefix("origin/").unwrap_or(n).starts_with("impl/")
-    })
+    let dir = format!("{ARCHIVE}{id}/");
+    let listed = clm_git::git(
+        at.repo,
+        &["ls-tree", "--name-only", at.merge_base, "--", &dir],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(!listed.is_empty())
 }
 
 /// `(status, path)` for each file `git diff --name-status --no-renames <range>` lists, each
@@ -1016,7 +1181,7 @@ fn fixed_bugs(
     if named.is_empty() {
         return Ok(fixed);
     }
-    let graph = load_specs_at(at, merge_base)?;
+    let graph = at.base_specs()?;
     // The text of each code file the branch changes, at the merge base and at `HEAD`, read
     // once and only when a node's `paths` don't settle it.
     let mut texts: Option<Vec<Vec<u8>>> = None;
@@ -1065,6 +1230,7 @@ fn paths_match(at: &At, nodes: &[&clm_model::Node]) -> Result<bool, String> {
         merge_base,
         head,
         root,
+        ..
     } = *at;
     let globs: Vec<String> = nodes
         .iter()
@@ -1298,16 +1464,18 @@ fn status_only(repo: &Path, diff_args: &[&str], allow_identical: bool) -> Result
         && changed.all(|l| l[1..].starts_with("status: ")))
 }
 
-/// `gate/up-to-date`: what CI's merge of `base` into `HEAD` can't settle (`merge-tested-tree`):
-/// a textual conflict, or a file under `specs/` changed on both sides, which is regenerated
-/// rather than merged (`regenerate-dont-merge`). Merely being behind `base` is fine.
-/// `here` is the path a conflict is reported at.
+/// `gate/up-to-date`: what `clm land`'s merge of `base` into `HEAD` can't settle
+/// (`land-locally`): a textual conflict, or a file under `specs/` changed on both sides,
+/// which is regenerated rather than merged (`regenerate-dont-merge`), one line per file in
+/// path order. Merely being behind `base` is fine. `here` is the path a conflict is reported
+/// at.
 fn up_to_date(at: &At, base: &str, here: &Path) -> Result<Vec<Violation>, String> {
     let At {
         repo,
         merge_base,
         head,
         root,
+        ..
     } = *at;
     let mut violations = Vec::new();
     match clm_git::git(repo, &["merge-tree", "--write-tree", base, head]) {
@@ -1385,48 +1553,76 @@ pub fn foreign_files(
     .map_err(|e| e.to_string())?;
     let merge_base = clm_git::git(repo, &["merge-base", base, &head]).map_err(|e| e.to_string())?;
     let root = Root::of(repo, RULES)?;
+    let base_specs = OnceCell::new();
     let at = At {
         repo,
         merge_base: &merge_base,
         head: &head,
         root: &root,
+        base_specs: &base_specs,
     };
-    let graph = load_specs_at(&at, &merge_base)?;
+    let graph = at.base_specs()?;
     let Some(wiring) = graph.wiring() else {
         return Ok(Vec::new());
     };
-    if !graph.nodes.contains_key(component) {
-        return Ok(Vec::new());
-    }
-    let served: BTreeSet<&String> = graph
-        .nodes
-        .get(component)
-        .into_iter()
-        .flat_map(|n| &n.requirements)
+    let changed = changed_files(repo, &root, &format!("{merge_base}...{head}"))?;
+    let files: Vec<(char, &str)> = changed
+        .iter()
+        .filter(|(_, f)| !is_spec_path(f))
+        .map(|(s, f)| (*s, f.as_str()))
+        .collect();
+    Ok(foreign_in(&at, graph, wiring, component, &files))
+}
+
+/// Of `files`, the code files a branch changes with their status, those that aren't
+/// `component`'s build's to change by the specs `graph` at the merge base and the `wiring`
+/// globs, sorted by path (`own-files`): a file outside the CLM root with an empty owner, and
+/// each file another component owns that no `wiring` glob matches, unless the branch only
+/// modifies it and its text at the merge base cites a capability `component` serves. Nothing
+/// when `graph` holds no `component`.
+pub(crate) fn foreign_in(
+    at: &At,
+    graph: &clm_model::Graph,
+    wiring: &[String],
+    component: &str,
+    files: &[(char, &str)],
+) -> Vec<ForeignFile> {
+    let Some(node) = graph.nodes.get(component) else {
+        return Vec::new();
+    };
+    let served: BTreeSet<&String> = node
+        .requirements
+        .iter()
         .flat_map(|r| graph.effective_serves(&r.id))
         .filter(|s| s.starts_with("capability/"))
         .collect();
     let mut found = Vec::new();
-    for (status, file) in changed_files(repo, &root, &format!("{merge_base}...{head}"))? {
+    for &(status, file) in files {
         // No component's, whatever a component's `paths` match (`paths-under-the-root`).
-        if outside_root(&file) {
+        if outside_root(file) {
             found.push(ForeignFile {
-                path: file,
+                path: file.to_string(),
                 owner: String::new(),
             });
             continue;
         }
-        if is_spec_path(&file) {
-            continue;
-        }
-        let Some(owner) = clm_coverage::owner(&graph, Path::new(&file)) else {
+        let Some(owner) = clm_coverage::owner(graph, Path::new(file)) else {
             continue;
         };
-        if owner == component || wiring.iter().any(|g| clm_coverage::matches(g, &file)) {
+        if owner == component || wiring.iter().any(|g| clm_coverage::matches(g, file)) {
             continue;
         }
+        // A build may drop a detector's allowance its work made stale (`own-files`).
+        if file == POLICY && status == 'M' {
+            let side = |rev: &str| show(at.repo, &at.object(rev, file)).ok();
+            if let (Some(before), Some(after)) = (side(at.merge_base), side(at.head))
+                && allowances_dropped(&before, &after)
+            {
+                continue;
+            }
+        }
         if status == 'M' {
-            let before = show_bytes(repo, &at.object(&merge_base, &file)).unwrap_or_default();
+            let before = show_bytes(at.repo, &at.object(at.merge_base, file)).unwrap_or_default();
             let before = String::from_utf8_lossy(&before);
             if clm_coverage::marker_spans(&before)
                 .iter()
@@ -1436,14 +1632,115 @@ pub fn foreign_files(
             }
         }
         found.push(ForeignFile {
-            path: file,
+            path: file.to_string(),
             owner: owner.to_string(),
         });
     }
     // `git diff` lists paths from the repository's top, so a file named from the root with
     // `../` may come out of order.
     found.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(found)
+    found
+}
+
+/// Whether `after`, the root's `clm.toml` at the head, only drops detectors' allowances
+/// from `before`, its text at the merge base (`own-files`): its lines, each with its line
+/// ending, are `before`'s in order with one or more taken out, and both read as TOML, the
+/// head's equal to the merge base's once one or more `"--allow"` elements, each with the
+/// element after it, are taken out of the `command` arrays of its `[[detectors]]` tables.
+fn allowances_dropped(before: &str, after: &str) -> bool {
+    let lines = |t: &str| {
+        t.split_inclusive('\n')
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    let (was, now) = (lines(before), lines(after));
+    let mut kept = was.iter();
+    if now.len() >= was.len() || !now.iter().all(|l| kept.any(|w| w == l)) {
+        return false;
+    }
+    let (Ok(mut was), Ok(mut now)) = (before.parse::<toml::Table>(), after.parse::<toml::Table>())
+    else {
+        return false;
+    };
+    let (Some(toml::Value::Array(was_detectors)), Some(toml::Value::Array(now_detectors))) =
+        (was.remove("detectors"), now.remove("detectors"))
+    else {
+        return false;
+    };
+    if was != now || was_detectors.len() != now_detectors.len() {
+        return false;
+    }
+    let mut dropped = false;
+    for (was, now) in was_detectors.iter().zip(&now_detectors) {
+        let (Some(was), Some(now)) = (was.as_table(), now.as_table()) else {
+            return false;
+        };
+        let (mut was, mut now) = (was.clone(), now.clone());
+        let (Some(toml::Value::Array(was_command)), Some(toml::Value::Array(now_command))) =
+            (was.remove("command"), now.remove("command"))
+        else {
+            if was == now {
+                continue;
+            }
+            return false;
+        };
+        if was != now || !pairs_dropped(&was_command, &now_command) {
+            return false;
+        }
+        dropped |= was_command.len() != now_command.len();
+    }
+    dropped
+}
+
+/// Whether `now` is `was` with zero or more `"--allow"` elements, each with the element after
+/// it, taken out, any such choice counting.
+fn pairs_dropped(was: &[toml::Value], now: &[toml::Value]) -> bool {
+    match (was, now) {
+        ([], []) => true,
+        ([], _) => false,
+        ([first, rest @ ..], _) => {
+            (now.first() == Some(first) && pairs_dropped(rest, &now[1..]))
+                || (first.as_str() == Some("--allow")
+                    && !rest.is_empty()
+                    && pairs_dropped(&rest[1..], now))
+        }
+    }
+}
+
+/// A `code` branch's component and the files a component owns outside the `wiring`, read
+/// from its code `files` over the specs at the merge base (`own-files`): the component is
+/// the first owner by ID of a file no `wiring` glob matches for which `foreign_in`, files
+/// outside the CLM root left out, returns nothing. Nothing when the root at the merge base
+/// sets no `wiring`, as when its `SPEC.md` doesn't load.
+fn own_files(
+    at: &At,
+    files: &[(char, &str)],
+) -> Result<(Vec<ForeignFile>, Option<String>), String> {
+    let graph = at.base_specs()?;
+    let Some(wiring) = graph.wiring() else {
+        return Ok((Vec::new(), None));
+    };
+    let mut owned: Vec<ForeignFile> = files
+        .iter()
+        .filter(|(_, f)| !outside_root(f) && !wiring.iter().any(|g| clm_coverage::matches(g, f)))
+        .filter_map(|(_, f)| {
+            Some(ForeignFile {
+                path: f.to_string(),
+                owner: clm_coverage::owner(graph, Path::new(f))?.to_string(),
+            })
+        })
+        .collect();
+    owned.sort_by(|a, b| a.path.cmp(&b.path));
+    let candidates: BTreeSet<&str> = owned.iter().map(|f| f.owner.as_str()).collect();
+    let component = candidates
+        .into_iter()
+        .find(|c| {
+            foreign_in(at, graph, wiring, c, files)
+                .iter()
+                .all(|f| f.owner.is_empty())
+        })
+        .map(str::to_string);
+    Ok((owned, component))
 }
 
 #[cfg(test)]
@@ -1463,7 +1760,7 @@ mod tests {
 
     #[test]
     fn resolves_are_read_at_the_merge_base() {
-        // req:gate/backlog-additions@85a57cc9
+        // req:gate/backlog-additions@1653493f
         let dir = tempfile::TempDir::new().unwrap();
         let d = dir.path();
         clm_git::git(d, &["init", "-q", "-b", "main"]).unwrap();
@@ -1479,11 +1776,13 @@ mod tests {
         let merge_base = clm_git::git(d, &["rev-parse", "HEAD"]).unwrap();
         commit(d, &[("changes/x/change.md", &change("x"))]);
         let root = Root::of(d, RULES).unwrap();
+        let base_specs = OnceCell::new();
         let at = At {
             repo: d,
             merge_base: &merge_base,
             head: "HEAD",
             root: &root,
+            base_specs: &base_specs,
         };
         let slugs = resolved_slugs(&at).unwrap();
         assert_eq!(slugs, BTreeSet::from(["z".to_string()]));

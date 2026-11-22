@@ -58,8 +58,8 @@ fn rules(out: &clm_gate::Outcome) -> Vec<&str> {
 
 #[test]
 fn scenario_a_removal_under_each_version() {
-    // req:gate/rules-version@373963b2
-    assert_eq!(RULES, 6);
+    // req:gate/rules-version@ad92df64
+    assert_eq!(RULES, 7);
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &format!("{HEAD}{Y}"));
@@ -85,7 +85,7 @@ fn scenario_a_removal_under_each_version() {
 
 #[test]
 fn scenario_a_changed_outcome_under_each_version() {
-    // req:gate/rules-version@373963b2
+    // req:gate/rules-version@ad92df64
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     let first = |then: &str| {
@@ -138,7 +138,7 @@ fn scenario_a_changed_outcome_under_each_version() {
 
 #[test]
 fn scenario_a_sentence_of_behaviour_that_holds_a_phrase_under_each_version() {
-    // req:gate/rules-version@373963b2
+    // req:gate/rules-version@ad92df64
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     let a = |statement: &str| {
@@ -212,7 +212,7 @@ fn scenario_a_sentence_of_behaviour_that_holds_a_phrase_under_each_version() {
 
 #[test]
 fn scenario_a_placement_phrase_across_a_line_under_each_version() {
-    // req:gate/rules-version@373963b2
+    // req:gate/rules-version@ad92df64
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     let a = |statement: &str| {
@@ -275,7 +275,7 @@ fn scenario_a_placement_phrase_across_a_line_under_each_version() {
 
 #[test]
 fn scenario_a_subdirectory_root_under_each_version() {
-    // req:gate/rules-version@373963b2
+    // req:gate/rules-version@ad92df64
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     git(top, &["init", "-q", "-b", "main"]);
@@ -297,7 +297,7 @@ fn scenario_a_subdirectory_root_under_each_version() {
 
 #[test]
 fn specs_that_dont_load_need_no_review_under_version_1() {
-    // req:gate/rules-version@373963b2
+    // req:gate/rules-version@ad92df64
     let dir = repo();
     let d = dir.path();
     // a requirement with no scenario doesn't load
@@ -333,7 +333,7 @@ fn specs_that_dont_load_need_no_review_under_version_1() {
 
 #[test]
 fn scenario_the_same_verdict_under_both() {
-    // req:gate/rules-version@373963b2
+    // req:gate/rules-version@ad92df64
     let dir = repo();
     let d = dir.path();
     write(d, "ARCHITECTURE.md", "invariants\n");
@@ -347,7 +347,7 @@ fn scenario_the_same_verdict_under_both() {
 
 #[test]
 fn scenario_a_version_this_gate_doesnt_know() {
-    // req:gate/rules-version@373963b2
+    // req:gate/rules-version@ad92df64
     let dir = repo();
     let d = dir.path();
     for version in [RULES + 1, 0] {

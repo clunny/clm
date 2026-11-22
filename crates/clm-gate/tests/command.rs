@@ -95,7 +95,7 @@ fn mixed_repo() -> TempDir {
 
 #[test]
 fn gate_prints_kind_and_blocks_mixed_pr() {
-    // req:gate/classify@3c5847d8
+    // req:gate/classify@872b6875
     let dir = mixed_repo();
     let (code, stdout) = clm(dir.path(), &["--base", "main", "--approved"]);
     assert_eq!(code, Some(1), "{stdout}");
@@ -105,8 +105,8 @@ fn gate_prints_kind_and_blocks_mixed_pr() {
 
 #[test]
 fn first_line() {
-    // req:gate/approval@492f6a25
-    // req:gate/needs-review@2373a9ad
+    // req:gate/approval@0b9e62cb
+    // req:gate/needs-review@3946ac29
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     git(d, &["init", "-q", "-b", "main"]);
@@ -140,7 +140,8 @@ fn first_line() {
 
 #[test]
 fn the_call_writes_what_clm_gate_prints() {
-    // req:gate/commands-in-crate@66389c3a
+    // req:gate/commands-in-crate@80d095b0
+    // req:gate/evaluate-at@a51bf198
     let dir = mixed_repo();
     let d = dir.path();
     let outcome = clm_gate::evaluate_at(d, "main", "HEAD", false).unwrap();
@@ -165,11 +166,11 @@ fn the_call_writes_what_clm_gate_prints() {
     );
     assert!(out.stderr.is_empty());
 
-    // A clean branch: the kind alone, and 0.
+    // A clean branch, an empty diff: the kind alone, `spec`, and 0.
     git(d, &["checkout", "-q", "main"]);
     let out = call(d, &["--base", "main"].map(OsStr::new));
     assert_eq!(out.status.code(), Some(0));
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), "code\n");
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "spec\n");
     assert!(out.stderr.is_empty());
 
     // `--root` overrides the root the call is given.
@@ -183,7 +184,7 @@ fn the_call_writes_what_clm_gate_prints() {
         ],
     );
     assert_eq!(out.status.code(), Some(0));
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), "code\n");
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "spec\n");
 
     // A base git can't resolve: the error on the error stream, and 2.
     let out = call(d, &["--base", "no-such-ref"].map(OsStr::new));
@@ -195,7 +196,7 @@ fn the_call_writes_what_clm_gate_prints() {
 
 #[test]
 fn arguments_it_cant_parse_return_2() {
-    // req:gate/commands-in-crate@66389c3a
+    // req:gate/commands-in-crate@80d095b0
     let dir = mixed_repo();
     let out = call(
         dir.path(),
@@ -206,4 +207,23 @@ fn arguments_it_cant_parse_return_2() {
     let err = String::from_utf8(out.stderr).unwrap();
     assert!(err.contains("--no-such-option"), "{err}");
     assert!(err.contains("Usage: clm gate"), "{err}");
+}
+
+#[test]
+fn scenario_help() {
+    // req:gate/commands-in-crate@80d095b0
+    let dir = TempDir::new().unwrap();
+    let out = call(dir.path(), &["--help"].map(OsStr::new));
+    assert_eq!(out.status.code(), Some(0));
+    assert!(out.stderr.is_empty());
+    let help = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        help.starts_with(
+            "Decide whether HEAD may merge into a base ref; exit 1 to block\n\nUsage: clm gate [OPTIONS] --base <BASE>\n"
+        ),
+        "{help}"
+    );
+    for option in ["--base", "--approved", "--root"] {
+        assert!(help.contains(option), "{option}: {help}");
+    }
 }

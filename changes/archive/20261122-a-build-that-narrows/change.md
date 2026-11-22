@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-build-that-narrows-a-public-call-clm-toml-allows-cannot-land-on-its-own]
 ---
 

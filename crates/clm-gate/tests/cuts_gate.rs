@@ -112,8 +112,8 @@ fn cut_lines(stdout: &str) -> Vec<&str> {
 
 #[test]
 fn scenario_a_removed_requirement() {
-    // req:gate/cuts@3b7d6e89
-    // req:gate/needs-review@2373a9ad
+    // req:gate/cuts@53fe4864
+    // req:gate/needs-review@3946ac29
     let two = format!(
         "{}{}",
         requirement("x", X, &["first"]),
@@ -166,7 +166,7 @@ fn cuts_of(base: String, head: String) -> (String, Vec<String>) {
 
 #[test]
 fn scenario_a_removed_scenario_and_a_renamed_one() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let base = requirement("x", X, &["first", "second"]);
     let line = "specs/a/SPEC.md: gate/cut: scenario \"second\" of a/x is gone";
     assert_eq!(
@@ -181,7 +181,7 @@ fn scenario_a_removed_scenario_and_a_renamed_one() {
 
 #[test]
 fn scenario_moved_to_another_component() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let dir = repo(&[
         ("a", requirement("x", X, &["the chain"])),
         ("b", requirement("y", X, &["other"])),
@@ -205,7 +205,7 @@ fn scenario_moved_to_another_component() {
 
 #[test]
 fn scenario_two_requirements_merged() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let base = format!(
         "{}{}",
         requirement("x", X, &["can edit"]),
@@ -222,7 +222,7 @@ fn scenario_two_requirements_merged() {
 
 #[test]
 fn scenario_a_name_another_requirement_already_held() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let dir = repo(&[
         ("a", requirement("x", X, &["s", "not switched on"])),
         ("b", requirement("y", X, &["not switched on"])),
@@ -244,7 +244,7 @@ fn scenario_a_name_another_requirement_already_held() {
 
 #[test]
 fn scenario_a_lost_sentence_a_placing_one_and_a_reworded_one() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let two = "The command SHALL print the list. It SHALL exit 1 when the list is empty.";
     let one = "The command SHALL print the list.";
     assert_eq!(
@@ -273,7 +273,7 @@ fn scenario_a_lost_sentence_a_placing_one_and_a_reworded_one() {
 
 #[test]
 fn scenario_a_sentence_that_places_a_test_across_a_line() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let one = "The command SHALL print the list.";
     let wrapped = format!("{one}\nEvery test of a's requirements SHALL\nsit in a's own files.");
     assert_eq!(
@@ -290,7 +290,7 @@ const LIST: &str = "# merged into a/y\nDELETE tests/t.rs::two\tits requirement i
 
 #[test]
 fn scenario_a_test_the_change_lists() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let dir = repo(&[("a", requirement("x", X, &["s"]))]);
     let d = dir.path();
     edit(
@@ -312,7 +312,7 @@ fn scenario_a_test_the_change_lists() {
 
 #[test]
 fn scenario_a_line_that_names_no_test() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let dir = repo(&[("a", requirement("x", X, &["s"]))]);
     let d = dir.path();
     // `one` holds no marker, so it names no citing test either
@@ -349,7 +349,7 @@ fn scenario_a_line_that_names_no_test() {
 
 #[test]
 fn scenario_a_list_whose_tests_are_gone() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let dir = repo(&[("a", requirement("x", X, &["s"]))]);
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -370,7 +370,7 @@ fn scenario_a_list_whose_tests_are_gone() {
 
 #[test]
 fn scenario_a_list_moved_into_the_archive() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let dir = repo(&[("a", requirement("x", X, &["s"]))]);
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -397,7 +397,7 @@ fn scenario_a_list_moved_into_the_archive() {
 
 #[test]
 fn specs_that_dont_load_need_review() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let dir = repo(&[("a", requirement("x", X, &["s"]))]);
     let d = dir.path();
     // a requirement with no scenario doesn't load
@@ -425,7 +425,7 @@ fn specs_that_dont_load_need_review() {
 
 #[test]
 fn evaluate_at_returns_the_cuts() {
-    // req:gate/evaluate-at@86fdcdf3
+    // req:gate/evaluate-at@a51bf198
     let dir = repo(&[("a", requirement("x", X, &["first", "second"]))]);
     let d = dir.path();
     edit(
@@ -454,7 +454,7 @@ const ARCH: &str = "# Arch\n\n## Constraints\n\n### Constraint: law\n**Principle
 
 #[test]
 fn the_graphs_hold_the_human_layers() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     // A rule that serves an architectural constraint loads only beside `ARCHITECTURE.md`.
     let serving =
         |reqs: &str| component("a", reqs).replace("paths:", "serves: [architecture/law]\npaths:");
@@ -486,7 +486,7 @@ fn the_graphs_hold_the_human_layers() {
 
 #[test]
 fn specs_that_dont_load_at_the_merge_base_need_review() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let broken = format!(
         "{}{}",
         requirement("x", X, &["s"]),
@@ -515,7 +515,7 @@ fn specs_that_dont_load_at_the_merge_base_need_review() {
 
 #[test]
 fn scenario_a_lowercase_shall() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let one = "The command SHALL print the list.";
     assert_eq!(
         cuts_of(
@@ -528,7 +528,7 @@ fn scenario_a_lowercase_shall() {
 
 #[test]
 fn scenario_a_phrase_inside_a_word() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let one = "The command SHALL print the list.";
     assert_eq!(
         cuts_of(
@@ -548,7 +548,7 @@ fn scenario_a_phrase_inside_a_word() {
 
 #[test]
 fn scenario_a_sentence_of_behaviour_that_holds_a_phrase() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let one = "The command SHALL print the list.";
     assert_eq!(
         cuts_of(
@@ -568,7 +568,7 @@ fn scenario_a_sentence_of_behaviour_that_holds_a_phrase() {
 
 #[test]
 fn scenario_a_sentence_ending_at_a_line_break() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let one = "It SHALL print the list.";
     assert_eq!(
         cuts_of(
@@ -586,7 +586,7 @@ const CAPS: &str = "# Capabilities\n\n## Capabilities\n\n### Capability: c\nA pe
 
 #[test]
 fn scenario_rules_that_serve_the_human_layers() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let serving =
         |reqs: &str| component("a", reqs).replace("paths:", "serves: [capability/c]\npaths:");
     let dir = repo(&[]);
@@ -619,7 +619,7 @@ fn loaded(requirements: &str) -> (clm_model::Graph, Vec<clm_model::Violation>) {
 
 #[test]
 fn scenario_specs_that_dont_load() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let good = requirement("x", X, &["s"]);
     let broken = format!("{good}{}", requirement("y", X, &[]));
     let dir = repo(&[("a", good.clone())]);
@@ -659,7 +659,7 @@ fn scenario_specs_that_dont_load() {
 
 #[test]
 fn scenario_unloaded_specs_and_a_listed_test() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let good = requirement("x", X, &["s"]);
     let broken = format!("{good}{}", requirement("y", X, &[]));
     let dir = repo(&[("a", good)]);
@@ -691,7 +691,7 @@ fn scenario_unloaded_specs_and_a_listed_test() {
 
 #[test]
 fn specs_that_load_at_neither_side_name_the_merge_base() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let broken = format!(
         "{}{}",
         requirement("x", X, &["s"]),
@@ -714,7 +714,7 @@ fn specs_that_load_at_neither_side_name_the_merge_base() {
 
 #[test]
 fn scenario_a_branch_that_touches_no_spec() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let dir = repo(&[("a", requirement("x", X, &["s"]))]);
     let d = dir.path();
     git(d, &["checkout", "-q", "main"]);
@@ -734,7 +734,7 @@ fn scenario_a_branch_that_touches_no_spec() {
 
 #[test]
 fn the_gate_lists_by_cuts_or_unloaded() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     // `clm gate` lists what `cuts_or_unloaded` returns, the call `web.worker` makes too, so
     // the two list one thing; it holds no rule of its own for specs that don't load.
     let lib = std::fs::read_to_string(
@@ -743,7 +743,7 @@ fn the_gate_lists_by_cuts_or_unloaded() {
     .unwrap();
     let lib: String = lib.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(lib.contains("let listed = cuts_or_unloaded("));
-    assert!(lib.contains("Ok((listed, widened, shortened_then))"));
+    assert!(lib.contains("Ok(ReadCuts { listed, widened, shortened_then,"));
     assert!(!lib.contains("Cut::Unloaded { revision"));
 }
 
@@ -766,7 +766,7 @@ fn outcome_line(name: &str) -> Vec<String> {
 
 #[test]
 fn scenario_a_reversed_outcome() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let head = RENAMED.replace("- THEN it exits 1", "- THEN it lands");
     assert_eq!(
         cuts_of(
@@ -779,7 +779,7 @@ fn scenario_a_reversed_outcome() {
 
 #[test]
 fn scenario_an_outcome_reflowed() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let head = RENAMED.replace("- THEN it exits 1", "- THEN it\n  exits 1");
     assert_eq!(
         cuts_of(
@@ -792,7 +792,7 @@ fn scenario_an_outcome_reflowed() {
 
 #[test]
 fn scenario_only_the_setting_changed() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let head = RENAMED.replace(
         "- GIVEN a test renamed in its file",
         "- GIVEN a test renamed into another file",
@@ -808,7 +808,7 @@ fn scenario_only_the_setting_changed() {
 
 #[test]
 fn scenario_two_scenarios_of_one_name() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let name = "not switched on";
     assert_eq!(
         cuts_of(
@@ -821,7 +821,7 @@ fn scenario_two_scenarios_of_one_name() {
 
 #[test]
 fn scenario_a_duplicate_the_head_loses() {
-    // req:gate/cuts@3b7d6e89
+    // req:gate/cuts@53fe4864
     let name = "not switched on";
     assert_eq!(
         cuts_of(
