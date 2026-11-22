@@ -105,7 +105,7 @@ fn pair(path: &str, owner: &str) -> (String, String) {
 
 // req:gate/own-files@a2deb7ec
 #[test]
-fn another_components_source_is_foreign_and_the_gate_ignores_it() {
+fn another_components_source_is_foreign_and_the_gate_blocks_it() {
     let dir = base(Some("[]"));
     let d = dir.path();
     write(d, "crates/a/src/lib.rs", "pub fn a2() {}\n");
@@ -113,13 +113,18 @@ fn another_components_source_is_foreign_and_the_gate_ignores_it() {
     commit(d, "change");
     assert_eq!(foreign(d, "a"), vec![pair("crates/b/src/lib.rs", "b")]);
     let outcome = evaluate_at(d, "main", "HEAD", false).unwrap();
-    assert_eq!(outcome.kind, Kind::Code);
-    assert!(outcome.violations.is_empty());
+    assert_eq!((outcome.kind, outcome.component), (Kind::Code, None));
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let status = clm_gate::command(["--base", "main"], d, &|_| None, &mut out, &mut err);
-    assert_eq!(status, 0, "{}", String::from_utf8_lossy(&err));
+    assert_eq!(status, 1, "{}", String::from_utf8_lossy(&err));
     let out = String::from_utf8(out).unwrap();
-    assert_eq!(out.lines().next(), Some("code"), "{out}");
+    let tail = "a code branch changes one component's files, the wiring and a capability test that component serves";
+    assert_eq!(
+        out,
+        format!(
+            "code\ncrates/a/src/lib.rs: gate/own-files: owned by a; {tail}\ncrates/b/src/lib.rs: gate/own-files: owned by b; {tail}\n"
+        )
+    );
 }
 
 // req:gate/own-files@a2deb7ec

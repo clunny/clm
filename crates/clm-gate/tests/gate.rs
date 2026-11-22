@@ -83,17 +83,17 @@ fn mixed_build_branch_says_to_leave_it_unbuilt() {
 
     let out = evaluate_at(dir.path(), "main", "HEAD", true).unwrap();
     assert_eq!(out.kind, Kind::Mixed);
-    let msg = &out.violations[0].message;
+    let msg = &out.violations[0].message.clone();
     assert!(
         msg.contains("leaves a requirement that needs a spec edit unbuilt")
             && msg.contains("`question`"),
         "{msg}"
     );
 
-    // a branch that isn't a build's gets no such advice
+    // the gate reads no branch name: a branch of another name gets the same advice
     git(dir.path(), &["checkout", "-q", "-b", "spec/z"]);
     let out = evaluate_at(dir.path(), "main", "HEAD", true).unwrap();
-    assert!(!out.violations[0].message.contains("question"));
+    assert_eq!(out.violations[0].message, *msg);
 }
 
 #[test]
@@ -2263,4 +2263,247 @@ fn nested_agents_md_is_code() {
     commit_all(dir.path(), "nested");
     let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
     assert_eq!(out.kind, Kind::Code);
+}
+
+#[test]
+fn scenario_what_the_mixed_line_names() {
+    // req:gate/classify@872b6875
+    let dir = repo();
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        &SPEC.replace("c\n", "changed\n"),
+    );
+    write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
+    commit_all(dir.path(), "both");
+    let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
+    assert_eq!(out.kind, Kind::Mixed);
+    let line = &out.violations[0];
+    assert_eq!(line.rule, "gate/classify");
+    assert!(
+        line.message
+            .contains("spec changes (specs/a/SPEC.md) with code changes (crates/x/src/lib.rs)"),
+        "{}",
+        line.message
+    );
+}
+
+#[test]
+fn scenario_only_files_left_out() {
+    // req:gate/classify@872b6875
+    // a backlog item filed alone
+    let dir = repo_with_changes();
+    let d = dir.path();
+    write(d, "backlog/new.md", "---\ntitle: N\nkind: idea\n---\n");
+    commit_all(d, "file");
+    let out = evaluate_at(d, "main", "HEAD", false).unwrap();
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, false, true),
+        "{:?}",
+        out.violations
+    );
+    assert!(out.cuts.is_empty());
+
+    // an archive move alone
+    let dir = repo_with_changes();
+    let d = dir.path();
+    archive_x(d, "---\nstatus: done\n---\n\n# x\n");
+    commit_all(d, "archive");
+    let out = evaluate_at(d, "main", "HEAD", false).unwrap();
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, false, true),
+        "{:?}",
+        out.violations
+    );
+
+    // no commit of its own
+    let dir = repo_with_changes();
+    let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, false, true),
+        "{:?}",
+        out.violations
+    );
+}
+
+#[test]
+fn scenario_edits_that_arent_status_only() {
+    // req:gate/status-only-exemption@618fa96d
+    let code = ("crates/x/src/lib.rs", Some("pub fn y() {}\n"));
+    // the status line beside the Contract
+    let dir = tier_repo(&[("specs/x/SPEC.md", SPEC)]);
+    let both = SPEC
+        .replace("status: specd", "status: active")
+        .replace("\nc\n", "\nchanged\n");
+    let out = tier_after(&dir, &[code, ("specs/x/SPEC.md", Some(&both))], false);
+    assert_eq!(out.kind, Kind::Mixed, "status and Contract");
+    // the status line beside a removed `-- note`
+    let noted = format!("{SPEC}-- note\n");
+    let dir = tier_repo(&[("specs/x/SPEC.md", &noted)]);
+    let flipped = SPEC.replace("status: specd", "status: active");
+    let out = tier_after(&dir, &[code, ("specs/x/SPEC.md", Some(&flipped))], false);
+    assert_eq!(out.kind, Kind::Mixed, "-- note");
+    // a status-looking line added to the trusted keys
+    let dir = tier_repo(&[("docs/allowed_signers", "a ssh-ed25519 AAAA\n")]);
+    let keys = "a ssh-ed25519 AAAA\nstatus: ssh-ed25519 BBBB\n";
+    let out = tier_after(&dir, &[code, ("docs/allowed_signers", Some(keys))], false);
+    assert_eq!(out.kind, Kind::Mixed, "allowed_signers");
+    // only a status line of ARCHITECTURE.md
+    let dir = tier_repo(&[("ARCHITECTURE.md", "status: a\n\nx\n")]);
+    let out = tier_after(
+        &dir,
+        &[code, ("ARCHITECTURE.md", Some("status: b\n\nx\n"))],
+        false,
+    );
+    assert_eq!(out.kind, Kind::Mixed, "ARCHITECTURE.md");
+}
+
+#[test]
+fn scenario_a_change_with_no_change_md() {
+    // req:gate/needs-review@3946ac29
+    let dir = tier_repo(&[]);
+    let deltas = delta("## ADDED Requirements\n");
+    let out = tier_after(&dir, &[("changes/x/deltas/a.md", Some(&deltas))], false);
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, true, false),
+        "{:?}",
+        out.violations
+    );
+}
+
+#[test]
+fn scenario_a_status_flip_alone() {
+    // req:gate/needs-review@3946ac29
+    let change = "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
+    let dir = tier_repo(&[("changes/x/change.md", change)]);
+    let flipped = change.replace("status: applied", "status: done");
+    let out = tier_after(&dir, &[("changes/x/change.md", Some(&flipped))], false);
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, false, true),
+        "{:?}",
+        out.violations
+    );
+}
+
+#[test]
+fn scenario_a_human_step_filed_alone() {
+    // req:gate/undeclared-burden@2d817b7e
+    let dir = tier_repo(&[]);
+    let out = tier_after(&dir, &[("backlog/h.md", Some(HUMAN_ITEM))], false);
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, false, true),
+        "{:?}",
+        out.violations
+    );
+
+    let dir = tier_repo(&[("clm.toml", STAMPED)]);
+    let stamped = STAMPED.replace("0.17.0", "0.18.0");
+    let out = tier_after(
+        &dir,
+        &[
+            ("backlog/h.md", Some(HUMAN_ITEM)),
+            ("clm.toml", Some(&stamped)),
+        ],
+        false,
+    );
+    assert_eq!(rules(&out), ["gate/undeclared-burden"]);
+    assert_eq!(out.violations[0].path, Path::new("backlog/h.md"));
+}
+
+#[test]
+fn scenario_adding_to_history() {
+    // req:gate/archive-immutable@ed0c1a6d
+    let dir = repo_with_changes();
+    let d = dir.path();
+    write(d, "changes/archive/old/notes.md", "more\n");
+    commit_all(d, "add to history");
+    let out = evaluate_at(d, "main", "HEAD", true).unwrap();
+    assert_eq!(
+        rules(&out),
+        ["gate/archive-immutable"],
+        "{:?}",
+        out.violations
+    );
+    assert_eq!(
+        out.violations[0].path,
+        Path::new("changes/archive/old/notes.md")
+    );
+
+    let dir = repo_with_changes();
+    let d = dir.path();
+    write(
+        d,
+        "changes/archive/y/change.md",
+        "---\nstatus: done\n---\n\n# y\n",
+    );
+    commit_all(d, "a new archived change");
+    let out = evaluate_at(d, "main", "HEAD", true).unwrap();
+    assert!(
+        !rules(&out).contains(&"gate/archive-immutable"),
+        "{:?}",
+        out.violations
+    );
+}
+
+#[test]
+fn scenario_a_bug_filed_under_the_old_key() {
+    // req:gate/item-components@c70518a7
+    let dir = repo_with_bug(&BUG_X.replace("components:", "nodes:"));
+    let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
+    assert_eq!((out.kind, rules(&out)), (Kind::Code, vec![]));
+
+    let both = BUG_X.replace("components: [a]", "nodes: [a]\ncomponents: [a]");
+    let dir = repo_with_bug(&both);
+    let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
+    assert_eq!(out.kind, Kind::Mixed, "both keys");
+
+    let dir = repo_with_bug(&BUG_X.replace("components: [a]", "components: a"));
+    let out = fix_with_trailer(&dir, FIX_A, "Resolves: backlog/x");
+    assert_eq!(out.kind, Kind::Mixed, "a string");
+}
+
+#[test]
+fn scenario_entries_judged_on_odd_names() {
+    // req:gate/resolves-named-items@29d5b2f2
+    let idea = "---\ntitle: Z\nkind: idea\n---\n";
+    let dir = tier_repo(&[]);
+    let out = tier_after(
+        &dir,
+        &[
+            (
+                "changes/c/change.md",
+                Some(&change_md("resolves: [sub/z]\n")),
+            ),
+            ("backlog/sub/z.md", Some(idea)),
+        ],
+        true,
+    );
+    let named = unnamed(&out);
+    assert_eq!(named.len(), 1, "{:?}", out.violations);
+    assert!(named[0].message.contains("`c`") && named[0].message.contains("`sub/z`"));
+
+    let dir = tier_repo(&[]);
+    let out = tier_after(
+        &dir,
+        &[
+            (
+                "changes/c/change.md",
+                Some(&change_md("resolves: [café]\n")),
+            ),
+            ("backlog/café.md", Some(idea)),
+        ],
+        true,
+    );
+    assert!(unnamed(&out).is_empty(), "{:?}", out.violations);
+
+    let dir = tier_repo(&[]);
+    let broken = "---\nstatus: [\nresolves: [nope]\n---\n";
+    let out = tier_after(&dir, &[("changes/c/change.md", Some(broken))], true);
+    assert!(unnamed(&out).is_empty(), "{:?}", out.violations);
 }

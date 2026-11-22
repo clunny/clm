@@ -59,7 +59,7 @@ fn rules(out: &clm_gate::Outcome) -> Vec<&str> {
 #[test]
 fn scenario_a_removal_under_each_version() {
     // req:gate/rules-version@ad92df64
-    assert_eq!(RULES, 6);
+    assert_eq!(RULES, 7);
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &format!("{HEAD}{Y}"));

@@ -141,6 +141,7 @@ fn first_line() {
 #[test]
 fn the_call_writes_what_clm_gate_prints() {
     // req:gate/commands-in-crate@80d095b0
+    // req:gate/evaluate-at@a51bf198
     let dir = mixed_repo();
     let d = dir.path();
     let outcome = clm_gate::evaluate_at(d, "main", "HEAD", false).unwrap();
@@ -165,11 +166,11 @@ fn the_call_writes_what_clm_gate_prints() {
     );
     assert!(out.stderr.is_empty());
 
-    // A clean branch: the kind alone, and 0.
+    // A clean branch, an empty diff: the kind alone, `spec`, and 0.
     git(d, &["checkout", "-q", "main"]);
     let out = call(d, &["--base", "main"].map(OsStr::new));
     assert_eq!(out.status.code(), Some(0));
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), "code\n");
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "spec\n");
     assert!(out.stderr.is_empty());
 
     // `--root` overrides the root the call is given.
@@ -183,7 +184,7 @@ fn the_call_writes_what_clm_gate_prints() {
         ],
     );
     assert_eq!(out.status.code(), Some(0));
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), "code\n");
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "spec\n");
 
     // A base git can't resolve: the error on the error stream, and 2.
     let out = call(d, &["--base", "no-such-ref"].map(OsStr::new));

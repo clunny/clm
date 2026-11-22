@@ -743,7 +743,7 @@ fn the_gate_lists_by_cuts_or_unloaded() {
     .unwrap();
     let lib: String = lib.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(lib.contains("let listed = cuts_or_unloaded("));
-    assert!(lib.contains("Ok((listed, widened, shortened_then))"));
+    assert!(lib.contains("Ok(ReadCuts { listed, widened, shortened_then,"));
     assert!(!lib.contains("Cut::Unloaded { revision"));
 }
 
