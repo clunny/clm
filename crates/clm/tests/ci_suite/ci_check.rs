@@ -52,6 +52,13 @@ const DOC_TESTS: &str = "cargo test --doc --workspace";
 const WASM: &str = "cargo build --target wasm32-unknown-unknown";
 /// The crates built for wasm only with their default features disabled (ci/web-checks).
 const NO_DEFAULTS: [&str; 4] = ["clm-check", "clm-orchestrator", "clm-view", "clm-ledger"];
+/// Every wasm build the script runs (ci/web-checks), as the `cargo` fake records it.
+fn wasm_builds() -> Vec<String> {
+    std::iter::once(format!("{WASM} -p clm-model"))
+        .chain(NO_DEFAULTS.map(|k| format!("{WASM} --no-default-features -p {k}")))
+        .chain([format!("{WASM} -p clm-web")])
+        .collect()
+}
 const BROWSER_INSTALL_CI: &str = "web$ npx playwright install --with-deps chromium";
 const BROWSER_INSTALL: &str = "web$ npx playwright install chromium";
 const WEB_TEST: &str = "web$ npm test";
@@ -72,14 +79,14 @@ use crate::exec::write_exec as executable;
 
 /// A work tree holding the real scripts, `web/` and `plugin-panel/`, with the fakes in `bin/`
 /// beside it.
-struct Tree {
-    dir: TempDir,
+pub(crate) struct Tree {
+    pub(crate) dir: TempDir,
     /// The script a run runs, under `.github/scripts/`: `ci-check.sh` unless a test says.
-    script: &'static str,
+    pub(crate) script: &'static str,
 }
 
 impl Tree {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let t = Tree {
             dir: TempDir::new().unwrap(),
             script: "ci-check.sh",
@@ -178,7 +185,7 @@ impl Tree {
     }
 
     /// The fakes first, then this process's `PATH`.
-    fn path(&self) -> std::ffi::OsString {
+    pub(crate) fn path(&self) -> std::ffi::OsString {
         let bin = self.dir.path().join("bin");
         let system = std::env::var_os("PATH").unwrap_or_default();
         std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&system))).unwrap()
@@ -259,7 +266,7 @@ impl Tree {
     }
 
     /// As `output`, with each of `env` also set.
-    fn output_env(
+    pub(crate) fn output_env(
         &self,
         ci: Option<&str>,
         fail: &str,
@@ -275,7 +282,10 @@ impl Tree {
             .env("CI_LOG", &log)
             .env("CI_FAIL", fail)
             .env_remove("CI")
-            .env_remove("CLM_SELECTION");
+            .env_remove("CLM_SELECTION")
+            // nextest sets these for the test running this; the script must not inherit them.
+            .env_remove("NEXTEST_PROFILE")
+            .env_remove("NEXTEST_CONFIG");
         if let Some(ci) = ci {
             c.env("CI", ci);
         }
@@ -289,8 +299,8 @@ impl Tree {
 
 #[test]
 fn every_check() {
-    // req:ci/web-checks@72a04372
-    // req:ci/detector-tools@86210325
+    // req:ci/web-checks@53cd2ed8
+    // req:ci/detector-tools@1984d752
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     // The real `detector-tools.sh` runs first: its install is the first `cargo` call.
@@ -303,21 +313,18 @@ fn every_check() {
         "{log:?}"
     );
     // `clm-ledger` without its `git` feature (ledger/ledger-builds-for-wasm).
-    let no_defaults = NO_DEFAULTS.map(|k| format!("{WASM} --no-default-features -p {k}"));
     for cmd in [
         "cargo fmt --all --check".to_owned(),
         "cargo clippy --all-targets -- -D warnings".to_owned(),
         NEXTEST_ALL.to_owned(),
         DOC_TESTS.to_owned(),
-        format!("{WASM} -p clm-model -p clm-context"),
-        format!("{WASM} -p clm-web"),
         "plugin-panel$ npm ci --ignore-scripts".to_owned(),
         "plugin-panel$ npm test".to_owned(),
         "web$ npm ci --ignore-scripts".to_owned(),
         WEB_TEST.to_owned(),
     ]
     .into_iter()
-    .chain(no_defaults)
+    .chain(wasm_builds())
     {
         assert!(log.contains(&cmd), "no `{cmd}` in {log:?}");
     }
@@ -354,7 +361,7 @@ fn every_check() {
     );
     // `clm land` runs `clm check` itself, after the command.
     assert!(!log.iter().any(|l| l.contains(" check")), "{log:?}");
-    // req:ci/no-model-steps@00759a81
+    // req:ci/no-model-steps@2b603986
     // Nor runs `clm` or a model session: `claude` only validates.
     assert!(!ran(&log, "clm "), "{log:?}");
     let claude = log.iter().filter(|l| l.starts_with("claude "));
@@ -365,70 +372,24 @@ fn every_check() {
                 .all(|l| l.starts_with("claude plugin validate ")),
         "{log:?}"
     );
-    // However `clm` is named in the script.
-    let lines = script_lines("ci-check.sh");
-    let runs_clm = |w: &str| w == "clm" || w.ends_with("/clm") || w.ends_with("clm.sh");
-    assert!(
-        !lines.iter().any(|l| l.split_whitespace().any(runs_clm)),
-        "{lines:?}"
-    );
-}
-
-#[test]
-fn every_wasm_build_stands_alone() {
-    // req:ci/web-checks@72a04372
-    // Whole lines, so nothing like `|| true` follows a build. Each `--no-default-features`
-    // crate builds on its own: built with a crate that depends on it with its default
-    // features, cargo would turn them back on.
-    let text = script("ci-check.sh");
-    assert!(text.contains("\nset -euo pipefail\n"), "{text}");
-    let lines = script_lines("ci-check.sh");
-    // Any line naming the target is a wasm build, and each has the one shape checked here.
-    let builds: Vec<_> = lines
-        .iter()
-        .filter(|l| l.contains("wasm32-unknown-unknown"))
-        .collect();
-    for build in &builds {
-        assert!(build.starts_with(WASM), "{build}");
-        if build.contains("--no-default-features") {
-            assert_eq!(build.matches(" -p ").count(), 1, "{build}");
-        }
-    }
-    // These build only with their default features disabled, and turn none back on.
-    for krate in NO_DEFAULTS {
-        let named: Vec<_> = builds
-            .iter()
-            .filter(|b| b.split([' ', '=']).any(|w| w.ends_with(krate)))
-            .collect();
-        assert!(!named.is_empty(), "no wasm build of {krate}");
-        for build in named {
-            assert!(build.contains("--no-default-features"), "{build}");
-            let turns_on = |w: &str| {
-                w.starts_with("--features") || w.starts_with("-F") || w == "--all-features"
-            };
-            assert!(!build.split_whitespace().any(turns_on), "{build}");
-        }
-    }
 }
 
 #[test]
 fn broken_wasm_build_fails() {
-    // req:ci/web-checks@72a04372
-    for build in [
-        format!("{WASM} -p clm-model -p clm-context"),
-        format!("{WASM} --no-default-features -p clm-ledger"),
-        format!("{WASM} -p clm-web"),
-    ] {
+    // req:ci/web-checks@53cd2ed8
+    // Each of the six builds failing in turn: the run fails and nothing runs after it.
+    let builds = wasm_builds();
+    assert_eq!(builds.len(), 6);
+    for build in builds {
         let (ok, log) = Tree::new().run(None, &build);
-        assert!(!ok, "{log:?}");
-        // Nothing runs after the failing step.
+        assert!(!ok, "{build}: {log:?}");
         assert_eq!(log.last(), Some(&build), "{log:?}");
     }
 }
 
 #[test]
 fn failing_panel_test_fails() {
-    // req:ci/web-checks@72a04372
+    // req:ci/web-checks@53cd2ed8
     for step in [
         "plugin-panel$ npm ci --ignore-scripts",
         "plugin-panel$ npm test",
@@ -443,7 +404,7 @@ fn failing_panel_test_fails() {
 
 #[test]
 fn a_web_change_leaves_the_site_out_and_a_site_change_runs_it() {
-    // req:ci/web-checks@72a04372
+    // req:ci/web-checks@53cd2ed8
     let (ok, log) = Tree::new().run_selecting("file web/src/app.ts\n");
     assert!(ok, "{log:?}");
     let web: Vec<_> = WEB_SUITE.iter().chain(&CAP_WEB_SUITE).copied().collect();
@@ -462,7 +423,7 @@ fn a_web_change_leaves_the_site_out_and_a_site_change_runs_it() {
 
 #[test]
 fn packages_not_built_yet_run_nothing() {
-    // req:ci/web-checks@72a04372
+    // req:ci/web-checks@53cd2ed8
     let (ok, log) = Tree::new().without_packages().run(None, "");
     assert!(ok, "{log:?}");
     let both: Vec<_> = PANEL_SUITE.iter().chain(&WEB_SUITE).copied().collect();
@@ -504,7 +465,7 @@ fn failing_on_both_attempts_fails() {
 
 #[test]
 fn failing_capability_package_fails() {
-    // req:ci/web-checks@72a04372
+    // req:ci/web-checks@53cd2ed8
     for step in CAP_PANEL_SUITE
         .iter()
         .chain(&CAP_WEB_SUITE)
@@ -513,25 +474,6 @@ fn failing_capability_package_fails() {
         let (ok, log) = Tree::new().run(None, step);
         assert!(!ok, "{step}: {log:?}");
         assert_eq!(log.last().map(String::as_str), Some(*step), "{log:?}");
-    }
-}
-
-/// Trees built and run on many threads at once never fail: a fake is never run while some
-/// process holds it open for writing (`Text file busy`).
-#[test]
-fn trees_built_and_run_in_parallel_never_run_a_busy_fake() {
-    let threads: Vec<_> = (0..16)
-        .map(|_| {
-            std::thread::spawn(|| {
-                for _ in 0..32 {
-                    let (ok, log) = Tree::new().run(None, "");
-                    assert!(ok, "{log:?}");
-                }
-            })
-        })
-        .collect();
-    for t in threads {
-        t.join().unwrap();
     }
 }
 
@@ -544,7 +486,7 @@ fn runs_before(log: &[String], first: &str, then: &str) -> bool {
 
 #[test]
 fn in_ci_installs_the_browser_with_deps() {
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/browser-install@7732c646
     let (ok, log) = Tree::new().run(Some("true"), "");
     assert!(ok, "{log:?}");
     assert!(runs_before(&log, BROWSER_INSTALL_CI, WEB_TEST), "{log:?}");
@@ -553,7 +495,7 @@ fn in_ci_installs_the_browser_with_deps() {
 
 #[test]
 fn outside_ci_installs_the_browser_without_deps() {
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/browser-install@7732c646
     // Unset, and any value but `true`.
     for ci in [None, Some("false"), Some("1"), Some("")] {
         let (ok, log) = Tree::new().run(ci, "");
@@ -571,7 +513,7 @@ fn outside_ci_installs_the_browser_without_deps() {
 
 #[test]
 fn failing_browser_install_fails() {
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/browser-install@7732c646
     let (ok, log) = Tree::new().run(None, BROWSER_INSTALL);
     assert!(!ok, "{log:?}");
     assert_eq!(log.last().map(String::as_str), Some(BROWSER_INSTALL));
@@ -580,7 +522,7 @@ fn failing_browser_install_fails() {
 
 #[test]
 fn capability_package_installs_the_browser() {
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/browser-install@7732c646
     const CAP_INSTALL: &str = "capabilities/web$ npx playwright install chromium";
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
@@ -609,7 +551,7 @@ fn capability_package_installs_the_browser() {
 
 #[test]
 fn detector_tools_installs_cargo_machete_pinned() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     let lines = script_lines("detector-tools.sh");
     let install = lines
         .iter()
@@ -638,9 +580,9 @@ fn detector_tools_installs_cargo_machete_pinned() {
 }
 
 /// What breaks `ci/detector-tools` in a `clm.toml` and `detector-tools.sh`'s lines: a
-/// detector whose tool has no install line its `hint` repeats, a `clm` detector whose hint
-/// doesn't name `scripts/dev-install.sh`, a script line that installs `clm` or `sh`; a detector
-/// that runs `sh` on a file of the repository (under `root`) needs no line.
+/// detector whose tool has no install line its `hint` repeats, a script line that installs
+/// `clm` or `sh`; a `clm` detector, and one that runs `sh` on a file of the repository (under
+/// `root`), needs no line.
 fn detector_tool_problems(
     config: &toml::Table,
     lines: &[String],
@@ -650,20 +592,15 @@ fn detector_tool_problems(
     for d in config["detectors"].as_array().unwrap() {
         let tool = d["command"][0].as_str().unwrap();
         let hint = d["hint"].as_str().unwrap();
-        if tool == "clm" {
-            // It runs the clone's own `clm`, or the binary under test; nothing installs it.
-            if !hint.contains("scripts/dev-install.sh") {
-                problems.push(format!(
-                    "`clm` detector's hint `{hint}` doesn't name scripts/dev-install.sh"
-                ));
-            }
-        } else if tool == "sh"
-            && d["command"]
-                .get(1)
-                .and_then(|p| p.as_str())
-                .is_some_and(|p| !p.starts_with('/') && !p.contains("..") && root.join(p).is_file())
-        {
-            // `sh <file in the repository>` needs only `sh` and `grep`; nothing installs it.
+        let command: Vec<&str> = d["command"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|w| w.as_str())
+            .collect();
+        if needs_no_install(&command, root) {
+            // A `clm` detector runs the clone's own `clm`, or the binary under test, and
+            // `sh <file in the repository>` needs only `sh` and `grep`: nothing installs either.
         } else if hint.split_whitespace().last() != Some(tool) {
             problems.push(format!("hint `{hint}` doesn't install `{tool}`"));
         } else if !lines.iter().any(|l| l == hint) {
@@ -677,6 +614,16 @@ fn detector_tool_problems(
         problems.push(format!("detector-tools.sh installs sh: `{line}`"));
     }
     problems
+}
+
+/// Whether a detector's `command` needs no tool installed (ci/detector-tools): its first word is
+/// `clm`, or it is `sh` and the path of a file of the repository under `root`.
+fn needs_no_install(command: &[&str], root: &std::path::Path) -> bool {
+    command.first() == Some(&"clm")
+        || (command.first() == Some(&"sh")
+            && command.get(1).is_some_and(|p| {
+                !p.starts_with('/') && !p.contains("..") && root.join(p).is_file()
+            }))
 }
 
 /// Whether a line installs `sh`: an install command naming it.
@@ -698,22 +645,57 @@ fn installs_clm(line: &str) -> bool {
 
 #[test]
 fn every_detector_has_its_tool_installed() {
-    // req:ci/detector-tools@86210325
-    // Each detector's tool has an install line, and its `hint` is that line, so the
-    // version is pinned in one place; a `clm` detector has none.
+    // req:ci/detector-tools@1984d752
+    // The detectors that need a tool installed: neither a `clm` one nor `sh` on a file of the
+    // repository. Each one's hint ends in its tool and starts with a command a fake stands in
+    // for.
     let config: toml::Table = fs::read_to_string(repo().join("clm.toml"))
         .unwrap()
         .parse()
         .unwrap();
-    let lines = script_lines("detector-tools.sh");
-    assert!(!config["detectors"].as_array().unwrap().is_empty());
-    let problems = detector_tool_problems(&config, &lines, &repo());
-    assert!(problems.is_empty(), "{problems:?}: {lines:?}");
+    let detectors = config["detectors"].as_array().unwrap();
+    assert!(!detectors.is_empty());
+    let mut tree = Tree::new();
+    tree.script = "detector-tools.sh";
+    let mut hints = Vec::new();
+    for d in detectors {
+        let command: Vec<&str> = d["command"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|w| w.as_str().unwrap())
+            .collect();
+        let exempt = needs_no_install(&command, &repo());
+        if exempt {
+            continue;
+        }
+        let hint = d["hint"].as_str().unwrap();
+        assert_eq!(
+            hint.split_whitespace().last(),
+            Some(command[0]),
+            "the hint `{hint}` doesn't end in the detector's tool"
+        );
+        tree.fake(hint.split_whitespace().next().unwrap(), FAKE);
+        hints.push(hint.to_owned());
+    }
+    assert!(!hints.is_empty());
+    let (ok, log) = tree.run(None, "");
+    assert!(ok, "{log:?}");
+    for hint in &hints {
+        assert!(
+            log.contains(hint),
+            "detector-tools.sh didn't run `{hint}`: {log:?}"
+        );
+    }
+    for call in &log {
+        assert!(!installs_clm(call), "installs clm: {call}");
+        assert!(!installs_sh(call), "installs sh: {call}");
+    }
 }
 
 #[test]
 fn clm_detector_needs_no_install_line() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     let machete = "cargo install --locked --version 0.9.2 cargo-machete";
     let config = |clm_hint: &str| -> toml::Table {
         format!(
@@ -735,12 +717,6 @@ fn clm_detector_needs_no_install_line() {
         detector_tool_problems(&ok, &lines(&[]), &repo()),
         Vec::<String>::new()
     );
-    // A `clm` detector whose hint doesn't say how a clone gets `main`'s `clm`.
-    let problems = detector_tool_problems(&config("cargo install clm"), &lines(&[]), &repo());
-    assert!(
-        problems.len() == 1 && problems[0].contains("dev-install.sh"),
-        "{problems:?}"
-    );
     // The script installing `clm` itself, however it is written.
     for install in [
         "cargo install --locked clm",
@@ -761,7 +737,7 @@ fn clm_detector_needs_no_install_line() {
 
 #[test]
 fn sh_detector_on_a_repository_file_needs_no_install_line() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     let machete = "cargo install --locked --version 0.9.2 cargo-machete";
     let config = |script: &str| -> toml::Table {
         format!(
@@ -796,7 +772,7 @@ fn sh_detector_on_a_repository_file_needs_no_install_line() {
 
 #[test]
 fn only_detector_tools_installs_tools() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     // Other tools, such as the release's `cargo-zigbuild`, may be installed elsewhere.
     let config: toml::Table = fs::read_to_string(repo().join("clm.toml"))
         .unwrap()
@@ -829,24 +805,51 @@ fn only_detector_tools_installs_tools() {
 
 #[test]
 fn check_script_installs_the_tools() {
-    // req:ci/detector-tools@86210325
-    let lines = script_lines("ci-check.sh");
-    let tools = lines
-        .iter()
-        .position(|l| l == ".github/scripts/detector-tools.sh")
-        .unwrap_or_else(|| panic!("ci-check.sh doesn't run detector-tools.sh: {lines:?}"));
-    let cargo = lines
-        .iter()
-        .position(|l| l.split_whitespace().any(|w| w == "cargo"))
-        .unwrap_or_else(|| panic!("no cargo line: {lines:?}"));
+    // req:ci/detector-tools@1984d752
+    let (ok, log) = Tree::new().run(None, "");
+    assert!(ok, "{log:?}");
+    let cargo = cargo_calls(&log);
     assert!(
-        tools < cargo,
-        "detector-tools.sh runs after cargo: {lines:?}"
+        is_pinned_install(cargo[0], "cargo-machete"),
+        "the first cargo call: {cargo:?}"
     );
+    let fmt = cargo
+        .iter()
+        .position(|c| c.starts_with("cargo fmt"))
+        .unwrap_or_else(|| panic!("no fmt: {cargo:?}"));
+    assert!(0 < fmt, "{cargo:?}");
+    // The only other `cargo install` is `test-tools.sh`'s.
+    let installs: Vec<_> = cargo
+        .iter()
+        .filter(|c| c.starts_with("cargo install"))
+        .collect();
+    assert_eq!(installs.len(), 2, "{installs:?}");
     assert!(
-        !lines.iter().any(|l| l.contains("cargo install")),
-        "{lines:?}"
+        is_pinned_install(installs[1], "cargo-nextest"),
+        "{installs:?}"
     );
+}
+
+/// The `cargo` calls a run made, in order.
+fn cargo_calls(log: &[String]) -> Vec<&str> {
+    log.iter()
+        .map(String::as_str)
+        .filter(|l| l.starts_with("cargo "))
+        .collect()
+}
+
+/// Whether `call` is `cargo install --locked --version <x.y.z> <krate>`, an exact version.
+fn is_pinned_install(call: &str, krate: &str) -> bool {
+    let words: Vec<&str> = call.split_whitespace().collect();
+    let ["cargo", "install", "--locked", "--version", version, name] = words[..] else {
+        return false;
+    };
+    let parts: Vec<&str> = version.split('.').collect();
+    name == krate
+        && parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// The commands a run ran to run Rust tests, `cargo nextest run` or `cargo test`, in order.
@@ -878,11 +881,9 @@ fn assert_whole_tree_checks(log: &[String]) {
     for cmd in [
         "cargo fmt --all --check".to_owned(),
         "cargo clippy --all-targets -- -D warnings".to_owned(),
-        format!("{WASM} -p clm-model -p clm-context"),
-        format!("{WASM} -p clm-web"),
     ]
     .into_iter()
-    .chain(NO_DEFAULTS.map(|k| format!("{WASM} --no-default-features -p {k}")))
+    .chain(wasm_builds())
     {
         assert!(log.contains(&cmd), "no `{cmd}` in {log:?}");
     }
@@ -890,7 +891,7 @@ fn assert_whole_tree_checks(log: &[String]) {
 
 #[test]
 fn one_integration_test() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) =
         Tree::new().run_selecting("node orchestrator.run\nfile crates/clm/tests/run.rs\n");
     assert!(ok, "{log:?}");
@@ -904,7 +905,7 @@ fn one_integration_test() {
 
 #[test]
 fn helper_and_source_files() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting(
         "file crates/clm-land/tests/common/mod.rs\nfile crates/clm-check/src/lib.rs\n",
     );
@@ -920,14 +921,14 @@ fn helper_and_source_files() {
 
 #[test]
 fn web_file() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting("file web/src/app.ts\n");
     assert!(ok, "{log:?}");
     assert_whole_tree_checks(&log);
     assert_eq!(tests_run(&log), Vec::<&str>::new());
     let web: Vec<_> = WEB_SUITE.iter().chain(&CAP_WEB_SUITE).copied().collect();
     assert_eq!(npm_run(&log), web);
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     assert!(!log.iter().any(|l| l.starts_with("claude")), "{log:?}");
     let (ok, log) = Tree::new().run_selecting("file plugin-panel/src/panel.ts\n");
     assert!(ok, "{log:?}");
@@ -937,13 +938,13 @@ fn web_file() {
         .copied()
         .collect();
     assert_eq!(npm_run(&log), panel);
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     assert!(log.contains(&PANEL_VALIDATE.to_owned()), "{log:?}");
 }
 
 #[test]
 fn capability_package_file() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting(
         "file capabilities/panel/watch-beside-chat.test.ts\n\
          file capabilities/web/follow-from-browser.spec.ts\n\
@@ -989,7 +990,7 @@ const NO_CLAUDE: &str = "skipped claude plugin validate: claude is not on PATH";
 
 #[test]
 fn a_refused_module_fails_the_check() {
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     let (ok, log) = Tree::new().run(None, PANEL_VALIDATE);
     assert!(!ok, "{log:?}");
     // It runs after the panel's tests, and nothing runs after it fails.
@@ -1004,7 +1005,7 @@ fn a_refused_module_fails_the_check() {
 
 #[test]
 fn a_valid_module_passes() {
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     // Exactly once, with neither `--strict` nor `--profile`, beside the plugin's own
@@ -1015,7 +1016,7 @@ fn a_valid_module_passes() {
 
 #[test]
 fn no_claude_on_path_skips() {
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     let (ok, log, stderr) = Tree::new().run_without_claude(None);
     assert!(ok, "{log:?} {stderr}");
     assert!(stderr.lines().any(|l| l == NO_CLAUDE), "{stderr}");
@@ -1024,8 +1025,59 @@ fn no_claude_on_path_skips() {
 }
 
 #[test]
+fn no_validation_waits_on_a_prompt() {
+    // req:ci/panel-validate@b6720879
+    // A `claude` that reads a line from its standard input and records whether it read one,
+    // and the script's own standard input a pipe holding `y`, then closed.
+    let tree = Tree::new();
+    tree.fake(
+        "claude",
+        "#!/usr/bin/env bash\nif read -r line; then read=yes; else read=no; fi\necho \"claude $* read=$read\" >> \"$CI_LOG\"\n",
+    );
+    let log = tree.dir.path().join("log");
+    let mut child = Command::new(".github/scripts/ci-check.sh")
+        .current_dir(tree.work())
+        .env("PATH", tree.path())
+        .env("CI_LOG", &log)
+        .env("CI_FAIL", "")
+        .env_remove("CI")
+        .env_remove("CLM_SELECTION")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        use std::io::Write;
+        let mut stdin = child.stdin.take().unwrap();
+        // A script that ended before reading leaves the pipe closed: the line is then unread,
+        // and the run's status says the rest.
+        match stdin.write_all(b"y\n") {
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
+            other => other.unwrap(),
+        }
+    }
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let log = fs::read_to_string(&log).unwrap();
+    let claude: Vec<&str> = log.lines().filter(|l| l.starts_with("claude ")).collect();
+    assert_eq!(
+        claude,
+        [
+            "claude plugin validate plugin-panel read=no",
+            "claude plugin validate plugin read=no",
+        ],
+        "{log}"
+    );
+}
+
+#[test]
 fn panel_not_selected_runs_no_claude() {
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     let (ok, log) = Tree::new().run_selecting("file crates/clm/src/main.rs\n");
     assert!(ok, "{log:?}");
     assert!(!log.iter().any(|l| l.starts_with("claude")), "{log:?}");
@@ -1082,24 +1134,29 @@ fn plugin_not_selected_runs_no_plugin_validation() {
 
 #[test]
 fn everything() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let tree = Tree::new();
     let all_line = tree.run_selecting("all Cargo.lock\nfile crates/clm/tests/run.rs\n");
     let unset = tree.run(None, "");
     let empty = tree.run_env(None, "", Some("".as_ref()));
-    // A selection file that isn't there can't narrow anything.
+    // A selection path where there is no regular file can't narrow anything: nothing there,
+    // or a directory.
     let missing = tree.dir.path().join("missing");
     let missing = tree.run_env(None, "", Some(missing.as_os_str()));
+    let directory = tree.dir.path().join("a-directory");
+    fs::create_dir_all(&directory).unwrap();
+    let directory = tree.run_env(None, "", Some(directory.as_os_str()));
     for (what, (ok, log)) in [
         ("all line", all_line),
         ("unset", unset),
         ("empty", empty),
         ("missing file", missing),
+        ("directory", directory),
     ] {
         assert!(ok, "{what}: {log:?}");
         assert_whole_tree_checks(&log);
         assert_eq!(tests_run(&log), [NEXTEST_ALL, DOC_TESTS], "{what}");
-        // req:ci/panel-validate@82219e3e
+        // req:ci/panel-validate@b6720879
         assert!(log.contains(&PANEL_VALIDATE.to_owned()), "{what}: {log:?}");
         let all: Vec<_> = PANEL_SUITE
             .iter()
@@ -1115,7 +1172,7 @@ fn everything() {
 
 #[test]
 fn empty_selection() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting("");
     assert!(ok, "{log:?}");
     assert_whole_tree_checks(&log);
@@ -1125,7 +1182,7 @@ fn empty_selection() {
 
 #[test]
 fn one_cargo_test_per_package_in_package_order() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting(
         "file crates/git/tests/b.rs\n\
          node clm\n\
@@ -1154,8 +1211,29 @@ fn one_cargo_test_per_package_in_package_order() {
 }
 
 #[test]
+fn a_deleted_crate_selects_nothing() {
+    // req:ci/selected-tests@a8fbc68d
+    // `crates/gone/` holds no `Cargo.toml`, and `crates/ws/`'s names a `[workspace]` and no
+    // `[package]`.
+    let tree = Tree::new();
+    let ws = tree.work().join("crates/ws");
+    fs::create_dir_all(ws.join("src")).unwrap();
+    fs::write(
+        ws.join("Cargo.toml"),
+        "[workspace]\nmembers = []\nname = \"ws\"\n",
+    )
+    .unwrap();
+    fs::write(ws.join("src/lib.rs"), "").unwrap();
+    let (ok, log) = tree.run_selecting(
+        "file crates/gone/src/lib.rs\nfile crates/gone/tests/x.rs\nfile crates/ws/src/lib.rs\n",
+    );
+    assert!(ok, "{log:?}");
+    assert_eq!(tests_run(&log), Vec::<&str>::new(), "{log:?}");
+}
+
+#[test]
 fn only_file_lines_select() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     // Lines that would select something if their path were read without the `file ` word.
     let (ok, log) = Tree::new().run_selecting(
         "node crates/clm/tests/run.rs\n\
@@ -1174,8 +1252,8 @@ fn only_file_lines_select() {
 
 #[test]
 fn web_not_selected_installs_no_browser() {
-    // req:ci/selected-tests@bf58d446
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/selected-tests@a8fbc68d
+    // req:ci/browser-install@7732c646
     let (ok, log) = Tree::new().run_selecting("file web/index.html\n");
     assert!(ok, "{log:?}");
     assert!(runs_before(&log, BROWSER_INSTALL, WEB_TEST), "{log:?}");
@@ -1189,7 +1267,7 @@ fn web_not_selected_installs_no_browser() {
 
 #[test]
 fn a_failing_selected_test_fails() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(
@@ -1210,7 +1288,7 @@ fn ran(log: &[String], prefix: &str) -> bool {
 
 #[test]
 fn the_pin_changing_runs_its_crate_s_tests() {
-    // req:ci/no-model-steps@00759a81
+    // req:ci/no-model-steps@2b603986
     let (ok, log) = Tree::new().run_selecting("file crates/clm-run/superpowers.pin\n");
     assert!(ok, "{log:?}");
     assert_eq!(
@@ -1224,7 +1302,7 @@ fn the_pin_changing_runs_its_crate_s_tests() {
 
 #[test]
 fn a_deleted_eval_file_only_validates_the_plugin() {
-    // req:ci/no-model-steps@00759a81
+    // req:ci/no-model-steps@2b603986
     let (ok, log) = Tree::new().run_selecting("file plugin/evals/superpowers-unattended/run.sh\n");
     assert!(ok, "{log:?}");
     let claude: Vec<_> = log.iter().filter(|l| l.starts_with("claude ")).collect();
@@ -1253,12 +1331,13 @@ if [ "$1 $2" = "llvm-cov nextest" ] && [ -e "$(dirname "$0")/fail-cargo" ]; then
 /// An `npx` that records its arguments, led by its directory, prints a version with more words
 /// after it for `vitest --version`, and for `vitest run` writes `lcov.info` under the
 /// `--coverage.reportsDirectory` it is given, with a relative record and an absolute one. It
-/// fails that run where `bin/fail-<dir>` exists.
+/// fails that run where `bin/fail-<dir>` exists, and prints no version where
+/// `bin/no-version-<dir>` does.
 const NPX_COVERAGE: &str = r#"#!/usr/bin/env bash
 here=$(basename "$PWD")
 echo "$here\$ npx $*" >> "$CI_LOG"
 if [ "$*" = "vitest --version" ]; then
-  echo "vitest/5.0.5 linux-x64 node-v22.0.0"
+  [ -e "$(dirname "$0")/no-version-$here" ] || echo "vitest/5.0.5 linux-x64 node-v22.0.0"
 elif [ "$1 $2" = "vitest run" ]; then
   [ ! -e "$(dirname "$0")/fail-$here" ] || exit 1
   for a; do
@@ -1274,7 +1353,7 @@ fi
 "#;
 
 /// A tree that runs `coverage.sh`, with the fakes for it.
-fn coverage_tree() -> Tree {
+pub(crate) fn coverage_tree() -> Tree {
     let mut tree = Tree::new();
     tree.script = "coverage.sh";
     executable(
@@ -1298,7 +1377,7 @@ fn tracefile_sources(tree: &Tree) -> Vec<String> {
 
 #[test]
 fn coverage_writes_one_tracefile_from_three_suites() {
-    // req:ci/coverage-script@7b99367f
+    // req:ci/coverage-script@ae8713bc
     let tree = coverage_tree();
     let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
     assert!(ok, "{log:?} {stderr}");
@@ -1375,7 +1454,7 @@ fn coverage_writes_one_tracefile_from_three_suites() {
 
 #[test]
 fn coverage_reads_the_same_from_a_checkout_reached_through_a_link() {
-    // req:ci/coverage-script@7b99367f
+    // req:ci/coverage-script@ae8713bc
     let tree = coverage_tree();
     // The tool writes real paths, `pwd -P`'s; the shell's `$PWD` names the checkout by its link.
     let physical = CARGO_COVERAGE.replace("\"$PWD/crates", "\"$(pwd -P)/crates");
@@ -1409,7 +1488,7 @@ fn coverage_reads_the_same_from_a_checkout_reached_through_a_link() {
 
 #[test]
 fn a_failing_coverage_suite_fails_the_script() {
-    // req:ci/coverage-script@7b99367f
+    // req:ci/coverage-script@ae8713bc
     let tree = coverage_tree();
     // A tracefile from an earlier run stays as it was.
     fs::create_dir_all(tree.work().join("target")).unwrap();
@@ -1442,88 +1521,99 @@ fn a_failing_coverage_suite_fails_the_script() {
 }
 
 #[test]
+fn no_vitest_version_fails_before_the_coverage_install() {
+    // req:ci/coverage-script@ae8713bc
+    let tree = coverage_tree();
+    fs::create_dir_all(tree.work().join("target")).unwrap();
+    fs::write(tree.work().join("target/lcov.info"), "SF:old\n").unwrap();
+    fs::write(tree.dir.path().join("bin/no-version-plugin-panel"), "").unwrap();
+    let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr
+            .lines()
+            .any(|l| l == "coverage.sh: no vitest version in plugin-panel"),
+        "{stderr}"
+    );
+    assert!(
+        !log.iter().any(
+            |l| l.starts_with("plugin-panel$ npm install") && l.contains("@vitest/coverage-v8")
+        ),
+        "{log:?}"
+    );
+    assert_eq!(tracefile_sources(&tree), ["old"]);
+}
+
+#[test]
 fn nothing_else_runs_coverage() {
-    // req:ci/coverage-script@7b99367f
-    for path in [
-        script_path("ci-check.sh"),
-        script_path("detector-tools.sh"),
-        repo().join(".github/workflows/release.yml"),
-    ] {
-        let text = fs::read_to_string(&path).unwrap();
-        for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
-            assert!(
-                !line.contains("coverage.sh") && !line.contains("llvm-cov"),
-                "{}: {line}",
-                path.display()
-            );
-        }
+    // req:ci/coverage-script@ae8713bc
+    let tree = Tree::new();
+    executable(&tree.work().join(".github/scripts/coverage.sh"), FAKE);
+    let (ok, log) = tree.run(None, "");
+    assert!(ok, "{log:?}");
+    assert!(!log.iter().any(|l| l.contains("llvm-cov")), "{log:?}");
+    assert!(
+        !log.iter().any(|l| l.starts_with("coverage.sh")),
+        "the stand-in ran: {log:?}"
+    );
+    for (file, job, step) in crate::workflow_steps() {
+        let run = step["run"].as_str().unwrap_or("");
+        assert!(
+            !run.contains("coverage.sh") && !run.contains("llvm-cov"),
+            "{file} `{job}`: {run}"
+        );
     }
 }
 
 #[test]
 fn coverage_tools_are_pinned() {
-    // req:ci/coverage-script@7b99367f
-    let lines = script_lines("coverage.sh");
-    let tools = lines
+    // req:ci/coverage-script@ae8713bc
+    let tree = coverage_tree();
+    let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
+    assert!(ok, "{log:?} {stderr}");
+    let cargo = cargo_calls(&log);
+    let installs: Vec<_> = cargo
         .iter()
-        .position(|l| l == ".github/scripts/detector-tools.sh")
-        .unwrap_or_else(|| panic!("coverage.sh doesn't run detector-tools.sh: {lines:?}"));
-    let test_tools = lines
+        .filter(|c| c.starts_with("cargo install"))
+        .collect();
+    assert_eq!(installs.len(), 3, "{cargo:?}");
+    for (call, krate) in installs
         .iter()
-        .position(|l| l == ".github/scripts/test-tools.sh")
-        .unwrap_or_else(|| panic!("coverage.sh doesn't run test-tools.sh: {lines:?}"));
-    let cargo = lines
+        .zip(["cargo-machete", "cargo-nextest", "cargo-llvm-cov"])
+    {
+        assert!(is_pinned_install(call, krate), "{krate}: {cargo:?}");
+    }
+    let run = cargo
         .iter()
-        .position(|l| l.split_whitespace().any(|w| w == "cargo"))
-        .unwrap_or_else(|| panic!("no cargo line: {lines:?}"));
-    assert!(tools < test_tools && test_tools < cargo, "{lines:?}");
-    let install = lines
+        .position(|c| c.starts_with("cargo llvm-cov nextest "))
+        .unwrap_or_else(|| panic!("no llvm-cov nextest: {cargo:?}"));
+    let last_install = cargo
         .iter()
-        .find(|l| l.starts_with("cargo install ") && l.ends_with(" cargo-llvm-cov"))
-        .unwrap_or_else(|| panic!("no cargo-llvm-cov install: {lines:?}"));
-    let words: Vec<&str> = install.split_whitespace().collect();
-    assert!(words.contains(&"--locked"), "{install}");
-    let version = words
-        .iter()
-        .position(|w| *w == "--version")
-        .and_then(|i| words.get(i + 1))
-        .unwrap_or_else(|| panic!("no --version: {install}"));
-    let parts: Vec<&str> = version.split('.').collect();
+        .rposition(|c| c.starts_with("cargo install"))
+        .unwrap();
+    assert!(last_install < run, "{cargo:?}");
     assert!(
-        parts.len() == 3
-            && parts
-                .iter()
-                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
-        "not an exact x.y.z version: {version}"
-    );
-    // The tests run under nextest, the instrumentation goes in `RUSTFLAGS`, which the nested
-    // wasm builds remove, and a failing test fails the run.
-    let llvm_cov = lines
-        .iter()
-        .find(|l| l.starts_with("cargo llvm-cov "))
-        .unwrap_or_else(|| panic!("no cargo llvm-cov line: {lines:?}"));
-    assert!(
-        llvm_cov.starts_with("cargo llvm-cov nextest "),
-        "{llvm_cov}"
-    );
-    assert!(
-        llvm_cov
+        cargo[run]
             .split_whitespace()
             .any(|w| w == "--no-rustc-wrapper"),
-        "{llvm_cov}"
+        "{}",
+        cargo[run]
     );
     assert!(
-        !lines.iter().any(|l| l.contains("--ignore-run-fail")),
-        "{lines:?}"
+        !log.iter().any(|l| l.contains("--ignore-run-fail")),
+        "{log:?}"
     );
-    let vitest = lines
+    let vitest: Vec<_> = log
         .iter()
-        .find(|l| l.contains("@vitest/coverage-v8@"))
-        .unwrap_or_else(|| panic!("no @vitest/coverage-v8 install: {lines:?}"));
-    assert!(
-        vitest.split_whitespace().any(|w| w == "--no-save"),
-        "{vitest}"
-    );
+        .filter(|l| l.contains("@vitest/coverage-v8@"))
+        .collect();
+    assert_eq!(vitest.len(), 2, "{log:?}");
+    for install in vitest {
+        assert!(
+            install.split_whitespace().any(|w| w == "--no-save"),
+            "{install}"
+        );
+    }
     let mode = fs::metadata(script_path("coverage.sh"))
         .unwrap()
         .permissions()
@@ -1533,7 +1623,7 @@ fn coverage_tools_are_pinned() {
 
 #[test]
 fn nextest_replaces_cargo_test_but_for_doctests() {
-    // req:ci/nextest-runner@26bed54d
+    // req:ci/nextest-runner@b769cc74
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     assert_eq!(tests_run(&log), [NEXTEST_ALL, DOC_TESTS]);
@@ -1547,33 +1637,13 @@ fn nextest_replaces_cargo_test_but_for_doctests() {
 
 #[test]
 fn test_tools_installs_only_nextest_pinned() {
-    // req:ci/test-tools@8da0e835
-    let lines = script_lines("test-tools.sh");
-    let installs: Vec<_> = lines
-        .iter()
-        .filter(|l| l.contains("cargo install"))
-        .collect();
-    assert_eq!(installs.len(), 1, "{lines:?}");
-    let words: Vec<&str> = installs[0].split_whitespace().collect();
-    assert!(
-        words.starts_with(&["cargo", "install"]) && words.last() == Some(&"cargo-nextest"),
-        "{}",
-        installs[0]
-    );
-    assert!(words.contains(&"--locked"), "{}", installs[0]);
-    let version = words
-        .iter()
-        .position(|w| *w == "--version")
-        .and_then(|i| words.get(i + 1))
-        .unwrap_or_else(|| panic!("no --version: {}", installs[0]));
-    let parts: Vec<&str> = version.split('.').collect();
-    assert!(
-        parts.len() == 3
-            && parts
-                .iter()
-                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
-        "not an exact x.y.z version: {version}"
-    );
+    // req:ci/test-tools@70e8cd5d
+    let mut tree = Tree::new();
+    tree.script = "test-tools.sh";
+    let (ok, log) = tree.run(None, "");
+    assert!(ok, "{log:?}");
+    assert_eq!(log.len(), 1, "{log:?}");
+    assert!(is_pinned_install(&log[0], "cargo-nextest"), "{log:?}");
     let mode = fs::metadata(script_path("test-tools.sh"))
         .unwrap()
         .permissions()
@@ -1583,50 +1653,25 @@ fn test_tools_installs_only_nextest_pinned() {
 
 #[test]
 fn test_tools_run_between_the_detector_tools_and_cargo() {
-    // req:ci/test-tools@8da0e835
-    for script in ["ci-check.sh", "coverage.sh"] {
-        let lines = script_lines(script);
-        let at = |line: &str| {
-            lines
-                .iter()
-                .position(|l| l == line)
-                .unwrap_or_else(|| panic!("{script} doesn't run {line}: {lines:?}"))
-        };
-        let detectors = at(".github/scripts/detector-tools.sh");
-        let tests = at(".github/scripts/test-tools.sh");
-        let cargo = lines
-            .iter()
-            .position(|l| l.split_whitespace().any(|w| w == "cargo"))
-            .unwrap();
-        assert!(detectors < tests && tests < cargo, "{script}: {lines:?}");
-    }
-    // And nothing else runs it, but the release workflow's `prepare` job, or installs
-    // `cargo-nextest`.
-    let github = repo().join(".github");
-    for dir in ["workflows", "scripts"] {
-        for entry in fs::read_dir(github.join(dir)).unwrap() {
-            let path = entry.unwrap().path();
-            let name = path.file_name().unwrap().to_string_lossy().into_owned();
-            let text = fs::read_to_string(&path).unwrap();
-            for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
-                assert!(
-                    !line.contains("test-tools.sh")
-                        || ["ci-check.sh", "coverage.sh", "release.yml"].contains(&name.as_str()),
-                    "{name} runs test-tools.sh: {line}"
-                );
-                assert!(
-                    !(line.contains("cargo install") && line.contains("cargo-nextest"))
-                        || name == "test-tools.sh",
-                    "{name} installs cargo-nextest: {line}"
-                );
-            }
-        }
+    // req:ci/test-tools@70e8cd5d
+    let check = Tree::new();
+    let coverage = coverage_tree();
+    for tree in [&check, &coverage] {
+        let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
+        assert!(ok, "{}: {log:?} {stderr}", tree.script);
+        let cargo = cargo_calls(&log);
+        assert!(
+            is_pinned_install(cargo[0], "cargo-machete")
+                && is_pinned_install(cargo[1], "cargo-nextest"),
+            "{}: {cargo:?}",
+            tree.script
+        );
     }
 }
 
 #[test]
 fn a_full_run_times_every_phase_it_runs() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     let out = tree.output(None, "", None, &tree.path());
     assert!(out.status.success());
@@ -1666,7 +1711,7 @@ fn phase_lines(text: &str) -> Vec<&str> {
 
 #[test]
 fn a_passing_run_prints_its_phase_times() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
@@ -1708,7 +1753,7 @@ fn a_passing_run_prints_its_phase_times() {
 
 #[test]
 fn a_failing_phase_prints_only_where_it_failed() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     tree.fake(
         "cargo",
@@ -1744,7 +1789,7 @@ fn a_failing_phase_prints_only_where_it_failed() {
 
 #[test]
 fn a_clock_that_steps_back_prints_no_negative_time() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
@@ -1791,7 +1836,7 @@ fn a_clock_that_steps_back_prints_no_negative_time() {
 
 #[test]
 fn a_failure_after_the_clock_steps_back_prints_no_negative_time() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
@@ -1811,6 +1856,41 @@ fn a_failure_after_the_clock_steps_back_prints_no_negative_time() {
         stderr.lines().last(),
         Some("ci-check: failed in clippy after 0s, 0s total"),
         "{stderr}"
+    );
+}
+
+#[test]
+fn a_failure_before_the_first_phase_is_in_setup() {
+    // req:ci/phase-times@10cc2378
+    let tree = Tree::new();
+    let file = tree.dir.path().join("selection");
+    fs::write(&file, "file crates/clm/src/main.rs\n").unwrap();
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&file).is_ok() {
+        // Root reads any file: there is no unreadable selection to give it.
+        return;
+    }
+    let out = tree.output(None, "", Some(file.as_os_str()), &tree.path());
+    assert!(!out.status.success());
+    let log = fs::read_to_string(tree.dir.path().join("log")).unwrap_or_default();
+    assert!(!log.lines().any(|l| l.starts_with("cargo ")), "{log}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains("::group::"), "{stdout}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let last = stderr.lines().last().unwrap_or("");
+    let rest = last
+        .strip_prefix("ci-check: failed in setup after ")
+        .unwrap_or_else(|| panic!("{stderr}"));
+    let (took, total) = rest.split_once("s, ").unwrap();
+    assert!(
+        !took.is_empty() && took.bytes().all(|b| b.is_ascii_digit()),
+        "{last}"
+    );
+    assert!(
+        total
+            .strip_suffix("s total")
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())),
+        "{last}"
     );
 }
 
@@ -1990,14 +2070,14 @@ fn cargo_variables(land_dir: Option<&str>, target: Option<&str>) -> Vec<String> 
 
 #[test]
 fn a_lands_place_holds_its_cargo_output() {
-    // req:ci/land-dir@23d7af00
+    // req:ci/land-dir@ad032ef2
     let calls = cargo_variables(Some("/tmp/x/land"), None);
     assert!(calls.iter().all(|c| c == "/tmp/x/land 0"), "{calls:?}");
 }
 
 #[test]
 fn without_a_land_place_the_cargo_variables_stay() {
-    // req:ci/land-dir@23d7af00
+    // req:ci/land-dir@ad032ef2
     for land_dir in [None, Some("")] {
         let calls = cargo_variables(land_dir, Some("/tmp/y"));
         assert!(calls.iter().all(|c| c == "/tmp/y unset"), "{calls:?}");
@@ -2359,7 +2439,7 @@ mutant() {
 
 /// A tree that runs `mutate.sh` with the fakes for it and a `coverage.sh` that logs and writes
 /// `target/lcov.info`, and the plan file `plan` holding `plan_text`.
-fn mutate_tree(plan_text: &str) -> Tree {
+pub(crate) fn mutate_tree(plan_text: &str) -> Tree {
     let mut tree = Tree::new();
     tree.script = "mutate.sh";
     let scripts = tree.work().join(".github/scripts");
@@ -2435,7 +2515,7 @@ impl Tree {
 
     /// The command that runs `mutate.sh` on the plan with `extra` environment variables, its
     /// earlier run's logs removed.
-    fn mutate_command(&self, extra: &[(&str, &str)]) -> Command {
+    pub(crate) fn mutate_command(&self, extra: &[(&str, &str)]) -> Command {
         let log = self.dir.path().join("log");
         let _ = fs::remove_file(&log);
         for kept in [
@@ -2475,7 +2555,9 @@ impl Tree {
             .env("CLM_MUTATE_RESULT", self.dir.path().join("result"))
             .env_remove("CLM_LAND_DIR")
             .env_remove("CLM_MUTATE_JOBS")
-            .env_remove("CLM_SLOT");
+            .env_remove("CLM_SLOT")
+            .env_remove("NEXTEST_PROFILE")
+            .env_remove("NEXTEST_CONFIG");
         without_git_env(&mut c);
         for (k, v) in extra {
             c.env(k, v);
@@ -2499,7 +2581,7 @@ impl Tree {
     }
 }
 
-const RUST_BLOCK: &str = "requirement a/x\ncode crates/clm-check/src/lib.rs\ndiff /tmp/the.diff\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n";
+pub(crate) const RUST_BLOCK: &str = "requirement a/x\ncode crates/clm-check/src/lib.rs\ndiff /tmp/the.diff\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n";
 
 #[test]
 fn a_rust_requirement_whose_test_notices_is_killed() {

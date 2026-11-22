@@ -91,6 +91,28 @@ cargo update --workspace
 corpus_dir=crates/clm-upgrade/corpus
 cargo build --release --locked -p clm || fail "couldn't build clm from the bumped tree"
 clm_bin=$(realpath "${CARGO_TARGET_DIR:-target}")/release/clm
+# A release never freezes a migration whose requirement is still to be built
+# (upgrade/shipped-migrations-frozen): both runs, whatever the first gave, then refuse. A run
+# that exits non-zero (1: specs that don't load; 4: a required migration not taken) is reported
+# by its status alone, one that exits 0 by the lines it printed, a blocked one's included.
+failed=false
+for component in upgrade init; do
+  status=0
+  # A trailing `.` keeps the newlines `$(...)` would strip, so a blank line counts as a line.
+  out=$("$clm_bin" pending "$component" && echo .) || status=$?
+  out=${out%.}
+  if [ "$status" -ne 0 ]; then
+    echo "release: clm pending $component exited $status" >&2
+    failed=true
+  elif [ -n "$out" ]; then
+    {
+      echo "release: requirements of upgrade or init are pending:"
+      printf '%s\n' "${out%$'\n'}"
+    } >&2
+    failed=true
+  fi
+done
+if $failed; then exit 1; fi
 "$corpus_dir/make.sh" "$version" "$clm_bin" || fail "couldn't make the upgrade corpus entry"
 "$clm_bin" upgrade --lock "$version" || fail "couldn't lock the migrations"
 

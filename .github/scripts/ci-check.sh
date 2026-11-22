@@ -178,7 +178,7 @@ timed clippy cargo clippy --all-targets -- -D warnings
 # they fail faster. Each `--no-default-features` crate builds on its own: built with a crate
 # that depends on it with its default features, cargo would turn them back on.
 wasm_builds() {
-  cargo build --target wasm32-unknown-unknown -p clm-model -p clm-context
+  cargo build --target wasm32-unknown-unknown -p clm-model
   cargo build --target wasm32-unknown-unknown --no-default-features -p clm-check
   cargo build --target wasm32-unknown-unknown --no-default-features -p clm-orchestrator
   cargo build --target wasm32-unknown-unknown --no-default-features -p clm-view
