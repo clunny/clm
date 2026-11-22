@@ -1161,13 +1161,20 @@ fn merged_tree(root: &Path, main: &str, branch: &str) -> Result<Option<String>, 
     }
 }
 
-/// `clm run --finish <node>`, once a build's subagent has returned (`build-places`): frees
-/// the place `<node>` and, when `impl/<node>` has landed, removes each clean worktree under
-/// the main worktree's `.claude/worktrees/` that has it checked out and whose lock no
-/// running process holds (`vcs/held-lock`). Reads no queue state,
+/// `clm run --finish <node>` (`build-places`): frees the place `<node>` and, when
+/// `impl/<node>` has landed, removes each clean worktree under the main worktree's
+/// `.claude/worktrees/` that has it checked out and whose lock no running process holds
+/// (`vcs/held-lock`), or, when `returned` says the build's subagent has handed back,
+/// whatever its lock says. Reads no queue state,
 /// so it works for any node. Returns what it did, one line each. A relative `root` is read
 /// from `cwd`, the directory it runs in, whose worktree is never removed.
-pub fn finish(root: &Path, cwd: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
+pub fn finish(
+    root: &Path,
+    cwd: &Path,
+    node: &str,
+    expiry_hours: u64,
+    returned: bool,
+) -> Result<String, Error> {
     let root = &cwd
         .join(root)
         .canonicalize()
@@ -1208,9 +1215,10 @@ pub fn finish(root: &Path, cwd: &Path, node: &str, expiry_hours: u64) -> Result<
             }
             if !clean(&wt.path)? {
                 done.push(format!("kept {}: uncommitted changes", wt.path.display()));
-            } else if wt.held {
+            } else if wt.held && !returned {
                 // A build still running there, waiting on its land or writing its report
-                // (`a-held-lock-keeps-a-worktree`): kept, and left locked.
+                // (`a-held-lock-keeps-a-worktree`): kept, and left locked. Once its subagent
+                // has handed back, the lock Claude Code keeps names only the session.
                 done.push(format!(
                     "kept {}: a running process holds its lock",
                     wt.path.display()
@@ -1295,7 +1303,7 @@ fn free(root: &Path, node: &str, branch: &str, holder: &Holder) -> Result<(), Er
 /// it landed (`merged-claims-released`): a clean worktree on it, then the local branch. Both
 /// hold nothing `origin/main` lacks. A landed worktree whose lock a running process holds
 /// (`vcs/held-lock`) may still be in use, so it is kept and the run refused
-/// (`a-held-lock-keeps-a-worktree`).
+/// (`a-held-lock-keeps-a-worktree`) until `clm run --finish <node> --returned` removes it.
 fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
     let local = format!("refs/heads/{branch}");
     let holder = checked_out(root, node, branch)?;
@@ -1306,8 +1314,9 @@ fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
             if h.held {
                 return Err(Error::Refused(format!(
                     "{} has the landed `{branch}` checked out and a running process holds \
-                     its lock, so it may still be in use; run `{node}` again once that \
-                     process has ended, or, when nothing works in it any more, run \
+                     its lock, so it may still be in use; once its build has handed back, \
+                     run `clm run --finish {node} --returned`, which removes it, and run \
+                     `{node}` again, or, when nothing works in it any more, run \
                      `git worktree unlock {}` first",
                     h.path.display(),
                     h.path.display()

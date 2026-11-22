@@ -15,9 +15,14 @@ pub struct RunArgs {
     /// A component ID, as `clm next` prints it.
     #[arg(value_name = "COMPONENT")]
     pub node: String,
-    /// Finish the component's build, whose subagent has returned, instead of starting one.
+    /// Finish the component's build instead of starting one: free its place and, once it
+    /// has landed, tidy its worktree.
     #[arg(long)]
     pub finish: bool,
+    /// With `--finish`: the build's subagent has handed back, so a lock a running process
+    /// holds keeps no worktree.
+    #[arg(long, requires = "finish")]
+    pub returned: bool,
     /// Hours without a commit after which a claim lapses.
     #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
     pub expiry: u64,
@@ -100,7 +105,7 @@ where
         if args.finish {
             return printed(
                 "run",
-                crate::finish(root, cwd, &args.node, args.expiry),
+                crate::finish(root, cwd, &args.node, args.expiry, args.returned),
                 out,
                 err,
             );
