@@ -343,3 +343,42 @@ fn a_commit_answered_from_the_record_prints_no_search_note() {
     assert!(unknown_notes(&out).is_empty(), "{:?}", out.notes);
     assert!(out.line.contains("culprit unknown"), "{}", out.line);
 }
+
+#[test]
+fn a_bisected_record_kept_local() {
+    // req:verify/verify-run@e732f1e5
+    // An `origin` that refuses every push to the ledger: the search's record stays on the
+    // clone's own ledger branch, and the notes say so.
+    let (f, [_, l1, l2, l3]) = three_lands("mode = \"import\"\nworkflow = \"slow\"");
+    f.red(&l3, &[&l1, &l2, &l3], VerifyMode::Import);
+    write_exec(
+        &f.path("origin.git/hooks/pre-receive"),
+        "#!/bin/sh\nwhile read old new ref; do\n  case $ref in refs/heads/clm/ledger/*) exit 1;; esac\ndone\n",
+    );
+    let out = f.run(&Request::Bisect(l3.clone()));
+    assert_eq!(
+        out.line,
+        format!(
+            "verify failed {} culprit {} components b",
+            &l3[..7],
+            &l2[..7]
+        )
+    );
+    assert_eq!(out.code, 1);
+    assert!(
+        out.notes
+            .iter()
+            .any(|n| n == "the record is committed locally; `clm reconnect` pushes it"),
+        "{:?}",
+        out.notes
+    );
+    // The clone's own ledger branch holds the record.
+    let own = f.own_records();
+    assert!(
+        matches!(
+            own.last(),
+            Some(Body::Verified { passed: false, culprit: Some(c), .. }) if *c == l2
+        ),
+        "{own:?}"
+    );
+}
