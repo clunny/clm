@@ -694,17 +694,32 @@ if [ "$1 $2" = "release list" ]; then cat "$dir/releases"; fi
 exit 0
 "#;
 
-/// Builds nothing: `cargo build` writes a `clm` whose `upgrade --lock <version>` appends a line
-/// for migration `b` to `crates/clm-upgrade/migrations.lock`. Any other call is the real cargo.
+/// Builds nothing: `cargo build` writes a `clm` that records its arguments in `bin/clm.log`;
+/// whose `pending <component>` prints a checkout line on stderr and, on stdout, what
+/// `bin/pending-<component>` holds (nothing when absent), exiting with the status in
+/// `bin/pending-<component>-exit` (0 when absent); and whose `upgrade --lock <version>` appends
+/// a line for migration `b` to `crates/clm-upgrade/migrations.lock`. Any other call is the real
+/// cargo.
 const FAKE_CARGO: &str = r#"#!/usr/bin/env bash
 if [ "$1" = build ]; then
   mkdir -p "$CARGO_TARGET_DIR/release"
-  cat > "$CARGO_TARGET_DIR/release/clm" <<'CLM'
-#!/bin/sh
+  bin=$(cd "$(dirname "$0")" && pwd)
+  {
+    echo '#!/bin/sh'
+    echo "bin='$bin'"
+    cat <<'CLM'
+echo "$*" >> "$bin/clm.log"
+if [ "$1" = pending ]; then
+  echo "commit 0000000" >&2
+  [ ! -f "$bin/pending-$2" ] || cat "$bin/pending-$2"
+  [ ! -f "$bin/pending-$2-exit" ] || exit "$(cat "$bin/pending-$2-exit")"
+  exit 0
+fi
 [ "$1 $2" = "upgrade --lock" ] || exit 2
 echo "$3 b" >> crates/clm-upgrade/migrations.lock || exit 1
 if [ -d crates/clm-init ]; then echo "$3 c" >> crates/clm-init/migrations.lock; fi
 CLM
+  } > "$CARGO_TARGET_DIR/release/clm"
   chmod +x "$CARGO_TARGET_DIR/release/clm"
   exit 0
 fi
@@ -1185,6 +1200,13 @@ fn a_release_with_a_new_migration_commits_its_corpus_entry_and_lock_line() {
     let f = Fixture::new("0.2.0");
     let r = f.run("0.3.0");
     assert!(r.ok, "{}", r.stderr);
+    // `clm pending` ran for both components before the lock, its stderr left as it is.
+    let calls = fs::read_to_string(f.bin().join("clm.log")).unwrap();
+    assert_eq!(
+        calls.lines().collect::<Vec<_>>(),
+        ["pending upgrade", "pending init", "upgrade --lock 0.3.0"],
+    );
+    assert!(r.stderr.contains("commit 0000000"), "{}", r.stderr);
     let show = |path: &str| f.git(&f.bare(), &["show", &format!("release/v0.3.0:{path}")]);
     assert_eq!(show("crates/clm-upgrade/corpus/v0.3.0.tar.gz"), "entry\n");
     assert_eq!(show("crates/clm-upgrade/migrations.lock"), "0.3.0 b\n");
@@ -1233,6 +1255,82 @@ fn a_failing_lock_fails_prepare_and_pushes_nothing() {
     let r = f.run("0.3.0");
     assert_failed_before_pushing(&r);
     assert!(r.stderr.contains("lock the migrations"), "{}", r.stderr);
+}
+
+#[test]
+fn a_migrations_requirement_pending_fails_before_the_lock() {
+    // req:ci/release-records-upgrade-corpus@9c29e940
+    // Each case: (component, stdout, exit status) for the runs it changes, and the lines the
+    // report on stderr must hold.
+    type Case<'a> = (&'a [(&'a str, &'a str, Option<i32>)], &'a [&'a str]);
+    let cases: [Case; 4] = [
+        (
+            &[("upgrade", "upgrade/x 1234abcd unbuilt\n", None)],
+            &[
+                "release: requirements of upgrade or init are pending:",
+                "upgrade/x 1234abcd unbuilt",
+            ],
+        ),
+        (
+            &[("init", "init/y 5678abcd unbuilt blocked backlog/q\n", None)],
+            &["init/y 5678abcd unbuilt blocked backlog/q"],
+        ),
+        (
+            &[("init", "", Some(4))],
+            &["release: clm pending init exited 4"],
+        ),
+        (
+            &[
+                ("upgrade", "specs/a/SPEC.md: model/x: broken\n", Some(1)),
+                ("init", "init/y 5678abcd unbuilt\n", None),
+            ],
+            &[
+                "release: clm pending upgrade exited 1",
+                "release: requirements of upgrade or init are pending:",
+                "init/y 5678abcd unbuilt",
+            ],
+        ),
+    ];
+    for (runs, report) in cases {
+        let f = Fixture::new("0.2.0");
+        for (component, out, status) in runs {
+            fs::write(f.bin().join(format!("pending-{component}")), out).unwrap();
+            if let Some(status) = status {
+                fs::write(
+                    f.bin().join(format!("pending-{component}-exit")),
+                    status.to_string(),
+                )
+                .unwrap();
+            }
+        }
+        let r = f.run("0.3.0");
+        assert!(!r.ok, "{runs:?}: {}", r.stderr);
+        assert_eq!(r.refs_before, r.refs_after, "{runs:?}: pushed something");
+        let calls = fs::read_to_string(f.bin().join("clm.log")).unwrap();
+        assert_eq!(
+            calls.lines().collect::<Vec<_>>(),
+            ["pending upgrade", "pending init"],
+            "{runs:?}: both ran, and no `upgrade --lock`"
+        );
+        assert!(
+            !f.work()
+                .join("crates/clm-upgrade/corpus/v0.3.0.tar.gz")
+                .exists(),
+            "{runs:?}: make.sh ran"
+        );
+        // The report's lines in order, `upgrade`'s first.
+        let lines: Vec<&str> = r.stderr.lines().collect();
+        let mut at = 0;
+        for want in report {
+            at += lines[at..]
+                .iter()
+                .position(|l| l == want)
+                .unwrap_or_else(|| panic!("{runs:?}: no `{want}` in order in {}", r.stderr))
+                + 1;
+        }
+        // A run that exits non-zero is reported by its status, not by what it printed.
+        assert!(!r.stderr.contains("model/x: broken"), "{}", r.stderr);
+    }
 }
 
 /// A failure after the version bump: nothing is created or pushed.

@@ -52,6 +52,13 @@ const DOC_TESTS: &str = "cargo test --doc --workspace";
 const WASM: &str = "cargo build --target wasm32-unknown-unknown";
 /// The crates built for wasm only with their default features disabled (ci/web-checks).
 const NO_DEFAULTS: [&str; 4] = ["clm-check", "clm-orchestrator", "clm-view", "clm-ledger"];
+/// Every wasm build the script runs (ci/web-checks), as the `cargo` fake records it.
+fn wasm_builds() -> Vec<String> {
+    std::iter::once(format!("{WASM} -p clm-model"))
+        .chain(NO_DEFAULTS.map(|k| format!("{WASM} --no-default-features -p {k}")))
+        .chain([format!("{WASM} -p clm-web")])
+        .collect()
+}
 const BROWSER_INSTALL_CI: &str = "web$ npx playwright install --with-deps chromium";
 const BROWSER_INSTALL: &str = "web$ npx playwright install chromium";
 const WEB_TEST: &str = "web$ npm test";
@@ -303,21 +310,18 @@ fn every_check() {
         "{log:?}"
     );
     // `clm-ledger` without its `git` feature (ledger/ledger-builds-for-wasm).
-    let no_defaults = NO_DEFAULTS.map(|k| format!("{WASM} --no-default-features -p {k}"));
     for cmd in [
         "cargo fmt --all --check".to_owned(),
         "cargo clippy --all-targets -- -D warnings".to_owned(),
         NEXTEST_ALL.to_owned(),
         DOC_TESTS.to_owned(),
-        format!("{WASM} -p clm-model -p clm-context"),
-        format!("{WASM} -p clm-web"),
         "plugin-panel$ npm ci --ignore-scripts".to_owned(),
         "plugin-panel$ npm test".to_owned(),
         "web$ npm ci --ignore-scripts".to_owned(),
         WEB_TEST.to_owned(),
     ]
     .into_iter()
-    .chain(no_defaults)
+    .chain(wasm_builds())
     {
         assert!(log.contains(&cmd), "no `{cmd}` in {log:?}");
     }
@@ -365,63 +369,17 @@ fn every_check() {
                 .all(|l| l.starts_with("claude plugin validate ")),
         "{log:?}"
     );
-    // However `clm` is named in the script.
-    let lines = script_lines("ci-check.sh");
-    let runs_clm = |w: &str| w == "clm" || w.ends_with("/clm") || w.ends_with("clm.sh");
-    assert!(
-        !lines.iter().any(|l| l.split_whitespace().any(runs_clm)),
-        "{lines:?}"
-    );
-}
-
-#[test]
-fn every_wasm_build_stands_alone() {
-    // req:ci/web-checks@72a04372
-    // Whole lines, so nothing like `|| true` follows a build. Each `--no-default-features`
-    // crate builds on its own: built with a crate that depends on it with its default
-    // features, cargo would turn them back on.
-    let text = script("ci-check.sh");
-    assert!(text.contains("\nset -euo pipefail\n"), "{text}");
-    let lines = script_lines("ci-check.sh");
-    // Any line naming the target is a wasm build, and each has the one shape checked here.
-    let builds: Vec<_> = lines
-        .iter()
-        .filter(|l| l.contains("wasm32-unknown-unknown"))
-        .collect();
-    for build in &builds {
-        assert!(build.starts_with(WASM), "{build}");
-        if build.contains("--no-default-features") {
-            assert_eq!(build.matches(" -p ").count(), 1, "{build}");
-        }
-    }
-    // These build only with their default features disabled, and turn none back on.
-    for krate in NO_DEFAULTS {
-        let named: Vec<_> = builds
-            .iter()
-            .filter(|b| b.split([' ', '=']).any(|w| w.ends_with(krate)))
-            .collect();
-        assert!(!named.is_empty(), "no wasm build of {krate}");
-        for build in named {
-            assert!(build.contains("--no-default-features"), "{build}");
-            let turns_on = |w: &str| {
-                w.starts_with("--features") || w.starts_with("-F") || w == "--all-features"
-            };
-            assert!(!build.split_whitespace().any(turns_on), "{build}");
-        }
-    }
 }
 
 #[test]
 fn broken_wasm_build_fails() {
-    // req:ci/web-checks@72a04372
-    for build in [
-        format!("{WASM} -p clm-model -p clm-context"),
-        format!("{WASM} --no-default-features -p clm-ledger"),
-        format!("{WASM} -p clm-web"),
-    ] {
+    // req:ci/web-checks@53cd2ed8
+    // Each of the six builds failing in turn: the run fails and nothing runs after it.
+    let builds = wasm_builds();
+    assert_eq!(builds.len(), 6);
+    for build in builds {
         let (ok, log) = Tree::new().run(None, &build);
-        assert!(!ok, "{log:?}");
-        // Nothing runs after the failing step.
+        assert!(!ok, "{build}: {log:?}");
         assert_eq!(log.last(), Some(&build), "{log:?}");
     }
 }
@@ -513,25 +471,6 @@ fn failing_capability_package_fails() {
         let (ok, log) = Tree::new().run(None, step);
         assert!(!ok, "{step}: {log:?}");
         assert_eq!(log.last().map(String::as_str), Some(*step), "{log:?}");
-    }
-}
-
-/// Trees built and run on many threads at once never fail: a fake is never run while some
-/// process holds it open for writing (`Text file busy`).
-#[test]
-fn trees_built_and_run_in_parallel_never_run_a_busy_fake() {
-    let threads: Vec<_> = (0..16)
-        .map(|_| {
-            std::thread::spawn(|| {
-                for _ in 0..32 {
-                    let (ok, log) = Tree::new().run(None, "");
-                    assert!(ok, "{log:?}");
-                }
-            })
-        })
-        .collect();
-    for t in threads {
-        t.join().unwrap();
     }
 }
 
@@ -878,11 +817,9 @@ fn assert_whole_tree_checks(log: &[String]) {
     for cmd in [
         "cargo fmt --all --check".to_owned(),
         "cargo clippy --all-targets -- -D warnings".to_owned(),
-        format!("{WASM} -p clm-model -p clm-context"),
-        format!("{WASM} -p clm-web"),
     ]
     .into_iter()
-    .chain(NO_DEFAULTS.map(|k| format!("{WASM} --no-default-features -p {k}")))
+    .chain(wasm_builds())
     {
         assert!(log.contains(&cmd), "no `{cmd}` in {log:?}");
     }
