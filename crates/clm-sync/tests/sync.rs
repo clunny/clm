@@ -3470,3 +3470,220 @@ fn an_untracked_file_main_adds_outside_the_root_stops_a_rename() {
     assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
     assert_eq!(read(&r.work, "notes.md"), "mine\n");
 }
+
+/// The root's `SPEC.md`, setting `wiring` when given.
+fn root_with(wiring: Option<&str>) -> String {
+    let wiring = wiring.map_or(String::new(), |w| format!("wiring: {w}\n"));
+    format!("---\ntitle: Root\nstatus: active\nowners: []\n{wiring}---\n\n## Contract\nr\n")
+}
+
+/// Component `id`, `active`, owning `crates/<id>/**`, with requirement `slug` stating `text`.
+fn owning(id: &str, slug: &str, text: &str) -> String {
+    format!(
+        "---\ntitle: {}\nstatus: active\nowners: []\npaths: [\"crates/{id}/**\"]\n---\n\n\
+         ## Contract\nc\n\n## Design\nd\n\n## Requirements\n\n### Requirement: {slug}\n\
+         {text}\n\n#### Scenario: s\n- ok\n",
+        id.to_uppercase()
+    )
+}
+
+/// *A build's branch of another name*: on `main`, a root setting `wiring` as given, component
+/// `a` owning `crates/a/**` with requirement `r`, component `b` owning `crates/b/**`, a
+/// tracked `README.md` and `ARCHITECTURE.md`, and a complete `applied` change `x` adding
+/// `a/x`, cited in `crates/a/tests/t.rs`; `broken`, when given, is then written over with a
+/// `SPEC.md` that doesn't parse and committed on `main` too. `HEAD` on `branch`, cut there.
+/// Then `origin/main` modifies `a/r` and puts back `broken`'s text, and its ledger holds an
+/// open proposal with slug `s`.
+fn another_name(branch: &str, wiring: Option<&str>, broken: Option<&str>) -> Repo {
+    let r = repo(branch);
+    write(&r.work, "specs/SPEC.md", &root_with(wiring));
+    write(&r.work, "specs/a/SPEC.md", &owning("a", "r", "It SHALL r."));
+    write(&r.work, "specs/b/SPEC.md", &owning("b", "y", "It SHALL y."));
+    write(&r.work, "crates/a/src/lib.rs", "pub fn a() {}\n");
+    write(&r.work, "crates/b/src/lib.rs", "pub fn b() {}\n");
+    write(&r.work, "README.md", "readme\n");
+    write(&r.work, "ARCHITECTURE.md", "invariants\n");
+    commit(&r.work, "components");
+    apply_change(&r, "x", "", &adds_x());
+    write(
+        &r.work,
+        "crates/a/tests/t.rs",
+        &citing("a/x", &version(&r, "a/x")),
+    );
+    commit(&r.work, "test a/x");
+    let mut fixed = vec![(
+        "specs/a/SPEC.md".to_string(),
+        read(&r.work, "specs/a/SPEC.md").replace("It SHALL r.", "It SHALL r, and more."),
+    )];
+    if let Some(path) = broken {
+        fixed.push((path.to_string(), read(&r.work, path)));
+        write(&r.work, path, "---\ntitle: Broken\n---\n");
+        commit(&r.work, "break");
+    }
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    let fixed: Vec<(&str, &str)> = fixed
+        .iter()
+        .map(|(p, t)| (p.as_str(), t.as_str()))
+        .collect();
+    main_moves(&r, &fixed);
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "Body.")],
+    );
+    r
+}
+
+/// Commits an edit to `crates/a/src/lib.rs` on the branch.
+fn edits_a(r: &Repo) {
+    write(&r.work, "crates/a/src/lib.rs", "pub fn a2() {}\n");
+    commit(&r.work, "edit a");
+}
+
+fn has(lines: &[String], line: &str) -> bool {
+    lines.iter().any(|l| l == line)
+}
+
+fn starts(lines: &[String], prefix: &str) -> bool {
+    lines.iter().any(|l| l.starts_with(prefix))
+}
+
+#[test]
+fn a_code_branch_of_another_name_is_a_builds() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("fix/y", Some("[]"), None);
+    edits_a(&r);
+
+    let lines = unfinished(&r);
+    assert_eq!(lines[0], "spec changed a", "{lines:?}");
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(has(&lines, "filed backlog/s.md"), "{lines:?}");
+}
+
+#[test]
+fn a_build_branch_of_another_name_stops_on_any_tracked_edit() {
+    // req:sync/build-branches@581c82df req:sync/rebase@789d48ec
+    let r = another_name("fix/y", Some("[]"), None);
+    edits_a(&r);
+    write(&r.work, "README.md", "readme, edited\n");
+
+    assert_refused(&r, &["uncommitted README.md"]);
+}
+
+#[test]
+fn a_doc_branch_is_no_builds() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("docs/z", Some("[]"), None);
+    write(&r.work, "docs/guide/x.md", "guide\n");
+    commit(&r.work, "guide");
+
+    let lines = synced(&r);
+    assert!(
+        !starts(&lines, "spec changed") && !starts(&lines, "archived") && !starts(&lines, "filed"),
+        "{lines:?}"
+    );
+}
+
+#[test]
+fn an_archive_branch_is_a_builds_without_a_component() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("impl/archive/x", Some("[]"), None);
+
+    let lines = synced(&r);
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(!starts(&lines, "spec changed"), "{lines:?}");
+}
+
+#[test]
+fn a_branch_that_needs_review_is_no_builds_whatever_its_name() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("impl/a", Some("[]"), None);
+    write(&r.work, "ARCHITECTURE.md", "invariants, more\n");
+    commit(&r.work, "architecture");
+
+    let report = sync(&r.work).unwrap();
+    assert!(
+        !starts(&report.lines, "archived") && !starts(&report.lines, "filed"),
+        "{:?}",
+        report.lines
+    );
+    assert_eq!(subject(&r), "architecture");
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), origin_main(&r));
+}
+
+#[test]
+fn a_code_branch_without_wiring_has_no_component() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("fix/y", None, None);
+    edits_a(&r);
+
+    let lines = synced(&r);
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(has(&lines, "filed backlog/s.md"), "{lines:?}");
+    assert!(!starts(&lines, "spec changed"), "{lines:?}");
+}
+
+#[test]
+fn specs_that_dont_load_at_the_merge_base_dont_fail_the_run() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("fix/y", Some("[]"), Some("specs/b/SPEC.md"));
+    edits_a(&r);
+    let lines = unfinished(&r);
+    assert_eq!(lines[0], "spec changed a", "{lines:?}");
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(has(&lines, "filed backlog/s.md"), "{lines:?}");
+
+    // A root that doesn't parse there names no `wiring`: no component.
+    let r = another_name("fix/y", Some("[]"), Some("specs/SPEC.md"));
+    edits_a(&r);
+    let lines = synced(&r);
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(has(&lines, "filed backlog/s.md"), "{lines:?}");
+    assert!(!starts(&lines, "spec changed"), "{lines:?}");
+}
+
+#[test]
+fn a_branch_adding_scenarios_with_their_code_archives_its_change() {
+    // req:sync/build-branches@581c82df
+    let r = repo("light/y");
+    write(&r.work, "specs/SPEC.md", &root_with(Some("[]")));
+    write(&r.work, "specs/a/SPEC.md", &owning("a", "q", "It SHALL q."));
+    write(&r.work, "crates/a/src/lib.rs", "pub fn a() {}\n");
+    write(
+        &r.work,
+        "crates/a/tests/t.rs",
+        &citing("a/q", &version(&r, "a/q")),
+    );
+    commit(&r.work, "a");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    let base = clm_model::load(&r.work).0.requirement("a/q").unwrap().hash.clone();
+    let scenario = "#### Scenario: y's\n- GIVEN y\n- WHEN it runs\n- THEN it holds\n";
+    apply_change(
+        &r,
+        "y",
+        "",
+        &format!(
+            "---\ncomponent: a\n---\n## MODIFIED Requirements\n\n### Requirement: q <!-- base: \
+             {base} -->\nIt SHALL q.\n\n#### Scenario: s\n- ok\n\n{scenario}"
+        ),
+    );
+    write(&r.work, "crates/a/src/lib.rs", "pub fn a2() {}\n");
+    write(
+        &r.work,
+        "crates/a/tests/t.rs",
+        &citing("a/q", &version(&r, "a/q")),
+    );
+    commit(&r.work, "prove y");
+
+    assert_eq!(synced(&r), ["archived y"]);
+    let md = git(&r.work, &["show", "HEAD:changes/archive/y/change.md"]);
+    assert!(md.contains("status: done"), "{md}");
+    let spec = read(&r.work, "specs/a/SPEC.md");
+    assert!(spec.contains(scenario), "{spec}");
+
+    // Light once archived, and still a build's: nothing more to do.
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+    assert!(!starts(&synced(&r), "archived"));
+    assert_eq!(read(&r.work, "specs/a/SPEC.md"), spec);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
