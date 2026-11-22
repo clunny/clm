@@ -165,8 +165,63 @@ fn scenario_an_allowance_for_a_marked_item() {
         ("crates/a/Cargo.toml", &manifest("a")),
         ("crates/a/src/lib.rs", &lib),
     ]);
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let status = clm_unreferenced::command(
+        ["--allow", "a::old"],
+        dir.path(),
+        &|_| None,
+        &mut out,
+        &mut err,
+    );
     assert_eq!(
-        lines(dir.path(), &["a::old"]),
-        ["clm.toml: allow a::old skips no finding"]
+        String::from_utf8(out).unwrap(),
+        "clm.toml: allow a::old skips no finding\n"
+    );
+    assert!(err.is_empty());
+    assert_eq!(status, 1);
+}
+
+#[test]
+fn markers_that_hold_nothing_in_every_language() {
+    // req:check.unreferenced/removal-marked@e3696365
+    let lib = format!(
+        "/*! {MARKER} */\npub fn inner_block() {{}}\n\
+         // {MARKER}\npub fn used() {{}}\npub struct OnlyOld;\n\
+         // {MARKER}\npub fn old() -> OnlyOld {{ OnlyOld }}\n"
+    );
+    let index = format!(
+        "// {MARKER}\ndeclare function ambient(): void;\n\
+         export {{ ambient }};\n\
+         function a() {{}}\n// {MARKER}\nexport {{ a }};\n\
+         export function b() {{}} // {MARKER}\nexport function c() {{}}\n\
+         export function d() {{\n  // {MARKER}\n}}\n"
+    );
+    let init = format!(
+        "def e(): ...  # {MARKER}\ndef f(): ...\n\
+         def g():\n    # {MARKER}\n    ...\n"
+    );
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", &manifest("a")),
+        ("crates/a/src/lib.rs", &lib),
+        ("crates/b/Cargo.toml", &manifest("b")),
+        ("crates/b/src/main.rs", "fn main() {\n    a::old();\n}\n"),
+        ("packages/core/package.json", r#"{"name": "@acme/core"}"#),
+        ("packages/core/src/index.ts", &index),
+        ("src/acme_core/__init__.py", &init),
+    ]);
+    // A marked item still carries its signature while its name is used: `OnlyOld` is used
+    // through `old`, and `used`, marked, is skipped though nothing uses it.
+    assert_eq!(
+        names(dir.path()),
+        [
+            "@acme/core::a",
+            "@acme/core::b",
+            "@acme/core::c",
+            "@acme/core::d",
+            "a::inner_block",
+            "acme_core::e",
+            "acme_core::f",
+            "acme_core::g"
+        ]
     );
 }
