@@ -2,7 +2,8 @@
 //! the branch's fingerprint to the requester's web ledger, `clm/ledger/<login>/web`,
 //! through the Git Data API with their own token, and writes nothing else. The request
 //! names the fingerprint of the review the person was shown, so an approval only ever
-//! names a diff they saw (`approve-pins-the-review`).
+//! names a diff they saw (`approve-pins-the-review`). The record names the requester's own
+//! change requests it clears (`ledger/request-cleared`).
 
 use clm_ledger::Body;
 use serde_json::Value;
@@ -22,7 +23,9 @@ pub fn fingerprint(body: &[u8]) -> Option<String> {
 
 /// Approves `branch` for `login` when its fingerprint is still `pin`: 422 for a branch
 /// that can't be approved at all, checked first, then 409 when it moved since the review
-/// was drawn. Neither writes anything.
+/// was drawn. The record names as its `clears` the requester's own requests for the branch
+/// at that fingerprint, read from their web ledger at its tip, and the route answers 502
+/// when that ledger can't be read. None of the refusals writes anything.
 pub async fn branch<P: Platform>(
     p: &P,
     access: &Access,
@@ -54,11 +57,24 @@ pub async fn branch<P: Platform>(
     if pin != fingerprint {
         return Response::empty(409);
     }
-    let record = ledger::record(
-        p,
-        login,
-        Body::approved(fingerprint, branch.into(), change_of(&changed, &trees.head)),
-    );
+    // The requests it clears are read from the requester's own web ledger at its tip, not
+    // the minute-old fold: only the web app writes a request, each to its writer's own web
+    // ledger, so that one holds every request of theirs (`ledger/request-cleared`).
+    let Some(own) = ledger::own(p, access, login).await else {
+        return Response::empty(502);
+    };
+    let clears = own
+        .change_requests
+        .get(branch)
+        .into_iter()
+        .flatten()
+        .filter(|r| clm_ledger::person(&r.writer) == login)
+        .filter(|r| matches!(&r.body, Body::ChangesRequested { fingerprint: f, .. } if *f == fingerprint))
+        .map(|r| r.id.clone())
+        .collect();
+    let body = Body::approved(fingerprint, branch.into(), change_of(&changed, &trees.head))
+        .with_clears(clears);
+    let record = ledger::record(p, login, body);
     match ledger::append(p, access, &record).await {
         Some(()) => Response::empty(200),
         None => Response::empty(502),
