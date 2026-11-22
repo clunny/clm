@@ -646,8 +646,8 @@ const CUTS: &str = "## Cuts\n- specs/a/SPEC.md: gate/cut: requirement a/x is gon
 
 #[test]
 fn the_cuts_come_before_the_cut_to_fit() {
-    // req:host/pr-open@f06b4b0e
-    // req:host/pr-body@42b28fb0
+    // req:host/pr-open@26605e35
+    // req:host/pr-body@08a50617
     let body = long_body();
     for listed in ["[]".to_string(), format!("[{}]", pull_request(12))] {
         with_fakes(&[], "spec/x", &body, |root, dir| {
