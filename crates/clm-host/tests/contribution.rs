@@ -74,7 +74,7 @@ const FORK: &str = r#"{"isFork":true,"parent":{"owner":{"login":"clunny"},"name"
 
 #[test]
 fn a_forks_parent() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     with_gh(&[("repo view", FORK)], |root, _| {
         let host = clm_host::adapter(Setting::Github);
         assert_eq!(host.parent(root).unwrap().as_deref(), Some("clunny/clm"));
@@ -90,7 +90,7 @@ fn a_forks_parent() {
 
 #[test]
 fn sync_brings_the_fork_up_without_force() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     with_gh(&[("repo view", FORK), ("repo sync", "")], |root, dir| {
         clm_host::adapter(Setting::Github).sync(root).unwrap();
         let log = calls(dir);
@@ -101,7 +101,7 @@ fn sync_brings_the_fork_up_without_force() {
 
 #[test]
 fn opening_on_the_parent() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     let answers = [
         ("repo view", FORK),
         ("pr list", "[]"),
@@ -129,7 +129,7 @@ fn opening_on_the_parent() {
 
 #[test]
 fn an_open_pull_request_on_the_parent_is_returned() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     let open = r#"[{"url":"https://github.com/other/clm/pull/2","headRepositoryOwner":{"login":"other"}},{"url":"https://github.com/clunny/clm/pull/4","headRepositoryOwner":{"login":"dana"}}]"#;
     with_gh(&[("repo view", FORK), ("pr list", open)], |root, dir| {
         let host = clm_host::adapter(Setting::Github);
@@ -143,7 +143,7 @@ fn an_open_pull_request_on_the_parent_is_returned() {
 
 #[test]
 fn a_pull_requests_files() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     let pr = r#"{"author":{"login":"dana"},"state":"OPEN","title":"t","body":"b","headRepository":{"name":"clm"},"headRepositoryOwner":{"login":"dana"},"headRefName":"spec/x","maintainerCanModify":true,"files":[{"path":"backlog/x.md"},{"path":"crates/a/src/lib.rs"}]}"#;
     with_gh(&[("pr view 7", pr), ("api users/dana", USER)], |root, _| {
         let shown = shown(root, 7);
@@ -176,7 +176,7 @@ fn shown(root: &Path, number: u64) -> clm_host::Shown {
 
 #[test]
 fn an_issue_is_shown_when_no_pull_request_has_the_number() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     let issue = r#"{"author":{"login":"sam"},"state":"OPEN","title":"idea","body":"do it"}"#;
     with_gh(
         &[("issue view 3", issue), ("api users/sam", SAM)],
@@ -198,7 +198,7 @@ fn an_issue_is_shown_when_no_pull_request_has_the_number() {
 
 #[test]
 fn closing_with_a_comment_and_labelling() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     let answers = [("comment", ""), ("close", ""), ("edit", "")];
     with_gh(&answers, |root, dir| {
         let body = root.join("c.md");
@@ -220,7 +220,7 @@ fn closing_with_a_comment_and_labelling() {
 
 #[test]
 fn fetch_makes_a_branch_and_refuses_an_existing_one() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     with_gh(&[], |root, _| {
         let commit = [
             "-c",
@@ -253,7 +253,7 @@ fn fetch_makes_a_branch_and_refuses_an_existing_one() {
 
 #[test]
 fn no_host_runs_no_gh() {
-    // req:host/contribution-operations@7cc3153f
+    // req:host/contribution-operations@78af32ce
     for setting in [Setting::None, Setting::Git] {
         with_gh(&[("", "{}")], |root, dir| {
             let host = clm_host::adapter(setting);
@@ -272,7 +272,7 @@ fn no_host_runs_no_gh() {
 
 #[test]
 fn listing_open_issues_and_pull_requests() {
-    // req:host/list-contributions@2311b721
+    // req:host/list-contributions@ca5fd90e
     let issues = r#"[{"number":73,"author":{"login":"clunny"},"title":"secret words"}]"#;
     let prs = r#"[{"number":80,"author":{"login":"dana"},"isCrossRepository":true},{"number":81,"author":{"login":"ghost"},"isCrossRepository":true},{"number":82,"author":{"login":"clunny"},"isCrossRepository":false},{"number":83,"author":{"login":"eve"}}]"#;
     with_gh(&[("issue list", issues), ("pr list", prs)], |root, dir| {
@@ -308,7 +308,7 @@ fn listing_open_issues_and_pull_requests() {
 
 #[test]
 fn listing_without_a_host_runs_no_gh() {
-    // req:host/list-contributions@2311b721
+    // req:host/list-contributions@ca5fd90e
     for setting in [Setting::None, Setting::Git] {
         with_gh(&[("", "[]")], |root, dir| {
             assert!(clm_host::adapter(setting).list(root).unwrap().is_empty());
@@ -321,7 +321,7 @@ const ALERT_4: &str = r#"{"number":4,"security_advisory":{"severity":"high","sum
 
 #[test]
 fn open_alerts() {
-    // req:host/list-alerts@7c2c7686
+    // req:host/list-alerts@50196087
     // Two pages, as `gh api --paginate` prints them: arrays one after another.
     let pages = format!("[][{ALERT_4}]");
     with_gh(&[("dependabot/alerts", &pages)], |root, dir| {
@@ -344,7 +344,7 @@ fn open_alerts() {
 
 #[test]
 fn alert_fields_are_one_word() {
-    // req:host/list-alerts@7c2c7686
+    // req:host/list-alerts@50196087
     let odd = r#"[{"number":5,"security_advisory":{"severity":"urgent"},"dependency":{"package":{"ecosystem":"","name":"a b\tc\nd\u0007e"}}}]"#;
     with_gh(&[("dependabot/alerts", odd)], |root, _| {
         let alerts = clm_host::adapter(Setting::Github).alerts(root).unwrap();
@@ -358,7 +358,7 @@ fn alert_fields_are_one_word() {
 
 #[test]
 fn unreadable_alerts_are_an_error() {
-    // req:host/list-alerts@7c2c7686
+    // req:host/list-alerts@50196087
     with_gh(&[("dependabot/alerts", "FAIL:HTTP 403")], |root, _| {
         let err = clm_host::adapter(Setting::Github).alerts(root).unwrap_err();
         assert!(format!("{err:?}").contains("HTTP 403"), "{err:?}");
@@ -367,8 +367,9 @@ fn unreadable_alerts_are_an_error() {
 
 #[test]
 fn malformed_alert_pages_are_an_error() {
-    // req:host/list-alerts@7c2c7686
-    for body in [r#"{"message":"off"}"#, r#"[{"severity":"high"}]"#] {
+    // req:host/list-alerts@50196087
+    let no_number = r#"[{"security_advisory":{"severity":"high"}}]"#;
+    for body in ["not json", r#"{"message":"off"}"#, no_number] {
         with_gh(&[("dependabot/alerts", body)], |root, _| {
             assert!(clm_host::adapter(Setting::Github).alerts(root).is_err());
         });
@@ -377,7 +378,7 @@ fn malformed_alert_pages_are_an_error() {
 
 #[test]
 fn alerts_without_a_host_run_no_gh() {
-    // req:host/list-alerts@7c2c7686
+    // req:host/list-alerts@50196087
     with_gh(&[], |root, dir| {
         assert!(
             clm_host::adapter(Setting::None)
@@ -399,7 +400,7 @@ const SHA_C: &str = "cccccccccccccccccccccccccccccccccccccccc";
 
 #[test]
 fn runs_are_listed() {
-    // req:host/list-runs@008f0107
+    // req:host/list-runs@6209a626
     let out = format!(
         r#"[{{"databaseId":12,"headSha":"{SHA_C}","status":"in_progress","conclusion":"","url":"https://h/12"}},{{"databaseId":11,"headSha":"{SHA_C}","status":"completed","conclusion":"failure","url":"https://h/11"}},{{"databaseId":10,"headSha":"short","status":"completed","conclusion":"success","url":"https://h/10"}},{{"databaseId":9,"headSha":"abc123","status":"completed","conclusion":"success","url":"https://h/9"}},{{"databaseId":8,"headSha":"gggggggggggggggggggggggggggggggggggggggg","status":"completed","conclusion":"success","url":"https://h/8"}}]"#
     );
@@ -442,7 +443,7 @@ fn runs_are_listed() {
 
 #[test]
 fn an_odd_conclusion_is_unknown() {
-    // req:host/list-runs@008f0107
+    // req:host/list-runs@6209a626
     let out = format!(
         r#"[{{"databaseId":1,"headSha":"{SHA_C}","status":"completed","conclusion":"Fail ure","url":"u"}},{{"databaseId":2,"headSha":"{SHA_C}","status":"completed","conclusion":"timed_out","url":"u"}},{{"databaseId":4,"headSha":"{SHA_C}","status":"completed","conclusion":"Failure","url":"u"}},{{"databaseId":3,"headSha":"{SHA_C}","status":"completed","url":"u"}}]"#
     );
@@ -457,7 +458,7 @@ fn an_odd_conclusion_is_unknown() {
 
 #[test]
 fn a_failing_run_list_is_an_error() {
-    // req:host/list-runs@008f0107
+    // req:host/list-runs@6209a626
     with_gh(&[("run list", "FAIL:HTTP 404")], |root, _| {
         let err = clm_host::adapter(Setting::Github)
             .runs(root, "slow")
@@ -468,7 +469,7 @@ fn a_failing_run_list_is_an_error() {
 
 #[test]
 fn other_hosts_list_no_runs() {
-    // req:host/list-runs@008f0107
+    // req:host/list-runs@6209a626
     for setting in [Setting::Azure, Setting::Git, Setting::None] {
         with_gh(&[], |root, dir| {
             let err = clm_host::adapter(setting).runs(root, "slow").unwrap_err();
@@ -477,6 +478,69 @@ fn other_hosts_list_no_runs() {
                 "{err:?}"
             );
             assert_eq!(calls(dir), "");
+        });
+    }
+}
+
+const NOT_A_FORK: &str = r#"{"isFork":false,"parent":null,"owner":{"login":"dana"},"name":"clm"}"#;
+
+#[test]
+fn scenario_not_a_fork() {
+    // req:host/contribution-operations@78af32ce
+    let answers = [
+        ("repo view", NOT_A_FORK),
+        ("", "https://github.com/x/y/pull/1"),
+    ];
+    with_gh(&answers, |root, dir| {
+        let host = clm_host::adapter(Setting::Github);
+        let refused =
+            |r: Result<(), clm_host::Error>| matches!(r, Err(clm_host::Error::Refused(_)));
+        assert!(refused(host.sync(root)));
+        let opened = host.open_on_parent(root, "spec/x", "t", Path::new("c.md"));
+        assert!(refused(opened.map(drop)));
+        let seen = calls(dir);
+        assert!(
+            !seen.contains("repo sync") && !seen.contains("pr create"),
+            "{seen}"
+        );
+        assert!(seen.contains("repo view"), "{seen}");
+    });
+}
+
+#[test]
+fn scenario_an_answer_it_cant_read() {
+    // req:host/list-contributions@ca5fd90e
+    let issues = r#"[{"number":73,"author":{"login":"clunny"}},{"author":{"login":"eve"}}]"#;
+    with_gh(&[("issue list", issues), ("pr list", "[]")], |root, _| {
+        let listed = clm_host::adapter(Setting::Github).list(root).unwrap();
+        let numbers: Vec<u64> = listed.iter().map(|l| l.number).collect();
+        assert_eq!(numbers, [73]);
+    });
+    for answer in ["not json", r#"{"message": "x"}"#] {
+        with_gh(&[("issue list", answer), ("pr list", "[]")], |root, _| {
+            let got = clm_host::adapter(Setting::Github).list(root);
+            assert!(got.is_err(), "{answer}: {got:?}");
+        });
+    }
+}
+
+#[test]
+fn scenario_a_run_it_cant_read() {
+    // req:host/list-runs@6209a626
+    let out = format!(
+        r#"[{{"databaseId":11,"headSha":"{SHA_C}","status":"completed","conclusion":"failure","url":"u"}},{{"headSha":"{SHA_C}","status":"completed","conclusion":"failure","url":"u"}},{{"databaseId":"12","headSha":"{SHA_C}","status":"completed","url":"u"}}]"#
+    );
+    with_gh(&[("run list", &out)], |root, _| {
+        let runs = clm_host::adapter(Setting::Github)
+            .runs(root, "slow")
+            .unwrap();
+        let ids: Vec<u64> = runs.iter().map(|r| r.id).collect();
+        assert_eq!(ids, [11]);
+    });
+    for answer in ["not json", r#"{"message": "x"}"#] {
+        with_gh(&[("run list", answer)], |root, _| {
+            let got = clm_host::adapter(Setting::Github).runs(root, "slow");
+            assert!(got.is_err(), "{answer}: {got:?}");
         });
     }
 }

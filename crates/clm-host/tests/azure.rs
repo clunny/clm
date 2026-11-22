@@ -107,7 +107,7 @@ fn url(id: u32) -> String {
 
 #[test]
 fn opened() {
-    // req:host/azure-pull-requests@f4a4b73c
+    // req:host/azure-pull-requests@0c59d49d
     let created = pull_request(12);
     let answers = [("pr list", "[]"), ("pr create", created.as_str())];
     with_fakes(&answers, "spec/x", "the body", |root, dir| {
@@ -144,7 +144,7 @@ fn opened() {
 
 #[test]
 fn a_relative_body_file_is_made_absolute() {
-    // req:host/azure-pull-requests@f4a4b73c
+    // req:host/azure-pull-requests@0c59d49d
     let created = pull_request(12);
     let answers = [("pr list", "[]"), ("pr create", created.as_str())];
     with_fakes(&answers, "spec/x", "the body", |root, dir| {
@@ -163,7 +163,7 @@ fn a_relative_body_file_is_made_absolute() {
 
 #[test]
 fn already_open() {
-    // req:host/azure-pull-requests@f4a4b73c
+    // req:host/azure-pull-requests@0c59d49d
     let listed = format!("[{}]", pull_request(12));
     with_fakes(
         &[("pr list", listed.as_str())],
@@ -181,7 +181,7 @@ fn already_open() {
 
 #[test]
 fn body_updated() {
-    // req:host/azure-pull-requests@f4a4b73c
+    // req:host/azure-pull-requests@0c59d49d
     let listed = format!("[{}]", pull_request(12));
     let answers = [("pr list", listed.as_str()), ("pr update", "{}")];
     with_fakes(&answers, "spec/x", "new body", |root, dir| {
@@ -204,7 +204,7 @@ fn body_updated() {
 
 #[test]
 fn a_blank_or_missing_body_calls_nothing() {
-    // req:host/azure-pull-requests@f4a4b73c
+    // req:host/azure-pull-requests@0c59d49d
     with_fakes(&[], "spec/x", "  \n", |root, dir| {
         assert!(Azure.page_body(root, &root.join("body.md")).is_err());
         assert!(Azure.page_body(root, &root.join("missing.md")).is_err());
@@ -214,7 +214,7 @@ fn a_blank_or_missing_body_calls_nothing() {
 
 #[test]
 fn no_active_pull_request_updates_nothing() {
-    // req:host/azure-pull-requests@f4a4b73c
+    // req:host/azure-pull-requests@0c59d49d
     with_fakes(&[("pr list", "[]")], "spec/x", "b", |root, dir| {
         let err = Azure.page_body(root, &root.join("body.md")).unwrap_err();
         assert!(matches!(err, Error::Refused(_)), "{err:?}");
@@ -224,7 +224,7 @@ fn no_active_pull_request_updates_nothing() {
 
 #[test]
 fn az_not_signed_in() {
-    // req:host/azure-pull-requests@f4a4b73c
+    // req:host/azure-pull-requests@0c59d49d
     let answers = [("repos", "FAIL:Please run 'az login'")];
     with_fakes(&answers, "spec/x", "b", |root, _| {
         let err = Azure
@@ -238,7 +238,7 @@ fn az_not_signed_in() {
 
 #[test]
 fn issue_has_nowhere_to_go() {
-    // req:host/azure-other-operations@1a35e857
+    // req:host/azure-other-operations@1b336bb9
     with_fakes(&[], "main", "the report", |root, dir| {
         let err = Azure
             .issue(root, "x", Path::new("body.md"), "clunny/clm")
@@ -256,7 +256,7 @@ fn issue_has_nowhere_to_go() {
 
 #[test]
 fn contributions_and_alerts_are_not_there() {
-    // req:host/azure-other-operations@1a35e857
+    // req:host/azure-other-operations@1b336bb9
     with_fakes(&[], "main", "b", |root, dir| {
         let body = root.join("body.md");
         assert_eq!(Azure.parent(root).unwrap(), None);

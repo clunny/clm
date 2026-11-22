@@ -575,7 +575,7 @@ fn scenario_branch_moved() {
 
 #[test]
 fn branch_moved_keeps_its_message() {
-    // req:host/shared-plumbing@02348618
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let s = push_impl_a(&r, "a.txt");
     other_clone_push(&r, "impl/a", "b.txt");
@@ -1536,7 +1536,7 @@ const ISSUE_ARGS: [&str; 7] = [
 
 #[test]
 fn scenario_issue_filed() {
-    // req:host/issue@02ae5818
+    // req:host/issue@f4bf6ce7
     let (r, gh) = (checkout("github"), fake_gh());
     write(&r.work, "r.md", "The report\n");
     let (code, out, err) = clm(&r.work, &gh, &ISSUE_ARGS, &[]);
@@ -1550,7 +1550,7 @@ fn scenario_issue_filed() {
 
 #[test]
 fn scenario_issue_nowhere_to_file() {
-    // req:host/issue@02ae5818
+    // req:host/issue@f4bf6ce7
     for host in ["git", "none"] {
         let (r, gh) = (checkout(host), fake_gh());
         write(&r.work, "r.md", "The report\n");
@@ -1559,6 +1559,18 @@ fn scenario_issue_nowhere_to_file() {
         assert_eq!(out, "The report\n");
         assert!(err.contains("nowhere to file it"), "{err}");
         assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+    }
+}
+
+#[test]
+fn scenario_issue_an_unreadable_report() {
+    // req:host/issue@f4bf6ce7
+    for host in ["git", "none"] {
+        let (r, gh) = (checkout(host), fake_gh());
+        let (code, out, err) = clm(&r.work, &gh, &ISSUE_ARGS, &[]);
+        assert_eq!((code, out.as_str()), (Some(1), ""), "{host}: {err}");
+        assert!(err.contains("r.md"), "{host}: {err}");
+        assert!(!err.contains("nowhere to file"), "{host}: {err}");
     }
 }
 
@@ -1588,7 +1600,7 @@ fn az_calls(gh: &Gh) -> Vec<String> {
 
 #[test]
 fn scenario_azure_pull_request_through_the_setting() {
-    // req:host/azure-selected@9030c61f
+    // req:host/azure-selected@0ab29923
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
@@ -1604,7 +1616,7 @@ fn scenario_azure_pull_request_through_the_setting() {
 
 #[test]
 fn scenario_azure_not_signed_in() {
-    // req:host/azure-selected@9030c61f
+    // req:host/azure-selected@0ab29923
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     let env = [("FAKE_AZ_FAIL", "Please run 'az login'")];
@@ -1615,7 +1627,7 @@ fn scenario_azure_not_signed_in() {
 
 #[test]
 fn scenario_azure_issue_through_the_setting() {
-    // req:host/azure-selected@9030c61f
+    // req:host/azure-selected@0ab29923
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     write(&r.work, "r.md", "The report\n");
