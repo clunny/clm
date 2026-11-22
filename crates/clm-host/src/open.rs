@@ -22,6 +22,15 @@ pub fn pr_open(
     if matches!(host, clm_config::Host::Git | clm_config::Host::None) {
         return Ok(None);
     }
+    // A body file that can't be read is refused first, naming it, before anything else is
+    // read or the host is asked anything, even whether a pull request is already open, so
+    // nothing is opened, named or kept.
+    let given = body_file
+        .map(|file| {
+            std::fs::read_to_string(root.join(file))
+                .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))
+        })
+        .transpose()?;
     let branch = match branch {
         Some(branch) => branch.to_string(),
         None => current_branch(root)?
@@ -36,14 +45,8 @@ pub fn pr_open(
         .map(String::from)
         .or_else(|| drawn.as_ref().map(|(title, _)| title.clone()))
         .unwrap_or_default();
-    // A body file that can't be read is refused before the host is asked anything, even
-    // whether a pull request is already open, so nothing is opened, named or kept.
-    let (text, temp) = match body_file {
-        Some(file) => {
-            let text = std::fs::read_to_string(root.join(file))
-                .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
-            (text, None)
-        }
+    let (text, temp) = match given {
+        Some(text) => (text, None),
         None => {
             let body = drawn.map(|(_, body)| body).unwrap_or_default();
             let file = TempFile::write(&body)?;

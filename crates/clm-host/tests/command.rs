@@ -2083,10 +2083,53 @@ fn a_relative_body_file_is_the_roots_beside_the_cuts_too() {
         (&open[..], &[][..]),
         (&body_args[..], &[("FAKE_PR_VIEW", PR_7)][..]),
     ] {
+        let _ = fs::remove_file(gh.dir.path().join("body"));
         let (code, _, err) = clm_at(other.path(), other.path(), &gh, args, env);
         assert_eq!(code, Some(0), "{args:?}: {err}");
         assert_eq!(body(&gh), format!("{CUTS}root body"), "{args:?}");
     }
+}
+
+#[test]
+fn a_relative_body_file_is_read_only_at_the_root() {
+    // req:host/pr-open@26605e35
+    // req:host/pr-body@08a50617
+    // A file only the root holds is read; a blank one at the root is blank, whatever the
+    // directory the command runs in holds under that name.
+    let (r, gh) = (checkout("github"), fake_gh());
+    write(&r.work, "b.md", "root body");
+    let other = TempDir::new().unwrap();
+    let root = r.work.display().to_string();
+    let open = [
+        "pr",
+        "open",
+        "spec/x",
+        "--title",
+        "x",
+        "--body-file",
+        "b.md",
+        "--root",
+        &root,
+    ];
+    let (code, _, err) = clm_at(other.path(), other.path(), &gh, &open, &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(body(&gh), "root body");
+    write(&r.work, "b.md", " \n");
+    write(other.path(), "b.md", "other body");
+    let args = ["pr", "body", "b.md", "--root", &root];
+    let (code, _, err) = clm_at(
+        other.path(),
+        other.path(),
+        &gh,
+        &args,
+        &[("FAKE_PR_VIEW", PR_7)],
+    );
+    assert_eq!(code, Some(1), "{err}");
+    assert!(
+        !gh.calls().iter().any(|c| c.starts_with("api")),
+        "{:?}",
+        gh.calls()
+    );
 }
 
 #[test]
@@ -2130,14 +2173,20 @@ fn an_unreadable_body_file_is_refused_before_an_open_pull_request_is_named() {
         "--body-file",
         "missing.md",
     ];
+    // Without a title, on a branch with nothing to draw one from, it is the file it names.
+    let untitled = ["pr", "open", "spec/x", "--body-file", "missing.md"];
     let view = r#"{"url":"https://github.com/o/r/pull/4","state":"OPEN","headRefName":"spec/x"}"#;
     for host in ["github", "azure"] {
-        let (r, gh) = (checkout(host), fake_gh());
-        fake_az(&gh);
-        let env = [("FAKE_PR_VIEW", view), ("FAKE_AZ_LIST", AZ_PR_12)];
-        let (code, out, err) = clm(&r.work, &gh, &args, &env);
-        assert_eq!((code, out.as_str()), (Some(1), ""), "{host}: {err}");
-        assert!(err.contains("missing.md"), "{host}: {err}");
+        for args in [&args[..], &untitled[..]] {
+            let (r, gh) = (checkout(host), fake_gh());
+            fake_az(&gh);
+            let env = [("FAKE_PR_VIEW", view), ("FAKE_AZ_LIST", AZ_PR_12)];
+            let (code, out, err) = clm(&r.work, &gh, args, &env);
+            assert_eq!((code, out.as_str()), (Some(1), ""), "{host}: {err}");
+            assert!(err.contains("missing.md"), "{host}: {err}");
+            let calls = [gh.calls(), az_calls(&gh)].concat();
+            assert!(calls.is_empty(), "{host}: {calls:?}");
+        }
     }
 }
 
