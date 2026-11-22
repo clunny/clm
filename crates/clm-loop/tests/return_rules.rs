@@ -11,7 +11,7 @@ fn running(fx: &Fixture, name: &str, kind: Kind, task: &str) {
 
 #[test]
 fn waiting() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-1");
     let actions = returned(
@@ -33,7 +33,7 @@ fn waiting() {
 
 #[test]
 fn landed_with_a_task_left_running() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-17");
     fx.set("finish-a", "landed impl/a\n");
@@ -47,7 +47,7 @@ fn landed_with_a_task_left_running() {
     )
     .unwrap();
     assert_eq!(actions[0], "stop build:a t-17");
-    assert_eq!(fx.ran("run --finish a"), 1);
+    assert_eq!(fx.ran("run --finish a --returned"), 1);
     let run = fx.file().run("build:a").unwrap().clone();
     assert_eq!(run.state, RunState::Returned);
     assert!(run.landed);
@@ -55,7 +55,7 @@ fn landed_with_a_task_left_running() {
 
 #[test]
 fn no_closing_line_landed() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-1");
     fx.set("finish-a", "landed impl/a\n");
@@ -76,7 +76,7 @@ fn no_closing_line_landed() {
 
 #[test]
 fn no_closing_line_not_landed() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-1");
     returned(
@@ -92,12 +92,12 @@ fn no_closing_line_not_landed() {
     assert!(!run.landed);
     assert_eq!(run.stops.get("context"), Some(&1));
     // A first `context` stop finishes the run and rebuilds it.
-    assert_eq!(fx.ran("run --finish a"), 1);
+    assert_eq!(fx.ran("run --finish a --returned"), 1);
 }
 
 #[test]
 fn stopped_keeps_its_place() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-1");
     returned(
@@ -119,7 +119,7 @@ fn stopped_keeps_its_place() {
 
 #[test]
 fn a_draft_for_review_joins_the_fold_list() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     running(&fx, "draft:d1", Kind::Draft, "t-1");
     // Another draft still runs, so the fold list waits.
@@ -142,7 +142,7 @@ fn a_draft_for_review_joins_the_fold_list() {
 
 #[test]
 fn a_build_finish_passes_on_what_it_left() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-1");
     fx.set(
@@ -157,14 +157,14 @@ fn a_build_finish_passes_on_what_it_left() {
 
 #[test]
 fn an_unknown_run_is_refused() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     assert!(returned(&fx.options(), "build:nope", None, "none", None, None).is_err());
 }
 
 #[test]
 fn a_closing_line_decides_landed_not_the_finish() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-1");
     fx.set("finish-a", "landed impl/a\n");
@@ -194,7 +194,7 @@ fn a_closing_line_decides_landed_not_the_finish() {
 
 #[test]
 fn a_late_report_of_a_run_the_loop_finished() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     fx.land_file("c", "c\n");
     let c = clm_git::git(&fx.work, &["rev-parse", "origin/main"]).unwrap();
@@ -212,7 +212,11 @@ fn a_late_report_of_a_run_the_loop_finished() {
     )
     .unwrap();
 
-    assert_eq!(fx.ran("run --finish a"), 0);
+    assert!(
+        !fx.calls().iter().any(|c| c.starts_with("run --finish")),
+        "{:?}",
+        fx.calls()
+    );
     assert!(
         !actions.iter().any(|a| a.starts_with("stop ")),
         "{actions:?}"
@@ -222,7 +226,7 @@ fn a_late_report_of_a_run_the_loop_finished() {
 
 #[test]
 fn a_report_of_a_commit_made_since_the_run_started_is_finished() {
-    // req:orchestrator.loop/return-rules@69ce6fa7
+    // req:orchestrator.loop/return-rules@374e0702
     let fx = Fixture::new();
     fx.land_file("c", "c\n");
     let c = clm_git::git(&fx.work, &["rev-parse", "origin/main"]).unwrap();
@@ -241,6 +245,139 @@ fn a_report_of_a_commit_made_since_the_run_started_is_finished() {
     .unwrap();
 
     assert_eq!(actions[0], "stop build:a t-2");
-    assert_eq!(fx.ran("run --finish a"), 1);
+    assert_eq!(fx.ran("run --finish a --returned"), 1);
     assert!(fx.file().run("build:a").unwrap().landed);
+}
+
+/// A commit on `origin/main` made after `build:a` started, as a build's `landed` line names one.
+fn a_commit_since_the_run_started(fx: &Fixture) -> String {
+    fx.land_file("c", "c\n");
+    let c = clm_git::git(&fx.work, &["rev-parse", "origin/main"]).unwrap();
+    fx.change_run("build:a", |r| r.started = clm_git::now() - 600);
+    c.trim().to_string()
+}
+
+#[test]
+fn a_return_finishes_as_returned() {
+    // req:orchestrator.loop/return-rules@374e0702
+    let fx = Fixture::new();
+    running(&fx, "build:a", Kind::Build, "t-1");
+    let sha = a_commit_since_the_run_started(&fx);
+    fx.set("finish-a", "landed impl/a\n");
+
+    returned(
+        &fx.options(),
+        "build:a",
+        None,
+        &format!("landed {sha}"),
+        None,
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(fx.ran("run --finish a --returned"), 1);
+    assert_eq!(fx.ran("run --finish a"), 0, "{:?}", fx.calls());
+    let run = fx.file().run("build:a").unwrap().clone();
+    assert_eq!(run.state, RunState::Returned);
+    assert!(run.landed);
+}
+
+/// The `build:a` with task `t-1` that a step finished as returned and landed once its claim had
+/// left `origin`, its finish printing a `left` line (`claim-gone-ends-a-build`); the commit its
+/// report names.
+fn finished_by_the_loop(fx: &Fixture) -> String {
+    running(fx, "build:a", Kind::Build, "t-1");
+    let sha = a_commit_since_the_run_started(fx);
+    fx.drop_claim("a");
+    fx.set(
+        "finish-a",
+        "landed impl/a\nleft /w/agent-1: busy; delete the directory by hand, then run git worktree prune\n",
+    );
+    clm_loop::step(&fx.options()).unwrap();
+    assert_eq!(fx.ran("run --finish a"), 1, "the step's finish passes none");
+    let run = fx.file().run("build:a").unwrap().clone();
+    assert_eq!(run.state, RunState::Returned);
+    assert!(run.landed);
+    sha
+}
+
+#[test]
+fn a_return_after_the_loop_finished_the_build() {
+    // req:orchestrator.loop/return-rules@374e0702
+    let fx = Fixture::new();
+    let sha = finished_by_the_loop(&fx);
+    let before = fx.file();
+
+    let actions = returned(
+        &fx.options(),
+        "build:a",
+        Some("t-1"),
+        &format!("landed {sha}"),
+        Some("running"),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(fx.ran("run --finish a --returned"), 1);
+    assert!(
+        !actions
+            .iter()
+            .any(|a| a.starts_with("stop ") || a.starts_with("resume ")),
+        "{actions:?}"
+    );
+    let say = line(&actions, "say ");
+    let text = std::fs::read_to_string(say.strip_prefix("say ").unwrap()).unwrap();
+    assert!(
+        text.contains("left /w/agent-1: busy; delete the directory by hand"),
+        "{text}"
+    );
+    let after = unchanged_but_for_the_lease(before, fx.file());
+    let run = after.run("build:a").unwrap();
+    assert_eq!(run.state, RunState::Returned);
+    assert!(run.landed);
+    assert!(run.stops.is_empty());
+}
+
+/// `after`, once checked equal to `before` but for the lease and the plan the actions were
+/// computed from.
+fn unchanged_but_for_the_lease(
+    mut before: clm_loop::LoopFile,
+    mut after: clm_loop::LoopFile,
+) -> clm_loop::LoopFile {
+    for file in [&mut before, &mut after] {
+        file.lease = None;
+        file.plan = None;
+    }
+    assert_eq!(after, before, "nothing but the lease changes");
+    after
+}
+
+#[test]
+fn still_waiting_after_the_loop_finished_the_build() {
+    // req:orchestrator.loop/return-rules@374e0702
+    let fx = Fixture::new();
+    finished_by_the_loop(&fx);
+    let before = fx.file();
+
+    let actions = returned(
+        &fx.options(),
+        "build:a",
+        Some("t-1"),
+        "waiting: clm land impl/a",
+        None,
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(fx.ran("run --finish a --returned"), 0);
+    assert_eq!(fx.ran("run --finish a"), 1, "only the step's");
+    assert!(
+        !actions.iter().any(|a| a.starts_with("say ")),
+        "{actions:?}"
+    );
+    let after = unchanged_but_for_the_lease(before, fx.file());
+    let run = after.run("build:a").unwrap();
+    assert_eq!(run.state, RunState::Returned);
+    assert!(run.landed);
+    assert!(run.stops.is_empty());
 }

@@ -19,13 +19,18 @@ struct Finished {
 /// Finishes a build or draft with `clm run --finish` or `clm draft --finish`, and reads from it
 /// whether the run landed: a closing line decides, and without one the finish does
 /// (`unclosed-build-reads-finish`). Each `left` line it prints is said, or, for a draft, recorded
-/// among the items drafts of the loop left.
-fn finish(options: &Options, run: &Run, line: &str) -> Result<Finished, Failure> {
+/// among the items drafts of the loop left. `returned` says the run's subagent has handed back,
+/// so a build's finish passes `--returned` (`return-rules`).
+fn finish(options: &Options, run: &Run, line: &str, returned: bool) -> Result<Finished, Failure> {
     let name = &run.name;
     let (finish_args, id) = match run.kind {
         Some(Kind::Build) => {
             let component = name.strip_prefix("build:").unwrap_or(name);
-            (vec!["run", "--finish", component], component)
+            let mut args = vec!["run", "--finish", component];
+            if returned {
+                args.push("--returned");
+            }
+            (args, component)
         }
         Some(Kind::Draft) => {
             let id = name.strip_prefix("draft:").unwrap_or(name);
@@ -79,7 +84,8 @@ fn finish(options: &Options, run: &Run, line: &str) -> Result<Finished, Failure>
 
 /// Finishes a build or draft as a run that returned with no closing line and no cause, and
 /// records it `returned`, with no stop counted: whether it landed, and the `say` actions its
-/// finish leaves (`return-rules`).
+/// finish leaves (`return-rules`). No subagent has handed back, so a build's finish passes no
+/// `--returned` (`claim-gone-ends-a-build`, `loop-start`).
 pub(crate) fn finish_unclosed(
     options: &Options,
     name: &str,
@@ -87,7 +93,7 @@ pub(crate) fn finish_unclosed(
     let Some(run) = state::read(&options.root).and_then(|f| f.run(name).cloned()) else {
         return Ok((false, Vec::new()));
     };
-    let finished = finish(options, &run, "")?;
+    let finished = finish(options, &run, "", false)?;
     state::update(&options.root, |f| {
         if finished.landed {
             f.landed_since_verify = true;
@@ -236,6 +242,20 @@ pub fn returned(
     {
         return crate::step::next_actions(options);
     }
+    // A build the loop already finished, as `claim-gone-ends-a-build` may before its subagent
+    // hands back: its return finishes it again with `--returned`, which removes the worktree the
+    // first finish kept, and changes nothing else (`return-rules`).
+    if let Some(known) = known
+        .as_ref()
+        .filter(|r| r.kind == Some(Kind::Build) && r.state == RunState::Returned)
+    {
+        let mut lines = Vec::new();
+        if !result.trim().starts_with("waiting:") {
+            lines.extend(finish(options, known, "", true)?.says);
+        }
+        lines.extend(crate::step::next_actions(options)?);
+        return Ok(lines);
+    }
     let (run, outstanding) = state::update(&options.root, |f| {
         f.lease = Some(now());
         let run = f
@@ -327,7 +347,7 @@ pub fn returned(
         lines.extend(crate::step::next_actions(options)?);
         return Ok(lines);
     }
-    let finished = finish(options, &run, line)?;
+    let finished = finish(options, &run, line, true)?;
     lines.extend(finished.says);
     let landed = finished.landed;
     let (stopped_for, verdict) = match (&stop, landed) {
