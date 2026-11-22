@@ -722,7 +722,7 @@ pub(crate) fn land_into(
         // 9. What landed.
         out.lines
             .push(format!("landed {merge} {}", verdict.words()));
-        // A light land is a code land (`land/build-target-freed`).
+        // A light land is a code land (`land/land-frees-build-target`).
         if !verdict.spec() {
             free_build_target(&repo, &branch, out);
         }

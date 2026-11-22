@@ -96,6 +96,8 @@ fn added(repo: &Repo, merge_base: &str, head: &str) -> Result<Vec<Vec<u8>>, Erro
 
 /// `sync.regenerate`'s regenerate, without its merge, from the CLM root in the checkout at
 /// `merged`: `onto`'s `specs/` with that commit's changes and backlog and `ids` re-applied.
+/// Neither of its refusals reaches a land: it merges nothing, so it writes no delta, and `ids`
+/// are read from the checkout it is given, so each is a change that checkout holds.
 fn regenerate(onto: &str, ids: &[String], merged: &Path) -> Result<clm_regenerate::Tree, Error> {
     match clm_regenerate::regenerated(merged, onto, ids, false)? {
         clm_regenerate::Regenerated::Tree(tree) => Ok(tree),
