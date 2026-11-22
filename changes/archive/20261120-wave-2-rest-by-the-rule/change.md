@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-proof-is-real-upgrade-note-doesn-t-say-wiring-switches-on-a-check-too]
 ---
 
