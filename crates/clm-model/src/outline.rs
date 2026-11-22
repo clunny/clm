@@ -202,7 +202,8 @@ mod tests {
     #[test]
     fn yaml_fence_reads_fences_as_fence_mask_does() {
         let lines = [
-            "````", "```yaml", "shown: 1", "```", "````", "~~~yaml", "a: 1", "```", "~~~~", "after",
+            "````", "```yaml", "shown: 1", "```", "````", "~~~~yaml", "a: 1", "```", "~~~~",
+            "after",
         ];
         assert_eq!(yaml_fence(&lines).as_deref(), Some("a: 1\n```\n"));
     }
