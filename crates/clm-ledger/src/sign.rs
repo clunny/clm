@@ -147,6 +147,25 @@ pub fn signed(root: &Path, rev: &str) -> Result<bool, Error> {
     holds(root, rev, SIGNERS)
 }
 
+impl crate::Fold {
+    /// `cleared` as a caller judging `rev` counts it (`request-cleared`): where `rev` is
+    /// signed, only an approval whose line as read is signed by its writer under
+    /// `clm-approve` counts, since an unsigned line can carry any writer's name.
+    pub fn cleared_at(&self, root: &Path, rev: &str, request: &Record) -> Result<bool, Error> {
+        if !signed(root, rev)? {
+            return Ok(self.cleared(request));
+        }
+        for approval in self.clearing(request) {
+            if let Some(line) = self.lines.get(&approval.id)
+                && signed_by(root, rev, line, "clm-approve")?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
 /// Whether `rev`'s tree holds `path`, relative to its top.
 fn holds(root: &Path, rev: &str, path: &str) -> Result<bool, Error> {
     let args = ["ls-tree", "--full-tree", "--name-only", rev, "--", path];

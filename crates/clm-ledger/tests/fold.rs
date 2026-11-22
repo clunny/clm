@@ -8,6 +8,7 @@ fn approved(fingerprint: &str) -> Body {
         fingerprint: fingerprint.into(),
         branch: "spec/x".into(),
         change: None,
+        clears: None,
     }
 }
 

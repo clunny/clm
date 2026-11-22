@@ -62,19 +62,37 @@ pub struct Fold {
 
 impl Fold {
     /// Whether a `changes_requested` record is cleared at its fingerprint: an `approved` record
-    /// for that fingerprint by the requester's person, at a later `at` as a string, signed or
-    /// not (`ledger/request-cleared`). Any other kind of record is never cleared. Whether the
+    /// for that fingerprint by the requester's person that names the request's `id` in its
+    /// `clears`, or has no `clears` and a later `at` as a string, signed or not
+    /// (`ledger/request-cleared`). Any other kind of record is never cleared. Whether the
     /// request names the fingerprint a land or a review is at is the caller's test.
     pub fn cleared(&self, request: &Record) -> bool {
-        let Body::ChangesRequested { fingerprint, .. } = &request.body else {
-            return false;
+        self.clearing(request).next().is_some()
+    }
+
+    /// The approvals that clear `request` by `cleared`'s rule, signed or not.
+    pub(crate) fn clearing<'a>(&'a self, request: &'a Record) -> impl Iterator<Item = &'a Record> {
+        let fingerprint = match &request.body {
+            Body::ChangesRequested { fingerprint, .. } => Some(fingerprint),
+            _ => None,
         };
         let requester = person(&request.writer);
-        self.approvals.get(fingerprint).is_some_and(|approvals| {
-            approvals
-                .iter()
-                .any(|a| person(&a.writer) == requester && a.at > request.at)
-        })
+        fingerprint
+            .and_then(|f| self.approvals.get(f))
+            .into_iter()
+            .flatten()
+            .filter(move |a| {
+                person(&a.writer) == requester
+                    && match &a.body {
+                        // Named, whatever either record's clock said.
+                        Body::Approved {
+                            clears: Some(ids), ..
+                        } => ids.contains(&request.id),
+                        // Written before approvals named their requests: by time.
+                        Body::Approved { clears: None, .. } => a.at > request.at,
+                        _ => false,
+                    }
+            })
     }
 
     /// The last `n` `landed` records that carry `check_seconds`, oldest first (`landed-times`).

@@ -93,7 +93,7 @@ fn effort_choice_without_default_features() {
 
 #[test]
 fn cleared_without_default_features() {
-    // req:ledger/request-cleared@3e4c06c9
+    // req:ledger/request-cleared@8069ffc9
     test_without_default_features("cleared");
 }
 
