@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-detector-refuses-verify-s-move-off-run-check-before-land-can]
 ---
 
