@@ -551,7 +551,9 @@ fn a_base_no_commit_has_is_compared_by_hand() {
         "changes/y/deltas/a.md",
         &delta.replace(&design, &typed),
     );
-    commit(&r.work, "a base typed by hand");
+    // Recorded so from the start: no commit of the branch set it from another base, so
+    // there is nothing to take back.
+    git(&r.work, &["commit", "-qa", "--amend", "--no-edit"]);
     main_moves(&r, &[("src/other.rs", "other\n")]);
 
     let left = unfinished(&r, &["y"]);
@@ -1599,5 +1601,123 @@ fn when_every_change_has_an_unknown_base_the_first_in_id_order_goes() {
             assert!(!left.iter().any(|l| l.contains("changes/x/")), "{left:?}");
         }
         Regenerated::Tree(_) => panic!("both bases are unknown"),
+    }
+}
+
+/// Every file under `dir`'s `specs/`, by path relative to `dir`, with its bytes.
+fn specs_files(dir: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![PathBuf::from("specs")];
+    while let Some(rel) = stack.pop() {
+        let Ok(entries) = fs::read_dir(dir.join(&rel)) else {
+            continue;
+        };
+        for entry in entries {
+            let entry = entry.unwrap();
+            let child = rel.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                stack.push(child);
+            } else {
+                out.insert(child.clone(), fs::read(dir.join(&child)).unwrap());
+            }
+        }
+    }
+    out
+}
+
+/// `rev`'s `specs/`, by path, with each file's bytes.
+fn specs_at(r: &Repo, rev: &str) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    git(&r.work, &["ls-tree", "-r", "--name-only", rev, "--", "specs"])
+        .lines()
+        .map(|path| {
+            let spec = format!("{rev}:{path}");
+            let bytes = run(&r.work, &["cat-file", "blob", &spec], Options::default()).unwrap();
+            (PathBuf::from(path), bytes)
+        })
+        .collect()
+}
+
+/// `HEAD`, the index and the working tree of the work clone, to compare before and after.
+fn repository_state(r: &Repo) -> (String, String, String) {
+    (
+        git(&r.work, &["rev-parse", "HEAD"]),
+        git(&r.work, &["diff", "--cached"]),
+        git(&r.work, &["status", "--porcelain"]),
+    )
+}
+
+#[test]
+fn arguments_regenerated_is_given() {
+    // req:sync.regenerate/regenerated-tree@185eaf1f
+    let r = repo("spec/x");
+    apply_change(&r, "x", "", &adds_x());
+    let adds_q = format!(
+        "---\ncomponent: a\n---\n## ADDED Requirements\n{}",
+        requirement("q")
+    );
+    for (path, text) in change_files("p", "proposed", &adds_q) {
+        write(&r.work, &path, &text);
+    }
+    commit(&r.work, "propose p");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    let onto = onto(&r);
+    let before = repository_state(&r);
+    let ids = |ids: &[&str]| ids.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let specs_of = |ids: &[String]| match regenerated(&r.work, &onto, ids, false).unwrap() {
+        Regenerated::Tree(tree) => specs_files(tree.path()),
+        Regenerated::Stopped { left, .. } => panic!("{left:?}"),
+    };
+
+    let once = specs_of(&ids(&["x"]));
+    assert_eq!(specs_of(&ids(&["x", "x"])), once);
+    assert_eq!(repository_state(&r), before);
+
+    assert_eq!(specs_of(&[]), specs_at(&r, &onto));
+    assert_eq!(repository_state(&r), before);
+
+    let with_p = specs_of(&ids(&["p"]));
+    let a = String::from_utf8(with_p[Path::new("specs/a/SPEC.md")].clone()).unwrap();
+    assert!(a.contains("### Requirement: q"), "{a}");
+    assert_eq!(repository_state(&r), before);
+
+    match regenerated(&r.work, "no-such-ref", &ids(&["x"]), false) {
+        Err(Error::Git(why)) => assert!(why.contains("no-such-ref"), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("built a tree on no commit"),
+    }
+    assert_eq!(repository_state(&r), before);
+
+    match regenerated(&r.work, &onto, &ids(&["nope"]), false) {
+        Err(Error::Refused(why)) => assert!(why.contains("nope"), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("regenerated a change HEAD doesn't hold"),
+    }
+    assert_eq!(repository_state(&r), before);
+}
+
+#[test]
+fn git_failure_outside_a_repository() {
+    // req:sync.regenerate/regenerated-tree@185eaf1f
+    let dir = TempDir::new().unwrap();
+    // No repository above the temporary directory either.
+    let ceiling = dir.path().parent().unwrap();
+    let outside = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .current_dir(dir.path())
+            .env("GIT_CEILING_DIRECTORIES", ceiling)
+            .output()
+            .unwrap()
+    };
+    let probe = outside(&["rev-parse", "--show-prefix"]);
+    assert!(!probe.status.success(), "{probe:?}");
+    let message = String::from_utf8_lossy(&probe.stderr).trim().to_string();
+
+    // SAFETY: nextest runs each test in a process of its own.
+    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", ceiling) };
+    match regenerated(dir.path(), "HEAD", &[], false) {
+        Err(Error::Git(why)) => assert!(why.contains(&message), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("built a tree outside a repository"),
     }
 }
