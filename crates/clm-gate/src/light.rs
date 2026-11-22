@@ -7,7 +7,9 @@ use std::path::Path;
 
 use clm_model::{ChangeStatus, Graph, Node, Requirement};
 
-use crate::{ARCHIVE, At, Graphs, ReadPart, foreign_in, load_graph_at, renames_of, show};
+use crate::{
+    ARCHIVE, At, Graphs, ReadPart, foreign_in, load_graph_at, renames_of, show, show_bytes,
+};
 
 /// `Ok(Ok(c))` when `light` takes the branch, `c` its component; `Ok(Err(why))` naming the
 /// first condition it fails and what is at fault; `Err` when git fails. `spec` holds the
@@ -31,13 +33,13 @@ pub(crate) fn judge(
             &loaded
         }
     };
-    let c = match change_shape(at, spec, new_archived, &graphs.head.0)? {
+    let c = match change_shape(at, spec, new_archived)? {
         Ok(c) => c,
         Err(why) => return Ok(Err(why)),
     };
     for (rev, (_, violations)) in [(at.merge_base, &graphs.base), (at.head, &graphs.head)] {
-        if !violations.is_empty() {
-            return Ok(Err(format!("the specs at {rev} don't load")));
+        if let Some(v) = violations.first() {
+            return Ok(Err(format!("the specs at {rev} don't load: {v}")));
         }
     }
     // A cut makes a spec part need review too, so it is named first, as the more telling.
@@ -45,9 +47,11 @@ pub(crate) fn judge(
         return Ok(Err(format!("its spec part cuts: {cut}")));
     }
     if read.review {
-        return Ok(Err(
-            "its spec part would need review as a `spec` branch".to_string()
-        ));
+        let spec: Vec<&str> = spec.iter().map(|(_, f)| *f).collect();
+        return Ok(Err(format!(
+            "its spec part would need review as a `spec` branch: {}",
+            spec.join(", ")
+        )));
     }
     let added = match scenarios_added(&c, &graphs.base.0, &graphs.head.0) {
         Ok(added) => added,
@@ -78,7 +82,6 @@ fn change_shape(
     at: &At,
     spec: &[(char, &str)],
     new_archived: &BTreeSet<&str>,
-    head: &Graph,
 ) -> Result<Result<String, String>, String> {
     let not_its = |file: &str| {
         Err(format!(
@@ -113,17 +116,15 @@ fn change_shape(
         .map(|fm| fm.resolves.clone())
         .unwrap_or_default();
     let delta = format!("{deltas}{c}.md");
-    let spec_file = head
-        .nodes
-        .get(c)
-        .map(|n| n.path.to_string_lossy().replace('\\', "/"));
+    // A component's spec, as the model names a component from its directory under `specs/`.
+    let spec_file = format!("specs/{}/SPEC.md", c.replace('.', "/"));
     for &(status, file) in spec {
         let resolved = status == 'D'
             && file
                 .strip_prefix("backlog/")
                 .and_then(|f| f.strip_suffix(".md"))
                 .is_some_and(|slug| !slug.contains('/') && resolves.iter().any(|r| r == slug));
-        if file != change && file != delta && spec_file.as_deref() != Some(file) && !resolved {
+        if file != change && file != delta && file != spec_file && !resolved {
             return Ok(not_its(file));
         }
     }
@@ -157,7 +158,7 @@ fn blocks(r: &Requirement) -> (String, Vec<String>) {
     let lines: Vec<&str> = r.text.lines().collect();
     let mask = clm_model::outline::fence_mask(&lines);
     let headings: Vec<usize> = (1..lines.len())
-        .filter(|&i| !mask[i] && lines[i].starts_with("####"))
+        .filter(|&i| !mask[i] && lines[i].starts_with("#### "))
         .collect();
     let first = headings.first().copied().unwrap_or(lines.len());
     let statement = norm(&lines[1.min(first)..first].join("\n"));
@@ -280,7 +281,8 @@ fn not_current(at: &At, r: &Requirement) -> Result<Option<String>, String> {
     files.sort();
     let mut cited = false;
     for file in files {
-        let Ok(text) = show(at.repo, &at.object(at.head, &file)) else {
+        // A file whose bytes aren't UTF-8 holds no marker; any other failure fails the gate.
+        let Ok(text) = String::from_utf8(show_bytes(at.repo, &at.object(at.head, &file))?) else {
             continue;
         };
         for marker in clm_coverage::markers_in(Path::new(&file), &text) {
