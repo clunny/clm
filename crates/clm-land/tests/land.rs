@@ -660,7 +660,7 @@ fn every_command_named() {
 
 #[test]
 fn build_target_freed() {
-    // req:land/land-frees-build-target@67aa5013
+    // req:land/land-frees-build-target@17131754
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let linked = f.linked("linked", "impl/a");
@@ -681,7 +681,7 @@ fn build_target_freed() {
 
 #[test]
 fn main_worktree_target_kept() {
-    // req:land/land-frees-build-target@67aa5013
+    // req:land/land-frees-build-target@17131754
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.git(&f.work(), &["checkout", "-q", "impl/a"]);
@@ -699,7 +699,7 @@ fn main_worktree_target_kept() {
 
 #[test]
 fn spec_land_target_kept() {
-    // req:land/land-frees-build-target@67aa5013
+    // req:land/land-frees-build-target@17131754
     let f = Fixture::new("");
     f.write("gate-out", "spec\n");
     f.branch("spec/y", &[("specs/y/SPEC.md", "# y\n")]);
@@ -710,8 +710,30 @@ fn spec_land_target_kept() {
 }
 
 #[test]
+fn a_code_land_of_any_name_frees_its_target() {
+    // req:land/land-frees-build-target@17131754
+    let f = Fixture::new("");
+    f.branch("fix-x", &[("x.txt", "x\n")]);
+    let linked = f.linked("linked", "fix-x");
+    let target = linked.join("target");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::write(target.join("file"), "x").unwrap();
+    let out = clm_land::land(&linked, None, &f.env(&[])).unwrap();
+    assert!(!target.exists());
+    let main = f.remote("main");
+    let canonical = std::fs::canonicalize(&linked).unwrap().join("target");
+    assert_eq!(
+        out.lines,
+        [
+            format!("landed {main} code"),
+            format!("removed {}", canonical.display())
+        ]
+    );
+}
+
+#[test]
 fn failed_land_target_kept() {
-    // req:land/land-frees-build-target@67aa5013
+    // req:land/land-frees-build-target@17131754
     let f = Fixture::new("");
     f.write("check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -723,7 +745,7 @@ fn failed_land_target_kept() {
 
 #[test]
 fn other_branch_target_kept() {
-    // req:land/land-frees-build-target@67aa5013
+    // req:land/land-frees-build-target@17131754
     let f = Fixture::new("");
     f.branch("spec/z", &[("specs/z/SPEC.md", "# z\n")]);
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -736,7 +758,7 @@ fn other_branch_target_kept() {
 
 #[test]
 fn failed_delete_warns() {
-    // req:land/land-frees-build-target@67aa5013
+    // req:land/land-frees-build-target@17131754
     use std::os::unix::fs::PermissionsExt;
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);

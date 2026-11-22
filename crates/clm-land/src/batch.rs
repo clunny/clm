@@ -751,7 +751,7 @@ impl Batch<'_, '_, '_> {
             "landed {commit} {}",
             kind_words(m.judged.kind, m.judged.review)
         ));
-        if m.wanted.branch.starts_with("impl/") {
+        if m.judged.kind == LandKind::Code {
             free_build_target(repo, &m.wanted.branch, &mut out);
         }
         self.landed = Some(out);

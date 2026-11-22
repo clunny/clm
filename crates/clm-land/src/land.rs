@@ -733,7 +733,7 @@ pub(crate) fn land_into(
             Verdict::Spec { review: false } => format!("landed {merge} spec"),
             Verdict::Spec { review: true } => format!("landed {merge} spec review"),
         });
-        if branch.starts_with("impl/") {
+        if matches!(verdict, Verdict::Code) {
             free_build_target(&repo, &branch, out);
         }
         return Ok(());
@@ -802,7 +802,7 @@ pub(crate) fn finish_found(
         found.commit,
         crate::batch::kind_words(found.kind, found.review)
     ));
-    if branch.starts_with("impl/") {
+    if found.kind == LandKind::Code {
         free_build_target(repo, branch, out);
     }
     std::mem::take(out)
