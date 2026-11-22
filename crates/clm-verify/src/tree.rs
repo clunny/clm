@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn the_places_ignore_a_worktree_still_being_added() {
-        // req:verify/verify-run@ff539674
+        // req:verify/verify-run@e732f1e5
         let dir = tempfile::tempdir().unwrap();
         let main = dir.path().join("main");
         std::fs::create_dir(&main).unwrap();

@@ -334,3 +334,31 @@ fn a_host_that_fails_exits_1_with_its_message() {
     };
     assert!(why.contains("gh"), "{why}");
 }
+
+#[test]
+fn an_imported_record_kept_local() {
+    // req:verify/verify-run@e732f1e5
+    // An `origin` that refuses every push to the ledger: the record stays on the clone's own
+    // ledger branch, and the notes say so.
+    let f = Fixture::new(Some(IMPORT));
+    let g = f.land(&[("a.txt", "1\n")], "green");
+    f.verified(&g, true);
+    let l = f.land(&[("crates/a/x.rs", "1\n")], "l");
+    write_exec(
+        &f.path("origin.git/hooks/pre-receive"),
+        "#!/bin/sh\nwhile read old new ref; do\n  case $ref in refs/heads/clm/ledger/*) exit 1;; esac\ndone\n",
+    );
+    let out = with_gh(&f, &[run(&l, "completed", "success", 7)], || {
+        import(&f, &Request::Import)
+    });
+    assert_eq!(out.line, format!("verify passed {} 1 lands", &l[..7]));
+    assert_eq!(out.code, 0);
+    assert!(
+        out.notes
+            .iter()
+            .any(|n| n == "the record is committed locally; `clm reconnect` pushes it"),
+        "{:?}",
+        out.notes
+    );
+    assert!(matches!(last_body(&f), Body::Verified { commit, passed: true, .. } if commit == l));
+}

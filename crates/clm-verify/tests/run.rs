@@ -13,7 +13,7 @@ fn every_land() -> Fixture {
 
 #[test]
 fn a_passing_run() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -68,7 +68,7 @@ fn a_passing_run() {
 
 #[test]
 fn a_run_with_no_green_record_selects_nothing() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     assert_eq!(f.due().code, 0);
@@ -77,7 +77,7 @@ fn a_run_with_no_green_record_selects_nothing() {
 
 #[test]
 fn a_failing_run() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -117,7 +117,7 @@ fn a_failing_run() {
 
 #[test]
 fn a_red_runs_report() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -148,7 +148,7 @@ fn a_red_runs_report() {
 
 #[test]
 fn a_red_runs_report_names_the_open_step() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -184,7 +184,7 @@ fn a_red_runs_report_names_the_open_step() {
 
 #[test]
 fn a_red_run_answered_from_the_ledger_prints_no_report() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     let land = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&land, false);
@@ -195,7 +195,7 @@ fn a_red_run_answered_from_the_ledger_prints_no_report() {
 
 #[test]
 fn a_land_waits_for_the_slow_check() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     f.write("sleep", "2");
@@ -227,7 +227,7 @@ fn a_land_waits_for_the_slow_check() {
 
 #[test]
 fn two_runs_never_move_the_tree_under_each_other() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     let old = f.land(&[("a.txt", "1\n")], "old");
     let new = f.land(&[("a.txt", "2\n")], "new");
@@ -249,7 +249,7 @@ fn two_runs_never_move_the_tree_under_each_other() {
 
 #[test]
 fn a_selection_that_cannot_be_made_runs_every_test() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     if let Some(stderr) = in_child("a_selection_that_cannot_be_made_runs_every_test") {
         assert!(
             stderr
@@ -300,7 +300,7 @@ fn ran_in_a_listed_tree(f: &Fixture, out: &clm_verify::Outcome) {
 
 #[test]
 fn a_broken_tree_is_remade() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     // A tree from an earlier run whose `.git` file at its top was removed.
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
@@ -325,7 +325,7 @@ fn a_broken_tree_is_remade() {
 
 #[test]
 fn a_record_kept_local() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -365,8 +365,37 @@ fn a_record_kept_local() {
 }
 
 #[test]
+fn the_logs_warning_names_clm_verify() {
+    // req:verify/verify-run@e732f1e5
+    if let Some(stderr) = in_child("the_logs_warning_names_clm_verify") {
+        assert!(
+            stderr
+                .lines()
+                .any(|l| l.starts_with("clm verify: warning: can't write the check's log at ")),
+            "{stderr}"
+        );
+        assert!(
+            !stderr.lines().any(|l| l.starts_with("clm land:")),
+            "{stderr}"
+        );
+        return;
+    }
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let head = f.land(&[("a.txt", "2\n")], "two");
+    // `.clm/verify-logs` a file, so the check's log can't be created.
+    let logs = f.work().join(".clm/verify-logs");
+    std::fs::create_dir_all(logs.parent().unwrap()).unwrap();
+    std::fs::write(&logs, "not a directory\n").unwrap();
+    let out = f.due();
+    assert_eq!(out.line, format!("verify passed {} 1 lands", &head[..7]));
+    assert_eq!(out.code, 0);
+}
+
+#[test]
 fn one_at_a_time() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     f.write("sleep", "1");
@@ -385,7 +414,7 @@ const CHILD: &str = "CLM_TEST_STDERR_FULL";
 #[cfg(target_os = "linux")]
 #[test]
 fn the_verdict_outlives_a_failing_stderr() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@e732f1e5
     if std::env::var_os(CHILD).is_none() {
         // The scenario runs in a child whose stderr is `/dev/full`.
         let full = std::fs::OpenOptions::new()
