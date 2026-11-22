@@ -385,6 +385,55 @@ fn no_step_says_who() {
 }
 
 #[test]
+fn the_holders_warnings_come_before_its_refusal() {
+    // req:land/commands-in-crate@9f588532
+    // As `the_holders_own_branch_breaks_the_check`, the holder's `clm land` run as the call.
+    let f = Fixture::new("");
+    check_with(&f, "[ ! -e a_file.txt ]");
+    branches(&f, &["a", "b", "c"]);
+    let held = hold(&f);
+    let env = f.env(&[]);
+    let (holder, others) = std::thread::scope(|s| {
+        let work = f.work();
+        let env = &env;
+        let holder = s.spawn(move || {
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            let code = clm_land::land_command(["impl/a"], &work, env, &mut out, &mut err);
+            (code, String::from_utf8_lossy(&err).into_owned())
+        });
+        wait_for_tickets(&f.work(), 1);
+        let mut others = Vec::new();
+        for (i, name) in ["b", "c"].iter().enumerate() {
+            let work = f.work();
+            let branch = format!("impl/{name}");
+            others.push(s.spawn(move || clm_land::land(&work, Some(&branch), env)));
+            wait_for_tickets(&f.work(), i + 2);
+        }
+        drop(held);
+        let others: Vec<_> = others.into_iter().map(|r| r.join().unwrap()).collect();
+        (holder.join().unwrap(), others)
+    });
+    assert!(others.iter().all(Result::is_ok), "{others:?}");
+    let (code, stderr) = holder;
+    assert_eq!(code, 1, "{stderr}");
+    let lines: Vec<&str> = stderr.lines().collect();
+    let said = lines
+        .iter()
+        .position(|l| l.contains("the check of the lands taken together failed"))
+        .expect(&stderr);
+    assert!(
+        lines[said].starts_with("clm land: warning: ")
+            && lines[said].matches("clm land: ").count() == 1,
+        "{stderr}"
+    );
+    let refusal = lines
+        .iter()
+        .rposition(|l| l.starts_with("clm land: ") && !l.starts_with("clm land: warning: "))
+        .expect(&stderr);
+    assert!(said < refusal, "{stderr}");
+}
+
+#[test]
 fn the_holders_own_branch_breaks_the_check() {
     // req:land/failed-batch@b38c0772
     let f = Fixture::new("");

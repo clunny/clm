@@ -585,7 +585,7 @@ impl Batch<'_, '_, '_> {
             )
         };
         self.warnings.push(format!(
-            "clm land: the check of the lands taken together failed; {next}"
+            "the check of the lands taken together failed; {next}"
         ));
         if !others.is_empty()
             && let Some(rest) = self.build(&others)?

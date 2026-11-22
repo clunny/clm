@@ -6,7 +6,7 @@ mod common;
 use std::ffi::OsString;
 use std::time::{Duration, Instant};
 
-use clm_land::{CheckEnv, Step, run_check};
+use clm_land::{CheckEnv, Step, run_check, run_check_as};
 use common::{Fixture, refused};
 
 fn passes() -> CheckEnv {
@@ -15,7 +15,7 @@ fn passes() -> CheckEnv {
 
 #[test]
 fn a_caller_waits_on_the_check_lock() {
-    // req:land/shared-check-runner@54ccc864
+    // req:land/shared-check-runner@64d3e878
     let f = Fixture::new("");
     let work = std::fs::canonicalize(f.work()).unwrap();
     let lock_path = work.join(".clm/check.lock");
@@ -40,7 +40,7 @@ fn a_caller_waits_on_the_check_lock() {
 
 #[test]
 fn the_open_step_returned() {
-    // req:land/shared-check-runner@54ccc864
+    // req:land/shared-check-runner@64d3e878
     let f = Fixture::new("");
     let script = "echo '::group::a'; echo x; echo '::group::b'; echo y; echo z; exit 1";
     let run = run_check(script, &f.work(), None, &passes(), None).unwrap();
@@ -59,7 +59,7 @@ fn the_open_step_returned() {
 
 #[test]
 fn the_selection_and_the_environment_reach_the_command() {
-    // req:land/shared-check-runner@54ccc864
+    // req:land/shared-check-runner@64d3e878
     let f = Fixture::new("");
     let selection = f.path("selection");
     std::fs::write(&selection, "file a\n").unwrap();
@@ -86,7 +86,7 @@ fn the_selection_and_the_environment_reach_the_command() {
 
 #[test]
 fn land_unchanged() {
-    // req:land/shared-check-runner@54ccc864
+    // req:land/check-log@6fefb1a1
     let f = Fixture::new("");
     f.write("check-prints", "for i in $(seq 50); do echo $i; done\n");
     f.write("check-fails", "");
@@ -109,7 +109,7 @@ fn land_unchanged() {
 
 #[test]
 fn the_exit_code_returned() {
-    // req:land/shared-check-runner@54ccc864
+    // req:land/shared-check-runner@64d3e878
     let f = Fixture::new("");
     let run = run_check("exit 127", &f.work(), None, &passes(), None).unwrap();
     assert!(!run.passed);
@@ -125,10 +125,50 @@ fn the_exit_code_returned() {
 /// Set in the child the scenario below re-runs itself in.
 const CHILD: &str = "CLM_TEST_STDERR_FULL";
 
+/// Set in the child `the_logs_warning_names_the_caller` re-runs itself in.
+const NAMED: &str = "CLM_TEST_LOG_WARNING";
+
+#[test]
+fn the_logs_warning_names_the_caller() {
+    // req:land/shared-check-runner@64d3e878
+    if std::env::var_os(NAMED).is_none() {
+        // The runner writes on the process's stderr: the scenario runs in a child whose
+        // stderr the test reads.
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "the_logs_warning_names_the_caller",
+                "--nocapture",
+            ])
+            .env(NAMED, "1")
+            .output()
+            .unwrap();
+        let said = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "{said}");
+        let log = said
+            .lines()
+            .find_map(|l| l.strip_prefix("log at "))
+            .expect(&said);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let warning = format!("clm x: warning: can't write the check's log at {log}");
+        assert!(stderr.lines().any(|l| l.starts_with(&warning)), "{stderr}");
+        return;
+    }
+    let f = Fixture::new("");
+    // A log whose directory can't be created: its parent is a file.
+    let blocker = f.path("blocker");
+    std::fs::write(&blocker, "").unwrap();
+    let log = blocker.join("run.log");
+    let run = run_check_as("clm x", "echo ok", &f.work(), None, &passes(), Some(&log)).unwrap();
+    assert!(run.passed);
+    assert!(!run.logged);
+    println!("log at {}", log.display());
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn a_failing_stderr_ends_nothing() {
-    // req:land/shared-check-runner@54ccc864
+    // req:land/shared-check-runner@64d3e878
     if std::env::var_os(CHILD).is_none() {
         // The scenario runs in a child whose stderr is `/dev/full`.
         let full = std::fs::OpenOptions::new()

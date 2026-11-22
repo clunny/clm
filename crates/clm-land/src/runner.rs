@@ -38,13 +38,16 @@ pub struct CheckRun {
     pub steps: Vec<clm_ledger::TimedStep>,
 }
 
-/// Runs `command` through `sh -c` in `dir`, under the check lock of the clone `dir` belongs
-/// to (`.clm/check.lock` in the CLM root of its main worktree), printing a waiting line once
-/// when another check holds it. Its stdout and stderr go, in the order written, to stderr and
-/// to `log` when given (created with its directories and truncated), as `check-log` says. The
-/// log is left for the caller to keep or remove. `dir` is the CLM root of a checkout (a land
-/// tree included), not a subdirectory of it, since the lock's place follows from it.
-pub fn run_check(
+/// Runs `command` through `sh -c` in `dir` for the command `name` (`clm land`, `clm verify`),
+/// under the check lock of the clone `dir` belongs to (`.clm/check.lock` in the CLM root of
+/// its main worktree), printing a waiting line once when another check holds it. Its stdout
+/// and stderr go, in the order written, to stderr and to `log` when given (created with its
+/// directories and truncated), as `check-log` says; a log that can't be created is said in a
+/// warning that names `name`. The log is left for the caller to keep or remove. `dir` is the
+/// CLM root of a checkout (a land tree included), not a subdirectory of it, since the lock's
+/// place follows from it.
+pub fn run_check_as(
+    name: &str,
     command: &str,
     dir: &Path,
     selection: Option<&Path>,
@@ -54,6 +57,7 @@ pub fn run_check(
     let places = places_of(dir)?;
     run_in(
         &places,
+        name,
         command,
         dir,
         selection,
@@ -63,6 +67,22 @@ pub fn run_check(
         Stderr::PROCESS,
     )
 }
+
+/// `run_check_as` under the name `clm land`, the runner's form from before it took a name,
+/// offered while `verify` moves off it (`land/runner-names-its-caller`).
+// clm:remove-by 20261122-the-check-runner-s
+pub fn run_check(
+    command: &str,
+    dir: &Path,
+    selection: Option<&Path>,
+    env: &CheckEnv,
+    log: Option<&Path>,
+) -> Result<CheckRun, Error> {
+    run_check_as(LAND, command, dir, selection, env, log)
+}
+
+/// The name `clm land` and `clm land --check-only` run the check under.
+pub(crate) const LAND: &str = "clm land";
 
 /// `<main worktree>/<prefix>/.clm` for the repository `root` is in, `<prefix>` where `root`
 /// is in its git repository: where a land keeps everything it keeps (`land/land-tree`).
@@ -81,6 +101,7 @@ pub(crate) fn places_of(root: &Path) -> Result<PathBuf, Error> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_in(
     places: &Path,
+    name: &str,
     command: &str,
     dir: &Path,
     selection: Option<&Path>,
@@ -94,7 +115,7 @@ pub(crate) fn run_in(
     let _lock = rank
         .map(|rank| crate::lock::check(places, rank, |l| err.line(l)))
         .transpose()?;
-    let logged = check_log::run(shell(command, dir, selection, env), log, err)?;
+    let logged = check_log::run(shell(command, dir, selection, env), name, log, err)?;
     Ok(CheckRun {
         passed: logged.status.success(),
         code: logged.status.code(),
@@ -162,7 +183,7 @@ mod tests {
 
     #[test]
     fn the_waiting_line_is_said_once_and_the_command_runs_after_the_lock() {
-        // req:land/shared-check-runner@54ccc864
+        // req:land/shared-check-runner@64d3e878
         let dir = tempfile::tempdir().unwrap();
         let places = dir.path().join(".clm");
         std::fs::create_dir_all(&places).unwrap();
@@ -178,6 +199,7 @@ mod tests {
         let start = Instant::now();
         let run = run_in(
             &places,
+            LAND,
             "echo ok",
             dir.path(),
             None,
