@@ -75,3 +75,21 @@ pub fn current(graph: &Graph, id: &str, path: &str, line: usize) -> Marker {
     let version = graph.requirement(id).unwrap().version().to_string();
     marker(id, Some(&version), path, line)
 }
+
+/// Points this process's git, and every git it starts, at no repository but one found
+/// from the directory it runs in: no inherited `GIT_DIR`, work tree or index.
+pub fn no_outer_git() {
+    // SAFETY: nextest runs each test in a process of its own.
+    unsafe {
+        for var in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
+            std::env::remove_var(var);
+        }
+    }
+}
+
+/// Pins `d` outside any git work tree, whatever holds the temporary directory.
+pub fn outside_git(d: &Path) {
+    no_outer_git();
+    // SAFETY: nextest runs each test in a process of its own.
+    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", d.parent().unwrap()) };
+}

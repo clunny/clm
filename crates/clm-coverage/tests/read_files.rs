@@ -11,6 +11,9 @@ use std::process::{Command, Stdio};
 
 use tempfile::TempDir;
 
+mod common;
+use common::{no_outer_git, outside_git};
+
 // Fixture markers are built so the literal never appears whole (`dangling-markers`).
 const REQ: &str = concat!("req", ":");
 
@@ -30,24 +33,6 @@ fn located(markers: &[clm_coverage::Marker]) -> Vec<(String, String)> {
         .iter()
         .map(|m| (m.id.clone(), m.to_string()))
         .collect()
-}
-
-/// Points this process's git, and every git it starts, at no repository but one found
-/// from the directory it runs in: no inherited `GIT_DIR`, work tree or index.
-fn no_outer_git() {
-    // SAFETY: nextest runs each test in a process of its own.
-    unsafe {
-        for var in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
-            std::env::remove_var(var);
-        }
-    }
-}
-
-/// Pins `d` outside any git work tree, whatever holds the temporary directory.
-fn outside_git(d: &Path) {
-    no_outer_git();
-    // SAFETY: nextest runs each test in a process of its own.
-    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", d.parent().unwrap()) };
 }
 
 #[test]

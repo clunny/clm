@@ -5,19 +5,11 @@ use std::fs;
 
 use tempfile::TempDir;
 
+mod common;
+use common::outside_git;
+
 // Fixture markers are built so the literal never appears whole in this file.
 const MARK: &str = concat!("clm", ":remove-by ");
-
-/// Pins `d` outside any git work tree, so `scan` reads the files under it.
-fn outside_git(d: &std::path::Path) {
-    // SAFETY: nextest runs each test in a process of its own.
-    unsafe {
-        for var in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
-            std::env::remove_var(var);
-        }
-        std::env::set_var("GIT_CEILING_DIRECTORIES", d.parent().unwrap());
-    }
-}
 
 #[test]
 fn scenario_what_may_come_before_a_marker() {
