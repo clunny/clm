@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [verify-env-s-bisect-case-can-t-hold-with-bad-as-origin-main-s]
 ---
 
