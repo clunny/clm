@@ -15,7 +15,7 @@ A component's assets are the files under `specs/<component path>/assets/` (`node
 
 The graph offers `requirement(id)`, a component's requirement or a layer's entry; `entry(id)`, an entry alone; `requirements()`, every component's requirements, then the architecture entries, then the capabilities; `effective_serves(id)`, the entries a rule serves (`serves`); `heading(layer)`, the heading a layer's file writes its entries under; `capability_node()` and `capability_tests_node()` (`reserved-ids`, `capability-tests-component`); `backlog_node_known(id)` (`backlog-components`); the root's `outside()` and `wiring()`, absent when the root doesn't set the key; and `declared_frontmatter_keys()`, the component frontmatter keys live changes declare (`declared-frontmatter-keys`). A requirement gives its `id`, `text`, `hash` and `version()` (`content-hash`), its `needs` (`requirement-needs`) and `serves`, and, for an entry, its `enforced_by` rules and its `#### Untested` text.
 
-The model offers the checks loading runs, so another component judges by the same rules: `parse_node(id, path, text, declared)` and `check_graph(graph)` (`graph-check`), `check_node_frontmatter(id, path, frontmatter_text, declared)`, which gives the parsed frontmatter with the root rules' violations, or the violations of the rules the text alone decides (`optional-nodes`), and `check_exemptions(value)` (`exemptions`). It offers the parse of one record's text, `parse_change_frontmatter(text)` (`parse-changes`) and `parse_backlog_item(slug, text)` (`parse-backlog-item`); `content_hash(text)` and `asset_hash(bytes)`; `split_frontmatter(text)`, a file's `---` block and the rest; the `outline` it reads a spec's sections, requirement blocks and code fences by; `carried()`; `Layer`, with each layer's ID prefix and file; `Priority`, `P1` the highest; whether a change is pending, `ChangeStatus::is_pending`; the term lists `STATUS_TERMS`, `CHANGE_STATUS_TERMS`, `BACKLOG_KIND_TERMS` and `CHANGE_KEYS` (`term-lists`); and `ROOT_ID` and `ARCHIVE_DIR`, the root's ID and the archive's directory name. It builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
+The model offers the checks loading runs, so another component judges by the same rules: `parse_node(id, path, text, declared)` and `check_graph(graph)` (`graph-check`), `check_node_frontmatter(id, path, frontmatter_text, declared)`, which gives the parsed frontmatter with the root rules' violations, or the violations of the rules the text alone decides (`optional-nodes`), and `check_exemptions(value)` (`exemptions`). It offers the parse of one record's text, `parse_change_frontmatter(text)` (`parse-changes`) and `parse_backlog_item(slug, text)` (`parse-backlog-item`); `content_hash(text)` and `asset_hash(bytes)`; `split_frontmatter(text)`, a file's `---` block and the rest; the `outline` it reads a spec's sections, requirement blocks and code fences by (`code-fences`); `carried()`; `Layer`, with each layer's ID prefix and file; `Priority`, `P1` the highest; whether a change is pending, `ChangeStatus::is_pending`; the term lists `STATUS_TERMS`, `CHANGE_STATUS_TERMS`, `BACKLOG_KIND_TERMS` and `CHANGE_KEYS` (`term-lists`); and `ROOT_ID` and `ARCHIVE_DIR`, the root's ID and the archive's directory name. It builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
 
 ## Design
 TBD.
@@ -1127,3 +1127,31 @@ The root component's frontmatter MAY set `wiring` to a list of globs, written as
 - GIVEN a violation with path `specs/a/SPEC.md`, rule `check/x` and message `m`
 - WHEN its line is asked for
 - THEN it is `specs/a/SPEC.md: check/x: m`
+
+### Requirement: code-fences
+The model SHALL read the code fences of every Markdown text it outlines (a component's `SPEC.md`, a delta, a human layer's file, a carried constraint) as CommonMark reads them, and `outline::fence_mask(lines)` SHALL mark each line that opens or closes a fence or lies inside one. A fence opens on a line that, after leading white space, starts with a run of three or more backticks or three or more tildes, unless the run is of backticks and another backtick follows it on the line. It closes on the first later line that, with leading and trailing white space taken off, is only a run of the opening run's character at least as long as that run; a fence never closed runs to the end of the text. A line inside a fence opens, closes and starts nothing. This is the reading `check/asset-references` gives fences, so a requirement's statement, which ends at its first `####` line outside a fence (`gate/cuts`, `check.health/rule-signals`), ends where the code spans read in it end.
+
+#### Scenario: a backtick run with a backtick after it opens no fence
+- GIVEN the lines ```` ```x``` ````, `#### Scenario: s` and `text`
+- WHEN `fence_mask` reads them
+- THEN no line is marked
+
+#### Scenario: a fence closes only on a bare run at least as long
+- GIVEN the lines ```` ```` ````, ```` ``` ````, ```` ```rust ````, `#### Scenario: fake`, ```` ```` ```` and `after`
+- WHEN `fence_mask` reads them
+- THEN the first five lines are marked and `after` is not
+
+#### Scenario: a tilde fence closes only on tildes
+- GIVEN the lines `~~~`, ```` ``` ````, `~~~ not a close`, `~~~~` and `after`
+- WHEN `fence_mask` reads them
+- THEN the first four lines are marked and `after` is not
+
+#### Scenario: a fence never closed
+- GIVEN the lines ```` ``` ```` and `## Design`
+- WHEN `fence_mask` reads them
+- THEN both lines are marked
+
+#### Scenario: a heading in a longer fence
+- GIVEN a `SPEC.md` whose requirement `a` holds a fence of four backticks containing a line of three backticks and then `### Requirement: fake`
+- WHEN the model loads it
+- THEN the component's one requirement is `a`, and its text holds `### Requirement: fake`
