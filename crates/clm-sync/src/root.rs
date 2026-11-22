@@ -1,6 +1,6 @@
 //! `paths-under-the-root`: how `clm rebase` names the CLM root's files, a root that may be a
 //! subdirectory of its git repository (`root-from-cwd`). A second copy of the gate's
-//! naming (`gate/paths-under-the-root`), since `clm-sync` doesn't depend on `clm-gate`.
+//! naming (`gate/paths-under-the-root`), since `gate`'s Contract offers no call that names one.
 
 use std::path::Path;
 

@@ -2,7 +2,7 @@
 //! print and their exit status. The rebase's call writes each warning as `clm rebase: <text>`
 //! (`warnings-name-the-command`).
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
@@ -27,17 +27,24 @@ pub struct AutosyncArgs {
     pub root: Option<PathBuf>,
 }
 
-/// The command line `rebase_command` parses: the command's own arguments, without its name.
+// The command line `rebase_command` parses: the command's own arguments, without its name.
 #[derive(Parser)]
-#[command(no_binary_name = true)]
+#[command(
+    no_binary_name = true,
+    about = "Rebase the branch onto origin/main, regenerate applied specs and run `clm check`; \
+             exit 1 with what is left to resolve"
+)]
 struct RebaseLine {
     #[command(flatten)]
     args: RebaseArgs,
 }
 
-/// The command line `autosync_command` parses: the command's own arguments, without its name.
+// The command line `autosync_command` parses: the command's own arguments, without its name.
 #[derive(Parser)]
-#[command(no_binary_name = true)]
+#[command(
+    no_binary_name = true,
+    about = "Push a snapshot of the spec work on a `spec/*` branch to origin as `autosync/<branch>`"
+)]
 struct AutosyncLine {
     #[command(flatten)]
     args: AutosyncArgs,
@@ -128,13 +135,14 @@ fn rebase(
 }
 
 /// `clm autosync` with `args`, the strings the command line gives after the command's name,
-/// in `root` unless `--root` overrides it. Writes what the command prints to `out` and `err`
-/// and returns its exit status: 0 when it pushed or had nothing to push, the failure's status
+/// in `root` unless `--root` overrides it, with `env` as the environment, whose
+/// `GIT_SSH_COMMAND` git is given. Writes what the command prints to `out` and `err` and
+/// returns its exit status: 0 when it pushed or had nothing to push, the failure's status
 /// when git fails, 2 for arguments it can't parse.
 pub fn autosync_command<I, T>(
     args: I,
     root: &Path,
-    _env: &dyn Fn(&str) -> Option<String>,
+    env: &dyn Fn(&str) -> Option<String>,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8
@@ -144,7 +152,10 @@ where
 {
     match parsed::<AutosyncLine, _, _>(args, "clm autosync", out, err) {
         Err(code) => code,
-        Ok(AutosyncLine { args }) => match crate::autosync(args.root.as_deref().unwrap_or(root)) {
+        Ok(AutosyncLine { args }) => match crate::snapshot(
+            args.root.as_deref().unwrap_or(root),
+            env("GIT_SSH_COMMAND").as_deref().map(OsStr::new),
+        ) {
             Ok(()) => 0,
             Err(e) => writeln!(err, "clm autosync: {e}").map_or(2, |()| e.exit_code()),
         },

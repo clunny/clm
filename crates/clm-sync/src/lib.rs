@@ -1,4 +1,4 @@
-//! Keeps branches converged with `main`: `clm sync` and `clm autosync` (see
+//! Keeps branches converged with `main`: `clm rebase` and `clm autosync` (see
 //! specs/sync/SPEC.md).
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -39,7 +39,7 @@ const SPEC_PATHS: [&str; 8] = [
 /// `Failure` (`shared-plumbing-in-git`).
 pub use clm_git::Failure as Error;
 
-/// What a `clm sync` run found and did.
+/// What a `clm rebase` run found and did.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Report {
     /// One line each: what is left for the caller (`conflict <path>`, a stale delta, a
@@ -370,7 +370,7 @@ fn conclude(
 
 /// `judged-by-check`, on `HEAD` checked out in `scratch`: the settings `main` brought in,
 /// loaded on every branch, so a `clm` that `clm check` and `clm land` would fail on them
-/// never says `sync ok`; the reconsider items, scored there and filed in `root`; and every
+/// never says `rebase ok`; the reconsider items, scored there and filed in `root`; and every
 /// `clm check` rule, its violations after `left`, what stopped an archive. Returns the
 /// lines, each naming files by their path under `root`, and whether the settings loaded
 /// and the check passed.
@@ -648,7 +648,7 @@ fn spec_changed(
     Ok(out)
 }
 
-/// `archive-complete` (`archive-on-sync`): on a branch `impl/*`, sets each `specd` node with
+/// `archive-complete` (`archive-on-sync`): on a branch `impl/*`, sets each `unbuilt` node with
 /// nothing pending at `HEAD` to `active`, and archives each complete change, deleting the
 /// backlog items it resolves, one `Archive <id>` commit each (the activations ride the first,
 /// or an `Activate <node>` commit of their own). Returns what it did (`activated <node>`,
@@ -806,7 +806,7 @@ fn names(root: &Path, args: &[&str]) -> Result<Vec<String>, Error> {
 /// its status is `done`. A `change.md` whose frontmatter doesn't parse is added, not
 /// regenerated. An archived copy of a change `HEAD` also holds live is left to the live one.
 /// A change `onto` holds `proposed` or `approved` that `HEAD` has `applied`, or archived
-/// `done`, is regenerated too (`regenerate-applied-live-changes`).
+/// `done`, is regenerated too (`reapply`).
 fn added_changes(
     root: &Path,
     onto: &str,
@@ -849,7 +849,7 @@ fn added_changes(
             clm_model::parse_change_frontmatter(&text).is_some_and(|fm| fm.status == regenerated);
         ids.insert(id.to_string(), regenerate);
     }
-    // A change `onto` holds unapplied, which `HEAD` applies (`regenerate-applied-live-changes`):
+    // A change `onto` holds unapplied, which `HEAD` applies (`reapply`):
     // `onto`'s `specs/` lacks its deltas, so they are regenerated as an added change's are.
     let status_at = |rev: &str, file: &str| -> Result<Option<clm_model::ChangeStatus>, Error> {
         let text = git(root, &["show", &object(rev, file)])?;
@@ -902,7 +902,7 @@ fn change_files(root: &Path, rev: &str) -> Result<BTreeSet<String>, Error> {
 /// re-applied (`regenerated`), committing the result when it differs from `HEAD`. A change
 /// that doesn't apply stops it before it writes anything to `specs/`. Then the deltas of the
 /// other live `proposed` or `approved` changes the regenerated tree made stale are merged
-/// too (`other-delta-merge`). Returns the `merged` lines, and what is left: the violations
+/// too (`sync.regenerate/stale-delta-merge`). Returns the `merged` lines, and what is left: the violations
 /// and the stale-delta report.
 fn regenerate(
     root: &Path,
@@ -953,7 +953,7 @@ fn regenerate(
             ],
         )?;
     }
-    // `other-delta-merge`: the regenerated tree is the last stage.
+    // `sync.regenerate/stale-delta-merge`: the regenerated tree is the last stage.
     let (lines, left) = tree.other_deltas(root, ids, onto)?;
     merged_lines.extend(lines);
     Ok((merged_lines, left))
@@ -962,8 +962,14 @@ fn regenerate(
 /// `autosync-policy`: on a `spec/*` branch, pushes `HEAD` with the working tree's spec paths
 /// (untracked files included) to `origin` as `autosync/<branch>`, leaving the working tree,
 /// the index and the branch untouched. Does nothing on other branches or when `origin`
-/// already has the same tree.
+/// already has the same tree. A `GIT_SSH_COMMAND` in this process's environment is git's.
 pub fn autosync(root: &Path) -> Result<(), Error> {
+    snapshot(root, std::env::var_os("GIT_SSH_COMMAND").as_deref())
+}
+
+/// `autosync` with `ssh`, the `GIT_SSH_COMMAND` of the environment the caller was given,
+/// handed to git as it is; with none, ssh may neither ask nor wait long.
+fn snapshot(root: &Path, ssh: Option<&OsStr>) -> Result<(), Error> {
     let Some(branch) = branch(root) else {
         return Ok(());
     };
@@ -1025,13 +1031,13 @@ pub fn autosync(root: &Path) -> Result<(), Error> {
     }
     // Nothing may prompt or wait long: no credential prompts, and ssh fails fast rather
     // than asking for a passphrase or host key, unless the user set their own ssh command.
-    let mut env = vec![("GIT_TERMINAL_PROMPT", OsStr::new("0"))];
-    if std::env::var_os("GIT_SSH_COMMAND").is_none() {
-        env.push((
+    let env = [
+        ("GIT_TERMINAL_PROMPT", OsStr::new("0")),
+        (
             "GIT_SSH_COMMAND",
-            OsStr::new("ssh -o BatchMode=yes -o ConnectTimeout=10"),
-        ));
-    }
+            ssh.unwrap_or(OsStr::new("ssh -o BatchMode=yes -o ConnectTimeout=10")),
+        ),
+    ];
     let push = [
         "push",
         "--quiet",

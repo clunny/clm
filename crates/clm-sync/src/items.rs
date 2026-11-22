@@ -1,4 +1,4 @@
-//! The backlog items `clm sync` files on its own: the open web proposals
+//! The backlog items `clm rebase` files on its own: the open web proposals
 //! (`file-proposal-items`) and the reconsider items of the branch's node
 //! (`file-reconsider-item`).
 

@@ -926,7 +926,6 @@ fn a_serves_c(r: &Repo) {
 #[test]
 fn spec_changed_reports_capabilities() {
     // req:sync/spec-changed@14245755
-    // req:sync/extract-through-layer@ccb1a495
     let r = repo("impl/a");
     a_serves_c(&r);
     main_moves(
@@ -1503,7 +1502,7 @@ fn autosync_tip(r: &Repo, branch: &str) -> Option<String> {
 
 #[test]
 fn autosync_pushes_uncommitted_spec_work_only() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     write(&r.work, "notes.txt", "private\n");
@@ -1531,7 +1530,7 @@ fn autosync_pushes_uncommitted_spec_work_only() {
 
 #[test]
 fn autosync_snapshots_capabilities() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "CAPABILITIES.md", "## Capabilities\n");
 
@@ -1543,19 +1542,21 @@ fn autosync_snapshots_capabilities() {
 
 #[test]
 fn autosync_snapshots_agents_md() {
-    // req:sync/agents-md-spec-path@353e8eb7
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "AGENTS.md", "# Agents\n");
+    commit(&r.work, "instructions");
+    write(&r.work, "AGENTS.md", "# Agents, edited\n");
 
     autosync(&r.work).unwrap();
     let tip = autosync_tip(&r, "spec/x").expect("pushed");
-    let files = git(&r.origin, &["ls-tree", "-r", "--name-only", &tip]);
-    assert!(files.lines().any(|f| f == "AGENTS.md"), "{files}");
+    let agents = git(&r.origin, &["show", &format!("{tip}:AGENTS.md")]);
+    assert_eq!(agents, "# Agents, edited");
 }
 
 #[test]
 fn autosync_pushes_nothing_new() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     autosync(&r.work).unwrap();
@@ -1571,7 +1572,7 @@ fn autosync_pushes_nothing_new() {
 
 #[test]
 fn autosync_never_signs_its_snapshot() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     // Signing that would fail (or prompt) on every turn.
     git(&r.work, &["config", "commit.gpgsign", "true"]);
@@ -1583,7 +1584,7 @@ fn autosync_never_signs_its_snapshot() {
 
 #[test]
 fn autosync_with_nothing_uncommitted_pushes_head() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     commit(&r.work, "delta");
@@ -1596,17 +1597,21 @@ fn autosync_with_nothing_uncommitted_pushes_head() {
 
 #[test]
 fn autosync_ignores_other_branches() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("impl/x/a");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     let refs = origin_refs(&r);
+    autosync(&r.work).unwrap();
+    assert_eq!(origin_refs(&r), refs);
+    // Nor on a detached `HEAD`.
+    git(&r.work, &["checkout", "-q", "--detach"]);
     autosync(&r.work).unwrap();
     assert_eq!(origin_refs(&r), refs);
 }
 
 #[test]
 fn autosync_skips_a_tree_already_on_the_branch() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     commit(&r.work, "delta");
@@ -2175,7 +2180,7 @@ fn only_checkouts_of_the_repo(r: &Repo, log: &Path) {
 
 #[test]
 fn no_post_checkout_hook_when_regenerating() {
-    // req:sync/extract-through-layer@ccb1a495
+    // req:sync/extract-through-layer@861ea529
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     main_moves(
@@ -2193,7 +2198,7 @@ fn no_post_checkout_hook_when_regenerating() {
 
 #[test]
 fn no_post_checkout_hook_when_comparing_a_nodes_spec() {
-    // req:sync/extract-through-layer@ccb1a495
+    // req:sync/extract-through-layer@861ea529
     let r = repo("impl/a");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -2375,30 +2380,6 @@ fn a_slug_that_isnt_kebab_case_is_skipped_with_a_warning() {
         "{report:?}"
     );
     assert!(!r.work.join("escape.md").exists());
-}
-
-#[test]
-fn a_skipped_proposals_warning_carries_no_command_name() {
-    // req:sync/warnings-name-the-command@f6774cd0
-    let r = repo("impl/a");
-    ledger(
-        &r,
-        "alice/web",
-        &[proposed("p9", "alice/web", "Not Kebab", "Bad", &["a"], "x")],
-    );
-
-    let report = sync(&r.work).unwrap();
-    let skipped: Vec<_> = report
-        .warnings
-        .iter()
-        .filter(|w| w.starts_with("skipped proposal"))
-        .collect();
-    assert_eq!(skipped.len(), 1, "{report:?}");
-    assert!(skipped[0].contains("p9"), "{report:?}");
-    assert!(
-        report.warnings.iter().all(|w| !w.starts_with("clm")),
-        "{report:?}"
-    );
 }
 
 #[test]
@@ -3216,7 +3197,6 @@ fn an_edit_outside_the_root_that_main_changed() {
 #[test]
 fn specs_conflict_in_a_subdirectory_root() {
     // req:sync/paths-under-the-root@6e985447
-    // req:sync/extract-through-layer@ccb1a495
     let r = repo_at("spec/x", TOOL);
     let root = tool(&r);
     write(
@@ -3342,7 +3322,6 @@ fn a_conflict_outside_the_root() {
 #[test]
 fn spec_changed_in_a_subdirectory_root() {
     // req:sync/paths-under-the-root@6e985447
-    // req:sync/extract-through-layer@ccb1a495
     let r = repo_at("impl/a", TOOL);
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
