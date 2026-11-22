@@ -297,3 +297,73 @@ fn an_unsigned_clearing_in_a_signed_repository() {
     assert_eq!(f.remote("main"), old);
     assert!(f.lines("check.log").is_empty(), "the check ran");
 }
+
+/// The tickets in the land lock's queue.
+fn tickets(f: &Fixture) -> usize {
+    std::fs::read_dir(f.work().join(".clm/land.queue"))
+        .map(|dir| {
+            dir.filter_map(Result::ok)
+                .filter(|e| {
+                    let name = e.file_name();
+                    let name = name.to_string_lossy();
+                    name.contains("-ordinary-p") || name.contains("-priority-p")
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+#[test]
+fn an_unsigned_clearing_holds_a_land_taken_with_another() {
+    // req:land/changes-requested-holds@81003a91
+    // req:land/batched-lands@ba7cbebe
+    let s = signed_repo("", true);
+    let f = &s.f;
+    use_key(f, &f.work(), &s.christopher);
+    hard_branch(f, None);
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    // Dana approves both, signed.
+    let clone = f.clone_as("clone-dana", "Dana");
+    use_key(f, &clone, &s.dana);
+    for branch in ["impl/a", "spec/x"] {
+        clm_approval::approve(&clone, Some(branch), &env(f)).unwrap();
+    }
+    let fingerprint = f.fingerprint("spec/x");
+    std::fs::create_dir_all(f.work().join(".clm")).unwrap();
+    let held = std::fs::File::create(f.work().join(".clm/land.lock")).unwrap();
+    held.lock().unwrap();
+    let env = env(f);
+    let outs: Vec<_> = std::thread::scope(|s| {
+        let mut runs = Vec::new();
+        for (i, branch) in ["impl/a", "spec/x"].into_iter().enumerate() {
+            let (env, work) = (&env, f.work());
+            runs.push(s.spawn(move || clm_land::land(&work, Some(branch), env)));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while tickets(f) < i + 1 {
+                assert!(std::time::Instant::now() < deadline, "no ticket");
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        }
+        // While both wait, Alice asks for changes to `spec/x` and clears it unsigned: the
+        // holder, judging `spec/x` as it would take it, finds it held.
+        f.web_ledger(
+            "alice/web",
+            &[serde_json::json!({"id": "r1", "writer": "alice/web",
+                "at": "2026-10-28T11:00:00.000Z", "kind": "changes_requested",
+                "branch": "spec/x", "fingerprint": fingerprint, "text": "Name the rule"})],
+        );
+        f.web_ledger(
+            "alice/1a2b3c4d",
+            &[serde_json::json!({"id": "a2", "writer": "alice/1a2b3c4d",
+                "at": "2026-10-28T11:30:00.000Z", "kind": "approved",
+                "fingerprint": fingerprint, "branch": "spec/x", "change": "x",
+                "clears": ["r1"]})],
+        );
+        drop(held);
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    });
+    let mut outs = outs.into_iter();
+    outs.next().unwrap().unwrap();
+    let why = refused(outs.next().unwrap());
+    assert!(why.contains("land/changes-requested: alice/web"), "{why}");
+}
