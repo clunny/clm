@@ -421,6 +421,8 @@ fn approve_over_a_request() {
             request("r1", "alice/web", "spec/x", &f),
             request("r3", "alice/web", "spec/x", "g"),
             request("r4", "alice/web", "spec/y", &f),
+            // A line of another person's in her ledger isn't hers to clear.
+            request("r5", "dana/web", "spec/x", &f),
         ],
     );
     ledger(
