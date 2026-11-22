@@ -117,7 +117,11 @@ pub(crate) fn land_into(
         // 2. The fingerprint, and a request for changes that holds it, before the gate, the
         // lock, the merge and the checks (`land/changes-requested-holds`).
         let fingerprint = repo.approval.fingerprint(&base, &head)?;
-        if let Some(why) = clm_approval::held(&fold, &branch, &fingerprint) {
+        // In a signed repository only a signed approval clears a request.
+        let held = repo
+            .approval
+            .held(&fold, &branch, &fingerprint, signed.then_some(&*base))?;
+        if let Some(why) = held {
             return Err(Error::Refused(why).into());
         }
         // A head behind in `specs/` lands on the merge git writes without regard to its

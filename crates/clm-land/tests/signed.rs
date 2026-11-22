@@ -245,7 +245,7 @@ fn signing_fails_pushes_nothing() {
 
 #[test]
 fn unsigned_request_holds_in_a_signed_repository() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     let s = signed_repo("", true);
     let f = &s.f;
     use_key(f, &f.work(), &s.christopher);
@@ -266,4 +266,34 @@ fn unsigned_request_holds_in_a_signed_repository() {
     // Without the request, Dana's approval counts and it lands.
     f.web_ledger("alice/web", &[]);
     clm_land::land(&f.work(), Some("spec/x"), &env(f)).unwrap();
+}
+
+#[test]
+fn an_unsigned_clearing_in_a_signed_repository() {
+    // req:land/changes-requested-holds@81003a91
+    let s = signed_repo("", true);
+    let f = &s.f;
+    use_key(f, &f.work(), &s.christopher);
+    hard_branch(f, None);
+    approve_from(&s, "Dana", Some(&s.dana));
+    let fingerprint = f.fingerprint("spec/x");
+    f.web_ledger(
+        "alice/web",
+        &[serde_json::json!({"id": "r1", "writer": "alice/web",
+            "at": "2026-10-28T11:00:00.000Z", "kind": "changes_requested",
+            "branch": "spec/x", "fingerprint": fingerprint, "text": "Name the rule"})],
+    );
+    // Alice clears it, naming it, but unsigned: in a signed repository that clears nothing.
+    f.web_ledger(
+        "alice/1a2b3c4d",
+        &[serde_json::json!({"id": "a2", "writer": "alice/1a2b3c4d",
+            "at": "2026-10-28T11:30:00.000Z", "kind": "approved",
+            "fingerprint": fingerprint, "branch": "spec/x", "change": "x",
+            "clears": ["r1"]})],
+    );
+    let old = f.remote("main");
+    let why = refused(clm_land::land(&f.work(), Some("spec/x"), &env(f)));
+    assert!(why.contains("land/changes-requested: alice/web"), "{why}");
+    assert_eq!(f.remote("main"), old);
+    assert!(f.lines("check.log").is_empty(), "the check ran");
 }

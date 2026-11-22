@@ -68,7 +68,10 @@ pub(crate) fn judge(
     derived: bool,
 ) -> Result<Judged, Error> {
     let fingerprint = repo.approval.fingerprint(first, head)?;
-    if let Some(why) = clm_approval::held(fold, branch, &fingerprint) {
+    if let Some(why) = repo
+        .approval
+        .held(fold, branch, &fingerprint, signed.then_some(first))?
+    {
         return Err(Error::Refused(why));
     }
     let policy = repo.approval.policy(first)?;
