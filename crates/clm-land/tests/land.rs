@@ -535,7 +535,7 @@ fn conflict_takes_no_lock() {
 
 #[test]
 fn copy_failure_refused() {
-    // req:land/land-binary-copy@a11966b0
+    // req:land/land-binary-copy@735a6495
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
@@ -548,6 +548,43 @@ fn copy_failure_refused() {
     assert_eq!(f.remote("main"), old);
     assert!(f.records().is_empty());
     assert!(f.lines("gate.log").is_empty());
+}
+
+#[test]
+fn every_command_named() {
+    // req:land/land-binary-copy@735a6495
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    // Each of the three commands a passing fake that records what the land's `TMPDIR` holds.
+    let seen = f.path("tmpdir-seen.log");
+    let tmp = f.tmpdir();
+    let recording = |name: &str, real: &str| {
+        let path = f.path(name);
+        let script = format!(
+            "#!/bin/sh\nls -a '{}' >> '{}'\nexec '{}' \"$@\"\n",
+            tmp.display(),
+            seen.display(),
+            f.path(real).display()
+        );
+        common::write_exec(&path, &script);
+        path.display().to_string()
+    };
+    let gate = recording("seen-gate", "bin/gate");
+    let check = recording("seen-check", "bin/clm-check");
+    let affected = recording("seen-affected", "bin/affected");
+    let env = f.env(&[
+        ("CLM_GATE", &gate),
+        ("CLM_CHECK", &check),
+        ("CLM_AFFECTED", &affected),
+    ]);
+    let out = clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
+    assert!(out.lines[0].starts_with("landed "), "{out:?}");
+    let seen = f.lines("tmpdir-seen.log");
+    assert!(!seen.is_empty());
+    assert!(
+        seen.iter().all(|entry| !entry.starts_with("land-bin-")),
+        "{seen:?}"
+    );
 }
 
 #[test]
