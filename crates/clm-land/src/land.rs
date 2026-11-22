@@ -670,14 +670,9 @@ pub(crate) fn land_into(
             turn = Some(lock::push(&places, repo.err)?);
             repo.fetch()?;
             if repo.rev(repo.base())?.as_deref() != Some(base.as_str()) {
-                // `main` may hold the head now, landed while this land waited or checked: the
-                // ledger and `origin`'s branch as this fetch read them (`land/already-on-main`).
-                // The `checked` record this land appended stands.
-                let fold = clm_ledger::fold(&repo.root)?;
-                if let Some(found) = crate::finish::on_main(&repo, &fold, &branch, &head)? {
-                    let on_origin = repo.rev(&format!("refs/remotes/{REMOTE}/{branch}"))?;
-                    on_main!(found, head, on_origin);
-                }
+                // Prepared again under the turn, which first asks whether `main` now holds the
+                // head, landed while this land waited or checked; the `checked` record this land
+                // appended stands (`land/already-on-main`).
                 chain = Some(merge.clone());
                 continue;
             }

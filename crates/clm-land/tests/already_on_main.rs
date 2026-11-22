@@ -178,12 +178,21 @@ fn a_head_main_holds_another_way() {
 #[test]
 fn a_waiting_land_main_already_holds() {
     // req:land/already-on-main@5d3c9a80
+    for gone in [false, true] {
+        waiting_land_main_already_holds(gone);
+    }
+}
+
+/// As the scenario gives it, and, `gone`, with `impl/b` only on `origin`, which the other
+/// land's cleanup then removes it from: the waiting land asks about the head its first attempt
+/// resolved.
+fn waiting_land_main_already_holds(gone: bool) {
     let f = Fixture::new("");
     f.branch("impl/a", &[("a2.txt", "x\n")]);
     let b_head = f.branch("impl/b", &[("b.txt", "x\n")]);
-    // Only on `origin`, which the other land's cleanup then removes it from: the waiting land
-    // asks about the head its first attempt resolved.
-    f.git(&f.work(), &["branch", "-q", "-D", "impl/b"]);
+    if gone {
+        f.git(&f.work(), &["branch", "-q", "-D", "impl/b"]);
+    }
     let second = f.clone_as("second", "Second");
     std::fs::create_dir_all(f.work().join(".clm")).unwrap();
     let held = std::fs::File::create(f.work().join(".clm/land.lock")).unwrap();
