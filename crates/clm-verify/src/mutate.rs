@@ -6,9 +6,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::os::fd::AsFd;
-use std::os::unix::process::CommandExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -45,8 +45,8 @@ enum Verdict {
 
 /// How the command ended.
 enum Ended {
-    /// By itself, with its exit status; none when a signal ended it.
-    Exited(Option<i32>),
+    /// By itself, or by a signal the pass didn't send, with its status.
+    Exited(ExitStatus),
     /// At `[verify] mutate_minutes`, that many.
     Limit(u64),
     /// At the call's stop request.
@@ -107,11 +107,19 @@ fn run_pass(
         )?;
         fs::write(&result, "")?;
         match launch(ctx, call, &tree.dir, &commit, command, &plan, &result)? {
-            Ended::Exited(Some(0)) => {}
-            Ended::Exited(status) => {
-                let status = status.map_or("a signal".to_string(), |s| s.to_string());
-                notes.push(format!("mutation: {command} failed with status {status}"));
-            }
+            Ended::Exited(status) if status.success() => {}
+            Ended::Exited(status) => match status.signal() {
+                Some(n) => {
+                    let name = signal_name(n).map_or(String::new(), |s| format!(" ({s})"));
+                    notes.push(format!("mutation: {command} was ended by signal {n}{name}"));
+                }
+                None => {
+                    let code = status
+                        .code()
+                        .map_or_else(|| status.to_string(), |c| c.to_string());
+                    notes.push(format!("mutation: {command} failed with status {code}"));
+                }
+            },
             Ended::Limit(minutes) => notes.push(format!(
                 "mutation: stopped at its limit of {minutes} minutes"
             )),
@@ -380,7 +388,7 @@ fn launch(
     let started = Instant::now();
     let watched = (|| loop {
         if let Some(status) = child.try_wait()? {
-            return Ok(Ended::Exited(status.code()));
+            return Ok(Ended::Exited(status));
         }
         let why = match limit {
             _ if call.stop.load(Ordering::SeqCst) => Some(Ended::Stopped),
@@ -437,6 +445,41 @@ fn group_of(child: &Child) -> libc::pid_t {
     child.id() as libc::pid_t
 }
 
+/// The name of signal `n` when it is one of the 27 `mutation-pass` names, read from this
+/// platform's own numbers, which differ between platforms; none for any other.
+fn signal_name(n: i32) -> Option<&'static str> {
+    Some(match n {
+        libc::SIGHUP => "SIGHUP",
+        libc::SIGINT => "SIGINT",
+        libc::SIGQUIT => "SIGQUIT",
+        libc::SIGILL => "SIGILL",
+        libc::SIGTRAP => "SIGTRAP",
+        libc::SIGABRT => "SIGABRT",
+        libc::SIGBUS => "SIGBUS",
+        libc::SIGFPE => "SIGFPE",
+        libc::SIGKILL => "SIGKILL",
+        libc::SIGUSR1 => "SIGUSR1",
+        libc::SIGSEGV => "SIGSEGV",
+        libc::SIGUSR2 => "SIGUSR2",
+        libc::SIGPIPE => "SIGPIPE",
+        libc::SIGALRM => "SIGALRM",
+        libc::SIGTERM => "SIGTERM",
+        libc::SIGCHLD => "SIGCHLD",
+        libc::SIGCONT => "SIGCONT",
+        libc::SIGSTOP => "SIGSTOP",
+        libc::SIGTSTP => "SIGTSTP",
+        libc::SIGTTIN => "SIGTTIN",
+        libc::SIGTTOU => "SIGTTOU",
+        libc::SIGURG => "SIGURG",
+        libc::SIGXCPU => "SIGXCPU",
+        libc::SIGXFSZ => "SIGXFSZ",
+        libc::SIGVTALRM => "SIGVTALRM",
+        libc::SIGPROF => "SIGPROF",
+        libc::SIGSYS => "SIGSYS",
+        _ => return None,
+    })
+}
+
 /// The verdict lines of the result file that end in a newline, the last for a requirement
 /// holding: `<id> killed`, `<id> survived <n>` and `<id> not-judged`; a line that doesn't
 /// parse is ignored.
@@ -456,4 +499,21 @@ fn read_verdicts(text: &str) -> BTreeMap<String, Verdict> {
         out.insert(words[0].to_string(), verdict);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_signal_is_named_only_when_listed() {
+        // req:verify/mutation-pass@66d709f6
+        assert_eq!(signal_name(libc::SIGKILL), Some("SIGKILL"));
+        assert_eq!(signal_name(libc::SIGTERM), Some("SIGTERM"));
+        assert_eq!(signal_name(libc::SIGSYS), Some("SIGSYS"));
+        // Signals the requirement doesn't list get no name.
+        assert_eq!(signal_name(libc::SIGWINCH), None);
+        assert_eq!(signal_name(libc::SIGRTMIN()), None);
+        assert_eq!(signal_name(0), None);
+    }
 }

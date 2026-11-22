@@ -19,7 +19,7 @@ fn toml_with(f: &Fixture, env: &str) -> String {
 
 #[test]
 fn every_probe_runs_every_test_when_the_table_changed() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let f = every_land();
     let green = f.land(&[("a.txt", "0\n")], "zero");
     f.verified(&green, true);
@@ -45,7 +45,7 @@ fn every_probe_runs_every_test_when_the_table_changed() {
 
 #[test]
 fn a_commit_takes_its_own_variables() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let f = every_land();
     let green = f.land(&[("a.txt", "0\n")], "zero");
     f.verified(&green, true);
@@ -109,7 +109,7 @@ fn last_record(f: &Fixture) -> (String, bool, Option<String>, Vec<String>) {
 
 #[test]
 fn a_commit_whose_table_cant_be_used_is_refused() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let (f, bad, _) = bad_then_good(true);
     let before = f.records().len();
     let err = common::verify(
@@ -131,7 +131,7 @@ fn a_commit_whose_table_cant_be_used_is_refused() {
 
 #[test]
 fn a_probe_on_a_land_whose_table_cant_be_used_is_untestable() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let (f, bad, good) = bad_then_good(true);
     let out = f.due();
     assert_eq!(
@@ -154,7 +154,7 @@ fn a_probe_on_a_land_whose_table_cant_be_used_is_untestable() {
 
 #[test]
 fn a_green_commit_whose_table_cant_be_used_differs() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let (f, bad, good) = bad_then_good(false);
     f.verified(&bad, true);
     let out = f.run(&clm_verify::Request::Commit(good.clone()));
@@ -167,7 +167,7 @@ fn a_green_commit_whose_table_cant_be_used_differs() {
 
 #[test]
 fn a_bisect_of_a_red_commit_whose_table_cant_be_used() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let f = every_land();
     let g = f.land(&[("a.txt", "0\n")], "g");
     f.verified(&g, true);
@@ -192,7 +192,7 @@ fn a_bisect_of_a_red_commit_whose_table_cant_be_used() {
 
 #[test]
 fn a_git_failure_reading_the_table_ends_the_run() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let f = every_land();
     let green = f.land(&[("a.txt", "0\n")], "g");
     f.verified(&green, true);

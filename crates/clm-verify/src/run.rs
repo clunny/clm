@@ -97,6 +97,9 @@ pub(crate) fn check(
             .collect(),
         unset: Vec::new(),
     };
+    // Still the unnamed form: the named one leaves `run_check` with no user, which the
+    // unreferenced-items detector refuses before `land` can remove it
+    // (`backlog/the-detector-refuses-verify-s-move-off-run-check-before-land-can`).
     let run = clm_land::run_check(
         &ctx.verify.check,
         &tree.dir,

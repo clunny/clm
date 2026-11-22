@@ -189,7 +189,7 @@ fn a_call_that_only_judged_a_trigger() {
 #[test]
 fn a_call_that_ends_in_an_error() {
     // req:verify/verify-tree-cleared@f3a40445
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let (f, base) = with_check("exit 0", "");
     f.verified(&base, true);
     // A commit whose `[env]` can't be used: `--commit` refuses it once it has checked it out.

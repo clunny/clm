@@ -64,14 +64,20 @@ const CHILD: &str = "CLM_TEST_VERIFY_CHILD";
 
 /// Re-runs the test `name` in a child and returns the child's stderr; `None` in the child.
 pub fn in_child(name: &str) -> Option<String> {
+    in_child_fed(name, None)
+}
+
+/// `in_child`, the child's standard input the file `stdin` when given, and empty otherwise.
+pub fn in_child_fed(name: &str, stdin: Option<&Path>) -> Option<String> {
     if std::env::var_os(CHILD).is_some() {
         return None;
     }
-    let out = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", name, "--nocapture"])
-        .env(CHILD, "1")
-        .output()
-        .unwrap();
+    let mut child = Command::new(std::env::current_exe().unwrap());
+    child.args(["--exact", name, "--nocapture"]).env(CHILD, "1");
+    if let Some(stdin) = stdin {
+        child.stdin(fs::File::open(stdin).unwrap());
+    }
+    let out = child.output().unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success() && stdout.contains("1 passed"),

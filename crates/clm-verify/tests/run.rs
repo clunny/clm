@@ -3,7 +3,7 @@
 mod common;
 
 use clm_ledger::Body;
-use common::Fixture;
+use common::{Fixture, in_child, write_exec};
 
 fn every_land() -> Fixture {
     Fixture::new(Some(
@@ -210,7 +210,8 @@ fn a_land_waits_for_the_slow_check() {
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         assert_eq!(f.lines("check-order.log"), ["start"]);
-        let run = clm_land::run_check(
+        let run = clm_land::run_check_as(
+            "clm land",
             &landing,
             &f.work(),
             None,
@@ -249,6 +250,16 @@ fn two_runs_never_move_the_tree_under_each_other() {
 #[test]
 fn a_selection_that_cannot_be_made_runs_every_test() {
     // req:verify/verify-run@ff539674
+    if let Some(stderr) = in_child("a_selection_that_cannot_be_made_runs_every_test") {
+        assert!(
+            stderr
+                .lines()
+                .any(|l| l.starts_with("clm affected failed: ")
+                    && l.ends_with("; the check runs every test")),
+            "{stderr}"
+        );
+        return;
+    }
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -256,7 +267,101 @@ fn a_selection_that_cannot_be_made_runs_every_test() {
     f.land(&[("specs/b/SPEC.md", "not a spec\n")], "break b");
     let out = f.due();
     assert_eq!(out.code, 0, "{}", out.line);
+    assert!(out.line.starts_with("verify passed"), "{}", out.line);
     assert_eq!(f.lines("check-selection.log"), ["unset"]);
+    assert!(matches!(
+        f.records().last(),
+        Some(Body::Verified { passed: true, .. })
+    ));
+}
+
+/// Asserts that the check last ran in the verify tree on `origin/main`'s head, that the
+/// outcome passed over one land, and that git lists the tree as a worktree.
+fn ran_in_a_listed_tree(f: &Fixture, out: &clm_verify::Outcome) {
+    let head = f.git(&f.work(), &["rev-parse", "origin/main"]);
+    assert_eq!(out.line, format!("verify passed {} 1 lands", &head[..7]));
+    assert_eq!(out.code, 0);
+    assert_eq!(f.lines("check-head.log").last(), Some(&head));
+    let tree = f.verify_tree().display().to_string();
+    assert_eq!(f.lines("check-pwd.log").last(), Some(&tree));
+    let listed = f.git(&f.work(), &["worktree", "list", "--porcelain"]);
+    assert!(
+        listed.lines().any(|l| l == format!("worktree {tree}")),
+        "{listed}"
+    );
+    // The tree is whole again: git run there finds its top there, at the head; and the main
+    // worktree around it was left alone.
+    let top = f.verify_tree();
+    assert!(top.join(".git").is_file());
+    assert_eq!(f.git(&top, &["rev-parse", "--show-toplevel"]), tree);
+    assert_eq!(f.git(&top, &["rev-parse", "HEAD"]), head);
+    assert_eq!(f.git(&f.work(), &["branch", "--show-current"]), "main");
+}
+
+#[test]
+fn a_broken_tree_is_remade() {
+    // req:verify/verify-run@ff539674
+    // A tree from an earlier run whose `.git` file at its top was removed.
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    f.land(&[("a.txt", "2\n")], "two");
+    assert_eq!(f.due().code, 0);
+    std::fs::remove_file(f.verify_tree().join(".git")).unwrap();
+    f.land(&[("a.txt", "3\n")], "three");
+    let out = f.due();
+    ran_in_a_listed_tree(&f, &out);
+    // A regular file where the tree goes.
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let tree = f.verify_tree();
+    std::fs::create_dir_all(tree.parent().unwrap()).unwrap();
+    std::fs::write(&tree, "not a tree\n").unwrap();
+    f.land(&[("a.txt", "2\n")], "two");
+    let out = f.due();
+    ran_in_a_listed_tree(&f, &out);
+}
+
+#[test]
+fn a_record_kept_local() {
+    // req:verify/verify-run@ff539674
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let head = f.land(&[("a.txt", "2\n")], "two");
+    write_exec(
+        &f.path("origin.git/hooks/pre-receive"),
+        "#!/bin/sh\nwhile read old new ref; do\n  case $ref in refs/heads/clm/ledger/*) exit 1;; esac\ndone\n",
+    );
+    let out = f.due();
+    assert_eq!(out.line, format!("verify passed {} 1 lands", &head[..7]));
+    assert_eq!(out.code, 0);
+    assert!(
+        out.notes
+            .iter()
+            .any(|n| n == "the record is committed locally; `clm reconnect` pushes it"),
+        "{:?}",
+        out.notes
+    );
+    // The clone's own ledger branch holds the record.
+    let own = f.git(
+        &f.work(),
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads/clm/ledger/",
+        ],
+    );
+    let text = f.git(&f.work(), &["show", &format!("{own}:records.jsonl")]);
+    let fold = clm_ledger::fold_records(&[(own.as_str(), text.as_str())]);
+    assert!(
+        fold.records.iter().any(|r| matches!(
+            &r.body,
+            Body::Verified { commit, passed: true, .. } if *commit == head
+        )),
+        "{text}"
+    );
 }
 
 #[test]
