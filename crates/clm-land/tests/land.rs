@@ -171,7 +171,15 @@ fn main_moves() {
     let f = Fixture::new("");
     f.write("move-main", "");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
-    clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    // Found by the fetch in its push turn, the move starts the next attempt unsaid.
+    assert!(
+        out.warnings
+            .iter()
+            .all(|w| !w.contains("main moved during attempt")),
+        "{:?}",
+        out.warnings
+    );
     let moved = f.lines("moved").remove(0);
     let main = f.remote("main");
     let origin = f.path("origin.git");
@@ -824,6 +832,22 @@ fn a_code_land_of_any_name_frees_its_target() {
             format!("removed {}", canonical.display())
         ]
     );
+}
+
+#[test]
+fn a_light_land_frees_its_target() {
+    // req:land/land-frees-build-target@17131754
+    let f = Fixture::new("");
+    f.write("gate-out", "light\n");
+    f.branch("fix-x", &[("x.txt", "x\n")]);
+    let linked = f.linked("linked", "fix-x");
+    let target = linked.join("target");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::write(target.join("file"), "x").unwrap();
+    let out = clm_land::land(&linked, None, &f.env(&[])).unwrap();
+    assert!(!target.exists(), "{:?}", out.lines);
+    let main = f.remote("main");
+    assert_eq!(out.lines[0], format!("landed {main} light"));
 }
 
 #[test]
