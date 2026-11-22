@@ -72,11 +72,18 @@ pub struct Output {
     pub warnings: Vec<String>,
 }
 
-const OFFLINE: &str = "offline: origin can't be reached; push and land when it can";
+const OFFLINE: &str = "offline: origin can't be reached; run `clm approve` again when it can";
 
 /// The branches pushed deliberately, so a local one ahead of `origin` isn't landed.
 fn is_pushed_deliberately(branch: &str) -> bool {
     branch.starts_with("impl/") || branch.starts_with("spec/")
+}
+
+/// A branch's head, and `origin`'s tip of the branch when `origin` holds it (`branch-head`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchHead {
+    pub head: String,
+    pub origin: Option<String>,
 }
 
 /// What the ledger's approvals of a diff come to.
@@ -110,18 +117,19 @@ impl<'a> Repo<'a> {
     }
 
     /// The ref `main` is landed on: `origin/main`.
-    pub fn base(&self) -> &str {
+    pub(crate) fn base(&self) -> &str {
         &self.base
     }
 
-    pub fn git(&self, args: &[&str]) -> Result<String, Error> {
+    pub(crate) fn git(&self, args: &[&str]) -> Result<String, Error> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, tried again after a failure (`approve-retries-fetch`): offline when
-    /// `origin` can't be reached, else refused with git's message from the last fetch.
-    pub fn fetch(&self) -> Result<(), Error> {
-        match clm_git::fetch_retrying(&self.root, &["fetch", REMOTE]) {
+    /// `git fetch --prune origin`, tried again after a failure (`approve-retries-fetch`):
+    /// offline when `origin` can't be reached, else refused with git's message from the last
+    /// fetch. It prunes, so a tracking ref of a branch `origin` deleted gives no head.
+    pub(crate) fn fetch(&self) -> Result<(), Error> {
+        match clm_git::fetch_retrying(&self.root, &["fetch", "--prune", REMOTE]) {
             Ok(()) => Ok(()),
             Err(clm_git::FetchError::Offline) => Err(Error::Refused(OFFLINE.into())),
             Err(clm_git::FetchError::Git(e)) => Err(Error::Refused(e.to_string())),
@@ -172,8 +180,43 @@ impl<'a> Repo<'a> {
         }
     }
 
+    /// `branch`'s head by one rule for `clm land` (`for_land`) and `clm approve`, whatever its
+    /// name, read from `refs/heads/<branch>` and `refs/remotes/origin/<branch>` as the caller's
+    /// fetch left them (`branch-head`). A land takes the local branch when it holds everything
+    /// `origin` holds of it, and is refused when it is behind or has diverged; an approve takes
+    /// `origin`'s tip when the local branch is absent or an ancestor of it.
+    pub fn branch_head(&self, branch: &str, for_land: bool) -> Result<BranchHead, Error> {
+        let local = self.rev(&format!("refs/heads/{branch}"))?;
+        let origin = self.rev(&format!("refs/remotes/{REMOTE}/{branch}"))?;
+        let ancestor = |a: &str, b: &str| clm_git::is_ancestor(&self.root, a, b);
+        let head = match (&local, &origin) {
+            (None, None) => return Err(Error::Refused(format!("no branch `{branch}`"))),
+            (Some(l), None) => l.clone(),
+            (None, Some(o)) => o.clone(),
+            (Some(l), Some(o)) if !for_land => match ancestor(l, o)? {
+                true => o.clone(),
+                false => l.clone(),
+            },
+            (Some(l), Some(o)) if ancestor(o, l)? => l.clone(),
+            (Some(l), Some(o)) => {
+                let tracking = format!("{REMOTE}/{branch}");
+                return Err(Error::Refused(match ancestor(l, o)? {
+                    true => format!(
+                        "`{branch}` is behind `{tracking}`: bring it up to `{tracking}`, then \
+                         land it"
+                    ),
+                    false => format!(
+                        "`{branch}` has diverged from `{tracking}`: rebase it onto `{tracking}` \
+                         or merge `{tracking}` into it, then land it"
+                    ),
+                }));
+            }
+        };
+        Ok(BranchHead { head, origin })
+    }
+
     /// The merge base of the base and `head`.
-    pub fn merge_base(&self, head: &str) -> Result<String, Error> {
+    pub(crate) fn merge_base(&self, head: &str) -> Result<String, Error> {
         self.git(&["merge-base", self.base(), head])
     }
 

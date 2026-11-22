@@ -26,9 +26,13 @@ impl ApproveArgs {
     }
 }
 
-/// The parser of the command alone: its own arguments, without its name.
+// The parser of the command alone: its own arguments, without its name.
 #[derive(Parser)]
-#[command(name = "clm approve", no_binary_name = true)]
+#[command(
+    name = "clm approve",
+    no_binary_name = true,
+    about = "Record your approval of a branch's current diff in the ledger"
+)]
 struct ApproveLine {
     #[command(flatten)]
     args: ApproveArgs,
@@ -65,11 +69,15 @@ where
         .root
         .map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
     let written = match approve(&root, args.branch.as_deref(), env) {
-        // `approve` warns of nothing: its `Output` holds the lines alone.
         Ok(done) => done
             .lines
             .iter()
             .try_for_each(|line| writeln!(out, "{line}"))
+            .and_then(|()| {
+                done.warnings
+                    .iter()
+                    .try_for_each(|w| writeln!(err, "clm approve: warning: {w}"))
+            })
             .map(|()| 0),
         Err(e) => writeln!(err, "clm approve: {e}").map(|()| exit_code(&e)),
     };

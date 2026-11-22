@@ -25,7 +25,7 @@ exec "$real" "$@"
 
 #[test]
 fn approve_fetches_through_fetch_retrying() {
-    // req:land.approval/approve-retries-fetch@59cf62a7
+    // req:land.approval/approve-retries-fetch@a18d807f
     let bin = tempfile::tempdir().unwrap();
     let fake = bin.path().join("git");
     fs::write(&fake, FAKE).unwrap();
@@ -81,6 +81,8 @@ fn approve_fetches_through_fetch_retrying() {
         &h.env(&[]),
     ));
     assert!(why.contains("offline"), "{why}");
+    assert!(why.contains("clm approve"), "{why}");
+    assert!(!why.contains("push") && !why.contains("land"), "{why}");
     h.git(
         &h.work(),
         &[
