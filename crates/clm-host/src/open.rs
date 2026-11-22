@@ -87,16 +87,20 @@ fn keeping(root: &Path, branch: &str, text: &str, error: Error) -> Error {
     }
 }
 
-/// The title and body drawn from `branch`: its change's `## Intent` on `spec/<id>`,
-/// otherwise its commits' subjects.
+/// The title and body drawn from `branch`: the `## Intent` of the one change it adds,
+/// whatever its name, otherwise its commits' subjects. Refuses, naming `origin/main`, when
+/// the branch can't be read against it.
 fn describe(root: &Path, branch: &str) -> Result<(String, String), Error> {
-    if let Some(id) = branch.strip_prefix("spec/")
-        && let Ok(change) = git(root, &["show", &format!("{branch}:changes/{id}/change.md")])
+    let main = format!("{REMOTE}/main");
+    let base = git(root, &["merge-base", &main, branch])
+        .map_err(|e| Error::Refused(format!("can't read `{branch}` against {main}: {e}")))?;
+    if let Some(path) = added_change(root, &base, branch)?
+        && let Ok(change) = git(root, &["show", &format!("{branch}:./{path}")])
         && let Some(intent) = intent(&change)
     {
         return Ok((first_sentence(&intent), intent));
     }
-    let range = format!("{REMOTE}/main..{branch}");
+    let range = format!("{main}..{branch}");
     let log = git(root, &["log", "--reverse", "--format=%s", &range])
         .map_err(|e| Error::Refused(e.to_string()))?;
     let Some(oldest) = log.lines().next() else {
@@ -106,6 +110,33 @@ fn describe(root: &Path, branch: &str) -> Result<(String, String), Error> {
     };
     let body: String = log.lines().map(|s| format!("- {s}\n")).collect();
     Ok((oldest.to_string(), body))
+}
+
+/// The one `changes/<id>/change.md` outside `changes/archive/` that `branch` adds against
+/// `base`, relative to the root; `None` when it adds none or several. `--no-renames`, so a
+/// change withdrawn and redrafted under a new ID reads as added.
+fn added_change(root: &Path, base: &str, branch: &str) -> Result<Option<String>, Error> {
+    let range = format!("{base}..{branch}");
+    let added = git(
+        root,
+        &[
+            "diff",
+            "--name-only",
+            "--relative",
+            "--no-renames",
+            "--diff-filter=A",
+            &range,
+        ],
+    )?;
+    let mut changes = added.lines().filter(|path| {
+        path.strip_prefix("changes/")
+            .and_then(|rest| rest.strip_suffix("/change.md"))
+            .is_some_and(|id| !id.is_empty() && !id.contains('/') && id != "archive")
+    });
+    Ok(match (changes.next(), changes.next()) {
+        (Some(one), None) => Some(one.to_string()),
+        _ => None,
+    })
 }
 
 /// The text of the `## Intent` section, up to the next `## ` heading, trimmed; `None` when
@@ -118,14 +149,13 @@ fn intent(change: &str) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-/// The first paragraph with its line breaks joined by spaces, up to and including the
-/// first `.`, `?` or `!` followed by a space or the paragraph's end.
+/// The first paragraph, which ends at the first line that is empty or holds only
+/// whitespace, its lines trimmed and joined by single spaces, up to and including the first
+/// `.`, `?` or `!` followed by a space or the paragraph's end.
 fn first_sentence(text: &str) -> String {
     let paragraph = text
-        .split("\n\n")
-        .next()
-        .unwrap_or_default()
         .lines()
+        .take_while(|line| !line.trim().is_empty())
         .map(str::trim)
         .collect::<Vec<_>>()
         .join(" ");

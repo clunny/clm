@@ -1065,7 +1065,7 @@ fn scenario_keep_nothing_worth_keeping() {
 
 #[test]
 fn scenario_page_open_no_host() {
-    // req:host/pr-open@f06b4b0e
+    // req:host/pr-open-defaults@17fa5999
     for host in ["none", "git"] {
         let (r, gh) = (checkout(host), fake_gh());
         let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
@@ -1465,7 +1465,7 @@ fn body(gh: &Gh) -> String {
 
 #[test]
 fn scenario_pr_open_a_spec_branchs_change() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -1482,7 +1482,7 @@ fn scenario_pr_open_a_spec_branchs_change() {
 
 #[test]
 fn pr_open_title_is_the_first_sentence_of_the_first_paragraph() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     for (intent, title) in [
         ("Is it so? Yes.\n", "Is it so?"),
         (
@@ -1490,6 +1490,7 @@ fn pr_open_title_is_the_first_sentence_of_the_first_paragraph() {
             "No stop here across lines",
         ),
         ("Version 1.2 ships. More.\n", "Version 1.2 ships."),
+        ("First line\n   \nNext. Para.\n", "First line"),
     ] {
         let r = spec_branch(intent);
         let gh = fake_gh();
@@ -1502,7 +1503,7 @@ fn pr_open_title_is_the_first_sentence_of_the_first_paragraph() {
 
 #[test]
 fn pr_open_blank_intent_falls_back_to_commits() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("  \n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -1513,7 +1514,7 @@ fn pr_open_blank_intent_falls_back_to_commits() {
 
 #[test]
 fn scenario_pr_open_a_branch_without_a_change() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "fix/y"]);
     for subject in ["first", "second"] {
@@ -1527,7 +1528,7 @@ fn scenario_pr_open_a_branch_without_a_change() {
 
 #[test]
 fn pr_open_describes_the_branch_it_is_given() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("Skills fail. They name a bare command.\n");
     git(&r.work, &["checkout", "-q", "-b", "fix/y", "origin/main"]);
     git(&r.work, &["commit", "-q", "--allow-empty", "-m", "other"]);
@@ -1541,7 +1542,7 @@ fn pr_open_describes_the_branch_it_is_given() {
 
 #[test]
 fn pr_open_spec_branch_without_a_change_uses_commits() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "spec/nochange"]);
     git(&r.work, &["commit", "-q", "--allow-empty", "-m", "only"]);
@@ -1553,7 +1554,7 @@ fn pr_open_spec_branch_without_a_change_uses_commits() {
 
 #[test]
 fn scenario_pr_open_given_arguments_override() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(
@@ -1571,7 +1572,7 @@ fn scenario_pr_open_given_arguments_override() {
 
 #[test]
 fn pr_open_each_argument_overrides_alone() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open", "--title", "mine"], &[]);
@@ -1590,7 +1591,7 @@ fn pr_open_each_argument_overrides_alone() {
 
 #[test]
 fn scenario_pr_open_nothing_to_describe() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "fix/z"]);
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -1600,7 +1601,7 @@ fn scenario_pr_open_nothing_to_describe() {
 
 #[test]
 fn scenario_pr_open_detached_head() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "--detach"]);
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -1610,15 +1611,97 @@ fn scenario_pr_open_detached_head() {
 
 #[test]
 fn scenario_pr_open_defaults_no_host() {
-    // req:host/pr-open-defaults@6b09a910
+    // req:host/pr-open-defaults@17fa5999
     for host in ["none", "git"] {
         let (r, gh) = (checkout(host), fake_gh());
         git(&r.work, &["checkout", "-q", "--detach"]);
-        let (code, out, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
-        assert_eq!(code, Some(0), "{host}: {err}");
-        assert_eq!(out, "none\n");
+        for args in [&["pr", "open"][..], &OPEN_ARGS] {
+            let (code, out, err) = clm(&r.work, &gh, args, &[]);
+            assert_eq!(code, Some(0), "{host} {args:?}: {err}");
+            assert_eq!(out, "none\n");
+        }
         assert!(gh.calls().is_empty(), "{:?}", gh.calls());
     }
+}
+
+/// `branch` from `main`, checked out, with one commit `subject` adding a change for each of
+/// `changes`, whose `## Intent` reads `intent`.
+fn branch_adding(r: &Repo, branch: &str, changes: &[&str], intent: &str, subject: &str) {
+    git(&r.work, &["checkout", "-q", "-B", branch, "main"]);
+    for id in changes {
+        write(
+            &r.work,
+            &format!("changes/{id}/change.md"),
+            &format!("---\nstatus: proposed\n---\n\n## Intent\n{intent}\n"),
+        );
+    }
+    git(&r.work, &["add", "changes"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", subject]);
+}
+
+#[test]
+fn scenario_pr_open_the_change_the_branch_adds() {
+    // req:host/pr-open-defaults@17fa5999
+    let r = checkout("github");
+    let cases: [(&str, &[&str], &str, &str, &str, &str); 3] = [
+        (
+            "fix/y",
+            &["y"],
+            "Fix it. Now.",
+            "Fix it.",
+            "Fix it. Now.",
+            "y",
+        ),
+        (
+            "spec/x",
+            &["other"],
+            "Other. Words.",
+            "Other.",
+            "Other. Words.",
+            "x",
+        ),
+        (
+            "fix/w",
+            &["w1", "w2"],
+            "W. Words.",
+            "both",
+            "- both\n",
+            "both",
+        ),
+    ];
+    for (branch, changes, intent, title, want_body, subject) in cases {
+        branch_adding(&r, branch, changes, intent, subject);
+        let gh = fake_gh();
+        let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+        assert_eq!(code, Some(0), "{branch}: {err}");
+        let want = format!("--head {branch} --title {title} --body-file ");
+        assert!(creates(&gh)[0].contains(&want), "{:?}", creates(&gh));
+        assert_eq!(body(&gh), want_body, "{branch}");
+    }
+    // `spec/x` whose change `origin/main` already holds, with one commit `edit` beyond it.
+    branch_adding(&r, "spec/x", &["x"], "Held. Already.", "the change");
+    git(&r.work, &["push", "-q", "origin", "spec/x:main"]);
+    git(&r.work, &["fetch", "-q", "origin"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", "edit"]);
+    let gh = fake_gh();
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(creates(&gh)[0].contains("--title edit --body-file "));
+    assert_eq!(body(&gh), "- edit\n");
+}
+
+#[test]
+fn scenario_pr_open_no_origin_main() {
+    // req:host/pr-open-defaults@17fa5999
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["checkout", "-q", "-b", "fix/z"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", "z"]);
+    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("origin/main"), "{err}");
+    assert!(err.contains("fatal"), "{err}");
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
 }
 
 const PR_7: &str = r#"{"number":7,"state":"OPEN","headRefName":"spec/x"}"#;
