@@ -79,14 +79,14 @@ use crate::exec::write_exec as executable;
 
 /// A work tree holding the real scripts, `web/` and `plugin-panel/`, with the fakes in `bin/`
 /// beside it.
-struct Tree {
-    dir: TempDir,
+pub(crate) struct Tree {
+    pub(crate) dir: TempDir,
     /// The script a run runs, under `.github/scripts/`: `ci-check.sh` unless a test says.
-    script: &'static str,
+    pub(crate) script: &'static str,
 }
 
 impl Tree {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let t = Tree {
             dir: TempDir::new().unwrap(),
             script: "ci-check.sh",
@@ -185,7 +185,7 @@ impl Tree {
     }
 
     /// The fakes first, then this process's `PATH`.
-    fn path(&self) -> std::ffi::OsString {
+    pub(crate) fn path(&self) -> std::ffi::OsString {
         let bin = self.dir.path().join("bin");
         let system = std::env::var_os("PATH").unwrap_or_default();
         std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&system))).unwrap()
@@ -266,7 +266,7 @@ impl Tree {
     }
 
     /// As `output`, with each of `env` also set.
-    fn output_env(
+    pub(crate) fn output_env(
         &self,
         ci: Option<&str>,
         fail: &str,
@@ -282,7 +282,10 @@ impl Tree {
             .env("CI_LOG", &log)
             .env("CI_FAIL", fail)
             .env_remove("CI")
-            .env_remove("CLM_SELECTION");
+            .env_remove("CLM_SELECTION")
+            // nextest sets these for the test running this; the script must not inherit them.
+            .env_remove("NEXTEST_PROFILE")
+            .env_remove("NEXTEST_CONFIG");
         if let Some(ci) = ci {
             c.env("CI", ci);
         }
@@ -577,9 +580,9 @@ fn detector_tools_installs_cargo_machete_pinned() {
 }
 
 /// What breaks `ci/detector-tools` in a `clm.toml` and `detector-tools.sh`'s lines: a
-/// detector whose tool has no install line its `hint` repeats, a `clm` detector whose hint
-/// doesn't name `scripts/dev-install.sh`, a script line that installs `clm` or `sh`; a detector
-/// that runs `sh` on a file of the repository (under `root`) needs no line.
+/// detector whose tool has no install line its `hint` repeats, a script line that installs
+/// `clm` or `sh`; a `clm` detector, and one that runs `sh` on a file of the repository (under
+/// `root`), needs no line.
 fn detector_tool_problems(
     config: &toml::Table,
     lines: &[String],
@@ -591,11 +594,6 @@ fn detector_tool_problems(
         let hint = d["hint"].as_str().unwrap();
         if tool == "clm" {
             // It runs the clone's own `clm`, or the binary under test; nothing installs it.
-            if !hint.contains("scripts/dev-install.sh") {
-                problems.push(format!(
-                    "`clm` detector's hint `{hint}` doesn't name scripts/dev-install.sh"
-                ));
-            }
         } else if tool == "sh"
             && d["command"]
                 .get(1)
@@ -637,17 +635,56 @@ fn installs_clm(line: &str) -> bool {
 
 #[test]
 fn every_detector_has_its_tool_installed() {
-    // req:ci/detector-tools@86210325
-    // Each detector's tool has an install line, and its `hint` is that line, so the
-    // version is pinned in one place; a `clm` detector has none.
+    // req:ci/detector-tools@1984d752
+    // The detectors that need a tool installed: neither a `clm` one nor `sh` on a file of the
+    // repository. Each one's hint ends in its tool and starts with a command a fake stands in
+    // for.
     let config: toml::Table = fs::read_to_string(repo().join("clm.toml"))
         .unwrap()
         .parse()
         .unwrap();
-    let lines = script_lines("detector-tools.sh");
-    assert!(!config["detectors"].as_array().unwrap().is_empty());
-    let problems = detector_tool_problems(&config, &lines, &repo());
-    assert!(problems.is_empty(), "{problems:?}: {lines:?}");
+    let detectors = config["detectors"].as_array().unwrap();
+    assert!(!detectors.is_empty());
+    let mut tree = Tree::new();
+    tree.script = "detector-tools.sh";
+    let mut hints = Vec::new();
+    for d in detectors {
+        let command: Vec<&str> = d["command"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|w| w.as_str().unwrap())
+            .collect();
+        let exempt = command[0] == "clm"
+            || (command[0] == "sh"
+                && command
+                    .get(1)
+                    .is_some_and(|p| !p.starts_with('/') && repo().join(p).is_file()));
+        if exempt {
+            continue;
+        }
+        let hint = d["hint"].as_str().unwrap();
+        assert_eq!(
+            hint.split_whitespace().last(),
+            Some(command[0]),
+            "the hint `{hint}` doesn't end in the detector's tool"
+        );
+        tree.fake(hint.split_whitespace().next().unwrap(), FAKE);
+        hints.push(hint.to_owned());
+    }
+    assert!(!hints.is_empty());
+    let (ok, log) = tree.run(None, "");
+    assert!(ok, "{log:?}");
+    for hint in &hints {
+        assert!(
+            log.contains(hint),
+            "detector-tools.sh didn't run `{hint}`: {log:?}"
+        );
+    }
+    for call in &log {
+        assert!(!installs_clm(call), "installs clm: {call}");
+        assert!(!installs_sh(call), "installs sh: {call}");
+    }
 }
 
 #[test]
@@ -673,12 +710,6 @@ fn clm_detector_needs_no_install_line() {
     assert_eq!(
         detector_tool_problems(&ok, &lines(&[]), &repo()),
         Vec::<String>::new()
-    );
-    // A `clm` detector whose hint doesn't say how a clone gets `main`'s `clm`.
-    let problems = detector_tool_problems(&config("cargo install clm"), &lines(&[]), &repo());
-    assert!(
-        problems.len() == 1 && problems[0].contains("dev-install.sh"),
-        "{problems:?}"
     );
     // The script installing `clm` itself, however it is written.
     for install in [
@@ -768,24 +799,51 @@ fn only_detector_tools_installs_tools() {
 
 #[test]
 fn check_script_installs_the_tools() {
-    // req:ci/detector-tools@86210325
-    let lines = script_lines("ci-check.sh");
-    let tools = lines
-        .iter()
-        .position(|l| l == ".github/scripts/detector-tools.sh")
-        .unwrap_or_else(|| panic!("ci-check.sh doesn't run detector-tools.sh: {lines:?}"));
-    let cargo = lines
-        .iter()
-        .position(|l| l.split_whitespace().any(|w| w == "cargo"))
-        .unwrap_or_else(|| panic!("no cargo line: {lines:?}"));
+    // req:ci/detector-tools@1984d752
+    let (ok, log) = Tree::new().run(None, "");
+    assert!(ok, "{log:?}");
+    let cargo = cargo_calls(&log);
     assert!(
-        tools < cargo,
-        "detector-tools.sh runs after cargo: {lines:?}"
+        is_pinned_install(cargo[0], "cargo-machete"),
+        "the first cargo call: {cargo:?}"
     );
+    let fmt = cargo
+        .iter()
+        .position(|c| c.starts_with("cargo fmt"))
+        .unwrap_or_else(|| panic!("no fmt: {cargo:?}"));
+    assert!(0 < fmt, "{cargo:?}");
+    // The only other `cargo install` is `test-tools.sh`'s.
+    let installs: Vec<_> = cargo
+        .iter()
+        .filter(|c| c.starts_with("cargo install"))
+        .collect();
+    assert_eq!(installs.len(), 2, "{installs:?}");
     assert!(
-        !lines.iter().any(|l| l.contains("cargo install")),
-        "{lines:?}"
+        is_pinned_install(installs[1], "cargo-nextest"),
+        "{installs:?}"
     );
+}
+
+/// The `cargo` calls a run made, in order.
+fn cargo_calls(log: &[String]) -> Vec<&str> {
+    log.iter()
+        .map(String::as_str)
+        .filter(|l| l.starts_with("cargo "))
+        .collect()
+}
+
+/// Whether `call` is `cargo install --locked --version <x.y.z> <krate>`, an exact version.
+fn is_pinned_install(call: &str, krate: &str) -> bool {
+    let words: Vec<&str> = call.split_whitespace().collect();
+    let ["cargo", "install", "--locked", "--version", version, name] = words[..] else {
+        return false;
+    };
+    let parts: Vec<&str> = version.split('.').collect();
+    name == krate
+        && parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// The commands a run ran to run Rust tests, `cargo nextest run` or `cargo test`, in order.
@@ -1211,7 +1269,7 @@ fi
 "#;
 
 /// A tree that runs `coverage.sh`, with the fakes for it.
-fn coverage_tree() -> Tree {
+pub(crate) fn coverage_tree() -> Tree {
     let mut tree = Tree::new();
     tree.script = "coverage.sh";
     executable(
@@ -1380,87 +1438,74 @@ fn a_failing_coverage_suite_fails_the_script() {
 
 #[test]
 fn nothing_else_runs_coverage() {
-    // req:ci/coverage-script@7b99367f
-    for path in [
-        script_path("ci-check.sh"),
-        script_path("detector-tools.sh"),
-        repo().join(".github/workflows/release.yml"),
-    ] {
-        let text = fs::read_to_string(&path).unwrap();
-        for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
-            assert!(
-                !line.contains("coverage.sh") && !line.contains("llvm-cov"),
-                "{}: {line}",
-                path.display()
-            );
-        }
+    // req:ci/coverage-script@ae8713bc
+    let tree = Tree::new();
+    executable(&tree.work().join(".github/scripts/coverage.sh"), FAKE);
+    let (ok, log) = tree.run(None, "");
+    assert!(ok, "{log:?}");
+    assert!(!log.iter().any(|l| l.contains("llvm-cov")), "{log:?}");
+    assert!(
+        !log.iter().any(|l| l.starts_with("coverage.sh")),
+        "the stand-in ran: {log:?}"
+    );
+    for (file, job, step) in crate::workflow_steps() {
+        let run = step["run"].as_str().unwrap_or("");
+        assert!(
+            !run.contains("coverage.sh") && !run.contains("llvm-cov"),
+            "{file} `{job}`: {run}"
+        );
     }
 }
 
 #[test]
 fn coverage_tools_are_pinned() {
-    // req:ci/coverage-script@7b99367f
-    let lines = script_lines("coverage.sh");
-    let tools = lines
+    // req:ci/coverage-script@ae8713bc
+    let tree = coverage_tree();
+    let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
+    assert!(ok, "{log:?} {stderr}");
+    let cargo = cargo_calls(&log);
+    let installs: Vec<_> = cargo
         .iter()
-        .position(|l| l == ".github/scripts/detector-tools.sh")
-        .unwrap_or_else(|| panic!("coverage.sh doesn't run detector-tools.sh: {lines:?}"));
-    let test_tools = lines
+        .filter(|c| c.starts_with("cargo install"))
+        .collect();
+    assert_eq!(installs.len(), 3, "{cargo:?}");
+    for (call, krate) in installs
         .iter()
-        .position(|l| l == ".github/scripts/test-tools.sh")
-        .unwrap_or_else(|| panic!("coverage.sh doesn't run test-tools.sh: {lines:?}"));
-    let cargo = lines
+        .zip(["cargo-machete", "cargo-nextest", "cargo-llvm-cov"])
+    {
+        assert!(is_pinned_install(call, krate), "{krate}: {cargo:?}");
+    }
+    let run = cargo
         .iter()
-        .position(|l| l.split_whitespace().any(|w| w == "cargo"))
-        .unwrap_or_else(|| panic!("no cargo line: {lines:?}"));
-    assert!(tools < test_tools && test_tools < cargo, "{lines:?}");
-    let install = lines
+        .position(|c| c.starts_with("cargo llvm-cov nextest "))
+        .unwrap_or_else(|| panic!("no llvm-cov nextest: {cargo:?}"));
+    let last_install = cargo
         .iter()
-        .find(|l| l.starts_with("cargo install ") && l.ends_with(" cargo-llvm-cov"))
-        .unwrap_or_else(|| panic!("no cargo-llvm-cov install: {lines:?}"));
-    let words: Vec<&str> = install.split_whitespace().collect();
-    assert!(words.contains(&"--locked"), "{install}");
-    let version = words
-        .iter()
-        .position(|w| *w == "--version")
-        .and_then(|i| words.get(i + 1))
-        .unwrap_or_else(|| panic!("no --version: {install}"));
-    let parts: Vec<&str> = version.split('.').collect();
+        .rposition(|c| c.starts_with("cargo install"))
+        .unwrap();
+    assert!(last_install < run, "{cargo:?}");
     assert!(
-        parts.len() == 3
-            && parts
-                .iter()
-                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
-        "not an exact x.y.z version: {version}"
-    );
-    // The tests run under nextest, the instrumentation goes in `RUSTFLAGS`, which the nested
-    // wasm builds remove, and a failing test fails the run.
-    let llvm_cov = lines
-        .iter()
-        .find(|l| l.starts_with("cargo llvm-cov "))
-        .unwrap_or_else(|| panic!("no cargo llvm-cov line: {lines:?}"));
-    assert!(
-        llvm_cov.starts_with("cargo llvm-cov nextest "),
-        "{llvm_cov}"
-    );
-    assert!(
-        llvm_cov
+        cargo[run]
             .split_whitespace()
             .any(|w| w == "--no-rustc-wrapper"),
-        "{llvm_cov}"
+        "{}",
+        cargo[run]
     );
     assert!(
-        !lines.iter().any(|l| l.contains("--ignore-run-fail")),
-        "{lines:?}"
+        !log.iter().any(|l| l.contains("--ignore-run-fail")),
+        "{log:?}"
     );
-    let vitest = lines
+    let vitest: Vec<_> = log
         .iter()
-        .find(|l| l.contains("@vitest/coverage-v8@"))
-        .unwrap_or_else(|| panic!("no @vitest/coverage-v8 install: {lines:?}"));
-    assert!(
-        vitest.split_whitespace().any(|w| w == "--no-save"),
-        "{vitest}"
-    );
+        .filter(|l| l.contains("@vitest/coverage-v8@"))
+        .collect();
+    assert_eq!(vitest.len(), 2, "{log:?}");
+    for install in vitest {
+        assert!(
+            install.split_whitespace().any(|w| w == "--no-save"),
+            "{install}"
+        );
+    }
     let mode = fs::metadata(script_path("coverage.sh"))
         .unwrap()
         .permissions()
@@ -1484,33 +1529,13 @@ fn nextest_replaces_cargo_test_but_for_doctests() {
 
 #[test]
 fn test_tools_installs_only_nextest_pinned() {
-    // req:ci/test-tools@8da0e835
-    let lines = script_lines("test-tools.sh");
-    let installs: Vec<_> = lines
-        .iter()
-        .filter(|l| l.contains("cargo install"))
-        .collect();
-    assert_eq!(installs.len(), 1, "{lines:?}");
-    let words: Vec<&str> = installs[0].split_whitespace().collect();
-    assert!(
-        words.starts_with(&["cargo", "install"]) && words.last() == Some(&"cargo-nextest"),
-        "{}",
-        installs[0]
-    );
-    assert!(words.contains(&"--locked"), "{}", installs[0]);
-    let version = words
-        .iter()
-        .position(|w| *w == "--version")
-        .and_then(|i| words.get(i + 1))
-        .unwrap_or_else(|| panic!("no --version: {}", installs[0]));
-    let parts: Vec<&str> = version.split('.').collect();
-    assert!(
-        parts.len() == 3
-            && parts
-                .iter()
-                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
-        "not an exact x.y.z version: {version}"
-    );
+    // req:ci/test-tools@70e8cd5d
+    let mut tree = Tree::new();
+    tree.script = "test-tools.sh";
+    let (ok, log) = tree.run(None, "");
+    assert!(ok, "{log:?}");
+    assert_eq!(log.len(), 1, "{log:?}");
+    assert!(is_pinned_install(&log[0], "cargo-nextest"), "{log:?}");
     let mode = fs::metadata(script_path("test-tools.sh"))
         .unwrap()
         .permissions()
@@ -1520,44 +1545,19 @@ fn test_tools_installs_only_nextest_pinned() {
 
 #[test]
 fn test_tools_run_between_the_detector_tools_and_cargo() {
-    // req:ci/test-tools@8da0e835
-    for script in ["ci-check.sh", "coverage.sh"] {
-        let lines = script_lines(script);
-        let at = |line: &str| {
-            lines
-                .iter()
-                .position(|l| l == line)
-                .unwrap_or_else(|| panic!("{script} doesn't run {line}: {lines:?}"))
-        };
-        let detectors = at(".github/scripts/detector-tools.sh");
-        let tests = at(".github/scripts/test-tools.sh");
-        let cargo = lines
-            .iter()
-            .position(|l| l.split_whitespace().any(|w| w == "cargo"))
-            .unwrap();
-        assert!(detectors < tests && tests < cargo, "{script}: {lines:?}");
-    }
-    // And nothing else runs it, but the release workflow's `prepare` job, or installs
-    // `cargo-nextest`.
-    let github = repo().join(".github");
-    for dir in ["workflows", "scripts"] {
-        for entry in fs::read_dir(github.join(dir)).unwrap() {
-            let path = entry.unwrap().path();
-            let name = path.file_name().unwrap().to_string_lossy().into_owned();
-            let text = fs::read_to_string(&path).unwrap();
-            for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
-                assert!(
-                    !line.contains("test-tools.sh")
-                        || ["ci-check.sh", "coverage.sh", "release.yml"].contains(&name.as_str()),
-                    "{name} runs test-tools.sh: {line}"
-                );
-                assert!(
-                    !(line.contains("cargo install") && line.contains("cargo-nextest"))
-                        || name == "test-tools.sh",
-                    "{name} installs cargo-nextest: {line}"
-                );
-            }
-        }
+    // req:ci/test-tools@70e8cd5d
+    let check = Tree::new();
+    let coverage = coverage_tree();
+    for tree in [&check, &coverage] {
+        let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
+        assert!(ok, "{}: {log:?} {stderr}", tree.script);
+        let cargo = cargo_calls(&log);
+        assert!(
+            is_pinned_install(cargo[0], "cargo-machete")
+                && is_pinned_install(cargo[1], "cargo-nextest"),
+            "{}: {cargo:?}",
+            tree.script
+        );
     }
 }
 
@@ -2296,7 +2296,7 @@ mutant() {
 
 /// A tree that runs `mutate.sh` with the fakes for it and a `coverage.sh` that logs and writes
 /// `target/lcov.info`, and the plan file `plan` holding `plan_text`.
-fn mutate_tree(plan_text: &str) -> Tree {
+pub(crate) fn mutate_tree(plan_text: &str) -> Tree {
     let mut tree = Tree::new();
     tree.script = "mutate.sh";
     let scripts = tree.work().join(".github/scripts");
@@ -2372,7 +2372,7 @@ impl Tree {
 
     /// The command that runs `mutate.sh` on the plan with `extra` environment variables, its
     /// earlier run's logs removed.
-    fn mutate_command(&self, extra: &[(&str, &str)]) -> Command {
+    pub(crate) fn mutate_command(&self, extra: &[(&str, &str)]) -> Command {
         let log = self.dir.path().join("log");
         let _ = fs::remove_file(&log);
         for kept in [
@@ -2412,7 +2412,9 @@ impl Tree {
             .env("CLM_MUTATE_RESULT", self.dir.path().join("result"))
             .env_remove("CLM_LAND_DIR")
             .env_remove("CLM_MUTATE_JOBS")
-            .env_remove("CLM_SLOT");
+            .env_remove("CLM_SLOT")
+            .env_remove("NEXTEST_PROFILE")
+            .env_remove("NEXTEST_CONFIG");
         without_git_env(&mut c);
         for (k, v) in extra {
             c.env(k, v);
@@ -2436,7 +2438,7 @@ impl Tree {
     }
 }
 
-const RUST_BLOCK: &str = "requirement a/x\ncode crates/clm-check/src/lib.rs\ndiff /tmp/the.diff\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n";
+pub(crate) const RUST_BLOCK: &str = "requirement a/x\ncode crates/clm-check/src/lib.rs\ndiff /tmp/the.diff\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n";
 
 #[test]
 fn a_rust_requirement_whose_test_notices_is_killed() {
