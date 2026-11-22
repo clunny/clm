@@ -226,7 +226,20 @@ fn scenario_what_a_light_branch_carries_beside_it() {
 #[test]
 fn scenario_a_branch_light_doesnt_take() {
     type Variant = fn(&Path);
-    let variants: [(&[&str], Variant); 6] = [
+    let variants: [(&[&str], Variant); 8] = [
+        // beyond the scenario: an archived change not `done`, and a block other than a
+        // scenario added
+        (&["`changes/archive/c/change.md`", "done"], |d| {
+            write(
+                d,
+                "changes/archive/c/change.md",
+                &DONE.replace("done", "applied"),
+            );
+        }),
+        (&["`a/x`", "more than scenarios"], |d| {
+            let needs = format!("{FIRST}{SECOND}\n#### Needs\n- b/y\n");
+            write(d, "specs/a/SPEC.md", &spec_a("unbuilt", "c", &needs));
+        }),
         (&["component `a`", "Contract"], |d| {
             write(
                 d,
