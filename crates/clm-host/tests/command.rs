@@ -2058,6 +2058,38 @@ fn scenario_pr_open_a_relative_body_file() {
 }
 
 #[test]
+fn a_relative_body_file_is_the_roots_beside_the_cuts_too() {
+    // req:host/pr-open@26605e35
+    // req:host/pr-body@08a50617
+    // A branch with cuts sends a body made from the file: still the root's.
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    write(&r.work, "b.md", "root body");
+    let other = TempDir::new().unwrap();
+    write(other.path(), "b.md", "other body");
+    let root = r.work.display().to_string();
+    let open = [
+        "pr",
+        "open",
+        "spec/x",
+        "--title",
+        "x",
+        "--body-file",
+        "b.md",
+        "--root",
+        &root,
+    ];
+    let body_args = ["pr", "body", "b.md", "--root", &root];
+    for (args, env) in [
+        (&open[..], &[][..]),
+        (&body_args[..], &[("FAKE_PR_VIEW", PR_7)][..]),
+    ] {
+        let (code, _, err) = clm_at(other.path(), other.path(), &gh, args, env);
+        assert_eq!(code, Some(0), "{args:?}: {err}");
+        assert_eq!(body(&gh), format!("{CUTS}root body"), "{args:?}");
+    }
+}
+
+#[test]
 fn scenario_pr_open_an_unreadable_body_file() {
     // req:host/pr-open@26605e35
     let args = [
