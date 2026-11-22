@@ -9,7 +9,7 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-// req:clm/readme-front-page@83830808
+// req:clm/readme-front-page@d8ab8035
 #[test]
 fn readme_is_the_front_page() {
     let readme = fs::read_to_string(repo().join("README.md")).expect("README.md exists");
@@ -44,7 +44,7 @@ fn readme_is_the_front_page() {
     }
 }
 
-// req:clm/readme-front-page@83830808
+// req:clm/readme-front-page@d8ab8035
 #[test]
 fn readme_links_the_site_first_and_credits_its_sources() {
     let readme = fs::read_to_string(repo().join("README.md")).expect("README.md exists");
