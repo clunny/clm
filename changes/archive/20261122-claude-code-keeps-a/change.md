@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [claude-code-keeps-a-finished-subagent-s-worktree-lock-for-the]
 ---
 
