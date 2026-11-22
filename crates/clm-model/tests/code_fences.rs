@@ -62,6 +62,12 @@ fn a_close_may_carry_leading_and_trailing_white_space() {
 
 // req:model/code-fences@59b932df
 #[test]
+fn a_run_of_two_opens_no_fence() {
+    assert_eq!(marked(&["``", "~~", "text"]), [false, false, false]);
+}
+
+// req:model/code-fences@59b932df
+#[test]
 fn a_fence_never_closed() {
     assert_eq!(marked(&["```", "## Design"]), [true, true]);
 }
