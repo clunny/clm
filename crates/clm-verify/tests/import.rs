@@ -54,7 +54,7 @@ fn last_body(f: &Fixture) -> Body {
 
 #[test]
 fn a_passing_run_imported() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let g = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&g, true);
@@ -91,7 +91,7 @@ fn a_passing_run_imported() {
 
 #[test]
 fn a_failing_run_over_one_land_names_it() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let g = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&g, true);
@@ -116,7 +116,7 @@ fn a_failing_run_over_one_land_names_it() {
 
 #[test]
 fn a_failing_run_over_several_lands_leaves_the_search() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let g = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&g, true);
@@ -146,7 +146,7 @@ fn a_failing_run_over_several_lands_leaves_the_search() {
 
 #[test]
 fn the_newest_result_covers_the_lands_up_to_it() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let l1 = f.land(&[("crates/a/x.rs", "1\n")], "l1");
     let l2 = f.land(&[("crates/a/y.rs", "2\n")], "l2");
@@ -167,8 +167,28 @@ fn the_newest_result_covers_the_lands_up_to_it() {
 }
 
 #[test]
+fn the_hosts_order_decides_which_is_newest() {
+    // req:verify/verify-import@a6af13ea
+    let f = Fixture::new(Some(IMPORT));
+    let l1 = f.land(&[("crates/a/x.rs", "1\n")], "l1");
+    let l2 = f.land(&[("crates/a/y.rs", "2\n")], "l2");
+    // The host lists `l1`'s run first, so it is the newest whatever the chain says.
+    let runs = [
+        run(&l1, "completed", "success", 20),
+        run(&l2, "completed", "success", 21),
+    ];
+    let out = with_gh(&f, &runs, || import(&f, &Request::Import));
+    assert_eq!(out.line, format!("verify passed {} 2 lands", &l1[..7]));
+    let Body::Verified { commit, run, .. } = last_body(&f) else {
+        panic!()
+    };
+    assert_eq!(commit, l1);
+    assert_eq!(run.as_deref(), Some("https://host/run/20"));
+}
+
+#[test]
 fn still_running() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let g = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&g, true);
@@ -184,7 +204,7 @@ fn still_running() {
 
 #[test]
 fn a_cancelled_run_is_no_result() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let g = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&g, true);
@@ -199,7 +219,7 @@ fn a_cancelled_run_is_no_result() {
 
 #[test]
 fn a_run_on_an_already_verified_commit_is_no_result() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let g = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&g, true);
@@ -212,7 +232,7 @@ fn a_run_on_an_already_verified_commit_is_no_result() {
 
 #[test]
 fn a_run_not_completed_is_no_result_whatever_it_says() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let l = f.land(&[("crates/a/x.rs", "1\n")], "l");
     let out = with_gh(&f, &[run(&l, "in_progress", "success", 7)], || {
@@ -224,7 +244,7 @@ fn a_run_not_completed_is_no_result_whatever_it_says() {
 
 #[test]
 fn no_result_is_pending_even_with_nothing_landed() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let head = f.back(0);
     f.verified(&head, true);
@@ -243,7 +263,7 @@ fn settings_that_cannot_be_used_exit_1() {
 
 #[test]
 fn nothing_to_import_elsewhere() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(
         "mode = \"local\"\ntriggers = []\nevery = { lands = 1 }",
     ));
@@ -256,7 +276,7 @@ fn nothing_to_import_elsewhere() {
 
 #[test]
 fn due_imports_only_when_a_trigger_holds() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     let g = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&g, true);
@@ -275,7 +295,7 @@ fn due_imports_only_when_a_trigger_holds() {
 
 #[test]
 fn a_host_that_fails_exits_1_with_its_message() {
-    // req:verify/verify-import@dd2aac1d
+    // req:verify/verify-import@a6af13ea
     let f = Fixture::new(Some(IMPORT));
     f.land(&[("a.txt", "1\n")], "one");
     let err = with_gh(&f, &["fail".to_string()], || {
