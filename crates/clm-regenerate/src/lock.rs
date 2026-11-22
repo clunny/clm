@@ -1,5 +1,5 @@
 //! `retry-index-lock`: several sessions share one clone, and Claude Code, hooks and the panel
-//! run `git` in it between a session's commands, so a `git` command `clm sync` runs can find
+//! run `git` in it between a session's commands, so a `git` command `clm rebase` runs can find
 //! the worktree's `index.lock` held for a moment. Every `git` command this crate runs goes
 //! through `git` or `run` here, which run it again when it fails naming `index.lock`.
 

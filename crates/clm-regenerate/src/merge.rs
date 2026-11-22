@@ -199,6 +199,8 @@ fn element_in(path: &Path, text: &str, element: &str) -> Option<(Option<String>,
 /// The commits `HEAD` holds and `onto` doesn't that changed one delta file, newest first,
 /// followed from `changes/archive/<id>/` back to `changes/<id>/`.
 struct DeltaHistory {
+    root: PathBuf,
+    onto: String,
     commits: Vec<String>,
     /// The file's place in an archived change, then in a live one, CLM-root-relative.
     places: [PathBuf; 2],
@@ -222,6 +224,8 @@ impl DeltaHistory {
         args.extend(names.iter().map(String::as_str));
         let log = git(root, &args)?;
         Ok(DeltaHistory {
+            root: root.to_path_buf(),
+            onto: onto.to_string(),
             commits: log.lines().map(str::to_string).collect(),
             places,
         })
@@ -230,17 +234,16 @@ impl DeltaHistory {
     /// `element`'s recorded base and text in the file at `rev`, read where the file is then.
     fn element_at(
         &self,
-        root: &Path,
         rev: &str,
         element: &str,
     ) -> Result<Option<(Option<String>, String)>, Error> {
         for place in &self.places {
             let relative = format!("./{}", place.display());
-            if !exists_at(root, rev, &relative)? {
+            if !exists_at(&self.root, rev, &relative)? {
                 continue;
             }
             let spec = format!("{rev}:{relative}");
-            let bytes = run(root, &["cat-file", "blob", &spec], Options::default())?;
+            let bytes = run(&self.root, &["cat-file", "blob", &spec], Options::default())?;
             return Ok(element_in(place, &String::from_utf8_lossy(&bytes), element));
         }
         Ok(None)
@@ -250,12 +253,9 @@ impl DeltaHistory {
     /// back past the newest commit that set it to `base` from another, and again while the
     /// base so restored is unknown; `None`, leaving it as it was, when a step conflicts or
     /// no commit set the base.
-    #[allow(clippy::too_many_arguments)]
     fn take_back(
         &self,
-        root: &Path,
         stages: &Stages,
-        onto: &str,
         delta: &Delta,
         file: &str,
         element: &str,
@@ -263,11 +263,11 @@ impl DeltaHistory {
     ) -> Result<Option<String>, Error> {
         let (mut file, mut base) = (file.to_string(), base.to_string());
         for commit in &self.commits {
-            let Some((Some(at), set)) = self.element_at(root, commit, element)? else {
+            let Some((Some(at), set)) = self.element_at(commit, element)? else {
                 continue;
             };
             let parent = format!("{commit}^");
-            let before = self.element_at(root, &parent, element)?;
+            let before = self.element_at(&parent, element)?;
             let Some((Some(before_base), before_text)) = before else {
                 continue;
             };
@@ -277,7 +277,7 @@ impl DeltaHistory {
             let Some((_, now)) = element_in(&delta.path, &file, element) else {
                 return Ok(None);
             };
-            let Some(text) = merge_file(root, &now, &set, &before_text)? else {
+            let Some(text) = merge_file(&self.root, &now, &set, &before_text)? else {
                 return Ok(None);
             };
             let Some(edited) = rewrite(&file, element, &text, &base, &before_base) else {
@@ -285,7 +285,7 @@ impl DeltaHistory {
             };
             (file, base) = (edited, before_base);
             if stages
-                .base_text(root, onto, &delta.node, element, &base)?
+                .base_text(&self.root, &self.onto, &delta.node, element, &base)?
                 .is_some()
             {
                 return Ok(Some(file));
@@ -335,9 +335,7 @@ pub(crate) fn take_back(
         let history = DeltaHistory::new(root, onto, change, delta)?;
         let mut file = original.clone();
         for (element, base) in unknown {
-            if let Some(taken) =
-                history.take_back(root, stages, onto, delta, &file, &element, &base)?
-            {
+            if let Some(taken) = history.take_back(stages, delta, &file, &element, &base)? {
                 file = taken;
                 edits.made.push(Made {
                     path: delta.path.clone(),
