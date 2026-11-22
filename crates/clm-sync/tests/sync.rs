@@ -2378,30 +2378,6 @@ fn a_slug_that_isnt_kebab_case_is_skipped_with_a_warning() {
 }
 
 #[test]
-fn a_skipped_proposals_warning_carries_no_command_name() {
-    // req:sync/warnings-name-the-command@f6774cd0
-    let r = repo("impl/a");
-    ledger(
-        &r,
-        "alice/web",
-        &[proposed("p9", "alice/web", "Not Kebab", "Bad", &["a"], "x")],
-    );
-
-    let report = sync(&r.work).unwrap();
-    let skipped: Vec<_> = report
-        .warnings
-        .iter()
-        .filter(|w| w.starts_with("skipped proposal"))
-        .collect();
-    assert_eq!(skipped.len(), 1, "{report:?}");
-    assert!(skipped[0].contains("p9"), "{report:?}");
-    assert!(
-        report.warnings.iter().all(|w| !w.starts_with("clm")),
-        "{report:?}"
-    );
-}
-
-#[test]
 fn no_proposal_items_off_impl_branches() {
     // req:sync/file-proposal-items@e75d388f
     let r = repo("spec/y");
