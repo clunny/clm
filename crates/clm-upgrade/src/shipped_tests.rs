@@ -1067,6 +1067,9 @@ fn the_proof_note_names_what_a_project_needs_to_know() {
         "`tests` glob",
         "`clm check`",
         "`tests-cite-their-owner`",
+        "a file the rule doesn't count as its own",
+        "Naming `wiring` also has `clm check` report",
+        "cites a requirement of a component other than the file's owner",
         "[verify] mutate",
         "off until the project sets them",
     ] {
