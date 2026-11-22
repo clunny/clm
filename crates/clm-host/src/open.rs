@@ -22,6 +22,15 @@ pub fn pr_open(
     if matches!(host, clm_config::Host::Git | clm_config::Host::None) {
         return Ok(None);
     }
+    // A body file that can't be read is refused first, naming it, before anything else is
+    // read or the host is asked anything, even whether a pull request is already open, so
+    // nothing is opened, named or kept.
+    let given = body_file
+        .map(|file| {
+            std::fs::read_to_string(root.join(file))
+                .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))
+        })
+        .transpose()?;
     let branch = match branch {
         Some(branch) => branch.to_string(),
         None => current_branch(root)?
@@ -36,12 +45,12 @@ pub fn pr_open(
         .map(String::from)
         .or_else(|| drawn.as_ref().map(|(title, _)| title.clone()))
         .unwrap_or_default();
-    let (text, temp) = match body_file {
-        Some(file) => (std::fs::read_to_string(root.join(file)).ok(), None),
+    let (text, temp) = match given {
+        Some(text) => (text, None),
         None => {
             let body = drawn.map(|(_, body)| body).unwrap_or_default();
             let file = TempFile::write(&body)?;
-            (Some(body), Some(file))
+            (body, Some(file))
         }
     };
     let file = match (&temp, body_file) {
@@ -59,8 +68,8 @@ pub fn pr_open(
             let text = match take_sent() {
                 Some(Sent::Unevaluated) => None,
                 Some(Sent::Body(sent)) => Some(sent),
-                Some(Sent::AsGiven) => text,
-                None => text.and_then(|text| as_sent(root, &branch, text)),
+                Some(Sent::AsGiven) => Some(text),
+                None => as_sent(root, &branch, text),
             };
             match text.filter(|t| !t.trim().is_empty()) {
                 Some(text) => keeping(root, &branch, &text, e),
