@@ -1019,6 +1019,47 @@ fn no_claude_on_path_skips() {
 }
 
 #[test]
+fn no_validation_waits_on_a_prompt() {
+    // req:ci/panel-validate@b6720879
+    // A `claude` that reads a line from its standard input and records whether it read one,
+    // and the script's own standard input a pipe holding `y`, then closed.
+    let tree = Tree::new();
+    tree.fake(
+        "claude",
+        "#!/usr/bin/env bash\nif read -r line; then read=yes; else read=no; fi\necho \"claude $* read=$read\" >> \"$CI_LOG\"\n",
+    );
+    let log = tree.dir.path().join("log");
+    let mut child = Command::new(".github/scripts/ci-check.sh")
+        .current_dir(tree.work())
+        .env("PATH", tree.path())
+        .env("CI_LOG", &log)
+        .env("CI_FAIL", "")
+        .env_remove("CI")
+        .env_remove("CLM_SELECTION")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    {
+        use std::io::Write;
+        let mut stdin = child.stdin.take().unwrap();
+        stdin.write_all(b"y\n").unwrap();
+    }
+    assert!(child.wait().unwrap().success());
+    let log = fs::read_to_string(&log).unwrap();
+    let claude: Vec<&str> = log.lines().filter(|l| l.starts_with("claude ")).collect();
+    assert_eq!(
+        claude,
+        [
+            "claude plugin validate plugin-panel read=no",
+            "claude plugin validate plugin read=no",
+        ],
+        "{log}"
+    );
+}
+
+#[test]
 fn panel_not_selected_runs_no_claude() {
     // req:ci/panel-validate@82219e3e
     let (ok, log) = Tree::new().run_selecting("file crates/clm/src/main.rs\n");
@@ -1082,14 +1123,19 @@ fn everything() {
     let all_line = tree.run_selecting("all Cargo.lock\nfile crates/clm/tests/run.rs\n");
     let unset = tree.run(None, "");
     let empty = tree.run_env(None, "", Some("".as_ref()));
-    // A selection file that isn't there can't narrow anything.
+    // A selection path where there is no regular file can't narrow anything: nothing there,
+    // or a directory.
     let missing = tree.dir.path().join("missing");
     let missing = tree.run_env(None, "", Some(missing.as_os_str()));
+    let directory = tree.dir.path().join("a-directory");
+    fs::create_dir_all(&directory).unwrap();
+    let directory = tree.run_env(None, "", Some(directory.as_os_str()));
     for (what, (ok, log)) in [
         ("all line", all_line),
         ("unset", unset),
         ("empty", empty),
         ("missing file", missing),
+        ("directory", directory),
     ] {
         assert!(ok, "{what}: {log:?}");
         assert_whole_tree_checks(&log);
@@ -1146,6 +1192,27 @@ fn one_cargo_test_per_package_in_package_order() {
         ]
     );
     assert_eq!(npm_run(&log), Vec::<&str>::new());
+}
+
+#[test]
+fn a_deleted_crate_selects_nothing() {
+    // req:ci/selected-tests@a8fbc68d
+    // `crates/gone/` holds no `Cargo.toml`, and `crates/ws/`'s names a `[workspace]` and no
+    // `[package]`.
+    let tree = Tree::new();
+    let ws = tree.work().join("crates/ws");
+    fs::create_dir_all(ws.join("src")).unwrap();
+    fs::write(
+        ws.join("Cargo.toml"),
+        "[workspace]\nmembers = []\nname = \"ws\"\n",
+    )
+    .unwrap();
+    fs::write(ws.join("src/lib.rs"), "").unwrap();
+    let (ok, log) = tree.run_selecting(
+        "file crates/gone/src/lib.rs\nfile crates/gone/tests/x.rs\nfile crates/ws/src/lib.rs\n",
+    );
+    assert!(ok, "{log:?}");
+    assert_eq!(tests_run(&log), Vec::<&str>::new(), "{log:?}");
 }
 
 #[test]
@@ -1248,12 +1315,13 @@ if [ "$1 $2" = "llvm-cov nextest" ] && [ -e "$(dirname "$0")/fail-cargo" ]; then
 /// An `npx` that records its arguments, led by its directory, prints a version with more words
 /// after it for `vitest --version`, and for `vitest run` writes `lcov.info` under the
 /// `--coverage.reportsDirectory` it is given, with a relative record and an absolute one. It
-/// fails that run where `bin/fail-<dir>` exists.
+/// fails that run where `bin/fail-<dir>` exists, and prints no version where
+/// `bin/no-version-<dir>` does.
 const NPX_COVERAGE: &str = r#"#!/usr/bin/env bash
 here=$(basename "$PWD")
 echo "$here\$ npx $*" >> "$CI_LOG"
 if [ "$*" = "vitest --version" ]; then
-  echo "vitest/5.0.5 linux-x64 node-v22.0.0"
+  [ -e "$(dirname "$0")/no-version-$here" ] || echo "vitest/5.0.5 linux-x64 node-v22.0.0"
 elif [ "$1 $2" = "vitest run" ]; then
   [ ! -e "$(dirname "$0")/fail-$here" ] || exit 1
   for a; do
@@ -1433,6 +1501,30 @@ fn a_failing_coverage_suite_fails_the_script() {
         "{log:?}"
     );
     assert!(!log.iter().any(|l| l.contains("$ npm ")), "{log:?}");
+    assert_eq!(tracefile_sources(&tree), ["old"]);
+}
+
+#[test]
+fn no_vitest_version_fails_before_the_coverage_install() {
+    // req:ci/coverage-script@ae8713bc
+    let tree = coverage_tree();
+    fs::create_dir_all(tree.work().join("target")).unwrap();
+    fs::write(tree.work().join("target/lcov.info"), "SF:old\n").unwrap();
+    fs::write(tree.dir.path().join("bin/no-version-plugin-panel"), "").unwrap();
+    let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr
+            .lines()
+            .any(|l| l == "coverage.sh: no vitest version in plugin-panel"),
+        "{stderr}"
+    );
+    assert!(
+        !log.iter().any(
+            |l| l.starts_with("plugin-panel$ npm install") && l.contains("@vitest/coverage-v8")
+        ),
+        "{log:?}"
+    );
     assert_eq!(tracefile_sources(&tree), ["old"]);
 }
 
@@ -1748,6 +1840,41 @@ fn a_failure_after_the_clock_steps_back_prints_no_negative_time() {
         stderr.lines().last(),
         Some("ci-check: failed in clippy after 0s, 0s total"),
         "{stderr}"
+    );
+}
+
+#[test]
+fn a_failure_before_the_first_phase_is_in_setup() {
+    // req:ci/phase-times@10cc2378
+    let tree = Tree::new();
+    let file = tree.dir.path().join("selection");
+    fs::write(&file, "file crates/clm/src/main.rs\n").unwrap();
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&file).is_ok() {
+        // Root reads any file: there is no unreadable selection to give it.
+        return;
+    }
+    let out = tree.output(None, "", Some(file.as_os_str()), &tree.path());
+    assert!(!out.status.success());
+    let log = fs::read_to_string(tree.dir.path().join("log")).unwrap_or_default();
+    assert!(!log.lines().any(|l| l.starts_with("cargo ")), "{log}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains("::group::"), "{stdout}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let last = stderr.lines().last().unwrap_or("");
+    let rest = last
+        .strip_prefix("ci-check: failed in setup after ")
+        .unwrap_or_else(|| panic!("{stderr}"));
+    let (took, total) = rest.split_once("s, ").unwrap();
+    assert!(
+        !took.is_empty() && took.bytes().all(|b| b.is_ascii_digit()),
+        "{last}"
+    );
+    assert!(
+        total
+            .strip_suffix("s total")
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())),
+        "{last}"
     );
 }
 

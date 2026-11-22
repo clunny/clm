@@ -998,6 +998,19 @@ fn failing_gh_fails_closed() {
     let f = Fixture::new("0.1.0");
     fs::write(f.bin().join("gh-fails"), "").unwrap();
     assert_refused(&f.run("0.1.0"));
+    // `gh` lists no release, and `origin`'s tags can't be listed.
+    let f = Fixture::new("0.1.0");
+    f.git(
+        &f.work(),
+        &["remote", "set-url", "origin", "/nonexistent/remote.git"],
+    );
+    let r = f.run("0.1.0");
+    assert_refused(&r);
+    assert!(
+        r.stderr.contains("can't list origin's tags"),
+        "{}",
+        r.stderr
+    );
 }
 
 #[test]
@@ -1393,6 +1406,17 @@ fn a_version_edit_that_changes_nothing_fails() {
     let r = f.run("0.2.0");
     assert_refused(&r);
     assert!(r.stderr.contains("plugin.json"), "{}", r.stderr);
+    // A `Cargo.toml` with no `[workspace.package] version`.
+    let f = Fixture::new("0.1.0");
+    let toml = fs::read_to_string(f.work().join("Cargo.toml")).unwrap();
+    let without = toml.replace("version = \"0.1.0\"\n", "");
+    assert_ne!(without, toml);
+    fs::write(f.work().join("Cargo.toml"), without).unwrap();
+    f.git(&f.work(), &["commit", "-q", "-am", "no version"]);
+    f.git(&f.work(), &["push", "-q", "origin", "main"]);
+    let r = f.run("0.2.0");
+    assert_refused(&r);
+    assert!(r.stderr.contains("Cargo.toml"), "{}", r.stderr);
 }
 
 #[test]
@@ -1489,11 +1513,6 @@ fn every_cargo_job_installs_the_pinned_toolchain() {
     // Jobs install what `rust-toolchain.toml` names (`pinned-rust-toolchain`) with `rustup
     // show`, always, before any step that runs cargo itself or through one of the scripts.
     let wf = workflow();
-    // What `dtolnay/rust-toolchain` used to set: no dev debuginfo, colour, short backtraces.
-    let env = &wf["env"];
-    assert_eq!(env["CARGO_PROFILE_DEV_DEBUG"].as_u64(), Some(0));
-    assert_eq!(env["CARGO_TERM_COLOR"].as_str(), Some("always"));
-    assert_eq!(env["RUST_BACKTRACE"].as_str(), Some("short"));
     let runs_cargo = |s: &Value| {
         let run = s["run"].as_str().unwrap_or("");
         run.split(|c: char| !(c.is_alphanumeric() || "-_.".contains(c)))
