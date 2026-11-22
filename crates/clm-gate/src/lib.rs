@@ -1612,6 +1612,15 @@ pub(crate) fn foreign_in(
         if owner == component || wiring.iter().any(|g| clm_coverage::matches(g, file)) {
             continue;
         }
+        // A build may drop a detector's allowance its work made stale (`own-files`).
+        if file == POLICY && status == 'M' {
+            let side = |rev: &str| show(at.repo, &at.object(rev, file)).ok();
+            if let (Some(before), Some(after)) = (side(at.merge_base), side(at.head))
+                && allowances_dropped(&before, &after)
+            {
+                continue;
+            }
+        }
         if status == 'M' {
             let before = show_bytes(at.repo, &at.object(at.merge_base, file)).unwrap_or_default();
             let before = String::from_utf8_lossy(&before);
@@ -1631,6 +1640,71 @@ pub(crate) fn foreign_in(
     // `../` may come out of order.
     found.sort_by(|a, b| a.path.cmp(&b.path));
     found
+}
+
+/// Whether `after`, the root's `clm.toml` at the head, only drops detectors' allowances
+/// from `before`, its text at the merge base (`own-files`): its lines, each with its line
+/// ending, are `before`'s in order with one or more taken out, and both read as TOML, the
+/// head's equal to the merge base's once one or more `"--allow"` elements, each with the
+/// element after it, are taken out of the `command` arrays of its `[[detectors]]` tables.
+fn allowances_dropped(before: &str, after: &str) -> bool {
+    let lines = |t: &str| {
+        t.split_inclusive('\n')
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    let (was, now) = (lines(before), lines(after));
+    let mut kept = was.iter();
+    if now.len() >= was.len() || !now.iter().all(|l| kept.any(|w| w == l)) {
+        return false;
+    }
+    let (Ok(mut was), Ok(mut now)) = (before.parse::<toml::Table>(), after.parse::<toml::Table>())
+    else {
+        return false;
+    };
+    let (Some(toml::Value::Array(was_detectors)), Some(toml::Value::Array(now_detectors))) =
+        (was.remove("detectors"), now.remove("detectors"))
+    else {
+        return false;
+    };
+    if was != now || was_detectors.len() != now_detectors.len() {
+        return false;
+    }
+    let mut dropped = false;
+    for (was, now) in was_detectors.iter().zip(&now_detectors) {
+        let (Some(was), Some(now)) = (was.as_table(), now.as_table()) else {
+            return false;
+        };
+        let (mut was, mut now) = (was.clone(), now.clone());
+        let (Some(toml::Value::Array(was_command)), Some(toml::Value::Array(now_command))) =
+            (was.remove("command"), now.remove("command"))
+        else {
+            if was == now {
+                continue;
+            }
+            return false;
+        };
+        if was != now || !pairs_dropped(&was_command, &now_command) {
+            return false;
+        }
+        dropped |= was_command.len() != now_command.len();
+    }
+    dropped
+}
+
+/// Whether `now` is `was` with zero or more `"--allow"` elements, each with the element after
+/// it, taken out, any such choice counting.
+fn pairs_dropped(was: &[toml::Value], now: &[toml::Value]) -> bool {
+    match (was, now) {
+        ([], []) => true,
+        ([], _) => false,
+        ([first, rest @ ..], _) => {
+            (now.first() == Some(first) && pairs_dropped(rest, &now[1..]))
+                || (first.as_str() == Some("--allow")
+                    && !rest.is_empty()
+                    && pairs_dropped(&rest[1..], now))
+        }
+    }
 }
 
 /// A `code` branch's component and the files a component owns outside the `wiring`, read
