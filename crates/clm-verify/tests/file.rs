@@ -279,8 +279,9 @@ fn a_dry_run_files_nothing() {
 fn a_verification_that_ends_in_an_error_files_nothing() {
     // req:verify/files-unproven@1dbfc127
     let p = filing("local", None);
-    // A trigger holds, and the run's record can't be appended: the clone's own ledger branch
-    // is held by a `<ref>.lock`, so the verification ends in a git failure.
+    // A trigger holds, and the verify tree's lock can't be opened (a directory stands in its
+    // place), so the verification ends in a failure once its settings are loaded; a filing
+    // would need neither the tree nor its lock.
     let toml = format!(
         "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nevery = {{ lands = 1 }}\n\
          mutate = \"true\"\n",
@@ -288,16 +289,7 @@ fn a_verification_that_ends_in_an_error_files_nothing() {
     );
     let head = p.f.land(&[("clm.toml", &toml)], "a trigger");
     let work = p.f.work();
-    let own = p.f.git(
-        &work,
-        &[
-            "for-each-ref",
-            "--format=%(refname)",
-            "refs/heads/clm/ledger/",
-        ],
-    );
-    let lock = work.join(".git").join(format!("{own}.lock"));
-    fs::write(&lock, "").unwrap();
+    fs::create_dir_all(work.join(".clm/verify.lock")).unwrap();
     let err = common::verify(
         &work,
         &clm_verify::Request::Due {
@@ -307,8 +299,11 @@ fn a_verification_that_ends_in_an_error_files_nothing() {
         &p.f.env(),
     )
     .unwrap_err();
-    fs::remove_file(&lock).unwrap();
     assert!(matches!(err, clm_verify::Error::Git(_)), "{err}");
     assert_eq!(p.head(), head);
     assert_eq!(p.on_origin(&p.item()), None);
+    // The same entry is filed once the call succeeds.
+    fs::remove_dir(work.join(".clm/verify.lock")).unwrap();
+    let out = p.f.due();
+    assert!(said(&out, "unproven: filed 1 items").is_some(), "{out:?}");
 }
