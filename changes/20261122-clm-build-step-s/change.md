@@ -32,6 +32,8 @@ No change or code fix since 2026-11-15 fixes it: `20261119-a-running-subagent-s`
 - `orchestrator.checkpoint`'s Design says Claude Code drops a subagent's lock once it hands back, so a returned run's worktree is removed by its finish or the next wrap-up, and that `clm run --finish` keeps a held one too.
 - `orchestrator.loop`'s Design no longer claims finishing early changes nothing; `claim-gone-ends-a-build` and every other loop requirement are unchanged, so none of the six requirements the plan's freeze holds is touched, and `orchestrator.loop` gets nothing to build.
 - The decision `a-held-lock-keeps-a-worktree` is amended: `clm run --finish` honours the lock, and why.
+- The decision `build-places`' "Cleanup on land" says the finish keeps a held worktree and also runs on a gone claim.
+- The build updates the doc comment on `clm_run::finish` (`crates/clm-run/src/lib.rs`), which says when it runs. A worktree both dirty and held prints only `kept <path>: uncommitted changes`, as the modified text reads.
 
 ## Constraints
 
