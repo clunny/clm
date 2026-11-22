@@ -101,7 +101,7 @@ fn said(out: &Outcome, start: &str) -> Option<String> {
 
 #[test]
 fn filed_and_read_as_not_built() {
-    // req:verify/files-unproven@1425f509
+    // req:verify/files-unproven@1dbfc127
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.due();
@@ -154,7 +154,7 @@ fn filed_and_read_as_not_built() {
 
 #[test]
 fn already_filed() {
-    // req:verify/files-unproven@1425f509
+    // req:verify/files-unproven@1dbfc127
     let p = filing("local", None);
     p.f.due();
     let filed = p.head();
@@ -165,7 +165,7 @@ fn already_filed() {
 
 #[test]
 fn reworded_since() {
-    // req:verify/files-unproven@1425f509
+    // req:verify/files-unproven@1dbfc127
     let p = filing("local", Some("11111111"));
     let before = p.head();
     let out = p.f.due();
@@ -176,7 +176,7 @@ fn reworded_since() {
 
 #[test]
 fn resolved_by_a_build() {
-    // req:verify/files-unproven@1425f509
+    // req:verify/files-unproven@1dbfc127
     let p = filing("local", None);
     p.f.due();
     p.sync();
@@ -193,7 +193,7 @@ fn resolved_by_a_build() {
 
 #[test]
 fn the_land_fails() {
-    // req:verify/files-unproven@1425f509
+    // req:verify/files-unproven@1dbfc127
     let p = filing("local", None);
     let hook = p.f.path("origin.git/hooks/pre-receive");
     write_exec(
@@ -219,7 +219,7 @@ fn the_land_fails() {
 
 #[test]
 fn pipeline_mode_files_nothing() {
-    // req:verify/files-unproven@1425f509
+    // req:verify/files-unproven@1dbfc127
     let p = filing("pipeline", None);
     let before = p.head();
     let out = p.f.due();
@@ -229,7 +229,7 @@ fn pipeline_mode_files_nothing() {
 
 #[test]
 fn a_commit_verification_files_nothing() {
-    // req:verify/files-unproven@1425f509
+    // req:verify/files-unproven@1dbfc127
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.run(&clm_verify::Request::Commit(p.found.clone()));
@@ -239,9 +239,37 @@ fn a_commit_verification_files_nothing() {
 
 #[test]
 fn a_dry_run_files_nothing() {
-    // req:verify/files-unproven@1425f509
+    // req:verify/files-unproven@1dbfc127
     let p = filing("local", None);
     let before = p.head();
-    p.f.dry(false);
+    let out = p.f.dry(false);
+    // Nothing has landed since the verified commit, so nothing is due.
+    assert!(out.line.starts_with("verify not-due"), "{}", out.line);
+    assert_eq!(out.code, 3);
+    assert_eq!(said(&out, "unproven:"), None);
     assert_eq!(p.head(), before);
+    assert_eq!(p.on_origin(&p.item()), None);
+    // A verification that ends in a refusal files nothing either.
+    let toml = format!(
+        "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nevery = {{ lands = 1 }}\n\
+         mutate = \"true\"\n\n[env]\nCLM_X = \"1\"\n",
+        p.f.path("bin/check").display()
+    );
+    let refused =
+        p.f.land(&[("clm.toml", &toml)], "an env that can't be used");
+    let err = common::verify(
+        &p.f.work(),
+        &clm_verify::Request::Due {
+            work_done: false,
+            dry_run: false,
+        },
+        &p.f.env(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, clm_verify::Error::Refused(_)), "{err}");
+    assert!(err.to_string().contains("env"), "{err}");
+    assert_eq!(p.head(), refused);
+    assert_eq!(p.on_origin(&p.item()), None);
+    let backlog = p.origin(&["ls-tree", "--name-only", "main", "backlog/"]);
+    assert_eq!(backlog, "", "{backlog}");
 }

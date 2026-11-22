@@ -20,7 +20,7 @@ fn toml_with(f: &Fixture, env: &str) -> String {
 
 #[test]
 fn mains_table_and_the_clones() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -50,7 +50,7 @@ fn mains_table_and_the_clones() {
 
 #[test]
 fn a_probe_takes_its_lands_variables() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let f = every_land();
     let green = f.land(&[("a.txt", "0\n")], "zero");
     f.verified(&green, true);
@@ -83,7 +83,7 @@ fn a_probe_takes_its_lands_variables() {
 
 #[test]
 fn a_changed_variable_runs_every_test() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let f = every_land();
     let green = f.land(&[("a.txt", "0\n")], "zero");
     f.verified(&green, true);
@@ -98,7 +98,7 @@ fn a_changed_variable_runs_every_test() {
 
 #[test]
 fn an_unchanged_table_keeps_the_selection() {
-    // req:verify/verify-env@877031f2
+    // req:verify/verify-env@aef086c1
     let f = every_land();
     let green = f.land(&[("a.txt", "0\n")], "zero");
     f.verified(&green, true);
