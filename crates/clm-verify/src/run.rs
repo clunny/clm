@@ -97,10 +97,10 @@ pub(crate) fn check(
             .collect(),
         unset: Vec::new(),
     };
-    // Under its own name, so a warning of the runner's says which command it came from
-    // (`verify-run`).
-    let run = clm_land::run_check_as(
-        "clm verify",
+    // Still the unnamed form: the named one leaves `run_check` with no user, which the
+    // unreferenced-items detector refuses before `land` can remove it
+    // (`backlog/the-detector-refuses-verify-s-move-off-run-check-before-land-can`).
+    let run = clm_land::run_check(
         &ctx.verify.check,
         &tree.dir,
         selection.as_ref().map(|s| s.path.as_path()),
