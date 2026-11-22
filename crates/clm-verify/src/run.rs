@@ -34,10 +34,7 @@ pub(crate) fn env_of(
     commit: &str,
 ) -> Result<Result<Vec<(String, String)>, String>, Error> {
     let source = format!("{commit}:{}clm.toml", ctx.prefix);
-    let text = match ctx.git(&["rev-parse", "--verify", "--quiet", &source]) {
-        Ok(_) => Some(ctx.git(&["show", &source])?),
-        Err(_) => None,
-    };
+    let text = crate::committed_text(&ctx.root, &source)?;
     let label = format!("{}:{}clm.toml", ctx.short(commit)?, ctx.prefix);
     Ok(
         clm_config::committed_env(&ctx.root, text.as_deref(), &label)

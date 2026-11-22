@@ -26,6 +26,37 @@ fn a_checkout_behind_main() {
 }
 
 #[test]
+fn main_turned_on_by_another_clone() {
+    // req:verify/settings-from-main@35114bba
+    let f = Fixture::new(None);
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    // Another clone turns `[verify]` on, so this clone's `origin/main` says nothing of it until
+    // `clm verify` fetches.
+    let other = f.path("other");
+    let origin = f.path("origin.git");
+    f.git(
+        &f.work(),
+        &[
+            "clone",
+            "-q",
+            origin.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    f.git(&other, &["config", "user.name", "Other"]);
+    f.git(&other, &["config", "user.email", "o@example.com"]);
+    std::fs::write(other.join("clm.toml"), LOCAL).unwrap();
+    f.git(&other, &["commit", "-q", "-am", "turn verify on"]);
+    f.git(&other, &["push", "-q", "origin", "main"]);
+    let out = f.run(&Request::Due {
+        work_done: true,
+        dry_run: true,
+    });
+    assert_eq!((out.line.as_str(), out.code), ("verify due work-done", 0));
+}
+
+#[test]
 fn turned_off_on_main() {
     // req:verify/settings-from-main@35114bba
     let f = Fixture::new(None);

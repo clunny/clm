@@ -262,6 +262,34 @@ fn queue_drained_when_only_blocked_requirements_remain() {
 }
 
 #[test]
+fn the_later_triggers_in_order() {
+    // req:verify/verify-due@eb23d6a6
+    // A drained queue comes before work done and the backstops.
+    let f = local("\"queue-drained\", \"work-done\"", "every = { lands = 1 }");
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    land_all(&f, &blocked_specs(), "block everything");
+    assert_eq!(f.dry(true).line, "verify due queue-drained");
+    // `every.lands` comes before `every.days`, both holding over a land three days old.
+    let f = local("", "every = { lands = 1, days = 2 }");
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    std::fs::write(f.work().join("a.txt"), "old\n").unwrap();
+    f.git(&f.work(), &["add", "-A"]);
+    let stamp = format!("{} +0000", clm_git::now() - 3 * 24 * 60 * 60);
+    let out = std::process::Command::new("git")
+        .args(["commit", "-q", "-m", "old"])
+        .env("GIT_COMMITTER_DATE", &stamp)
+        .env("GIT_AUTHOR_DATE", &stamp)
+        .current_dir(f.work())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    f.git(&f.work(), &["push", "-q", "origin", "main"]);
+    assert_eq!(f.dry(false).line, "verify due every.lands");
+}
+
+#[test]
 fn queue_not_drained_while_a_requirement_is_ready() {
     // req:verify/verify-due@eb23d6a6
     let f = local("\"queue-drained\"", "");

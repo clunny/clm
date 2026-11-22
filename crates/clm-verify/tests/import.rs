@@ -272,6 +272,35 @@ fn nothing_to_import_elsewhere() {
     assert_eq!(out.line, "verify nothing to import");
     assert_eq!(out.code, 0);
     assert!(f.lines("gh-calls.log").is_empty());
+    let f = Fixture::new(Some(
+        "mode = \"pipeline\"\ntriggers = []\nevery = { lands = 1 }",
+    ));
+    f.land(&[("a.txt", "1\n")], "one");
+    let out = with_gh(&f, &[], || import(&f, &Request::Import));
+    assert_eq!(
+        (out.line.as_str(), out.code),
+        ("verify nothing to import", 0)
+    );
+    assert!(f.lines("gh-calls.log").is_empty());
+}
+
+#[test]
+fn the_host_comes_from_the_checkout() {
+    // req:verify/settings-from-main@35114bba
+    let f = Fixture::new(Some(IMPORT));
+    let before = f.back(0);
+    // `origin/main` names no host; the checkout, behind it, keeps the default, GitHub.
+    let toml = std::fs::read_to_string(f.work().join("clm.toml")).unwrap();
+    let l = f.land(
+        &[("clm.toml", &format!("host = \"none\"\n{toml}"))],
+        "no host",
+    );
+    f.git(&f.work(), &["reset", "-q", "--hard", &before]);
+    let out = with_gh(&f, &[run(&l, "completed", "success", 30)], || {
+        import(&f, &Request::Import)
+    });
+    assert_eq!(out.line, format!("verify passed {} 2 lands", &l[..7]));
+    assert_eq!(f.lines("gh-calls.log").len(), 1);
 }
 
 #[test]

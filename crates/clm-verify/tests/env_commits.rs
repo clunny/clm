@@ -189,3 +189,44 @@ fn a_bisect_of_a_red_commit_whose_table_cant_be_used() {
     assert_eq!(culprit, Some(l1));
     assert_eq!(components, ["a"]);
 }
+
+#[test]
+fn a_git_failure_reading_the_table_ends_the_run() {
+    // req:verify/verify-env@877031f2
+    let f = every_land();
+    let green = f.land(&[("a.txt", "0\n")], "g");
+    f.verified(&green, true);
+    let mid = f.land(&[("a.txt", "1\n")], "mid");
+    f.land(&[("a.txt", "2\n")], "head");
+    // A `git` first on `PATH` that fails reading `mid`'s `clm.toml` as a broken repository
+    // would, and passes everything else to the real git.
+    let real = String::from_utf8(
+        std::process::Command::new("sh")
+            .args(["-c", "command -v git"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let bin = f.path("git-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    write_exec(
+        &bin.join("git"),
+        &format!(
+            "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = '{mid}:clm.toml' ]; then\n    \
+             echo 'fatal: bad object' >&2; exit 128\n  fi\ndone\nexec '{}' \"$@\"\n",
+            real.trim()
+        ),
+    );
+    let old = std::env::var("PATH").unwrap();
+    // SAFETY: the tests run one per process, and this one alone sets `PATH`.
+    unsafe { std::env::set_var("PATH", format!("{}:{old}", bin.display())) };
+    let before = f.records().len();
+    let out = common::verify(&f.work(), &clm_verify::Request::Commit(mid), &f.env());
+    unsafe { std::env::set_var("PATH", old) };
+    let err = out.unwrap_err();
+    assert!(matches!(err, clm_verify::Error::Git(_)), "{err}");
+    assert!(err.to_string().contains("bad object"), "{err}");
+    assert!(f.lines("check-pwd.log").is_empty());
+    assert_eq!(f.records().len(), before);
+}

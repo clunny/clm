@@ -121,6 +121,21 @@ pub(crate) fn say(line: &str) {
     let _ = writeln!(std::io::stderr(), "{line}");
 }
 
+/// The text of the file `source` (`<rev>:<path>`) names, or none when the revision or the file
+/// doesn't exist; any other git failure is `Error::Git` (`settings-from-main`, `verify-env`).
+pub(crate) fn committed_text(root: &Path, source: &str) -> Result<Option<String>, Error> {
+    match clm_git::git(root, &["rev-parse", "--verify", "--quiet", source]) {
+        Ok(_) => Ok(Some(clm_git::git(root, &["show", source])?)),
+        // `--quiet` reports a missing object with status 1 and nothing on stderr.
+        Err(clm_git::Error::Failed { status, stderr, .. })
+            if status.code() == Some(1) && stderr.trim().is_empty() =>
+        {
+            Ok(None)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
 /// The cap `land` applies when `[land]` sets none, which `config` doesn't offer without the
 /// table.
 const DEFAULT_CAP_GB: u64 = 15;
@@ -160,10 +175,7 @@ impl<'a> Ctx<'a> {
         let base = format!("{}/main", clm_git::REMOTE);
         let prefix = clm_git::git(&root, &["rev-parse", "--show-prefix"])?;
         let source = format!("{base}:{prefix}clm.toml");
-        let text = match clm_git::git(&root, &["rev-parse", "--verify", "--quiet", &source]) {
-            Ok(_) => Some(clm_git::git(&root, &["show", &source])?),
-            Err(_) => None,
-        };
+        let text = committed_text(&root, &source)?;
         let settings = clm_config::load_committed(&root, text.as_deref(), &source, env)?;
         let Some(verify) = settings.verify.value else {
             return Ok(Err(source));
