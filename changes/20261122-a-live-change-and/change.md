@@ -20,7 +20,11 @@ A live change and an archived one that share an ID are reported by `clm check`, 
 
 ## Outcome
 
-`model` gains `unique-change-ids`: a live and an archived change that both load and share an ID are reported at the live `change.md`, naming the archived one, and the graph keeps the live change. Its build changes `load_files` (or `change::load_changes`) alone. The Contract already says a record that breaks a rule stays unless its requirement says it is not loaded, so it needs no edit. A pair where either copy fails to load is already reported by `parse-changes` and makes no second report.
+`model` gains `unique-change-ids`: a live and an archived change that both load and share an ID are reported at the live `change.md`, naming the archived one, and the graph keeps the live change. Its build changes `load_files` (or `change::load_changes`) alone. The Contract already says a record that breaks a rule stays unless its requirement says it is not loaded, so it needs no edit. A pair where either copy fails to load is already reported by `parse-changes` and makes no second report. Leaving the archived copy out also leaves out its `resolves`, its `deleted-tests.txt` and any `check/archive-done` report on it; that is accepted, since the pair already fails `clm check` until a person removes one copy.
+
+`clm rebase` changes with no code of its own: `clm-sync` already prefers the live copy when it picks the changes a branch adds, and `clm-regenerate` keeps the violations under the live change's directory, so regenerating such a change now stops on `model/unique-change-ids` instead of applying the archived copy's deltas, which agrees with the pair failing every land.
+
+One piece of work stays out: the comment in `clm-apply`'s `archive` (`crates/clm-apply/src/lib.rs`) that says a change both live and archived loads as the archived one alone becomes false once this is built (`deferred-work-resolves-in-code`, `backlog/clm-apply-s-archive-comment-says-a-live-and-archived-pair-loads-as-the-archived-one`). Its check on disk stays, since an archive directory holding no change makes no pair.
 
 ## Constraints
 
