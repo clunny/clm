@@ -88,8 +88,8 @@ pub fn hash(bundle: &str) -> String {
     clm_model::content_hash(bundle)
 }
 
-/// The IDs of the nodes whose specs make up `id`'s bundle: its spine from the root down,
-/// then the dependencies off the spine, sorted. Empty if no such node exists.
+/// The IDs of the nodes whose specs make up `id`'s bundle: its ancestors from the root down,
+/// then the dependencies that aren't among them, sorted. Empty if no such node exists.
 pub fn bundle_nodes(graph: &Graph, id: &str) -> Vec<String> {
     let Some(target) = graph.nodes.get(id) else {
         return Vec::new();
@@ -118,8 +118,8 @@ pub fn served_capabilities<'g>(graph: &'g Graph, node: &Node) -> Vec<&'g Require
     capabilities.filter(|c| named.contains(&&c.id)).collect()
 }
 
-/// `target`'s direct dependencies, `depends_on`, that aren't on its
-/// spine, sorted and deduplicated.
+/// `target`'s direct dependencies, `depends_on`, that aren't among its
+/// ancestors, sorted and deduplicated.
 fn dependencies<'g>(graph: &'g Graph, target: &'g Node) -> Vec<&'g Node> {
     let on_spine: Vec<&str> = spine(graph, target).iter().map(|n| n.id.as_str()).collect();
     let mut deps: Vec<&Node> = target
