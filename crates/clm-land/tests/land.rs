@@ -449,29 +449,79 @@ fn main_keeps_moving() {
 }
 
 #[test]
-fn origin_branch_ahead_of_local() {
-    // req:land/land@f4bd0a7c
+fn the_head_it_lands() {
+    // req:land/land@db059c83
     let f = Fixture::new("");
-    f.branch("impl/a", &[("b.txt", "b\n")]);
-    // Another clone pushes on; the local `impl/a` is behind it.
+    let work = f.work();
+    let origin = f.path("origin.git");
     let other = f.path("other");
+    // Refused, with nothing pushed and nothing appended.
+    let refused_with = |branch: Option<&str>, dir: &std::path::Path| {
+        let (main, records) = (f.remote("main"), f.records().len());
+        let why = refused(clm_land::land(dir, branch, &f.env(&[])));
+        assert_eq!(f.remote("main"), main, "{why}");
+        assert_eq!(f.records().len(), records, "{why}");
+        why
+    };
+    // `origin/impl/a` one commit ahead of the local `impl/a`: behind, refused with what to do.
+    f.branch("impl/a", &[("b.txt", "b\n")]);
     f.git(&other, &["fetch", "-q", "origin", "impl/a"]);
     f.git(&other, &["checkout", "-q", "-b", "impl/a", "FETCH_HEAD"]);
     std::fs::write(other.join("c.txt"), "c\n").unwrap();
     f.git(&other, &["add", "-A"]);
     f.git(&other, &["commit", "-q", "-m", "more"]);
     f.git(&other, &["push", "-q", "origin", "impl/a"]);
-    // A local branch behind `origin`'s is refused, with what to do (`land.approval/branch-head`).
-    let old = f.remote("main");
-    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
-    assert!(why.contains("behind `origin/impl/a`"), "{why}");
-    assert_eq!(f.remote("main"), old);
-    // With no local branch, `origin`'s tip lands.
-    f.git(&f.work(), &["branch", "-q", "-D", "impl/a"]);
+    let why = refused_with(Some("impl/a"), &work);
+    assert!(why.contains("`impl/a` is behind `origin/impl/a`"), "{why}");
+    // With no local `impl/a`, `origin`'s tip lands.
+    f.git(&work, &["branch", "-q", "-D", "impl/a"]);
     let newer = f.git(&other, &["rev-parse", "HEAD"]);
-    clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
-    let main = f.remote("main");
-    assert_eq!(f.parents(&f.path("origin.git"), &main)[1], newer);
+    clm_land::land(&work, Some("impl/a"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&origin, "main")[1], newer);
+    // `fix-x` pushed with one more local commit: the local tip lands.
+    f.branch("fix-x", &[("x.txt", "x\n")]);
+    f.git(&work, &["checkout", "-q", "fix-x"]);
+    let local = f.commit_files(&[("x2.txt", "x2\n")], "more");
+    f.git(&work, &["checkout", "-q", "main"]);
+    clm_land::land(&work, Some("fix-x"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&origin, "main")[1], local);
+    // `fix-z` pushed and then diverged locally by an amended commit: refused.
+    f.git(&work, &["pull", "-q", "--ff-only", "origin", "main"]);
+    f.branch("fix-z", &[("z.txt", "z\n")]);
+    f.git(&work, &["checkout", "-q", "fix-z"]);
+    f.git(&work, &["commit", "-q", "--amend", "-m", "amended"]);
+    f.git(&work, &["checkout", "-q", "main"]);
+    let why = refused_with(Some("fix-z"), &work);
+    assert!(why.contains("`fix-z` has diverged"), "{why}");
+    // `fix-y`, which `origin` doesn't hold: its local tip lands.
+    f.git(&work, &["checkout", "-q", "-b", "fix-y", "main"]);
+    let local = f.commit_files(&[("y.txt", "y\n")], "fix-y");
+    f.git(&work, &["checkout", "-q", "main"]);
+    clm_land::land(&work, Some("fix-y"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&origin, "main")[1], local);
+    // `gone`, pushed and since deleted on `origin` by another clone: the fetch prunes it, so
+    // its local tip lands.
+    let local = f.branch("gone", &[("g.txt", "g\n")]);
+    f.git(&work, &["fetch", "-q", "origin"]);
+    f.git(&other, &["push", "-q", "origin", "--delete", "gone"]);
+    assert_ne!(f.git(&work, &["branch", "-r", "--list", "origin/gone"]), "");
+    let out = clm_land::land(&work, Some("gone"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&origin, "main")[1], local);
+    // The fetch pruned it: it reads as a branch `origin` doesn't hold, with nothing to delete
+    // there.
+    assert_eq!(f.git(&work, &["branch", "-r", "--list", "origin/gone"]), "");
+    assert!(
+        out.warnings.iter().all(|w| !w.contains("`gone`")),
+        "{:?}",
+        out.warnings
+    );
+    // `nope`, nowhere.
+    let why = refused_with(Some("nope"), &work);
+    assert!(why.contains("`nope`"), "{why}");
+    // A detached checkout, no branch named.
+    f.git(&work, &["checkout", "-q", "--detach", "main"]);
+    let why = refused_with(None, &work);
+    assert!(why.contains("name the branch"), "{why}");
 }
 
 #[test]
