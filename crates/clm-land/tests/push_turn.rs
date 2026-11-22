@@ -45,7 +45,7 @@ fn moved(out: &clm_land::Output) -> bool {
 
 #[test]
 fn two_lands_with_nothing_to_check() {
-    // req:land/push-turn@379d1699
+    // req:land/push-turn@a2816e96
     let f = Fixture::new("");
     slow_clm_check(&f, true);
     f.branch("spec/a", &[("specs/a/SPEC.md", "# a\n")]);
@@ -68,7 +68,7 @@ fn two_lands_with_nothing_to_check() {
 
 #[test]
 fn turns_in_the_order_asked() {
-    // req:land/push-turn@379d1699
+    // req:land/push-turn@a2816e96
     let f = Fixture::new("");
     slow_clm_check(&f, true);
     for name in ["a", "b", "c"] {
@@ -115,7 +115,7 @@ fn turns_in_the_order_asked() {
 
 #[test]
 fn released_when_the_attempt_fails() {
-    // req:land/push-turn@379d1699
+    // req:land/push-turn@a2816e96
     let f = Fixture::new("");
     f.branch("spec/a", &[("specs/a/SPEC.md", "# a\n")]);
     f.branch("spec/b", &[("specs/b/SPEC.md", "# b\n")]);
@@ -175,7 +175,7 @@ fn a_land_that_waited_checks_the_new_main() {
 
 #[test]
 fn a_land_with_nothing_to_check_doesnt_wait_for_a_check() {
-    // req:land/push-turn@379d1699
+    // req:land/push-turn@a2816e96
     let f = Fixture::new("");
     f.write("hold", "");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
@@ -195,4 +195,40 @@ fn a_land_with_nothing_to_check_doesnt_wait_for_a_check() {
         assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
     });
     assert_eq!(f.lines("check.log").len(), 1);
+}
+
+/// Gives `origin` a hook that logs, for each push to a ledger branch, whether the work clone's
+/// push turn is held then.
+fn log_turn_at_ledger_pushes(f: &Fixture) {
+    f.hook(Some(
+        r#"while read -r _ _ ref; do
+  case "$ref" in refs/heads/clm/ledger/*)
+    if flock -n "$DIR/work/.clm/push.lock" true; then echo free; else echo held; fi >> "$DIR/turn.log";;
+  esac
+done"#,
+    ));
+}
+
+#[test]
+fn the_turn_lasts_until_the_records_are_appended() {
+    // req:land/push-turn@a2816e96
+    // The `landed` record is the last append: the turn is still held when it reaches `origin`,
+    // whether the land ran a check or not.
+    for checked in [false, true] {
+        let f = Fixture::new("");
+        log_turn_at_ledger_pushes(&f);
+        f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
+        if checked {
+            let merged = f.git(
+                &f.work(),
+                &["merge-tree", "--write-tree", "origin/main", "impl/a"],
+            );
+            f.mark_checked(merged.lines().next().unwrap());
+        }
+        let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+        assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+        assert_eq!(f.lines("check.log").is_empty(), checked);
+        let log = f.lines("turn.log");
+        assert_eq!(log.last().map(String::as_str), Some("held"), "{log:?}");
+    }
 }

@@ -74,28 +74,38 @@ pub(crate) fn land_into(
     };
     // 1. Fetch, pick the head, fold, and merge the trees: before the worktree it checks in
     // exists, a land knows whether its check will run.
-    let prepare = |chain: Option<&str>, woke: bool| -> Result<Prepared, Bail> {
+    let prepare = |chain: Option<&str>, earlier: Option<&str>| -> Result<Prepared, Bail> {
         repo.fetch()?;
-        let clm_approval::BranchHead {
-            head,
-            origin: on_origin,
-        } = repo.approval.branch_head(&branch, true)?;
+        // A branch another land removed from the clone and `origin` since the earlier attempt
+        // is asked about at the head that attempt resolved (`land/already-on-main`).
+        let (head, on_origin, gone) = match repo.approval.branch_head(&branch, true) {
+            Ok(clm_approval::BranchHead { head, origin }) => (head, origin, None),
+            Err(e) => {
+                let held = |r: String| repo.rev(&r).map(|tip| tip.is_some());
+                match earlier {
+                    Some(head)
+                        if !held(format!("refs/heads/{branch}"))?
+                            && !held(format!("refs/remotes/{REMOTE}/{branch}"))? =>
+                    {
+                        (head.to_string(), None, Some(e))
+                    }
+                    _ => return Err(e.into()),
+                }
+            }
+        };
         let fold = clm_ledger::fold(&repo.root)?;
-        // A land that waited for the lock may have been landed by the holder, with the lands
-        // taken together on one check (`land/batched-lands`).
-        if let Some(commit) = crate::finish::unrecorded_commit(&repo, &fold, &head)? {
-            return Err(Bail::Unrecorded {
-                commit,
+        // `main` may hold the head already, as the land that waited for the lock or for its
+        // check may find it: first of all, so no rule of a newer `main` refuses a land that is
+        // done (`land/already-on-main`).
+        if let Some(on_main) = crate::finish::on_main(&repo, &fold, &branch, &head)? {
+            return Err(Bail::OnMain {
+                on_main,
                 head,
                 on_origin,
             });
         }
-        if woke && let Some(found) = crate::batch::landed_record(&repo, &fold, &branch, &head)? {
-            return Err(Bail::Found {
-                found,
-                head,
-                on_origin,
-            });
+        if let Some(e) = gone {
+            return Err(e.into());
         }
         let base = repo.rev(repo.base())?.ok_or_else(|| {
             Error::Refused(format!(
@@ -232,47 +242,46 @@ pub(crate) fn land_into(
     let mut overlap_nothing: Option<(String, String)> = None;
     // The head and base whose selection printed nothing, asked once across a restart.
     let mut selection_nothing: Option<(String, String)> = None;
-    // Whether the lock was waited for, so the next preparing looks for a land taken together
-    // with the holder's (`land/batched-lands`).
-    let mut woke = false;
+    // The head the last attempt resolved, asked about when the branch has gone since
+    // (`land/already-on-main`).
+    let mut resolved: Option<String> = None;
     // The rank the lock was just taken in, until the lands waiting for it are looked at.
     let mut lock_rank: Option<Rank> = None;
-    // Prepares an attempt, and ends the land when the holder landed this branch.
-    macro_rules! prepared {
-        ($woke:expr) => {
-            match prepare(chain.as_deref(), $woke) {
-                Ok(p) => p,
-                Err(Bail::Err(e)) => return Err(e),
-                Err(Bail::Found {
-                    found,
-                    head,
-                    on_origin,
-                }) => {
+    // Ends the land of a head `main` already holds (`land/already-on-main`).
+    macro_rules! on_main {
+        ($on_main:expr, $head:expr, $on_origin:expr) => {
+            match $on_main {
+                crate::finish::OnMain::Found(landed) => {
                     let mut done = std::mem::take(out);
-                    *out = finish_found(
+                    *out = found(
                         &repo,
                         &branch,
-                        &head,
-                        on_origin.as_deref(),
-                        &found,
+                        &$head,
+                        $on_origin.as_deref(),
+                        &landed,
                         &mut done,
                     );
                     return Ok(());
                 }
-                Err(Bail::Unrecorded {
-                    commit,
-                    head,
-                    on_origin,
-                }) => {
+                crate::finish::OnMain::Elsewhere(commit) => {
+                    return Err(crate::finish::OnMain::elsewhere(&branch, &commit));
+                }
+                crate::finish::OnMain::Unrecorded(commit) => {
+                    // The locks in their order: a push turn held alone is let go first.
+                    if lock.is_none() {
+                        turn = None;
+                    }
                     let ctx = crate::finish::Ctx {
                         repo: &repo,
                         exe,
                         places: &places,
                         check: check.as_deref(),
                         branch: &branch,
-                        head: &head,
-                        on_origin,
+                        head: &$head,
+                        on_origin: $on_origin,
                         commit: &commit,
+                        locked: lock.is_some(),
+                        turned: turn.is_some(),
                     };
                     // What was said before stands beside what finishing says.
                     let mut done = crate::finish::finish(&ctx)?;
@@ -287,8 +296,25 @@ pub(crate) fn land_into(
             }
         };
     }
+    // Prepares an attempt, and ends the land when `main` holds its head.
+    macro_rules! prepared {
+        () => {
+            match prepare(chain.as_deref(), resolved.as_deref()) {
+                Ok(p) => {
+                    resolved = Some(p.head.clone());
+                    p
+                }
+                Err(Bail::Err(e)) => return Err(e),
+                Err(Bail::OnMain {
+                    on_main,
+                    head,
+                    on_origin,
+                }) => on_main!(on_main, head, on_origin),
+            }
+        };
+    }
     for attempt in 1..=ATTEMPTS {
-        let mut p = prepared!(std::mem::take(&mut woke));
+        let mut p = prepared!();
         // The priority this land's tickets carry, worked out once, before its first wait
         // of the attempt (`land/lock-queue`).
         let mut priority: Option<Priority> = None;
@@ -308,7 +334,7 @@ pub(crate) fn land_into(
             let held = lock::land(target, rank, &branch, repo.err)?;
             // The land it waited for may have moved `main` or checked this code meanwhile.
             if held.waited {
-                p = prepared!(true);
+                p = prepared!();
             }
             if check_runs(&p) {
                 lock = Some(held);
@@ -565,7 +591,6 @@ pub(crate) fn land_into(
                 // The land it waited for moved `main` meanwhile: merge with that one
                 // (`land/land-target-lock`).
                 if waited {
-                    woke = true;
                     continue;
                 }
                 land_tree_for_readers = Scratch::land_tree(&repo, &places, &merge)?;
@@ -645,6 +670,14 @@ pub(crate) fn land_into(
             turn = Some(lock::push(&places, repo.err)?);
             repo.fetch()?;
             if repo.rev(repo.base())?.as_deref() != Some(base.as_str()) {
+                // `main` may hold the head now, landed while this land waited or checked: the
+                // ledger and `origin`'s branch as this fetch read them (`land/already-on-main`).
+                // The `checked` record this land appended stands.
+                let fold = clm_ledger::fold(&repo.root)?;
+                if let Some(found) = crate::finish::on_main(&repo, &fold, &branch, &head)? {
+                    let on_origin = repo.rev(&format!("refs/remotes/{REMOTE}/{branch}"))?;
+                    on_main!(found, head, on_origin);
+                }
                 chain = Some(merge.clone());
                 continue;
             }
@@ -674,7 +707,6 @@ pub(crate) fn land_into(
             chain = Some(merge.clone());
             continue;
         }
-        drop(turn.take());
         // The lock covered the gate on the merge commit, `clm check` and the push, so no other
         // land checked its commit out before this one was on `main`. The cap on the shared
         // target (`land/land-target-cap`) runs under it too; the rest runs outside it.
@@ -694,6 +726,9 @@ pub(crate) fn land_into(
             .append_landed(entries, &branch)?
             .pop()
             .expect("the landed record was appended last");
+        // Held until the records are appended, so a land that takes the turn next finds this
+        // land recorded (`land/push-turn`).
+        drop(turn.take());
 
         // The push to `main` went through, so the land stands; the push named, or this
         // clone's next append, sends the record.
@@ -733,19 +768,12 @@ pub(crate) fn land_into(
     )))
 }
 
-/// Why preparing an attempt stopped: a failure, or the holder of the lock having landed this
-/// branch with its own (`land/batched-lands`).
+/// Why preparing an attempt stopped: a failure, or `main` holding the head
+/// (`land/already-on-main`).
 enum Bail {
     Err(Error),
-    Found {
-        found: crate::batch::Found,
-        head: String,
-        on_origin: Option<String>,
-    },
-    /// The head is on `main` through a merge commit no `landed` record names
-    /// (`land/unrecorded-land-finished`).
-    Unrecorded {
-        commit: String,
+    OnMain {
+        on_main: crate::finish::OnMain,
         head: String,
         on_origin: Option<String>,
     },
@@ -769,8 +797,38 @@ impl From<clm_ledger::Error> for Bail {
     }
 }
 
-/// What a land does once the holder has landed it: the branch's deletion, the claims a spec
-/// land releases and a build's disk, and its `landed` line (`land/batched-lands`).
+/// What a land of a head `main` already holds through the branch's own recorded land does: the
+/// branch's `effort` records this machine hasn't appended, then what `finish_found` does
+/// (`land/already-on-main`). An effort record the earlier land wrote is superseded, not
+/// doubled, and one that can't be read or appended only warns, since the land is done.
+pub(crate) fn found(
+    repo: &Repo,
+    branch: &str,
+    head: &str,
+    on_origin: Option<&str>,
+    found: &crate::batch::Found,
+    out: &mut Output,
+) -> Output {
+    let options = clm_effort::Options {
+        branch: Some(branch.to_string()),
+        ..Default::default()
+    };
+    match clm_effort::unrecorded(&repo.root, &options, repo.env) {
+        Ok(read) if !read.bodies.is_empty() => {
+            let entries = read.bodies.into_iter().map(Into::into).collect();
+            if let Err(e) = clm_ledger::append_all(&repo.root, entries, repo.env) {
+                out.warnings.push(format!("effort not recorded: {e}"));
+            }
+        }
+        Ok(_) => {}
+        Err(e) => out.warnings.push(format!("effort not recorded: {e}")),
+    }
+    finish_found(repo, branch, head, on_origin, found, out)
+}
+
+/// What a land does once another has landed it: the branch's deletion, the claims a spec land
+/// releases and a build's disk, and its `landed` line (`land/batched-lands`,
+/// `land/already-on-main`).
 pub(crate) fn finish_found(
     repo: &Repo,
     branch: &str,

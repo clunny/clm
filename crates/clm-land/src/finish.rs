@@ -4,12 +4,12 @@
 
 use std::path::Path;
 
-use clm_ledger::{Entry, Fold};
+use clm_ledger::{Body, Entry, Fold};
 
 use crate::batch::{Found, judge};
 use crate::lock::{self, Rank};
 use crate::scratch::Scratch;
-use crate::{Error, Output, Repo};
+use crate::{Error, Output, Repo, Verdict};
 
 /// A commit of `origin/main`'s first-parent chain.
 struct Commit {
@@ -45,27 +45,81 @@ fn chain(repo: &Repo) -> Result<Vec<Commit>, Error> {
         .collect())
 }
 
-/// The commit of `origin/main`'s first-parent chain that merges `head` as its second parent
-/// and that no `landed` record names; none for a head that isn't on `main`, one on the chain
-/// itself, or one whose merge a record names, which land as before.
-pub(crate) fn unrecorded_commit(
+/// What `origin/main` holding a head comes to (`land/already-on-main`).
+pub(crate) enum OnMain {
+    /// A commit of the first-parent chain merges the head as its second parent, and a
+    /// `landed` record of the branch names it.
+    Found(Found),
+    /// The newest such commit, no `landed` record naming it
+    /// (`land/unrecorded-land-finished`).
+    Unrecorded(String),
+    /// Any other head `main` holds: the oldest commit of the first-parent chain that contains
+    /// it.
+    Elsewhere(String),
+}
+
+impl OnMain {
+    /// The refusal of a head `main` holds other than through a land of `branch`.
+    pub(crate) fn elsewhere(branch: &str, commit: &str) -> Error {
+        Error::Refused(format!("`{branch}` is already on main, in {commit}"))
+    }
+}
+
+/// Whether `origin/main`, as last fetched, contains `head`, and how (`land/already-on-main`):
+/// none when it doesn't.
+pub(crate) fn on_main(
     repo: &Repo,
     fold: &Fold,
+    branch: &str,
     head: &str,
-) -> Result<Option<String>, Error> {
-    if !clm_git::is_ancestor(&repo.root, head, repo.base()).unwrap_or(false) {
+) -> Result<Option<OnMain>, Error> {
+    let contains = |commit: &str| clm_git::is_ancestor(&repo.root, head, commit);
+    // With no `main` on `origin`, the land's refusal names `clm reconnect`.
+    if repo.rev(repo.base())?.is_none() || !contains(repo.base())? {
         return Ok(None);
     }
     let chain = chain(repo)?;
-    if chain.iter().any(|c| c.sha == head) {
-        return Ok(None);
-    }
-    let merge = chain
+    let merges: Vec<&Commit> = chain
         .iter()
-        .find(|c| c.parents.get(1).map(String::as_str) == Some(head));
-    Ok(merge
-        .filter(|c| !fold.lands.contains_key(&c.sha))
-        .map(|c| c.sha.clone()))
+        .filter(|c| c.parents.get(1).map(String::as_str) == Some(head))
+        .collect();
+    // Any land of the branch on one of them, when `main` merges the head more than once.
+    for commit in &merges {
+        for record in fold.lands.get(&commit.sha).into_iter().flatten() {
+            if let Body::Landed {
+                branch: landed,
+                kind,
+                review,
+                light,
+                ..
+            } = &record.body
+                && landed == branch
+            {
+                return Ok(Some(OnMain::Found(Found {
+                    commit: commit.sha.clone(),
+                    verdict: Verdict::of_record(*kind, *review, *light),
+                })));
+            }
+        }
+    }
+    // The chain is newest first.
+    if let Some(commit) = merges.iter().find(|c| !fold.lands.contains_key(&c.sha)) {
+        return Ok(Some(OnMain::Unrecorded(commit.sha.clone())));
+    }
+    // Along the chain, from its newest commit, the ones that contain the head come first: the
+    // last of them is the oldest.
+    let (mut lo, mut hi) = (0, chain.len());
+    while hi - lo > 1 {
+        let mid = lo + (hi - lo) / 2;
+        match contains(&chain[mid].sha)? {
+            true => lo = mid,
+            false => hi = mid,
+        }
+    }
+    let oldest = chain
+        .get(lo)
+        .map_or_else(|| repo.base().to_string(), |c| c.sha.clone());
+    Ok(Some(OnMain::Elsewhere(oldest)))
 }
 
 /// What finishing a land needs of the land that runs it.
@@ -78,6 +132,10 @@ pub(crate) struct Ctx<'a, 'r> {
     pub(crate) head: &'a str,
     pub(crate) on_origin: Option<String>,
     pub(crate) commit: &'a str,
+    /// Whether the land already holds the land lock, and the push turn, which finishing then
+    /// takes no second time.
+    pub(crate) locked: bool,
+    pub(crate) turned: bool,
 }
 
 /// Appends the records of the land that merged `ctx.head` as `ctx.commit` and of every other
@@ -86,20 +144,38 @@ pub(crate) struct Ctx<'a, 'r> {
 /// `clm land` would have made.
 pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
     let repo = ctx.repo;
-    // The land that pushed may still be appending its records: wait for it, and look again.
-    let _lock = lock::land(&ctx.places.join("land"), Rank::ORDINARY, "", repo.err)?;
+    // The land that pushed may still be appending its records, which it does inside its push
+    // turn: wait for it, the locks taken in their order, and look again (`land/push-turn`). A
+    // land that held the push turn alone let it go before it got here.
+    let _lock = match ctx.locked {
+        true => None,
+        false => Some(lock::land(
+            &ctx.places.join("land"),
+            Rank::ORDINARY,
+            "",
+            repo.err,
+        )?),
+    };
+    let _turn = match ctx.turned {
+        true => None,
+        false => Some(lock::push(ctx.places, repo.err)?),
+    };
     repo.fetch()?;
     let fold = clm_ledger::fold(&repo.root)?;
     let mut out = Output::default();
-    if let Some(found) = crate::batch::landed_record(repo, &fold, ctx.branch, ctx.head)? {
-        return Ok(crate::land::finish_found(
-            repo,
-            ctx.branch,
-            ctx.head,
-            ctx.on_origin.as_deref(),
-            &found,
-            &mut out,
-        ));
+    match on_main(repo, &fold, ctx.branch, ctx.head)? {
+        Some(OnMain::Found(found)) => {
+            return Ok(crate::land::found(
+                repo,
+                ctx.branch,
+                ctx.head,
+                ctx.on_origin.as_deref(),
+                &found,
+                &mut out,
+            ));
+        }
+        Some(OnMain::Elsewhere(commit)) => return Err(OnMain::elsewhere(ctx.branch, &commit)),
+        Some(OnMain::Unrecorded(_)) | None => {}
     }
     let refuse = |why: &str| {
         Error::Refused(format!(
