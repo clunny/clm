@@ -79,6 +79,13 @@ fn is_pushed_deliberately(branch: &str) -> bool {
     branch.starts_with("impl/") || branch.starts_with("spec/")
 }
 
+/// A branch's head, and `origin`'s tip of the branch when `origin` holds it (`branch-head`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchHead {
+    pub head: String,
+    pub origin: Option<String>,
+}
+
 /// What the ledger's approvals of a diff come to.
 pub struct Approvals {
     /// One of them counts.
@@ -170,6 +177,41 @@ impl<'a> Repo<'a> {
             (Some(l), _) => Ok((l, false)),
             (None, None) => Err(Error::Refused(format!("no branch `{branch}`"))),
         }
+    }
+
+    /// `branch`'s head by one rule for `clm land` (`for_land`) and `clm approve`, whatever its
+    /// name, read from `refs/heads/<branch>` and `refs/remotes/origin/<branch>` as the caller's
+    /// fetch left them (`branch-head`). A land takes the local branch when it holds everything
+    /// `origin` holds of it, and is refused when it is behind or has diverged; an approve takes
+    /// `origin`'s tip when the local branch is absent or an ancestor of it.
+    pub fn branch_head(&self, branch: &str, for_land: bool) -> Result<BranchHead, Error> {
+        let local = self.rev(&format!("refs/heads/{branch}"))?;
+        let origin = self.rev(&format!("refs/remotes/{REMOTE}/{branch}"))?;
+        let ancestor = |a: &str, b: &str| clm_git::is_ancestor(&self.root, a, b);
+        let head = match (&local, &origin) {
+            (None, None) => return Err(Error::Refused(format!("no branch `{branch}`"))),
+            (Some(l), None) => l.clone(),
+            (None, Some(o)) => o.clone(),
+            (Some(l), Some(o)) if !for_land => match ancestor(l, o)? {
+                true => o.clone(),
+                false => l.clone(),
+            },
+            (Some(l), Some(o)) if ancestor(o, l)? => l.clone(),
+            (Some(l), Some(o)) => {
+                let tracking = format!("{REMOTE}/{branch}");
+                return Err(Error::Refused(match ancestor(l, o)? {
+                    true => format!(
+                        "`{branch}` is behind `{tracking}`: bring it up to `{tracking}`, then \
+                         land it"
+                    ),
+                    false => format!(
+                        "`{branch}` has diverged from `{tracking}`: rebase it onto `{tracking}` \
+                         or merge `{tracking}` into it, then land it"
+                    ),
+                }));
+            }
+        };
+        Ok(BranchHead { head, origin })
     }
 
     /// The merge base of the base and `head`.
