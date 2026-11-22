@@ -97,7 +97,10 @@ pub(crate) fn check(
             .collect(),
         unset: Vec::new(),
     };
-    let run = clm_land::run_check(
+    // Under its own name, so a warning of the runner's says which command it came from
+    // (`verify-run`).
+    let run = clm_land::run_check_as(
+        "clm verify",
         &ctx.verify.check,
         &tree.dir,
         selection.as_ref().map(|s| s.path.as_path()),

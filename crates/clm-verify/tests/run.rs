@@ -3,7 +3,7 @@
 mod common;
 
 use clm_ledger::Body;
-use common::Fixture;
+use common::{Fixture, in_child, write_exec};
 
 fn every_land() -> Fixture {
     Fixture::new(Some(
@@ -13,7 +13,7 @@ fn every_land() -> Fixture {
 
 #[test]
 fn a_passing_run() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -68,7 +68,7 @@ fn a_passing_run() {
 
 #[test]
 fn a_run_with_no_green_record_selects_nothing() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     assert_eq!(f.due().code, 0);
@@ -77,7 +77,7 @@ fn a_run_with_no_green_record_selects_nothing() {
 
 #[test]
 fn a_failing_run() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -117,7 +117,7 @@ fn a_failing_run() {
 
 #[test]
 fn a_red_runs_report() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -148,7 +148,7 @@ fn a_red_runs_report() {
 
 #[test]
 fn a_red_runs_report_names_the_open_step() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -184,7 +184,7 @@ fn a_red_runs_report_names_the_open_step() {
 
 #[test]
 fn a_red_run_answered_from_the_ledger_prints_no_report() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     let land = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&land, false);
@@ -195,7 +195,7 @@ fn a_red_run_answered_from_the_ledger_prints_no_report() {
 
 #[test]
 fn a_land_waits_for_the_slow_check() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     f.write("sleep", "2");
@@ -210,7 +210,8 @@ fn a_land_waits_for_the_slow_check() {
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         assert_eq!(f.lines("check-order.log"), ["start"]);
-        let run = clm_land::run_check(
+        let run = clm_land::run_check_as(
+            "clm land",
             &landing,
             &f.work(),
             None,
@@ -226,7 +227,7 @@ fn a_land_waits_for_the_slow_check() {
 
 #[test]
 fn two_runs_never_move_the_tree_under_each_other() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     let old = f.land(&[("a.txt", "1\n")], "old");
     let new = f.land(&[("a.txt", "2\n")], "new");
@@ -248,7 +249,17 @@ fn two_runs_never_move_the_tree_under_each_other() {
 
 #[test]
 fn a_selection_that_cannot_be_made_runs_every_test() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
+    if let Some(stderr) = in_child("a_selection_that_cannot_be_made_runs_every_test") {
+        assert!(
+            stderr
+                .lines()
+                .any(|l| l.starts_with("clm affected failed: ")
+                    && l.ends_with("; the check runs every test")),
+            "{stderr}"
+        );
+        return;
+    }
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -256,12 +267,127 @@ fn a_selection_that_cannot_be_made_runs_every_test() {
     f.land(&[("specs/b/SPEC.md", "not a spec\n")], "break b");
     let out = f.due();
     assert_eq!(out.code, 0, "{}", out.line);
+    assert!(out.line.starts_with("verify passed"), "{}", out.line);
     assert_eq!(f.lines("check-selection.log"), ["unset"]);
+    assert!(matches!(
+        f.records().last(),
+        Some(Body::Verified { passed: true, .. })
+    ));
+}
+
+/// Asserts that the check last ran in the verify tree on `origin/main`'s head, that the
+/// outcome passed over one land, and that git lists the tree as a worktree.
+fn ran_in_a_listed_tree(f: &Fixture, out: &clm_verify::Outcome) {
+    let head = f.git(&f.work(), &["rev-parse", "origin/main"]);
+    assert_eq!(out.line, format!("verify passed {} 1 lands", &head[..7]));
+    assert_eq!(out.code, 0);
+    assert_eq!(f.lines("check-head.log").last(), Some(&head));
+    let tree = f.verify_tree().display().to_string();
+    assert_eq!(f.lines("check-pwd.log").last(), Some(&tree));
+    let listed = f.git(&f.work(), &["worktree", "list", "--porcelain"]);
+    assert!(
+        listed.lines().any(|l| l == format!("worktree {tree}")),
+        "{listed}"
+    );
+}
+
+#[test]
+fn a_broken_tree_is_remade() {
+    // req:verify/verify-run@a6220530
+    // A tree from an earlier run whose `.git` file at its top was removed.
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    f.land(&[("a.txt", "2\n")], "two");
+    assert_eq!(f.due().code, 0);
+    std::fs::remove_file(f.verify_tree().join(".git")).unwrap();
+    f.land(&[("a.txt", "3\n")], "three");
+    let out = f.due();
+    ran_in_a_listed_tree(&f, &out);
+    // A regular file where the tree goes.
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let tree = f.verify_tree();
+    std::fs::create_dir_all(tree.parent().unwrap()).unwrap();
+    std::fs::write(&tree, "not a tree\n").unwrap();
+    f.land(&[("a.txt", "2\n")], "two");
+    let out = f.due();
+    ran_in_a_listed_tree(&f, &out);
+}
+
+#[test]
+fn a_record_kept_local() {
+    // req:verify/verify-run@a6220530
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let head = f.land(&[("a.txt", "2\n")], "two");
+    write_exec(
+        &f.path("origin.git/hooks/pre-receive"),
+        "#!/bin/sh\nwhile read old new ref; do\n  case $ref in refs/heads/clm/ledger/*) exit 1;; esac\ndone\n",
+    );
+    let out = f.due();
+    assert_eq!(out.line, format!("verify passed {} 1 lands", &head[..7]));
+    assert_eq!(out.code, 0);
+    assert!(
+        out.notes
+            .iter()
+            .any(|n| n == "the record is committed locally; `clm reconnect` pushes it"),
+        "{:?}",
+        out.notes
+    );
+    // The clone's own ledger branch holds the record.
+    let own = f.git(
+        &f.work(),
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads/clm/ledger/",
+        ],
+    );
+    let text = f.git(&f.work(), &["show", &format!("{own}:records.jsonl")]);
+    let fold = clm_ledger::fold_records(&[(own.as_str(), text.as_str())]);
+    assert!(
+        fold.records.iter().any(|r| matches!(
+            &r.body,
+            Body::Verified { commit, passed: true, .. } if *commit == head
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn the_logs_warning_names_clm_verify() {
+    // req:verify/verify-run@a6220530
+    if let Some(stderr) = in_child("the_logs_warning_names_clm_verify") {
+        assert!(
+            stderr
+                .lines()
+                .any(|l| l.starts_with("clm verify: warning: can't write the check's log at ")),
+            "{stderr}"
+        );
+        assert!(
+            !stderr.lines().any(|l| l.starts_with("clm land:")),
+            "{stderr}"
+        );
+        return;
+    }
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let head = f.land(&[("a.txt", "2\n")], "two");
+    let logs = f.work().join(".clm/verify-logs");
+    std::fs::create_dir_all(logs.parent().unwrap()).unwrap();
+    std::fs::write(&logs, "a file\n").unwrap();
+    let out = f.due();
+    assert_eq!(out.line, format!("verify passed {} 1 lands", &head[..7]));
+    assert_eq!(out.code, 0);
 }
 
 #[test]
 fn one_at_a_time() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     f.write("sleep", "1");
@@ -280,7 +406,7 @@ const CHILD: &str = "CLM_TEST_STDERR_FULL";
 #[cfg(target_os = "linux")]
 #[test]
 fn the_verdict_outlives_a_failing_stderr() {
-    // req:verify/verify-run@ff539674
+    // req:verify/verify-run@a6220530
     if std::env::var_os(CHILD).is_none() {
         // The scenario runs in a child whose stderr is `/dev/full`.
         let full = std::fs::OpenOptions::new()

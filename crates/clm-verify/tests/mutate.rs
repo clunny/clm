@@ -967,7 +967,8 @@ fn lands_do_not_wait_for_the_pass() {
         }
         assert!(p.f.path("started").exists(), "the pass never started");
         // The pass is waiting for `release`; a land's check runs now.
-        let run = clm_land::run_check(
+        let run = clm_land::run_check_as(
+            "clm land",
             "true",
             &p.f.work(),
             None,
