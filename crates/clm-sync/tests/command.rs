@@ -205,7 +205,7 @@ fn a_command_called_in_a_test_writes_its_streams_and_returns_its_status() {
 
 #[test]
 fn the_temporary_worktree_goes_under_the_tmpdir_the_environment_names() {
-    // req:sync/commands-in-crate@8e0be5d8 req:sync/judged-by-check@bfefb55e
+    // req:sync/commands-in-crate@8e0be5d8 req:sync/judged-by-check@04b187e7
     let (dir, work) = node_a("");
     // A `TMPDIR` that is a file: no worktree can be made under it, so the run fails as git
     // does, whatever the process's own `TMPDIR` is.
@@ -310,7 +310,7 @@ fn help_and_usage_errors_print_no_outcome_line() {
 
 #[test]
 fn sync_prints_what_is_left_and_exits_1_then_0() {
-    // req:sync/rebase@3ba762e9 req:sync/outcome-line@cac8dfb4
+    // req:sync/rebase@789d48ec req:sync/outcome-line@cac8dfb4
     let (_dir, work) = conflicting();
     write(&work, "src/lib.rs", "edited\n");
     let out = clm(&work, &["rebase"]);
@@ -341,7 +341,7 @@ fn sync_prints_what_is_left_and_exits_1_then_0() {
 
 #[test]
 fn sync_refusing_exits_1_and_git_failing_exits_2() {
-    // req:sync/rebase@3ba762e9 req:sync/outcome-line@cac8dfb4
+    // req:sync/rebase@789d48ec req:sync/outcome-line@cac8dfb4
     let (dir, work) = conflicting();
     git(&work, &["checkout", "-q", "main"]);
     let out = clm(&work, &["rebase"]);
@@ -785,7 +785,7 @@ fn a_worktree_left_behind_keeps_the_outcome() {
 
 #[test]
 fn sync_leaves_no_temporary_worktree() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     write(
@@ -808,7 +808,7 @@ fn sync_leaves_no_temporary_worktree() {
 
 #[test]
 fn sync_ignores_an_uncommitted_settings_edit() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     git(&work, &["checkout", "-q", "main"]);
@@ -828,7 +828,7 @@ fn sync_ignores_an_uncommitted_settings_edit() {
 
 #[test]
 fn sync_with_settings_that_cant_be_loaded() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let (_dir, work) = node_a("[component_size]\nspec_tokens = 0\n");
     let (code, stdout) = rebase_without_user_settings(&work);
     assert_eq!(code, Some(1), "{stdout}");
@@ -842,7 +842,7 @@ fn sync_with_settings_that_cant_be_loaded() {
 
 #[test]
 fn sync_fails_on_settings_main_brought_in_that_cant_be_loaded() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     write(&work, "notes.md", "mine\n");
@@ -873,7 +873,7 @@ fn sync_fails_on_settings_main_brought_in_that_cant_be_loaded() {
 
 #[test]
 fn sync_files_a_reconsider_item_at_the_repository_threshold() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let (_dir, work) = node_a("[health]\nreconsider = 2\n");
     write(
         &work,

@@ -216,7 +216,7 @@ fn adds_x() -> String {
 
 #[test]
 fn behind_main() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -232,7 +232,7 @@ fn behind_main() {
 
 #[test]
 fn real_conflict_then_resume() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     commit(&r.work, "work");
@@ -252,7 +252,7 @@ fn real_conflict_then_resume() {
 
 #[test]
 fn refuses_a_dirty_tree_main_and_a_detached_head() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("impl/a");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "src/lib.rs", "edited\n");
@@ -292,7 +292,7 @@ fn assert_refused(r: &Repo, lines: &[&str]) {
 
 #[test]
 fn an_edit_to_a_file_main_changed_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     main_moves(&r, &[("src/lib.rs", "one\n2\nthree\n")]);
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
@@ -301,7 +301,7 @@ fn an_edit_to_a_file_main_changed_stops_it() {
 
 #[test]
 fn an_unrelated_edit_is_carried_through() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     // On `main`, so the branch holds no code of its own and isn't a build's.
     write(&r.work, ".claude/settings.json", "{}\n");
@@ -361,7 +361,7 @@ fn a_set_aside_edit_that_cant_be_put_back_is_kept_in_the_stash() {
 
 #[test]
 fn an_uncommitted_spec_edit_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     write(&r.work, "backlog/q.md", "---\ntitle: Q\nkind: idea\n---\n");
     commit(&r.work, "q");
@@ -372,7 +372,7 @@ fn an_uncommitted_spec_edit_stops_it() {
 
 #[test]
 fn an_uncommitted_change_edit_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     write(&r.work, "changes/x/change.md", "draft\n");
     commit(&r.work, "x");
@@ -383,7 +383,7 @@ fn an_uncommitted_change_edit_stops_it() {
 
 #[test]
 fn a_staged_change_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     write(&r.work, ".claude/settings.json", "{}\n");
     commit(&r.work, "settings");
@@ -395,7 +395,7 @@ fn a_staged_change_stops_it() {
 
 #[test]
 fn without_a_merge_base_every_edit_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     git(&r.work, &["checkout", "-q", "--orphan", "spec/y"]);
     commit(&r.work, "unrelated history");
@@ -405,7 +405,7 @@ fn without_a_merge_base_every_edit_stops_it() {
 
 #[test]
 fn an_edit_is_set_aside_during_a_conflict() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     // The settings on `main` and the conflict in a doc, so the branch isn't a build's.
     write(&r.work, ".claude/settings.json", "{}\n");
@@ -430,7 +430,7 @@ fn an_edit_is_set_aside_during_a_conflict() {
 
 #[test]
 fn untracked_output_and_worktrees_dont_stop_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -453,7 +453,7 @@ fn untracked_output_and_worktrees_dont_stop_it() {
 
 #[test]
 fn an_untracked_delta_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "changes/x/deltas/a.md", "delta\n");
@@ -467,7 +467,7 @@ fn an_untracked_delta_stops_it() {
 
 #[test]
 fn uncommitted_work_is_named_path_by_path() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     // An ignored file under `specs/` isn't work in progress.
     write(&r.work, ".git/info/exclude", "*.tmp\n");
@@ -492,7 +492,7 @@ fn uncommitted_work_is_named_path_by_path() {
 
 #[test]
 fn an_untracked_file_main_adds_fails_naming_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     main_moves(&r, &[("test-results/report.txt", "theirs\n")]);
     write(&r.work, "test-results/report.txt", "mine\n");
@@ -503,7 +503,7 @@ fn an_untracked_file_main_adds_fails_naming_it() {
 
 #[test]
 fn applied_specs_are_regenerated_on_the_new_main() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     // `main` adds `a/y` to the same file, so a text merge of `specs/` would conflict.
@@ -541,7 +541,7 @@ fn design_hash(r: &Repo) -> String {
 
 #[test]
 fn a_change_built_on_another_sorts_first() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     let three = node_a("specd", "c", &["p"]).replace("## Design\nd", "## Design\none\ntwo\nthree");
     main_moves(&r, &[("specs/a/SPEC.md", &three)]);
@@ -579,7 +579,7 @@ fn a_change_built_on_another_sorts_first() {
 
 #[test]
 fn applied_assets_survive_regeneration() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     main_moves(&r, &[("specs/a/assets/old.png", "png")]);
     git(&r.work, &["pull", "-q", "--rebase", "origin", "main"]);
@@ -603,7 +603,7 @@ fn applied_assets_survive_regeneration() {
 
 #[test]
 fn a_stale_delta_stops_before_writing_specs() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     let graph = clm_model::load(&r.work).0;
     let base = graph.nodes["a"].hashes.contract.clone();
@@ -629,7 +629,7 @@ fn a_stale_delta_stops_before_writing_specs() {
 
 #[test]
 fn a_finish_branch_keeps_its_status_edit() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("impl/y/finish");
     write(&r.work, "specs/a/SPEC.md", &node_a("active", "c", &["p"]));
     commit(&r.work, "finish");
@@ -647,7 +647,7 @@ fn a_finish_branch_keeps_its_status_edit() {
 
 #[test]
 fn an_applied_change_already_on_main_is_not_regenerated() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -665,7 +665,7 @@ fn an_applied_change_already_on_main_is_not_regenerated() {
 
 #[test]
 fn a_change_main_archived_is_not_reapplied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -693,7 +693,7 @@ fn a_change_main_archived_is_not_reapplied() {
 
 #[test]
 fn a_change_main_removed_is_not_reapplied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -714,7 +714,7 @@ fn a_change_main_removed_is_not_reapplied() {
 
 #[test]
 fn a_branch_without_an_applied_change_never_regenerates() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     // A proposed change and a hand edit to `specs/`: neither may be regenerated away.
     write(
@@ -735,7 +735,7 @@ fn a_branch_without_an_applied_change_never_regenerates() {
 
 #[test]
 fn the_result_is_judged_by_check() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("topic");
     // The marker is built so this file never cites `a/p` itself.
     write(
@@ -788,7 +788,7 @@ fn names_pending(line: &str) {
 
 #[test]
 fn spec_changed_when_a_requirement_changed_on_main() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -813,7 +813,7 @@ fn spec_changed_when_a_requirement_changed_on_main() {
 
 #[test]
 fn spec_changed_is_reported_with_the_check_result() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     // A marker nothing defines: `clm check` must still run and report it (step 7).
     write(
@@ -834,7 +834,7 @@ fn spec_changed_is_reported_with_the_check_result() {
 
 #[test]
 fn quiet_on_the_next_run() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_modified(&r))]);
     assert!(!sync(&r.work).unwrap().ok);
@@ -844,7 +844,7 @@ fn quiet_on_the_next_run() {
 
 #[test]
 fn a_run_stopped_by_a_stale_delta_still_owes_the_report() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     let old = version(&r, "a/p");
     apply_change(&r, "y", "", &modifies_contract(&r, "mine"));
@@ -906,7 +906,7 @@ fn a_rebase_finished_with_plain_git_still_owes_the_report() {
 
 #[test]
 fn requirements_that_appeared_or_went() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     let old = version(&r, "a/p");
     main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", "c", &["y"]))]);
@@ -935,7 +935,7 @@ fn a_depends_on_b(r: &Repo) {
 
 #[test]
 fn dependency_contract_changed() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     a_depends_on_b(&r);
     main_moves(&r, &[("specs/b/SPEC.md", &B.replace("\nb\n", "\nb2\n"))]);
@@ -948,7 +948,7 @@ fn dependency_contract_changed() {
 
 #[test]
 fn asset_changed() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     main_moves(&r, &[("specs/a/assets/m.html", "<p>m</p>\n")]);
     pull(&r);
@@ -964,7 +964,7 @@ fn asset_changed() {
 
 #[test]
 fn unrelated_change_on_main() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     main_moves(&r, &[("specs/b/SPEC.md", B)]);
     assert_eq!(synced(&r), Vec::<String>::new());
@@ -998,7 +998,7 @@ fn a_serves_c(r: &Repo) {
 
 #[test]
 fn spec_changed_reports_capabilities() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     a_serves_c(&r);
     main_moves(
@@ -1035,7 +1035,7 @@ fn capability_tests_node_sees_any_capability(r: &Repo, node: &str) {
 
 #[test]
 fn spec_changed_on_the_capability_node() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/capability");
     let node = "---\ntitle: Capabilities\nstatus: specd\nowners: []\n---\n\n## Contract\nk\n\n\
                 ## Design\nd\n\n## Requirements\n";
@@ -1045,7 +1045,7 @@ fn spec_changed_on_the_capability_node() {
 
 #[test]
 fn spec_changed_on_the_root_without_a_capability_node() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     // With no capability node, the root builds the capability tests.
     let r = repo("impl/clm");
     capability_tests_node_sees_any_capability(&r, "clm");
@@ -1053,7 +1053,7 @@ fn spec_changed_on_the_root_without_a_capability_node() {
 
 #[test]
 fn unserved_capability_changed() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     // `a` serves an architecture requirement, so it serves no capability and is traced.
     let a = node_a("specd", "c", &["p"])
@@ -1073,7 +1073,7 @@ fn unserved_capability_changed() {
 
 #[test]
 fn unserved_capability_changed_with_the_node() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     a_serves_c(&r);
     let a = read(&r.work, "specs/a/SPEC.md").replace("## Contract\nc\n", "## Contract\nc2\n");
@@ -1093,7 +1093,7 @@ fn unserved_capability_changed_with_the_node() {
 
 #[test]
 fn no_spec_changed_report_off_node_branches() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     for branch in ["spec/x", "topic", "impl/x/a"] {
         let r = repo(branch);
         main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_modified(&r))]);
@@ -1117,7 +1117,7 @@ fn with_applied_x(branch: &str, extra: &str) -> Repo {
 
 #[test]
 fn branch_completes_a_change() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/a", "");
     write(&r.work, "src/test.rs", &citing("a/x", &version(&r, "a/x")));
     commit(&r.work, "test a/x");
@@ -1134,7 +1134,7 @@ fn branch_completes_a_change() {
 
 #[test]
 fn a_repo_without_a_backlog_archives_too() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     apply_change(&r, "x", "", &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -1149,7 +1149,7 @@ fn a_repo_without_a_backlog_archives_too() {
 
 #[test]
 fn an_uncited_requirement_holds_it() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/a", "");
     write(&r.work, "src/test.rs", &citing("a/p", &version(&r, "a/p")));
     commit(&r.work, "test a/p only");
@@ -1165,7 +1165,7 @@ fn an_uncited_requirement_holds_it() {
 
 #[test]
 fn obsolete_marker_holds_it() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     let p = clm_model::load(&r.work)
         .0
@@ -1205,7 +1205,7 @@ fn obsolete_marker_holds_it() {
 
 #[test]
 fn completed_by_another_branch_s_merge() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/b", "");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -1218,7 +1218,7 @@ fn completed_by_another_branch_s_merge() {
 
 #[test]
 fn unapplied_change_left_alone() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     let p = clm_model::load(&r.work)
         .0
@@ -1251,7 +1251,7 @@ fn unapplied_change_left_alone() {
 
 #[test]
 fn node_activated() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     write(&r.work, "src/test.rs", &citing("a/p", &version(&r, "a/p")));
     commit(&r.work, "test a/p");
@@ -1266,7 +1266,7 @@ fn node_activated() {
 
 #[test]
 fn activation_rides_the_archive_commit() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/a", "");
     let (p, x) = (version(&r, "a/p"), version(&r, "a/x"));
     write(
@@ -1288,7 +1288,7 @@ fn activation_rides_the_archive_commit() {
 
 #[test]
 fn an_untracked_test_neither_archives_nor_activates() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/a", "");
     let (p, x) = (version(&r, "a/p"), version(&r, "a/x"));
     // Markers count only at `HEAD`: an untracked test isn't on the branch.
@@ -1311,7 +1311,7 @@ fn an_untracked_test_neither_archives_nor_activates() {
 
 #[test]
 fn an_untracked_backlog_item_is_left_alone() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     write(&r.work, "backlog/q.md", "---\ntitle: Q\nkind: idea\n---\n");
     write(&r.work, "backlog/u.md", "---\ntitle: U\nkind: idea\n---\n");
@@ -1337,7 +1337,7 @@ fn an_untracked_backlog_item_is_left_alone() {
 
 #[test]
 fn regeneration_reads_the_branch_not_untracked_files() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     main_moves(
@@ -1358,7 +1358,7 @@ fn regeneration_reads_the_branch_not_untracked_files() {
 
 #[test]
 fn nothing_archived_or_activated_off_impl_branches() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     for branch in ["spec/y", "topic"] {
         let r = with_applied_x(branch, "");
         let (p, x) = (version(&r, "a/p"), version(&r, "a/x"));
@@ -1389,7 +1389,7 @@ fn filed(lines: &[String]) -> bool {
 
 #[test]
 fn settings_are_loaded_on_every_branch() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     let mut calls = 0;
@@ -1406,7 +1406,7 @@ fn settings_are_loaded_on_every_branch() {
 
 #[test]
 fn settings_cant_be_loaded() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("impl/a");
     let head = git(&r.work, &["rev-parse", "HEAD"]);
 
@@ -1419,7 +1419,7 @@ fn settings_cant_be_loaded() {
 
 #[test]
 fn the_settings_error_comes_before_the_check() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     // On `main`, so the branch holds no code of its own.
     write(&r.work, "src/test.rs", &cites_missing());
@@ -1440,7 +1440,7 @@ fn the_settings_error_comes_before_the_check() {
 
 #[test]
 fn the_settings_are_loaded_from_head_in_a_temporary_worktree() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "notes.txt", "untracked\n");
@@ -1481,7 +1481,7 @@ fn cites_missing() -> String {
 
 #[test]
 fn an_uncommitted_marker_is_not_judged() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "src/lib.rs", &cites_missing());
@@ -1492,7 +1492,7 @@ fn an_uncommitted_marker_is_not_judged() {
 
 #[test]
 fn a_committed_fault_is_judged_despite_an_uncommitted_fix() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     // The fault on `main`, as the merge base and `origin/main` both hold it.
     write(&r.work, "src/lib.rs", &cites_missing());
@@ -1513,7 +1513,7 @@ fn a_committed_fault_is_judged_despite_an_uncommitted_fix() {
 
 #[test]
 fn an_untracked_test_file_is_not_judged() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "tests/new.rs", &cites_missing());
@@ -1525,7 +1525,7 @@ fn an_untracked_test_file_is_not_judged() {
 
 #[test]
 fn a_clone_the_environment_names_is_judged_at_head() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     // The child half: the test binary runs itself with the variables set, so no other
     // test in this process sees them.
     if let Ok(work) = std::env::var("CLM_SYNC_TEST_JUDGED_WORK") {
@@ -1698,7 +1698,7 @@ fn autosync_skips_a_tree_already_on_the_branch() {
 
 #[test]
 fn a_change_with_links_is_regenerated() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(
         &r.work,
@@ -1721,7 +1721,7 @@ fn a_change_with_links_is_regenerated() {
 
 #[test]
 fn an_item_blocking_a_requirement_the_change_adds_is_regenerated() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     // `a/x` is in the branch's `specs/` but not `main`'s, which the regenerate step
@@ -1747,7 +1747,7 @@ fn an_item_blocking_a_requirement_the_change_adds_is_regenerated() {
 
 #[test]
 fn an_item_the_change_doesnt_fix_is_judged_by_check() {
-    // req:sync/reapply@85e68c87 req:sync/judged-by-check@bfefb55e
+    // req:sync/reapply@5dc2a995 req:sync/judged-by-check@04b187e7
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     write(
@@ -1770,7 +1770,7 @@ fn an_item_the_change_doesnt_fix_is_judged_by_check() {
 
 #[test]
 fn a_broken_delta_of_the_change_still_stops_it() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     write(&r.work, "changes/y/deltas/b.md", "no frontmatter\n");
@@ -1792,7 +1792,7 @@ fn a_broken_delta_of_the_change_still_stops_it() {
 
 #[test]
 fn a_stale_second_change_writes_nothing() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     apply_change(&r, "y1", "", &adds_x());
     let delta = modifies_contract(&r, "mine");
@@ -1814,7 +1814,7 @@ fn a_stale_second_change_writes_nothing() {
 
 #[test]
 fn a_spec_file_main_deleted_is_regenerated_not_reported() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     main_moves(&r, &[("src/other.rs", "other\n")]);
@@ -1834,7 +1834,7 @@ fn a_spec_file_main_deleted_is_regenerated_not_reported() {
 
 #[test]
 fn a_resume_regenerates_against_the_main_it_rebased_onto() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     commit(&r.work, "work");
@@ -1868,7 +1868,7 @@ fn a_resume_regenerates_against_the_main_it_rebased_onto() {
 
 #[test]
 fn a_change_set_back_to_proposed_keeps_mains_specs() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     let before = read(&r.work, "specs/a/SPEC.md");
     applied_spec_branch(&r, &adds_x());
@@ -1895,7 +1895,7 @@ fn a_change_set_back_to_proposed_keeps_mains_specs() {
 
 #[test]
 fn a_specs_conflict_beside_a_real_one_is_resolved() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -1929,7 +1929,7 @@ fn a_specs_conflict_beside_a_real_one_is_resolved() {
 
 #[test]
 fn a_specs_modify_delete_beside_a_real_conflict_is_settled_first() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -1955,7 +1955,7 @@ fn a_specs_modify_delete_beside_a_real_conflict_is_settled_first() {
 
 #[test]
 fn a_branch_adding_no_change_reports_its_specs_conflict() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     write(&r.work, "specs/a/SPEC.md", &node_a("specd", "mine", &["p"]));
     commit(&r.work, "edit a's Contract");
@@ -1970,7 +1970,7 @@ fn a_branch_adding_no_change_reports_its_specs_conflict() {
 
 #[test]
 fn a_change_whose_frontmatter_doesnt_parse_still_counts_as_added() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     write(
         &r.work,
@@ -2005,7 +2005,7 @@ fn subjects_since_main(r: &Repo) -> Vec<String> {
 
 #[test]
 fn a_resume_keeps_mains_specs_for_a_change_that_isnt_applied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -2056,7 +2056,7 @@ fn archive_in(dir: &Path, id: &str, status: &str) {
 
 #[test]
 fn a_change_archived_on_its_spec_branch_is_reapplied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     archive_in(&r.work, "x", "done");
@@ -2079,7 +2079,7 @@ fn a_change_archived_on_its_spec_branch_is_reapplied() {
 
 #[test]
 fn a_resume_regenerates_a_change_archived_on_the_branch() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     commit(&r.work, "work");
@@ -2107,7 +2107,7 @@ fn a_resume_regenerates_a_change_archived_on_the_branch() {
 
 #[test]
 fn an_archived_change_is_merged() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -2142,7 +2142,7 @@ fn an_archived_change_is_merged() {
 
 #[test]
 fn an_archived_change_that_isnt_done_keeps_mains_specs() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     archive_in(&r.work, "x", "abandoned");
@@ -2165,7 +2165,7 @@ fn an_archived_change_that_isnt_done_keeps_mains_specs() {
 
 #[test]
 fn live_and_archived_changes_are_reapplied_in_id_order() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     // The archived change sorts first, the live one after it.
     apply_change(&r, "a1", "", &adds_x());
@@ -2193,7 +2193,7 @@ fn live_and_archived_changes_are_reapplied_in_id_order() {
 
 #[test]
 fn a_branch_archiving_a_change_main_applied_doesnt_reapply_it() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("impl/b");
     let delta = modifies_contract(&r, "mine");
     apply_change(&r, "y", "", &delta);
@@ -2353,7 +2353,7 @@ fn export_csv(body: &str) -> String {
 
 #[test]
 fn a_proposal_is_filed() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     ledger(&r, "alice/web", &[export_csv("Let me export.\n\n")]);
 
@@ -2374,7 +2374,7 @@ fn a_proposal_is_filed() {
 
 #[test]
 fn a_proposal_files_the_same_bytes_on_two_branches() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let mut files = Vec::new();
     for branch in ["impl/a", "impl/b"] {
         let r = repo(branch);
@@ -2388,7 +2388,7 @@ fn a_proposal_files_the_same_bytes_on_two_branches() {
 
 #[test]
 fn withdrawn_filed_or_resolved_proposals_are_not_filed() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     write(
         &r.work,
@@ -2424,7 +2424,7 @@ fn withdrawn_filed_or_resolved_proposals_are_not_filed() {
 
 #[test]
 fn an_untracked_item_keeps_its_proposal_unfiled() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     ledger(
         &r,
@@ -2440,7 +2440,7 @@ fn an_untracked_item_keeps_its_proposal_unfiled() {
 
 #[test]
 fn a_slug_that_isnt_kebab_case_is_skipped_with_a_warning() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     ledger(
         &r,
@@ -2560,7 +2560,7 @@ fn a_ledger_that_cant_be_read_files_nothing() {
 
 #[test]
 fn no_proposal_items_off_impl_branches() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("spec/y");
     ledger(
         &r,
@@ -2608,7 +2608,7 @@ fn flagged(branch: &str, id: &str, flags: usize) -> Repo {
 
 #[test]
 fn a_clone_the_environment_names_keeps_its_head_when_an_item_is_filed() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     // Filing an item moves the temporary worktree with `git checkout`, the one git command
     // that writes there: it must not follow the variables to the clone.
     if let Ok(work) = std::env::var("CLM_SYNC_TEST_FILED_WORK") {
@@ -2647,7 +2647,7 @@ fn a_clone_the_environment_names_keeps_its_head_when_an_item_is_filed() {
 
 #[test]
 fn a_requirement_at_the_threshold_gets_a_reconsider_item() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
 
     assert_eq!(synced(&r), ["filed backlog/reconsider-a-x.md"]);
@@ -2674,7 +2674,7 @@ fn a_requirement_at_the_threshold_gets_a_reconsider_item() {
 
 #[test]
 fn a_reconsider_item_is_filed_after_archiving_and_proposals() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     let adds_z = format!(
         "---\ncomponent: a\n---\n## ADDED Requirements\n{}",
@@ -2701,7 +2701,7 @@ fn a_reconsider_item_is_filed_after_archiving_and_proposals() {
 
 #[test]
 fn a_reconsider_item_is_filed_after_a_spec_change() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_modified(&r))]);
 
@@ -2713,7 +2713,7 @@ fn a_reconsider_item_is_filed_after_a_spec_change() {
 
 #[test]
 fn a_failed_commit_leaves_no_reconsider_item() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     let hook = r.work.join(git(
         &r.work,
@@ -2747,7 +2747,7 @@ fn a_failed_commit_leaves_no_reconsider_item() {
 
 #[test]
 fn a_reconsider_item_already_filed_is_left_alone() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     write(
         &r.work,
@@ -2766,7 +2766,7 @@ fn a_reconsider_item_already_filed_is_left_alone() {
 
 #[test]
 fn a_requirement_below_the_threshold_gets_none() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 2);
 
     let lines = synced(&r);
@@ -2775,7 +2775,7 @@ fn a_requirement_below_the_threshold_gets_none() {
 
 #[test]
 fn another_nodes_requirement_gets_none() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "b/y", 3);
 
     let lines = synced(&r);
@@ -2785,7 +2785,7 @@ fn another_nodes_requirement_gets_none() {
 
 #[test]
 fn no_reconsider_item_off_node_branches() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("spec/y", "a/x", 3);
 
     let lines = synced(&r);
@@ -2794,7 +2794,7 @@ fn no_reconsider_item_off_node_branches() {
 
 #[test]
 fn no_reconsider_item_when_the_settings_cant_be_loaded() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
 
     let report =
@@ -2805,7 +2805,7 @@ fn no_reconsider_item_when_the_settings_cant_be_loaded() {
 
 #[test]
 fn an_untracked_reconsider_item_counts_as_filed() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     write(&r.work, "backlog/reconsider-a-x.md", "mine\n");
 
@@ -2816,7 +2816,7 @@ fn an_untracked_reconsider_item_counts_as_filed() {
 
 #[test]
 fn a_proposal_title_is_written_as_a_json_string() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     let title = "Say \"hi\": now";
     ledger(
@@ -2837,7 +2837,7 @@ fn a_proposal_title_is_written_as_a_json_string() {
 
 #[test]
 fn a_graph_with_violations_files_no_proposal() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     write(&r.work, "backlog/broken.md", "---\nkind: idea\n---\n");
     commit(&r.work, "an item without a title");
@@ -2869,7 +2869,7 @@ fn main_holds_proposed_y() -> Repo {
 
 #[test]
 fn a_branch_applies_a_change_main_holds() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = main_holds_proposed_y();
     clm_apply::apply(&r.work, "y").unwrap();
     write(
@@ -2895,7 +2895,7 @@ fn a_branch_applies_a_change_main_holds() {
 
 #[test]
 fn a_branch_applies_and_archives_a_change_main_holds() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = main_holds_proposed_y();
     clm_apply::apply(&r.work, "y").unwrap();
     commit(&r.work, "Apply y");
@@ -2917,7 +2917,7 @@ fn a_branch_applies_and_archives_a_change_main_holds() {
 
 #[test]
 fn a_change_main_holds_applied_is_not_applied_again() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -2931,7 +2931,7 @@ fn a_change_main_holds_applied_is_not_applied_again() {
 
 #[test]
 fn a_change_main_holds_proposed_stays_unregenerated_while_proposed() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = main_holds_proposed_y();
     write(&r.work, "specs/a/SPEC.md", &node_a("specd", "c2", &["p"]));
     commit(&r.work, "hand edit");
@@ -2944,7 +2944,7 @@ fn a_change_main_holds_proposed_stays_unregenerated_while_proposed() {
 
 #[test]
 fn a_branch_applies_a_change_main_holds_approved() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/z");
     write(
         &r.work,
@@ -2971,7 +2971,7 @@ fn a_branch_applies_a_change_main_holds_approved() {
 
 #[test]
 fn a_change_archived_abandoned_is_not_applied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = main_holds_proposed_y();
     let md = read(&r.work, "changes/y/change.md").replace("proposed", "applied");
     write(&r.work, "changes/y/change.md", &md);
@@ -3025,7 +3025,7 @@ fn other_change_on_main(o_text: &str) -> Repo {
 
 #[test]
 fn another_changes_delta_is_merged() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = other_change_on_main("one\ntwo\nTHREE");
     assert_eq!(
         synced(&r),
@@ -3045,7 +3045,7 @@ fn another_changes_delta_is_merged() {
 
 #[test]
 fn another_changes_delta_is_left_stale() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = other_change_on_main("ONE!\ntwo\nthree");
     let before = read(&r.work, "changes/o/deltas/a.md");
     let lines = unfinished(&r);
@@ -3067,7 +3067,7 @@ fn another_changes_delta_is_left_stale() {
 
 #[test]
 fn a_branch_that_regenerates_nothing_merges_no_other_delta() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -3282,7 +3282,7 @@ fn rename_branch() -> Repo {
 
 #[test]
 fn main_moved_under_a_rename() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
     // `main` adds a requirement `w` to the node and a backlog item blocking `a/p`.
     main_moves(
@@ -3326,7 +3326,7 @@ fn git_env(w: &Path, g: &Path, args: &[&str]) -> String {
 
 #[test]
 fn a_clone_the_environment_names() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     // The child half: the test binary runs itself with the variables set, so no other
     // test in this process sees them.
     if let Ok(work) = std::env::var("CLM_SYNC_TEST_WORK") {
@@ -3359,7 +3359,7 @@ fn a_clone_the_environment_names() {
 
 #[test]
 fn a_defect_report_survives_and_a_second_run_changes_nothing() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
     write(
         &r.work,
@@ -3385,7 +3385,7 @@ fn a_defect_report_survives_and_a_second_run_changes_nothing() {
 
 #[test]
 fn a_hand_edit_on_a_rename_branch() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
     write(&r.work, "src/lib.rs", "one\ntwo\nthree\nfour\n");
     commit(&r.work, "hand edit");
@@ -3400,7 +3400,7 @@ fn a_hand_edit_on_a_rename_branch() {
 
 #[test]
 fn a_rename_main_refuses_leaves_the_branch() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
     // `main` gains a `q` of its own, so `a/p` to `a/q` can no longer be carried out.
     main_moves(
@@ -3417,7 +3417,7 @@ fn a_rename_main_refuses_leaves_the_branch() {
 
 #[test]
 fn proposals_are_filed_in_slug_order() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     ledger(
         &r,
@@ -3436,7 +3436,7 @@ fn proposals_are_filed_in_slug_order() {
 
 #[test]
 fn a_lock_met_at_the_reapply_commit_is_waited_out() {
-    // req:sync/git-through-layer@808d5bc4
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     main_moves(
@@ -3717,7 +3717,7 @@ fn rename_branch_in_tool() -> Repo {
 
 #[test]
 fn a_rename_in_a_subdirectory_root() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch_in_tool();
     let version = {
         let (graph, violations) = clm_model::load(&tool(&r));
@@ -3756,7 +3756,7 @@ fn a_rename_in_a_subdirectory_root() {
 
 #[test]
 fn a_file_outside_a_subdirectory_root() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch_in_tool();
     write(&r.work, "README.md", "one\nTWO\nthree\n");
     commit(&r.work, "hand edit");
@@ -3769,7 +3769,7 @@ fn a_file_outside_a_subdirectory_root() {
 
 #[test]
 fn a_rename_in_a_subdirectory_root_keeps_its_items_and_follows_main_outside() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch_in_tool();
     write(
         &tool(&r),
@@ -3814,7 +3814,7 @@ fn an_untracked_file_main_adds_stops_a_rename() {
 
 #[test]
 fn an_untracked_file_main_adds_outside_the_root_stops_a_rename() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch_in_tool();
     main_moves(&r, &[("notes.md", "main's\n")]);
     write(&r.work, "notes.md", "mine\n");
