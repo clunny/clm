@@ -42,7 +42,6 @@ pub(crate) fn with_cuts(
 ) -> Result<(PathBuf, Option<TempFile>), Error> {
     let cuts = cuts(root, branch).inspect_err(|_| leave(Sent::Unevaluated))?;
     let body = std::fs::read_to_string(root.join(file))
-        .or_else(|_| std::fs::read_to_string(file))
         .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
     let rest = without_section(&body);
     if cuts.is_none() && rest.len() == body.len() {

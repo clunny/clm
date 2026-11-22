@@ -82,10 +82,11 @@ fn said(answer: &[u8]) -> String {
     joined.chars().take(500).collect()
 }
 
-/// `file` made absolute against the caller's directory: `az` runs in the repository's root
-/// and reads `@<file>` relative to that.
-fn absolute(file: &Path) -> Result<PathBuf, Error> {
-    std::path::absolute(file).map_err(|e| Error::Refused(format!("{}: {e}", file.display())))
+/// `file` made absolute against the repository's root, where every body file is read, so
+/// the `@<file>` `az` is given names that file whatever directory `az` reads it from.
+fn absolute(root: &Path, file: &Path) -> Result<PathBuf, Error> {
+    std::path::absolute(root.join(file))
+        .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))
 }
 
 fn units(text: &str) -> usize {
@@ -129,10 +130,10 @@ fn fitted(root: &Path, branch: &str, file: &Path) -> Result<(PathBuf, Option<Tem
         kept.display()
     );
     let temp = TempFile::write(&cut(&text, &note))?;
-    eprintln!(
+    crate::say(format!(
         "cut the body to {LIMIT} characters; the whole is kept at {}",
         kept.display()
-    );
+    ));
     Ok((temp.0.clone(), Some(temp)))
 }
 
@@ -147,7 +148,7 @@ impl Host for Azure {
         if let Some(open) = active(root, branch)? {
             return web_url(&open).map(Some);
         }
-        let (body_file, _cuts) = with_cuts(root, branch, &absolute(body_file)?)?;
+        let (body_file, _cuts) = with_cuts(root, branch, &absolute(root, body_file)?)?;
         let (file, _guard) = fitted(root, branch, &body_file)?;
         let description = format!("@{}", file.display());
         let created = pr_raw(
@@ -180,7 +181,7 @@ impl Host for Azure {
     }
 
     fn page_body(&self, root: &Path, file: &Path) -> Result<Option<String>, Error> {
-        let file = absolute(file)?;
+        let file = absolute(root, file)?;
         check_body(root, &file)?;
         let branch = current_branch(root)?.ok_or_else(|| {
             Error::Refused("`HEAD` is detached; check out the page's branch".into())

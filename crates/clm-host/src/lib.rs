@@ -85,6 +85,22 @@ pub struct Run {
     pub url: String,
 }
 
+thread_local! {
+    /// What an adapter says beside its answer, such as that it cut a body to fit
+    /// (`azure-body-limit`), for the command that called it to write on its own error stream.
+    static SAID: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Leaves `line` for the command calling the adapter to write on its error stream.
+fn say(line: String) {
+    SAID.with(|said| said.borrow_mut().push(line));
+}
+
+/// What adapters said on this thread since the last call, taken.
+fn take_said() -> Vec<String> {
+    SAID.with(|said| std::mem::take(&mut *said.borrow_mut()))
+}
+
 fn no_host<T>() -> Result<T, Error> {
     Err(Error::Refused("there is no host".into()))
 }

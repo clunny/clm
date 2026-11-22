@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
-use crate::{Error, adapter, delete_pushed_branch, pr_open, push_branch};
+use crate::{Error, adapter, delete_pushed_branch, pr_open, push_branch, take_said};
 
 /// The environment, as a lookup.
 type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
@@ -268,7 +268,12 @@ fn hosted(
         Err(e) => writeln!(err, "clm {command}: {e}").map(|()| 2),
         Ok(settings) => {
             let host = settings.host.value;
-            report(command, host, op(host, root), out, err)
+            take_said();
+            let result = op(host, root);
+            take_said()
+                .iter()
+                .try_for_each(|line| writeln!(err, "{line}"))
+                .and_then(|()| report(command, host, result, out, err))
         }
     };
     written.unwrap_or(2)
