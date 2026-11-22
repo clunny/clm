@@ -374,7 +374,7 @@ fn a_callers_settings_failure_is_written_as_given_whatever_the_question() {
     }
     // `--overlap` reads each side's settings from its commit, so the caller's loader isn't
     // called and its failure stops nothing.
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let status = clm_affected::command(
         ["--overlap", "main", "work", "--root", path],
@@ -765,7 +765,7 @@ fn an_untracked_reader_and_an_untracked_doc_count() {
 
 #[test]
 fn why_prints_the_chain_through_a_dependency() {
-    // req:check.affected/why-chain@6518d01f
+    // req:check.affected/why-chain@f4c8abf0
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -783,7 +783,7 @@ fn why_prints_the_chain_through_a_dependency() {
 
 #[test]
 fn why_says_not_selected_and_all() {
-    // req:check.affected/why-chain@6518d01f
+    // req:check.affected/why-chain@f4c8abf0
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -800,7 +800,7 @@ fn why_says_not_selected_and_all() {
 
 #[test]
 fn why_with_readers_exits_1_naming_both_flags() {
-    // req:check.affected/why-chain@6518d01f
+    // req:check.affected/why-chain@f4c8abf0
     let dir = repo("");
     let out = clm_affected_with(
         dir.path(),
@@ -817,7 +817,7 @@ fn why_with_readers_exits_1_naming_both_flags() {
 
 #[test]
 fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
-    // req:check.affected/why-chain@6518d01f
+    // req:check.affected/why-chain@f4c8abf0
     let dir = repo("[affected]\nall = [\"Cargo.lock\"]\n");
     let root = dir.path();
     write(root, "Cargo.lock", "lock 2\n");
@@ -837,7 +837,7 @@ fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
 
 #[test]
 fn why_reads_the_scan_for_readers_and_citations() {
-    // req:check.affected/why-chain@6518d01f
+    // req:check.affected/why-chain@f4c8abf0
     let dir = readers_repo();
     let root = dir.path();
     write(root, "ARCHITECTURE.md", "# B\n");
@@ -910,7 +910,7 @@ fn touch(root: &Path, rel: &str) {
 
 #[test]
 fn a_rename_on_one_side_counts_as_its_old_path_and_its_new_one() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     // `x` moves `b`'s file into `a`, unchanged, which git would read as a rename.
     let dir = overlap_repo(
         "",
@@ -938,7 +938,7 @@ fn a_rename_on_one_side_counts_as_its_old_path_and_its_new_one() {
 
 #[test]
 fn independent_changes_overlap_in_nothing() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo("", "[]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -949,7 +949,7 @@ fn independent_changes_overlap_in_nothing() {
 
 #[test]
 fn a_dependant_of_both_is_what_they_share() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     // req:check.affected/clm-root-paths@de45727f
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
@@ -964,7 +964,7 @@ fn a_dependant_of_both_is_what_they_share() {
 
 #[test]
 fn a_side_that_selects_everything_leaves_the_others_output() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo(
         "[affected]\nall = [\"Cargo.lock\"]\n",
         "[a, b]",
@@ -985,7 +985,7 @@ fn a_side_that_selects_everything_leaves_the_others_output() {
 
 #[test]
 fn a_reader_on_one_side_meets_its_owner_on_the_other() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo(
         "",
         "[]",
@@ -1010,7 +1010,7 @@ fn a_reader_on_one_side_meets_its_owner_on_the_other() {
 
 #[test]
 fn overlap_takes_no_working_tree_or_untracked_file() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -1026,7 +1026,7 @@ fn overlap_takes_no_working_tree_or_untracked_file() {
 
 #[test]
 fn overlap_refuses_flags_that_dont_combine() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
     for flag in [&["--readers"][..], &["--why", "p"], &["--base", "main"]] {
         let mut args = vec!["--overlap", "x", "y"];
@@ -1042,7 +1042,7 @@ fn overlap_refuses_flags_that_dont_combine() {
 
 #[test]
 fn overlap_names_a_revision_that_is_no_commit_and_commits_with_no_base() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
     let root = dir.path();
     let out = clm_affected_args(root, &["--overlap", "x", "nope"]);
@@ -1065,7 +1065,7 @@ fn overlap_names_a_revision_that_is_no_commit_and_commits_with_no_base() {
 
 #[test]
 fn overlap_has_no_file_line_for_a_deleted_file() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo(
         "",
         "[]",
@@ -1079,7 +1079,7 @@ fn overlap_has_no_file_line_for_a_deleted_file() {
 
 #[test]
 fn overlap_with_shared_components_but_no_shared_file_prints_nothing() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo(
         "",
         "[]",
@@ -1099,7 +1099,7 @@ fn cycle(root: &Path) {
 
 #[test]
 fn a_side_whose_graph_cant_be_loaded_is_refused_whatever_is_checked_out() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo("", "[]", &|r| touch(r, "crates/a/src/lib.rs"), &cycle);
     let root = dir.path();
     git(root, &["switch", "-q", "x"]);
@@ -1117,7 +1117,7 @@ fn a_side_whose_graph_cant_be_loaded_is_refused_whatever_is_checked_out() {
 
 #[test]
 fn a_link_to_a_file_counts_on_both_sides_as_with_a_checkout() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
     let root = dir.path();
     git(root, &["switch", "-q", "main"]);
@@ -1142,7 +1142,7 @@ fn a_link_to_a_file_counts_on_both_sides_as_with_a_checkout() {
 
 #[test]
 fn links_to_links_and_absolute_targets_are_followed_and_one_out_of_the_top_is_no_file() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     // A file beside the system's temporary directories: where a relative target that climbs
     // out of a tree extracted there would land.
     let outside = tempfile::NamedTempFile::new().unwrap();
@@ -1200,7 +1200,7 @@ fn settings_repo(m: Option<&str>, x: Option<&str>, y: Option<&str>, y_cycle: boo
 
 #[test]
 fn each_side_takes_the_settings_its_own_commit_holds() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let globs = "[affected]\nall = [\"Cargo.lock\"]\n";
     let not_toml = "this is [not toml\n";
 
@@ -1265,7 +1265,7 @@ fn each_side_takes_the_settings_its_own_commit_holds() {
 
 #[test]
 fn a_sides_settings_are_read_at_the_clm_roots_place_in_its_commit() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     // req:check.affected/clm-root-paths@de45727f
     let dir = subdirectory_repo();
     let top = dir.path();
@@ -1293,7 +1293,7 @@ fn a_sides_settings_are_read_at_the_clm_roots_place_in_its_commit() {
 
 #[test]
 fn overlap_reads_the_graph_whole_from_the_commits() {
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -1325,7 +1325,7 @@ fn overlap_reads_the_graph_whole_from_the_commits() {
 #[test]
 fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
     // req:check.affected/affected-files@72f3baff
-    // req:check.affected/why-chain@6518d01f
+    // req:check.affected/why-chain@f4c8abf0
     let dir = repo("");
     let root = dir.path();
     // `d` depends on nothing the change reaches, but exempts a test from `undeclared-imports`.
@@ -1357,7 +1357,7 @@ fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
 
 #[test]
 fn an_exempt_test_whose_owner_is_affected_is_explained_by_its_exemption() {
-    // req:check.affected/why-chain@6518d01f
+    // req:check.affected/why-chain@f4c8abf0
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     git(root, &["init", "-q", "-b", "main"]);
@@ -1652,7 +1652,7 @@ fn exempt_bytes_repo(more: bool) -> TempDir {
 #[test]
 fn an_exempt_file_whatever_its_bytes() {
     // req:check.affected/affected-files@72f3baff
-    // req:check.affected/why-chain@6518d01f
+    // req:check.affected/why-chain@f4c8abf0
     let dir = exempt_bytes_repo(false);
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -1674,7 +1674,7 @@ fn an_exempt_file_whatever_its_bytes() {
 #[test]
 fn an_exempt_file_whatever_its_bytes_on_both_sides() {
     // req:check.affected/affected-files@72f3baff
-    // req:check.affected/overlap-selection@8fd7fe1a
+    // req:check.affected/overlap-selection@bc565b43
     // With a committed link to the file, and exempt Markdown that isn't UTF-8, which imports
     // nothing and so is never selected.
     let dir = exempt_bytes_repo(true);
