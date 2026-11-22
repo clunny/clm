@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-coverage-deleted-tests-leaves-out-a-file-named-md-that-scan-counts]
 ---
 
