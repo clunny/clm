@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-verify-refuses-on-an-invalid-table-in-the-checkout-s-own-clm]
 ---
 
