@@ -19,6 +19,7 @@ An addition a user must handle counts as such a change: a variant it matches exh
 - with two changes, the expand change's spec branch must also propose the contract change, or its markers fail at once. Both go in one spec branch, which costs at most one human review;
 - the removing change can't finish while any of its markers remain, so the removal can't be skipped;
 - abandoning it fails the markers, forcing a decision about the old path.
+- `clm unreferenced` skips an item a marker holds, so the last user's move lands though it leaves the old path with no user (`unreferenced-skips-marked-old-paths`, added 2026-11-22).
 
 The specs describe both contracts while both exist, since both are current (`spec-is-current`). The removing delta takes the old one out.
 
