@@ -27,7 +27,7 @@ fn approved_by(settings: &str, approver: Option<&str>) -> Fixture {
 
 #[test]
 fn self_approval_refused() {
-    // req:land/approval-policy@4438df26
+    // req:land/approval-policy@822b3d40
     let f = approved_by("approval = \"other\"", None);
     let old = f.remote("main");
     let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
@@ -37,7 +37,7 @@ fn self_approval_refused() {
 
 #[test]
 fn another_person_approves() {
-    // req:land/approval-policy@4438df26
+    // req:land/approval-policy@822b3d40
     let f = approved_by("approval = \"other\"", Some("Dana"));
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
     assert_eq!(f.parents(&f.path("origin.git"), "main").len(), 2);
@@ -45,10 +45,57 @@ fn another_person_approves() {
 
 #[test]
 fn any() {
-    // req:land/approval-policy@4438df26
+    // req:land/approval-policy@822b3d40
     let f = approved_by("approval = \"any\"", None);
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
     assert_eq!(f.parents(&f.path("origin.git"), "main").len(), 2);
+}
+
+#[test]
+fn why_no_approval_counts() {
+    // req:land/approval-policy@822b3d40
+    // Under `other`, the author's own approval: the policy, why it doesn't count, and whom
+    // to ask.
+    let f = approved_by("approval = \"other\"", None);
+    let writer = f.records()[0].writer.clone();
+    let old = f.remote("main");
+    let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
+    let lines: Vec<&str> = why.lines().collect();
+    assert!(
+        lines.contains(
+            &"approval = \"other\" from origin/main:clm.toml: only an approval by someone who \
+              isn't an author of the branch counts"
+        ),
+        "{why}"
+    );
+    let at = lines
+        .iter()
+        .position(|l| *l == "no approval of this diff counts:")
+        .unwrap_or_else(|| panic!("{why}"));
+    let refusal = lines[at + 1];
+    assert!(refusal.starts_with(&format!("{writer} at ")), "{why}");
+    assert!(refusal.contains("author"), "{why}");
+    assert_eq!(
+        lines.last(),
+        Some(&"ask another person to run `clm approve spec/x`"),
+        "{why}"
+    );
+    assert_eq!(f.remote("main"), old);
+    // Under `any`, with no approval: no policy line, and the human is asked.
+    let g = Fixture::new("approval = \"any\"");
+    g.write("gate-out", "spec review\n");
+    g.write("needs-approval", "");
+    g.branch("spec/x", &[("changes/x/change.md", "x\n")]);
+    let old = g.remote("main");
+    let why = refused(clm_land::land(&g.work(), Some("spec/x"), &g.env(&[])));
+    assert!(!why.contains("approval = \"other\""), "{why}");
+    assert!(!why.contains("no approval of this diff counts"), "{why}");
+    assert_eq!(
+        why.lines().last(),
+        Some("ask the human to run `clm approve spec/x`"),
+        "{why}"
+    );
+    assert_eq!(g.remote("main"), old);
 }
 
 /// A `spec/x` that needs review, authored by `Christopher Lunny` whose head's `clm.toml` holds `head` where
@@ -72,7 +119,7 @@ fn branch_sets(f: &Fixture, base: &str, head: &str) {
 
 #[test]
 fn a_branch_that_weakens_the_policy_is_judged_by_the_base() {
-    // req:land/approval-from-base@094b6c3d
+    // req:land/approval-from-base@2e526f76
     let f = Fixture::new("approval = \"other\"");
     branch_sets(&f, "approval = \"other\"", "approval = \"any\"");
     let old = f.remote("main");
@@ -85,7 +132,7 @@ fn a_branch_that_weakens_the_policy_is_judged_by_the_base() {
 
 #[test]
 fn a_host_none_clone_is_judged_by_origin_main() {
-    // req:land/approval-from-base@094b6c3d
+    // req:land/approval-from-base@2e526f76
     let f = Fixture::local_with("approval = \"other\"");
     branch_sets(&f, "approval = \"other\"", "approval = \"any\"");
     // The local `main` says `any` and `spec/x` is on `origin` alone: neither is the base.
@@ -104,7 +151,7 @@ fn a_host_none_clone_is_judged_by_origin_main() {
 
 #[test]
 fn a_branch_that_tightens_the_policy_is_judged_by_the_base() {
-    // req:land/approval-from-base@094b6c3d
+    // req:land/approval-from-base@2e526f76
     let f = Fixture::new("# no approval");
     branch_sets(&f, "# no approval", "approval = \"other\"");
     clm_land::land(&f.work(), None, &f.env(&[])).unwrap();
@@ -113,7 +160,7 @@ fn a_branch_that_tightens_the_policy_is_judged_by_the_base() {
 
 #[test]
 fn the_clones_local_file_wins() {
-    // req:land/approval-from-base@094b6c3d
+    // req:land/approval-from-base@2e526f76
     let f = approved_by("approval = \"other\"", None);
     f.write("work/clm.local.toml", "approval = \"any\"\n");
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
@@ -122,7 +169,7 @@ fn the_clones_local_file_wins() {
 
 #[test]
 fn the_clones_local_file_can_tighten() {
-    // req:land/approval-from-base@094b6c3d
+    // req:land/approval-from-base@2e526f76
     let f = approved_by("approval = \"any\"", None);
     f.write("work/clm.local.toml", "approval = \"other\"\n");
     let old = f.remote("main");
@@ -133,7 +180,7 @@ fn the_clones_local_file_can_tighten() {
 
 #[test]
 fn unreadable_policy_at_the_base() {
-    // req:land/approval-from-base@094b6c3d
+    // req:land/approval-from-base@2e526f76
     let f = Fixture::new("approval = \"everyone\"");
     branch_sets(&f, "approval = \"everyone\"", "approval = \"any\"");
     let old = f.remote("main");
@@ -152,7 +199,7 @@ fn unreadable_policy_at_the_base() {
 
 #[test]
 fn unparseable_policy_at_the_base() {
-    // req:land/approval-from-base@094b6c3d
+    // req:land/approval-from-base@2e526f76
     let f = Fixture::new("approval = = =");
     branch_sets(&f, "approval = = =", "approval = \"any\"");
     let old = f.remote("main");

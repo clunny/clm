@@ -194,7 +194,7 @@ fn has_status(text: &str, status: clm_model::ChangeStatus) -> bool {
 
 /// The changes the head applies: live at the base with status `proposed` or `approved`,
 /// and in the merge commit `applied`, or gone with `changes/archive/<id>` `done`
-/// (`regenerate-applied-live-changes`).
+/// (`regenerate-applied-specs`).
 fn applied_changes(
     repo: &Repo,
     base: &str,

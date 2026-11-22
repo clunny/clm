@@ -38,11 +38,6 @@ pub use runner::{CheckEnv, CheckRun, Step, run_check, run_check_as};
 
 pub use clm_approval::{Env, Output};
 
-/// `clm approve [<branch>]`, which `clm-approval` holds (`land.approval/approve`).
-pub fn approve(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Error> {
-    Ok(clm_approval::approve(root, branch, env)?)
-}
-
 /// Ends a merge commit's message with the trailer `Gate-Rules: <RULES>`, the version of the
 /// gate's rules the land is judged by, in the trailer block that holds any `Change:` or
 /// `Checked:` line, after them (`land/gate-rules-trailer`).

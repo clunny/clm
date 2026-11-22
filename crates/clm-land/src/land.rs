@@ -824,7 +824,7 @@ pub(crate) fn approval_hint(approvals: &Approvals, branch: &str, policy: &Policy
     if !approvals.refused.is_empty() {
         hint.push_str("no approval of this diff counts:\n");
         for why in &approvals.refused {
-            hint.push_str(&format!("  {why}\n"));
+            hint.push_str(&format!("{why}\n"));
         }
     }
     // Under `approval = "other"`, the authors' and the lander's own approvals never count.
