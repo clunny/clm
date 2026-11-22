@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::Error;
 
 /// This clone's identity, `<person>/<clone>`, creating the clone part on first use. `env` is
-/// the environment `config` reads, as for `clm_config::load`.
+/// the environment `config` reads, as for `clm_config::load`; `clm.toml` is not read.
 pub fn writer(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<String, Error> {
     let person = person(root, env)?;
     let file = writer_file(root)?;
@@ -20,7 +20,9 @@ pub fn writer(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Strin
 
 /// `config`'s `writer`, or the repository's git `user.name` as a slug.
 fn person(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<String, Error> {
-    let settings = clm_config::load(Some(root), env)?;
+    // With no repository layer: `clm.toml` never sets `writer`, and one that can't be loaded
+    // mustn't stop a caller that never reads the working tree's file from appending.
+    let settings = clm_config::load_committed(root, None, "clm.toml", env)?;
     let person = match settings.writer.value {
         // A ref name part: only a slug, so it can't break or reshape `<person>/<clone>`.
         Some(person) if slug(&person) != person => {
@@ -45,8 +47,8 @@ fn person(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<String, E
     };
     if person.is_empty() {
         return Err(Error::Writer(
-            "no writer: set `writer` (CLM_WRITER, or `writer = \"<name>\"` in config.toml), \
-             since git's user.name gives an empty name"
+            "no writer: set `writer` (CLM_WRITER, or `writer = \"<name>\"` in clm.local.toml \
+             or config.toml), since git's user.name gives an empty name"
                 .into(),
         ));
     }
