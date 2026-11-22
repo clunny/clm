@@ -54,7 +54,7 @@ pub fn tests_in(path: &Path, text: &str) -> Vec<TestSpan> {
 }
 
 /// The `req:` markers in `text` on no line of a test or group, as `Marker`s: nothing for a
-/// Markdown file or a language `tests_in` doesn't read.
+/// file of a language `tests_in` doesn't read.
 pub fn markers_outside_tests(path: &Path, text: &str) -> Vec<Marker> {
     split_markers(path, text).map_or_else(Vec::new, |(_, outside)| outside)
 }
