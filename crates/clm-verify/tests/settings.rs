@@ -3,6 +3,7 @@
 
 mod common;
 
+use clm_ledger::Body;
 use clm_verify::Request;
 use common::Fixture;
 
@@ -10,7 +11,7 @@ const LOCAL: &str = "[verify]\ncheck = \"true\"\nmode = \"local\"\ntriggers = [\
 
 #[test]
 fn a_checkout_behind_main() {
-    // req:verify/settings-from-main@35114bba
+    // req:verify/settings-from-main@037796b9
     let f = Fixture::new(None);
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -27,7 +28,7 @@ fn a_checkout_behind_main() {
 
 #[test]
 fn main_turned_on_by_another_clone() {
-    // req:verify/settings-from-main@35114bba
+    // req:verify/settings-from-main@037796b9
     let f = Fixture::new(None);
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -58,7 +59,7 @@ fn main_turned_on_by_another_clone() {
 
 #[test]
 fn turned_off_on_main() {
-    // req:verify/settings-from-main@35114bba
+    // req:verify/settings-from-main@037796b9
     let f = Fixture::new(None);
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -83,7 +84,7 @@ fn turned_off_on_main() {
 
 #[test]
 fn an_invalid_setting_on_main() {
-    // req:verify/settings-from-main@35114bba
+    // req:verify/settings-from-main@037796b9
     let f = Fixture::new(None);
     let before_land = f.back(0);
     f.land(
@@ -109,8 +110,45 @@ fn an_invalid_setting_on_main() {
 }
 
 #[test]
+fn a_checkout_whose_own_settings_cannot_be_loaded() {
+    // req:verify/settings-from-main@037796b9
+    let f = Fixture::new(Some(
+        "mode = \"local\"\ntriggers = []\nevery = { lands = 1 }",
+    ));
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let head = f.land(&[("a.txt", "2\n")], "two");
+    // The checkout's own file names a host no adapter serves and a `[verify]` with no check.
+    f.write(
+        "work/clm.toml",
+        "host = \"gitlab\"\n[verify]\nmode = \"local\"\n",
+    );
+    let out = f.due();
+    assert_eq!(
+        (out.line.as_str(), out.code),
+        (format!("verify passed {} 1 lands", &head[..7]).as_str(), 0)
+    );
+    let passed: Vec<_> = f
+        .records()
+        .into_iter()
+        .filter(|b| matches!(b, Body::Verified { commit, passed: true, .. } if *commit == head))
+        .collect();
+    assert_eq!(passed.len(), 1);
+    let work = f.work().join("clm.toml").display().to_string();
+    for said in std::iter::once(&out.line).chain(&out.notes) {
+        assert!(
+            !said
+                .replace("origin/main:clm.toml", "")
+                .contains("clm.toml")
+                && !said.contains(&work),
+            "{said}"
+        );
+    }
+}
+
+#[test]
 fn a_fetch_that_fails_is_a_git_failure() {
-    // req:verify/settings-from-main@35114bba
+    // req:verify/settings-from-main@037796b9
     let f = Fixture::new(Some("mode = \"local\"\ntriggers = [\"work-done\"]"));
     f.git(
         &f.work(),
@@ -131,7 +169,7 @@ fn a_fetch_that_fails_is_a_git_failure() {
 
 #[test]
 fn a_ledger_write_that_fails_is_a_git_failure() {
-    // req:verify/settings-from-main@35114bba
+    // req:verify/settings-from-main@037796b9
     let f = Fixture::new(Some(
         "mode = \"local\"\ntriggers = []\nevery = { lands = 1 }",
     ));

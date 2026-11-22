@@ -255,7 +255,7 @@ fn no_result_is_pending_even_with_nothing_landed() {
 
 #[test]
 fn settings_that_cannot_be_used_exit_1() {
-    // req:verify/settings-from-main@35114bba
+    // req:verify/settings-from-main@037796b9
     let f = Fixture::new(Some("mode = \"pipeline\"\ntriggers = [\"work-done\"]"));
     let err = common::verify(&f.work(), &Request::Import, &f.env()).unwrap_err();
     assert!(matches!(err, clm_verify::Error::Refused(_)), "{err}");
@@ -285,17 +285,16 @@ fn nothing_to_import_elsewhere() {
 }
 
 #[test]
-fn the_host_comes_from_the_checkout() {
-    // req:verify/settings-from-main@35114bba
+fn the_host_from_main() {
+    // req:verify/settings-from-main@037796b9
     let f = Fixture::new(Some(IMPORT));
     let before = f.back(0);
-    // `origin/main` names no host; the checkout, behind it, keeps the default, GitHub.
-    let toml = std::fs::read_to_string(f.work().join("clm.toml")).unwrap();
-    let l = f.land(
-        &[("clm.toml", &format!("host = \"none\"\n{toml}"))],
-        "no host",
-    );
+    let l = f.land(&[("a.txt", "1\n")], "one");
+    // `origin/main` names no host, so GitHub's adapter, the default; the checkout, behind it,
+    // names `none`, which would read no runs at all.
     f.git(&f.work(), &["reset", "-q", "--hard", &before]);
+    let toml = std::fs::read_to_string(f.work().join("clm.toml")).unwrap();
+    f.write("work/clm.toml", &format!("host = \"none\"\n{toml}"));
     let out = with_gh(&f, &[run(&l, "completed", "success", 30)], || {
         import(&f, &Request::Import)
     });
