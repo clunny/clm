@@ -1,7 +1,8 @@
 //! The lists `clm coverage` prints beside its report (`coverage-lists`): the markers no
 //! test counts, the tests a removal leaves with nothing to cite, and the tests a branch
 //! deleted. The computing and the reading of the working tree's files are `clm-coverage`'s;
-//! this reads the base revision's files and formats.
+//! this reads the base revision's files, leaves the working tree's links out of
+//! `--deleted-tests`, and formats.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -54,7 +55,8 @@ pub(crate) fn obsolete_tests_lines(root: &Path) -> Result<Vec<String>, Vec<Viola
 
 /// `clm coverage --deleted-tests <base>`: a count line, then a `DELETED` line per citing test
 /// of the revision `base` that `clm_coverage::deleted_tests` finds gone from the working tree,
-/// counted by bare name across files, both sides read under the CLM root and named from it.
+/// counted by bare name across files, both sides read under the CLM root and named from it,
+/// and each side's symbolic links to files left out, as `clm land` leaves them out.
 /// `Err` names `base` when it resolves to no commit.
 pub(crate) fn deleted_tests_lines(root: &Path, base: &str) -> Result<Vec<String>, Vec<Violation>> {
     load(root)?;
