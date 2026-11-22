@@ -362,7 +362,7 @@ fn launch(
         .stdout(Stdio::from(output))
         .process_group(0)
         .env_remove("CLM_SELECTION")
-        .envs(run::env_of(ctx, commit)?)
+        .envs(run::env_of(ctx, commit)?.map_err(Error::Refused)?)
         .env("CLM_LAND_DIR", build)
         .env("CLM_MUTATE", plan)
         .env("CLM_MUTATE_RESULT", result)

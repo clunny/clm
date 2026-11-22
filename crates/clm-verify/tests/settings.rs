@@ -10,7 +10,7 @@ const LOCAL: &str = "[verify]\ncheck = \"true\"\nmode = \"local\"\ntriggers = [\
 
 #[test]
 fn a_checkout_behind_main() {
-    // req:verify/settings-from-main@bbaa1ef1
+    // req:verify/settings-from-main@35114bba
     let f = Fixture::new(None);
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -26,8 +26,39 @@ fn a_checkout_behind_main() {
 }
 
 #[test]
+fn main_turned_on_by_another_clone() {
+    // req:verify/settings-from-main@35114bba
+    let f = Fixture::new(None);
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    // Another clone turns `[verify]` on, so this clone's `origin/main` says nothing of it until
+    // `clm verify` fetches.
+    let other = f.path("other");
+    let origin = f.path("origin.git");
+    f.git(
+        &f.work(),
+        &[
+            "clone",
+            "-q",
+            origin.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    f.git(&other, &["config", "user.name", "Other"]);
+    f.git(&other, &["config", "user.email", "o@example.com"]);
+    std::fs::write(other.join("clm.toml"), LOCAL).unwrap();
+    f.git(&other, &["commit", "-q", "-am", "turn verify on"]);
+    f.git(&other, &["push", "-q", "origin", "main"]);
+    let out = f.run(&Request::Due {
+        work_done: true,
+        dry_run: true,
+    });
+    assert_eq!((out.line.as_str(), out.code), ("verify due work-done", 0));
+}
+
+#[test]
 fn turned_off_on_main() {
-    // req:verify/settings-from-main@bbaa1ef1
+    // req:verify/settings-from-main@35114bba
     let f = Fixture::new(None);
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -52,7 +83,7 @@ fn turned_off_on_main() {
 
 #[test]
 fn an_invalid_setting_on_main() {
-    // req:verify/settings-from-main@bbaa1ef1
+    // req:verify/settings-from-main@35114bba
     let f = Fixture::new(None);
     let before_land = f.back(0);
     f.land(
@@ -79,7 +110,7 @@ fn an_invalid_setting_on_main() {
 
 #[test]
 fn a_fetch_that_fails_is_a_git_failure() {
-    // req:verify/settings-from-main@bbaa1ef1
+    // req:verify/settings-from-main@35114bba
     let f = Fixture::new(Some("mode = \"local\"\ntriggers = [\"work-done\"]"));
     f.git(
         &f.work(),
@@ -95,4 +126,42 @@ fn a_fetch_that_fails_is_a_git_failure() {
     )
     .unwrap_err();
     assert!(matches!(err, clm_verify::Error::Git(_)), "{err}");
+    assert!(err.to_string().contains("/nonexistent/x"), "{err}");
+}
+
+#[test]
+fn a_ledger_write_that_fails_is_a_git_failure() {
+    // req:verify/settings-from-main@35114bba
+    let f = Fixture::new(Some(
+        "mode = \"local\"\ntriggers = []\nevery = { lands = 1 }",
+    ));
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    f.land(&[("a.txt", "2\n")], "two");
+    let before = f.records().len();
+    // A lock held in place on the clone's own ledger branch.
+    let own = f.git(
+        &f.work(),
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads/clm/ledger/",
+        ],
+    );
+    assert_eq!(own.lines().count(), 1, "{own}");
+    let lock = f.work().join(".git").join(format!("{own}.lock"));
+    std::fs::write(&lock, "").unwrap();
+    let err = common::verify(
+        &f.work(),
+        &Request::Due {
+            work_done: false,
+            dry_run: false,
+        },
+        &f.env(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, clm_verify::Error::Git(_)), "{err}");
+    assert!(err.to_string().contains(".lock"), "{err}");
+    std::fs::remove_file(&lock).unwrap();
+    assert_eq!(f.records().len(), before);
 }

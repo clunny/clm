@@ -31,7 +31,7 @@ fn linked(f: &Fixture) -> (std::path::PathBuf, String) {
 
 #[test]
 fn a_red_runs_log() {
-    // req:verify/kept-log@05b0ad5c
+    // req:verify/kept-log@4d02ca9d
     let f = every_land();
     let (linked, land) = linked(&f);
     f.write("check-fails", "");
@@ -49,7 +49,7 @@ fn a_red_runs_log() {
 
 #[test]
 fn nothing_kept() {
-    // req:verify/kept-log@05b0ad5c
+    // req:verify/kept-log@4d02ca9d
     let f = every_land();
     let (linked, land) = linked(&f);
     assert_eq!(f.due().code, 0);
@@ -60,7 +60,7 @@ fn nothing_kept() {
 
 #[test]
 fn a_longer_name() {
-    // req:verify/kept-log@05b0ad5c
+    // req:verify/kept-log@4d02ca9d
     let f = every_land();
     let (linked, land) = linked(&f);
     let dir = f.work().join(".clm/verify-logs");
@@ -73,7 +73,7 @@ fn a_longer_name() {
 
 #[test]
 fn only_a_prefix_of_seven_or_more_matches() {
-    // req:verify/kept-log@05b0ad5c
+    // req:verify/kept-log@4d02ca9d
     let f = every_land();
     let (linked, land) = linked(&f);
     let dir = f.work().join(".clm/verify-logs");
@@ -87,9 +87,27 @@ fn only_a_prefix_of_seven_or_more_matches() {
 
 #[test]
 fn a_missing_directory() {
-    // req:verify/kept-log@05b0ad5c
+    // req:verify/kept-log@4d02ca9d
     let f = every_land();
     let (linked, land) = linked(&f);
     assert_eq!(clm_verify::kept_log(&linked, &land), None);
     assert!(!f.work().join(".clm/verify-logs").exists());
+}
+
+#[test]
+fn a_root_outside_a_repository() {
+    // req:verify/kept-log@4d02ca9d
+    let dir = tempfile::TempDir::new().unwrap();
+    let outside = std::process::Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(
+        !outside.status.success(),
+        "the directory is in a repository"
+    );
+    let commit = "0123456789abcdef0123456789abcdef01234567";
+    assert_eq!(clm_verify::kept_log(dir.path(), commit), None);
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
 }

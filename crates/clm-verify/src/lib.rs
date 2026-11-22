@@ -68,7 +68,7 @@ impl Outcome {
 pub enum Error {
     /// Nothing was verified, for the reason given: exit 1.
     Refused(String),
-    /// `git`, the ledger or the settings failed: exit 2.
+    /// git, the ledger or a file failed: exit 2.
     Git(String),
 }
 
@@ -83,15 +83,6 @@ impl fmt::Display for Error {
 impl From<clm_git::Error> for Error {
     fn from(e: clm_git::Error) -> Self {
         Error::Git(e.to_string())
-    }
-}
-
-impl From<clm_git::Failure> for Error {
-    fn from(e: clm_git::Failure) -> Self {
-        match e {
-            clm_git::Failure::Refused(why) => Error::Refused(why),
-            clm_git::Failure::Git(why) => Error::Git(why),
-        }
     }
 }
 
@@ -128,6 +119,21 @@ impl From<std::io::Error> for Error {
 /// (`verify/verify-run`).
 pub(crate) fn say(line: &str) {
     let _ = writeln!(std::io::stderr(), "{line}");
+}
+
+/// The text of the file `source` (`<rev>:<path>`) names, or none when the revision or the file
+/// doesn't exist; any other git failure is `Error::Git` (`settings-from-main`, `verify-env`).
+pub(crate) fn committed_text(root: &Path, source: &str) -> Result<Option<String>, Error> {
+    match clm_git::git(root, &["rev-parse", "--verify", "--quiet", source]) {
+        Ok(_) => Ok(Some(clm_git::git(root, &["show", source])?)),
+        // `--quiet` reports a missing object with status 1 and nothing on stderr.
+        Err(clm_git::Error::Failed { status, stderr, .. })
+            if status.code() == Some(1) && stderr.trim().is_empty() =>
+        {
+            Ok(None)
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// The cap `land` applies when `[land]` sets none, which `config` doesn't offer without the
@@ -169,10 +175,7 @@ impl<'a> Ctx<'a> {
         let base = format!("{}/main", clm_git::REMOTE);
         let prefix = clm_git::git(&root, &["rev-parse", "--show-prefix"])?;
         let source = format!("{base}:{prefix}clm.toml");
-        let text = match clm_git::git(&root, &["rev-parse", "--verify", "--quiet", &source]) {
-            Ok(_) => Some(clm_git::git(&root, &["show", &source])?),
-            Err(_) => None,
-        };
+        let text = committed_text(&root, &source)?;
         let settings = clm_config::load_committed(&root, text.as_deref(), &source, env)?;
         let Some(verify) = settings.verify.value else {
             return Ok(Err(source));
@@ -214,7 +217,7 @@ pub struct Call<'a> {
 
 impl<'a> Call<'a> {
     /// The call `clm` makes: `/proc/meminfo`, a minute of 60 seconds and a grace of 10, with
-    /// `stop` as its stop request (`clm/verify-command`).
+    /// `stop` as its stop request (`mutation-pass`).
     pub fn standard(stop: &'a AtomicBool) -> Self {
         Call {
             memory: Path::new("/proc/meminfo"),

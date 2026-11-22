@@ -26,22 +26,38 @@ pub(crate) struct Probe {
 }
 
 /// The `[env]` variables `commit`'s `clm.toml` and the clone's `clm.local.toml` give, as
-/// `(name, value)` sorted by name (`verify-env`).
-pub(crate) fn env_of(ctx: &Ctx, commit: &str) -> Result<Vec<(String, String)>, Error> {
+/// `(name, value)` sorted by name, or, in the inner `Err`, `config`'s message when it refuses
+/// the table, naming the file as `<short sha>:<prefix>clm.toml` (`verify-env`). A git command
+/// that fails is the outer `Err`.
+pub(crate) fn env_of(
+    ctx: &Ctx,
+    commit: &str,
+) -> Result<Result<Vec<(String, String)>, String>, Error> {
     let source = format!("{commit}:{}clm.toml", ctx.prefix);
-    let text = match ctx.git(&["rev-parse", "--verify", "--quiet", &source]) {
-        Ok(_) => Some(ctx.git(&["show", &source])?),
-        Err(_) => None,
-    };
-    let label = format!("{}:clm.toml", ctx.short(commit)?);
-    let vars = clm_config::committed_env(&ctx.root, text.as_deref(), &label)?;
-    Ok(vars.into_iter().map(|(k, s)| (k, s.value)).collect())
+    let text = crate::committed_text(&ctx.root, &source)?;
+    let label = format!("{}:{}clm.toml", ctx.short(commit)?, ctx.prefix);
+    Ok(
+        clm_config::committed_env(&ctx.root, text.as_deref(), &label)
+            .map(|vars| vars.into_iter().map(|(k, s)| (k, s.value)).collect())
+            .map_err(|e| e.to_string()),
+    )
+}
+
+/// Whether the `[env]` of `verifying` differs from that of `green`, one that can't be used
+/// counting as differing (`verify-env`).
+fn env_differs(ctx: &Ctx, verifying: &str, green: &str) -> Result<bool, Error> {
+    Ok(match (env_of(ctx, verifying)?, env_of(ctx, green)?) {
+        (Ok(a), Ok(b)) => a != b,
+        _ => true,
+    })
 }
 
 /// Runs `[verify] check` on `commit` in the verify tree, with `CLM_SELECTION` naming what
 /// `clm affected --base <green>` selects when there is a green commit, under the clone's
 /// check lock. `verifying` is the commit the verification is for, which `commit` is unless a
-/// bisect probe runs. Its output goes to stderr, and to `log` when given.
+/// bisect probe runs. Its output goes to stderr, and to `log` when given. When `commit`'s
+/// `[env]` can't be used, the verification's own commit is refused and a probe's land is
+/// untestable, with no check run (`verify-env`).
 pub(crate) fn check(
     ctx: &Ctx,
     commit: &str,
@@ -50,11 +66,23 @@ pub(crate) fn check(
     log: Option<&Path>,
 ) -> Result<Probe, Error> {
     let tree = tree::Tree::at(ctx, commit)?;
-    let vars = env_of(ctx, commit)?;
+    let vars = match env_of(ctx, commit)? {
+        Ok(vars) => vars,
+        Err(why) if commit == verifying => return Err(Error::Refused(why)),
+        Err(_) => {
+            return Ok(Probe {
+                passed: false,
+                untestable: true,
+                log: None,
+                tail: Vec::new(),
+                step: None,
+            });
+        }
+    };
     // A variable can change any test's result, so a changed table runs every test
     // (`verify-env`).
     let green = match green {
-        Some(green) if env_of(ctx, verifying)? != env_of(ctx, green)? => None,
+        Some(green) if env_differs(ctx, verifying, green)? => None,
         other => other,
     };
     let selection = green.and_then(|green| selection(ctx, &tree.dir, green));
