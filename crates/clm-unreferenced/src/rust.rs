@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use tree_sitter::{Node, Parser, Tree};
 
-use crate::{Carrier, Finding, Mentions, Source, ascii_words, deepest, one_line, words_outside};
+use crate::{
+    Before, Carrier, Finding, Mentions, Source, ascii_words, deepest, one_line, words_outside,
+};
 
 /// The attributes that mark an entry point called from outside Rust, beyond those given with
 /// `--entry`.
@@ -129,7 +131,9 @@ pub(crate) fn findings(
     let mut findings = Vec::new();
     for ((path, package, declarations), entries) in libraries.iter().zip(&entries) {
         for (item, entry) in declarations.items.iter().zip(entries) {
-            if *entry {
+            // An entry point is called from outside Rust, and a marked item is the old path of
+            // a removal: neither is listed, whatever the allow-list says.
+            if *entry || item.marked {
                 continue;
             }
             let used = mentions.outside(&item.word, *package)
@@ -331,6 +335,8 @@ impl<'s> File<'s> {
                     // signatures too; an inherent `impl`'s listed items carry their own.
                     let mut words = self.words_in(child, child.start_byte()..body.start_byte());
                     let inherent = child.child_by_field_name("trait").is_none();
+                    // A marker before the block holds every item of it.
+                    let held = self.marked(child);
                     for (item, own) in self.with_attributes(body) {
                         if own.iter().any(Attribute::is_test) {
                             continue;
@@ -338,20 +344,30 @@ impl<'s> File<'s> {
                         if !inherent {
                             words.extend(self.signature(item));
                         } else if IMPL_ITEMS.contains(&item.kind()) {
-                            self.push(item, Some(ty), [&attrs, &own], out);
+                            let marked = held || self.marked(item);
+                            self.push(item, Some(ty), [&attrs, &own], marked, out);
                         }
                     }
                     out.carriers.push(carrier(ty, words));
                 }
-                kind if MODULE_ITEMS.contains(&kind) => self.push(child, None, [&attrs, &[]], out),
+                kind if MODULE_ITEMS.contains(&kind) => {
+                    self.push(child, None, [&attrs, &[]], self.marked(child), out)
+                }
                 _ => {}
             }
         }
     }
 
     /// Lists `item` when it is exactly `pub`, named after `ty` for an `impl` item, with the
-    /// attributes it carries and those of its `impl` block.
-    fn push(&self, item: Node, ty: Option<&str>, attrs: [&[Attribute]; 2], out: &mut Declarations) {
+    /// attributes it carries and those of its `impl` block, and whether a marker holds it.
+    fn push(
+        &self,
+        item: Node,
+        ty: Option<&str>,
+        attrs: [&[Attribute]; 2],
+        marked: bool,
+        out: &mut Declarations,
+    ) {
         let Some(name) = self.name(item).filter(|n| self.public(item) && *n != "_") else {
             return;
         };
@@ -360,12 +376,26 @@ impl<'s> File<'s> {
             word: name.to_string(),
             signature: carrier(name, self.signature(item)),
             line: item.start_position().row + 1,
+            marked,
             attributes: attrs
                 .iter()
                 .flat_map(|a| a.iter())
                 .map(|a| a.name.clone())
                 .collect(),
         });
+    }
+
+    /// Whether a removal marker holds `item`: among the comments and attributes before it, a
+    /// plain or outer doc comment that starts its own line.
+    fn marked(&self, item: Node) -> bool {
+        let before = |node: Node| match node.kind() {
+            "line_comment" | "block_comment" if node.child_by_field_name("inner").is_none() => {
+                Before::Comment
+            }
+            "line_comment" | "block_comment" | "attribute_item" => Before::Passed,
+            _ => Before::Stop,
+        };
+        crate::marked(self.text, item, before, &[])
     }
 
     /// Whether `item`'s visibility is exactly `pub`.
@@ -509,13 +539,14 @@ struct Declarations {
 }
 
 /// A listed item: its name below the crate, the word a use spells, its signature as a carrier
-/// under that word, its 1-based line, and the names of the attributes it and its `impl` block
-/// carry.
+/// under that word, its 1-based line, whether a removal marker holds it, and the names of the
+/// attributes it and its `impl` block carry.
 struct Declaration {
     name: String,
     word: String,
     signature: Carrier,
     line: usize,
+    marked: bool,
     attributes: Vec<String>,
 }
 

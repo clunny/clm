@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 
 use tree_sitter::{Language, Node, Parser};
 
-use crate::{Carrier, Finding, Mentions, Source, ascii_words, deepest, normalise, one_line};
+use crate::{
+    Before, Carrier, Finding, Mentions, Source, ascii_words, deepest, normalise, one_line,
+};
 
 /// The extensions of TypeScript and JavaScript sources, in the order entry modules are tried.
 pub(crate) const EXTENSIONS: [&str; 8] = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
@@ -27,12 +29,14 @@ struct Package {
     entries: Vec<String>,
 }
 
-/// Where a name is declared: the file, the 1-based line and the name it is declared as.
+/// Where a name is declared: the file, the 1-based line, the name it is declared as, and
+/// whether a removal marker holds the declaration.
 #[derive(Clone)]
 struct Declared<'s> {
     path: &'s Path,
     line: usize,
     word: &'s str,
+    marked: bool,
 }
 
 /// What one module exports, before re-exports are followed.
@@ -53,8 +57,9 @@ enum Export<'s> {
 #[derive(Default)]
 struct Module<'s> {
     words: HashSet<&'s str>,
-    /// Each top-level declared name, at its first declaration's line.
-    declared: HashMap<&'s str, usize>,
+    /// Each top-level declared name, at its first declaration's line, and whether a removal
+    /// marker holds that declaration.
+    declared: HashMap<&'s str, (usize, bool)>,
     /// Each name an `import { imported as local } from '<spec>'` binds: `local` to
     /// `(spec, imported)`.
     imports: HashMap<&'s str, (&'s str, &'s str)>,
@@ -136,6 +141,10 @@ pub(crate) fn findings(
         carriers.extend(&renames);
         let carried = mentions.carried(index, &carriers, HashSet::new());
         for (name, declared) in items {
+            // A marked declaration is the old path of a removal: never listed.
+            if declared.marked {
+                continue;
+            }
             if !(mentions.outside(name, index) || carried.contains(name)) {
                 findings.push(Finding {
                     path: declared.path.to_string_lossy().into_owned(),
@@ -339,10 +348,11 @@ impl<'g, 's> Graph<'g, 's> {
             let found: Vec<(&str, Declared)> = match *export {
                 Export::Local { local, name } => {
                     let declared = match module.declared.get(local) {
-                        Some(&line) => Some(Declared {
+                        Some(&(line, marked)) => Some(Declared {
                             path,
                             line,
                             word: local,
+                            marked,
                         }),
                         None => module.imports.get(local).and_then(|&(spec, imported)| {
                             self.follow(path, spec, imported, visiting)
@@ -564,6 +574,7 @@ impl<'s> Reader<'s> {
     /// and returns the names.
     fn declaration(&self, node: Node, module: &mut Module<'s>) -> Vec<&'s str> {
         let mut names = Vec::new();
+        let marked = self.marked(node);
         match node.kind() {
             "ambient_declaration" => {
                 let mut cursor = node.walk();
@@ -596,7 +607,7 @@ impl<'s> Reader<'s> {
                         self.signature(value, &mut words);
                     }
                     for name in bound {
-                        self.declare(name, &declarator, words.clone(), module);
+                        self.declare(name, &declarator, words.clone(), marked, module);
                         names.push(name);
                     }
                 }
@@ -630,17 +641,24 @@ impl<'s> Reader<'s> {
             _ => return names,
         }
         let name = self.text(name);
-        self.declare(name, &node, words, module);
+        self.declare(name, &node, words, marked, module);
         names.push(name);
         names
     }
 
-    /// Records `name` as declared at `node`, carrying `words`.
-    fn declare(&self, name: &'s str, node: &Node, words: Vec<String>, module: &mut Module<'s>) {
+    /// Records `name` as declared at `node`, carrying `words`, and whether a marker holds it.
+    fn declare(
+        &self,
+        name: &'s str,
+        node: &Node,
+        words: Vec<String>,
+        marked: bool,
+        module: &mut Module<'s>,
+    ) {
         module
             .declared
             .entry(name)
-            .or_insert(node.start_position().row + 1);
+            .or_insert((node.start_position().row + 1, marked));
         if !words.is_empty() {
             module.carriers.push(Carrier {
                 name: name.to_string(),
@@ -719,6 +737,23 @@ impl<'s> Reader<'s> {
                 _ => {}
             }
         }
+    }
+
+    /// Whether a removal marker holds the declaration `node`: among the comments and decorators
+    /// before it, or before the `export` or `declare` statement it opens, a comment that starts
+    /// its own line.
+    fn marked(&self, node: Node) -> bool {
+        let before = |n: Node| match n.kind() {
+            "comment" => Before::Comment,
+            "decorator" => Before::Passed,
+            _ => Before::Stop,
+        };
+        crate::marked(
+            self.text,
+            node,
+            before,
+            &["export_statement", "ambient_declaration"],
+        )
     }
 
     /// Whether a member or constructor parameter is marked `private`.
