@@ -404,6 +404,16 @@ impl Decision {
 }
 
 impl Body {
+    /// An `approved` body, so a caller builds one without a literal of the variant and a field
+    /// the variant gains later breaks no caller (`approved-constructor`).
+    pub fn approved(fingerprint: String, branch: String, change: Option<String>) -> Body {
+        Body::Approved {
+            fingerprint,
+            branch,
+            change,
+        }
+    }
+
     /// A `mutated` body, so a caller builds one without a literal of the variant and a field
     /// the variant gains later breaks no caller (`mutated-constructor`).
     pub fn mutated(

@@ -302,7 +302,9 @@ impl Rated {
         match outcome.kind {
             clm_gate::Kind::Code => Rated::Code,
             clm_gate::Kind::Mixed => Rated::Mixed,
-            clm_gate::Kind::Spec => Rated::Spec {
+            // Every other kind rates as a spec branch, so a kind the gate gains later
+            // compiles here.
+            _ => Rated::Spec {
                 review: outcome.review,
             },
         }
