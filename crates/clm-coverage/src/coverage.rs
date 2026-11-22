@@ -1,4 +1,4 @@
-//! Requirement coverage: `req:<id>@<version>` markers in non-Markdown files (see
+//! Requirement coverage: `req:<id>@<version>` markers in files whose extension isn't `md` (see
 //! specs/check/coverage/SPEC.md and `versioned-markers`).
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -308,7 +308,8 @@ pub struct Scan {
     pub remove_by: Vec<Marker>,
 }
 
-/// Markers in every non-Markdown file `read_files` gives (`markers-from-files`).
+/// Markers in every file `read_files` gives whose extension isn't exactly `md`
+/// (`markers-from-files`, `markers-in-tests`).
 #[cfg(feature = "checkout")]
 pub fn scan(root: &Path) -> Scan {
     let mut scan = Scan {

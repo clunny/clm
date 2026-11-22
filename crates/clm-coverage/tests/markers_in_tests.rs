@@ -127,6 +127,7 @@ fn scenario_same_as_the_files() {
         ("lib.go", format!("// {c}\n")),
         ("src/lib.rs", format!("fn h() {{\n    // {c}\n}}\n")),
         ("notes.md", format!("{c}\n")),
+        ("notes.MD", format!("{c}\n")),
     ];
     for (path, text) in &files {
         write(dir.path(), path, text);
@@ -144,7 +145,7 @@ fn scenario_same_as_the_files() {
     a.sort();
     b.sort();
     assert_eq!(a, b);
-    assert_eq!(a.len(), 2);
+    assert_eq!(a.len(), 3);
     let g = graph(dir.path());
     let one = |ms: &[Marker]| {
         let mut ms = ms.to_vec();
@@ -165,6 +166,8 @@ fn only_the_extension_md_exactly_holds_no_markers() {
     let dir = repo();
     let text = format!("{}\n", cite(&dir));
     assert!(markers_in(Path::new("notes.md"), &text).is_empty());
+    // A file named `.md` has no extension, so it isn't one of exactly `md`.
+    assert_eq!(markers_in(Path::new("docs/.md"), &text).len(), 1);
     assert_eq!(
         line(&dir, &[("notes.MD", text.clone())]),
         "a/x current notes.MD:1"
