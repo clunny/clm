@@ -118,21 +118,36 @@ enum Branch {
 }
 
 #[derive(Parser)]
-#[command(name = "clm pr", bin_name = "clm pr", no_binary_name = true)]
+#[command(
+    name = "clm pr",
+    bin_name = "clm pr",
+    no_binary_name = true,
+    about = "A branch's pull request on the host the `host` setting names"
+)]
 struct PrLine {
     #[command(flatten)]
     args: PrArgs,
 }
 
 #[derive(Parser)]
-#[command(name = "clm issue", bin_name = "clm issue", no_binary_name = true)]
+#[command(
+    name = "clm issue",
+    bin_name = "clm issue",
+    no_binary_name = true,
+    about = "File an issue where the host the `host` setting names keeps them and print its URL; without a host, print the report and exit 1"
+)]
 struct IssueLine {
     #[command(flatten)]
     args: IssueArgs,
 }
 
 #[derive(Parser)]
-#[command(name = "clm branch", bin_name = "clm branch", no_binary_name = true)]
+#[command(
+    name = "clm branch",
+    bin_name = "clm branch",
+    no_binary_name = true,
+    about = "Remote branches, through the host adapter the `host` setting names"
+)]
 struct BranchLine {
     #[command(flatten)]
     args: BranchArgs,

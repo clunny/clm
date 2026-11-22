@@ -166,7 +166,7 @@ fn clm(dir: &Path, gh: &Gh, args: &[&str], env: &[(&str, &str)]) -> (Option<i32>
 
 #[test]
 fn scenario_a_command_called_in_a_test() {
-    // req:host/commands-in-crate@80eed79d
+    // req:host/commands-in-crate@f798e133
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
     assert_eq!(
@@ -192,7 +192,7 @@ fn scenario_a_command_called_in_a_test() {
 
 #[test]
 fn scenario_arguments_it_cant_parse() {
-    // req:host/commands-in-crate@80eed79d
+    // req:host/commands-in-crate@f798e133
     let (r, gh) = (checkout("github"), fake_gh());
     for args in [
         &["pr", "open", "--nope"][..],
@@ -209,7 +209,7 @@ fn scenario_arguments_it_cant_parse() {
 
 #[test]
 fn the_given_root_overrides_the_found_one() {
-    // req:host/commands-in-crate@80eed79d
+    // req:host/commands-in-crate@f798e133
     let (r, gh) = (checkout("none"), fake_gh());
     let elsewhere = TempDir::new().unwrap();
     write(elsewhere.path(), "clm.toml", "host = \"nowhere\"\n");
@@ -259,7 +259,92 @@ fn the_given_root_overrides_the_found_one() {
     let err = String::from_utf8(err).unwrap();
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("config.toml"), "{err}");
-    drop(gh);
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn scenario_settings_that_dont_load() {
+    // req:host/commands-in-crate@f798e133
+    let user = TempDir::new().unwrap();
+    write(user.path(), "clm/config.toml", "host = \"git\"\n");
+    let xdg = user.path().display().to_string();
+    let commands: [(&str, &[&str]); 5] = [
+        ("pr open", &["pr", "open"]),
+        ("pr body", &["pr", "body", "body.md"]),
+        ("issue", &ISSUE_ARGS),
+        ("branch push", &["branch", "push"]),
+        ("branch delete", &["branch", "delete", "impl/a"]),
+    ];
+    for (command, args) in commands {
+        // A `clm.toml` naming no host CLM knows.
+        let (r, gh) = (checkout("nowhere"), fake_gh());
+        let (code, out, err) = clm(&r.work, &gh, args, &[]);
+        assert_eq!((code, out.as_str()), (Some(2), ""), "{command}: {err}");
+        assert!(err.starts_with(&format!("clm {command}: ")), "{err}");
+        assert!(err.contains("clm.toml"), "{command}: {err}");
+        // A user settings file that sets `host`.
+        let (r, gh) = (checkout("github"), fake_gh());
+        let tip_before = on_origin(&r, "spec/x");
+        let (code, out, err) = clm(&r.work, &gh, args, &[("XDG_CONFIG_HOME", &xdg)]);
+        assert_eq!((code, out.as_str()), (Some(2), ""), "{command}: {err}");
+        assert!(err.starts_with(&format!("clm {command}: ")), "{err}");
+        assert!(err.contains("config.toml"), "{command}: {err}");
+        assert!(gh.calls().is_empty(), "{command}: {:?}", gh.calls());
+        assert_eq!(on_origin(&r, "spec/x"), tip_before, "{command}");
+    }
+}
+
+#[test]
+fn scenario_help() {
+    // req:host/commands-in-crate@f798e133
+    let pr = "Open the branch's pull request against `main` on the host, or find the open one, and print its URL, or `none` without a host";
+    let cases: [(&[&str], &str, &str); 7] = [
+        (
+            &["pr", "--help"],
+            "A branch's pull request on the host the `host` setting names",
+            "Usage: clm pr <COMMAND>",
+        ),
+        (&["pr", "open", "--help"], pr, "Usage: clm pr open "),
+        (
+            &["pr", "body", "--help"],
+            "Set the body of the current branch's open pull request to a file's contents",
+            "Usage: clm pr body ",
+        ),
+        (
+            &["issue", "--help"],
+            "File an issue where the host the `host` setting names keeps them and print its URL; without a host, print the report and exit 1",
+            "Usage: clm issue ",
+        ),
+        (
+            &["branch", "--help"],
+            "Remote branches, through the host adapter the `host` setting names",
+            "Usage: clm branch <COMMAND>",
+        ),
+        (
+            &["branch", "push", "--help"],
+            "Push the checked-out branch to `origin`, overwriting only what this clone last saw",
+            "Usage: clm branch push ",
+        ),
+        (
+            &["branch", "delete", "--help"],
+            "Delete `origin`'s branch when its tip is still `--lease` (default: the tip last fetched) and this clone pushed it, on every host",
+            "Usage: clm branch delete ",
+        ),
+    ];
+    let (r, gh) = (checkout("github"), fake_gh());
+    for (args, about, usage) in cases {
+        let (code, out, err) = clm(&r.work, &gh, args, &[]);
+        assert_eq!((code, err.as_str()), (Some(0), ""), "{args:?}");
+        let mut lines = out.lines();
+        assert_eq!(lines.next(), Some(about), "{args:?}: {out}");
+        assert_eq!(lines.next(), Some(""), "{args:?}: {out}");
+        let line = lines.next().unwrap_or_default();
+        assert!(line.starts_with(usage), "{args:?}: {out}");
+        if usage.ends_with('>') {
+            assert_eq!(line, usage, "{args:?}");
+        }
+    }
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
 }
 
 /// A fake `gh` whose `pr view` prints `$FAKE_PR_VIEW` (failing when it is unset), whose
