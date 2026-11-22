@@ -71,11 +71,7 @@ fn setup() -> (Fake, Access) {
 fn the_append() {
     // req:web.worker.platform/shared-layer@33f47bc2
     let (fake, access) = setup();
-    let body = Body::Approved {
-        fingerprint: "f1".into(),
-        branch: "spec/y".into(),
-        change: None,
-    };
+    let body = Body::approved("f1".into(), "spec/y".into(), None);
     let record: Record = ledger::record(&fake, "alice", body);
     assert_eq!(record.writer, "alice/web");
     block_on(ledger::append(&fake, &access, &record)).unwrap();
