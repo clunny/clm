@@ -11,7 +11,7 @@ A land's check, and a check shared by lands taken together (`land/batched-lands`
 ## What is known (2026-11-15)
 
 - `clm verify` hands its check a selection too, from the last green commit (`verify`'s Design, **Since when**). A run on this repository that day ran 83 tests, not the suite. So a test the selection misses is missed after the land as well.
-- `20261113-land-starvation` and `config`'s Design describe this repository's `[verify]` as "the whole suite after the land, with no selection". That didn't match the run above. Which is right, and whether `[affected] all` is what was meant, is to be checked first.
+- `20261113-land-starvation` and `config`'s Design describe this repository's `[verify]` as "the whole suite after the land, with no selection". That didn't match the run above. Settled from the code on 2026-11-21: `clm verify` hands its check the selection `clm affected --base <last green commit>` makes whenever a green record exists, and every test only with no green commit or a changed `[env]` (`verify/verify-run`, `verify/verify-env`). `config`'s Design was wrong; `20261121-wave-3-verify-by-the-rule` corrects it and names this item. Whether `[affected] all` was what was meant is still open.
 - The change names a build's own `clm land --check-only` as running every test on its branch merged with `main`. That was not confirmed in the code.
 - Lands taken together lean on the selection harder: one check's selection is joined from several lands' parts.
 

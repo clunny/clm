@@ -1,0 +1,9 @@
+DELETE crates/clm-verify/tests/constructor.rs::no_literal_of_the_variant	verify/mutated-through-constructor is cut: a scan of verify's source for the variant's literal
+DELETE crates/clm/tests/ci_suite/community_files.rs::security_policy_says_where_to_report	ci/security-policy is cut: it stated the text of .github/SECURITY.md
+DELETE crates/clm/tests/ci_suite/community_files.rs::code_of_conduct_is_the_covenant_with_our_contact	ci/code-of-conduct is cut: it stated the text of .github/CODE_OF_CONDUCT.md
+DELETE crates/clm/tests/ci_suite/community_files.rs::issue_forms_parse_and_say_what_is_asked	ci/issue-forms is cut: it stated the text of .github/ISSUE_TEMPLATE/
+DELETE crates/clm/tests/ci_suite/community_files.rs::pull_request_template_lists_the_spec_paths	ci/pull-request-template is cut: it stated the text of .github/PULL_REQUEST_TEMPLATE.md
+DELETE crates/clm/tests/ci_suite/ci_check.rs::every_wasm_build_stands_alone	a scan of ci-check.sh's wasm lines; every_check and broken_wasm_build_fails prove each build by run
+DELETE crates/clm-context/tests/wasm.rs::wasm_build	context/context-builds-for-wasm is cut: nothing builds the crate for wasm
+DELETE crates/clm-context/tests/carried.rs::bundle_from_matches_the_checkout	context/bundle-from-text is cut: it proved only that bundle_from equals bundle
+DELETE crates/clm-context/tests/command.rs::bundle_from_equals_checkout	context/bundle-from-text is cut: it compares bundle_from with the command; its no-ARCHITECTURE.md case repeats no_architecture_file_no_heading

@@ -1,0 +1,519 @@
+---
+component: verify
+base: { contract: "4f2b056ebcfef95d", design: "99c0908db19d6ccc" }
+---
+
+## MODIFIED Contract
+Running a project's slow tests after the land, at the moments the project chooses, and recording the result in the ledger (`verify-after-land`). Every `clm verify` takes the settings it follows, `[verify]`, `[affected]`, `[land] target_cap_gb` and `max_builds`, from the `clm.toml` committed at `origin/main`, which it fetches first, never from the checkout it runs in, so a checkout behind `main` judges `main` by `main`'s settings (`settings-from-main`); `host` alone comes from the CLM root it runs in, and `[env]` from the commit it checks (`verify-env`). A project whose `origin/main` sets no `[verify]` (`config`) keeps its slow tests in `[land] check`, and every `clm verify` then prints `verify off: no [verify] in origin/main:clm.toml` and exits 0.
+
+The command, whose arguments, help and printing are the root's code (`clm/verify-command`), each form taking `--root <root>` for the CLM root in place of the one found from the current directory:
+- `clm verify --due [--event work-done] [--dry-run]`: whether a trigger has fired since the last verified commit of `origin/main` (`verify-due`), and when one has, the verification of `origin/main`'s head: in `local` and `pipeline` mode by running `[verify] check` (`verify-run`), in `import` mode by reading the pipeline's result (`verify-import`). With `--dry-run` it only says whether a run is due.
+- `clm verify --commit <sha>`: the verification of one commit of `main`, for a release or deploy step (`verify-commit`).
+- `clm verify --import`: in `import` mode, the record of the newest completed pipeline run on an unverified land, running nothing; in the other modes it prints `verify nothing to import` and exits 0 (`verify-import`).
+- `clm verify --bisect <sha>`: the land that broke a red commit, found by running `[verify] check` on the lands it covers (`verify-bisect`).
+
+Every outcome is one line on stdout starting `verify `: `verify not-due <why>`, `verify due <trigger>`, `verify passed <sha> <n> lands`, `verify failed <sha> culprit <land|unknown> components <component>...`, `verify pending <sha>` and `verify nothing to import`, `<sha>` abbreviated as `git rev-parse --short` abbreviates it; every other line goes to stderr. It exits 0 when it passed, nothing was due or there was nothing to import; 1 when the verification failed, or with the reason when it can't run: a `<sha>` that names no commit or none on `origin/main`'s first parents, a `--bisect` of a commit no red record names, settings it can't use, an `[env]` of the commit it verifies that it can't use, or `host`'s `runs` failing in `import` mode; 2 when git, the ledger or a file it reads or writes fails; 3 when, with `--dry-run`, nothing is due; and 4 when the result is pending (`import`). Each verification it decides appends one `verified` record (`ledger`); nothing else writes one.
+
+When the settings it follows set `[verify] mutate`, a run whose check passed goes on to the mutation pass (`mutation-pass`, `mutation-after-land`): it asks the project's command whether the tests that cite each requirement built since the last pass notice a change to that requirement's component, appends one `mutated` record, and, in `local` mode, lands a `bug` item naming each requirement whose tests noticed none as `unproven` (`files-unproven`), which reads as not built until a build resolves the item (`check.coverage/coverage-report`). The pass changes neither the outcome line nor the exit status, and holds no lock a land waits for.
+
+Crate `clm-verify` offers, as library calls:
+- `verify_with(root, request, env, call, announce) -> Result<Outcome, Error>`: one `clm verify` in the CLM root `root`, `env` being the environment as a lookup (`Env`, which `clm-land` offers) that the settings and the ledger are read with. `request` is a `Request`: `Due { work_done, dry_run }`, `Commit(sha)`, `Import` or `Bisect(sha)`, the four forms above. An `Outcome` holds `line`, the outcome line; `notes`, the lines for stderr in order; and `code`, the exit status. An `Error` is `Refused(why)`, the reason it can't run, which the command exits 1 with, or `Git(why)`, a failure of git, the ledger or a file, which it exits 2 with. `announce` is called once with the outcome when there is one, after its record is appended and before the mutation pass and the filing, which the call does before it returns, their notes last in the outcome it returns; on an error it isn't called.
+- `Call { memory, minute, grace, stop }`: what the mutation pass is given, the file it reads available memory from, the length of a minute and of the grace between `SIGTERM` and `SIGKILL`, and a stop request it watches while its command runs; `Call::standard(stop)` is the call `clm` makes (`mutation-pass`).
+- `kept_log(root, commit)`: the path of the log a failed run of `commit` kept in this clone, or none (`kept-log`), so `orchestrator.triage`'s `clm intake` can point a session at a red result's output without knowing where verify keeps it (`path-ownership`).
+
+## MODIFIED Design
+**Settings** (`settings-from-main`). `clm verify` verifies `origin/main`, so it reads how to verify it from `origin/main`: the commit it checks out is the one whose settings it follows. It first loads the root's own settings for `host` alone, which names the host adapter, fetches `origin` (every host has one: `none-keeps-its-own-remote`), and then loads the settings again through `config/committed-settings`, the repository layer being the text of `origin/main:<prefix>clm.toml`, `<prefix>` the CLM root's place in its git repository (none when `origin/main` or the file is missing). `[verify]`, `[affected] all`, `[land] target_cap_gb`, the cap on verify's build place (`verify-build-cap`), and `max_builds`, after which the pass takes its slots, come from those; the clone's `clm.local.toml` still sets any of them for this clone, as everywhere (`local-settings`), since it belongs to the clone and is never behind. Whether `[verify]` is set is decided only after the fetch, so a project with no `[verify]` pays one fetch per call. The sessions that run `clm verify --due --event work-done` at their end run it in their own checkout, which they leave as it is and which may be far behind `main`: reading the checkout's file there would skip every run once `[verify]` had landed after the checkout was made. `host` stays the root's, as `land` keeps it (`land-policy-from-base`): it is needed before there is anything fetched to read, and names the tooling, not the policy. This is the decision `verify-settings-from-main`.
+
+**Since when.** The *last verified commit* is the newest commit on `origin/main`'s first-parent chain that a `verified` record names, whatever its result; the *last green commit* the newest that one with `passed: true` names. The *unverified lands* are the first-parent commits of `origin/main` after the last verified commit, up to its head, or all of them when no record exists. A run's tests are selected by `check.affected`'s library call with the last green commit as its base, as `clm affected --base <last green commit>` selects them (`graph-test-selection`), written to a file in `TMPDIR` and handed to the check as `CLM_SELECTION` as `[land] check` gets it, so a run covers everything changed since the tests last passed, the lands of an earlier red run included. With no green record, with an `[env]` that differs from the green commit's, or with a selection that can't be made, there is none and every test runs.
+
+**Triggers** (`verify-due`). Read from `[verify] triggers` and `[verify] every` over the unverified lands, tried in a fixed order and the first that holds named: a red last record (`red-again`), since a fix may have landed; `change-done` when one of them adds a `changes/archive/<id>/change.md` (`git diff --diff-filter=A` against its first parent); `queue-drained` when every requirement `check.coverage`'s `pending` returns for `origin/main`'s head, checked out into the verify tree, is blocked, its `blocked_by` or its `waits_on` holding something, so also when it returns none (computed only when `queue-drained` is among the triggers and none before it holds): a blocked requirement waits on a human's answer or on other work, which no build is about to do, and one of a component under a live claim is still pending and unblocked in `origin/main` until its build lands, so the trigger reads no claim and waits for that land. A spec graph with violations leaves the queue unknown, and the trigger doesn't hold; `work-done` when the caller passed `--event work-done`; `every.lands` when there are at least that many; `every.days` when the oldest of them was committed at least that many days ago. No unverified land means nothing is due, whatever else holds.
+
+**The run** (`verify-run`). It checks `origin/main`'s head out into `<home>/.clm/verify-tree` as `land` keeps its land tree (`fixed-land-tree`), `<home>` found as `land` finds it, from the common git directory rather than by listing worktrees, so a run waiting for the lock never reads the entry of a worktree another run is still adding. A tree git doesn't list, or that isn't a worktree of its own, is removed and added afresh. It runs `[verify] check` there through `land`'s shared check runner (`land/shared-check-runner`), so under the clone's check lock, `<home>/.clm/check.lock`, like every other check of the clone (`check-runs-one-at-a-time`): CLM can't know what a project's tests share, so a slow run and a land's check never overlap. A land on the same clone waits while a slow run's check runs; triggers make that rare, and a project that can't accept the wait runs its slow tests in `pipeline` mode or from another clone. Each bisect probe takes the lock afresh, so lands can go between probes. **Build place** (`verify-build-dir`, `verify-build-cap`). Every run of `[verify] check`, a bisect probe's included, gets `CLM_LAND_DIR` set to `<home>/.clm/verify-build`, as a land's check gets `.clm/land` (`land/land-dir-env`): a place that lasts from run to run outside the verify tree, so a check script that points its toolchain there for lands (`init/starter-check-land-dir`) does so for verify too, with incremental compilation off. Build output kept inside the verify tree grew without bound, most of it incremental data no run between whole commits reuses, so the tree keeps nothing past a `clm verify` (`verify-tree-cleared`, below). Verify sets no toolchain's variables itself. Before each run of the check, and before the mutation pass's command, which gets the same `CLM_LAND_DIR` (`mutation-pass`), verify creates that place when it is missing, so a command may write into it before building anything there, as the pass's copy of its coverage file does (`ci/mutate-script`): a fresh clone has none, and the cap below removes it whole. Creating it in verify rather than in each script that writes there keeps the place a promise of the environment, as `.clm/land` is a land's by the time its check builds, whatever the project's toolchain (`reuse-first`); nothing about the place may lose a run's result. After each run of the check, still holding the verify tree's lock (`verify.lock`), so no other verify run is building there, it applies `land`'s cap to that place through `land/shared-target-cap`, named `.clm/verify-build` and capped at `[land] target_cap_gb` from the settings it follows. Cargo prunes no unit no run builds again, so the cap trades one cold run for a bounded place, as the land's does. The check's output goes to stderr and to `<home>/.clm/verify-logs/<sha>.log`, which a passing run removes and a failing one keeps. `local` and `pipeline` differ only in where the project calls it: `pipeline` is a host pipeline running `clm verify --due` on each push to `main`, with `CLM_WRITER` naming it and the right to push `clm/ledger/*`. A run killed before it records leaves its trigger due. **Output.** Once the check has exited, nothing `clm verify` writes can lose its result: every write to stderr before the record ignores a failure, as the runner's copy of the check's output already does, and nothing goes to stdout before it, since the outcome and the notes are announced only after the record is appended. A failed write before the check exits ends nothing either, since ending then would leave the check running unwatched in the verify tree. The check's output is still copied to stderr, so a person watching a run sees it progress; the log holds it whole. `clm verify --commit <sha>` for a commit other than the head takes the last verified commit before it as its `since` and checks that commit out.
+
+**A clean tree between runs** (`verify-tree-cleared`). Once a `clm verify` is done with the verify tree, after the mutation pass when one ran and before it files anything, it removes from the tree every file git doesn't track, those git ignores included (`git clean -ffdx` at the tree's top), under the verify tree's lock. Each checkout within one `clm verify` still removes only untracked files and keeps ignored ones, so what the check installs there (`node_modules/`, which the pass's StrykerJS runs from: `ci/mutate-script`) serves the pass after it; what any command leaves in the tree past the end of the call is not kept. A project's scripts can build caches under the tree, such as a mutation tool's per-job targets, that grow without bound beside the capped `.clm/verify-build` and starve the build loop, which counts free room before each launch (`machine/disk-room`). The place a project keeps from run to run is `CLM_LAND_DIR`, which the cap bounds; the tree is no second, unbounded one, whatever a project's scripts write there, so the bound lies in verify, for every project, rather than in one project's script (`redesign-before-workaround`). It costs the pass one cold build per job each pass; a pass's peak, its jobs' targets while it runs, is room the work uses and stays. The clean runs only when git run in the tree finds its top there, as the checkout's test of a tree it reuses does: git run in a tree with no `.git` of its own finds the main worktree around it, and a clean there would go through the main worktree's repository rather than the tree's. Every call that checked the tree out cleans, however it ends; the pass's tree has dropped the lock by then, so the clean takes it afresh. A `clm verify` killed with `SIGKILL` cleans nothing; the next one that checks the tree out cleans what it left, since the clean takes the whole tree.
+
+**Import** (`verify-import`). `host`'s `runs` for `[verify] workflow` (`host/list-runs`), each with its head commit, whether it completed and its conclusion, newest first as `host/list-runs` gives them, so the first that is a result is the newest. A completed run whose conclusion is `success` or `failure` on an unverified land is a result; the newest such run's commit is the one recorded, covering the unverified lands up to it, `passed` from its conclusion and `run` its URL. Any other conclusion (cancelled, skipped) is no result.
+
+**Culprits and components** (`verify-bisect`). A red result over one unverified land names that land as the culprit. Over several, `local` and `pipeline` runs bisect at once: a search of the first-parent lands between the last green commit (exclusive) and the red one, each probe running the same selection in the verify tree, the first red land being the culprit; `import` records `culprit: null` and leaves the search to `clm verify --bisect <sha>` on a developer's machine, which appends a fresh red record for the same commit with what the search found. **Untestable lands.** The codes `verify-bisect` counts as untestable are `sh`'s own for a command it found but could not run and one it could not find, as on a commit older than the project's slow-test script, and the code `git bisect run` already gives a script for "this commit can't be tested", so a project's script can say so without CLM inventing a convention (`reuse-first`). A land whose `[env]` can't be used is set aside the same way: the check can't be given its variables there, and refusing would lose the red result already found. Such a land is neither green nor red. The search keeps a range of lands `lo..hi`, `hi` the red one (at first the red commit itself) and every land before `lo` in the range known green; it probes the land in `lo..hi` (`hi` excluded) not set aside that is nearest `lo + (hi - lo) / 2` (rounded down), the later of two equally near, moving `lo` past a green probe and `hi` to a red one, until no such land is left. When `lo` is `hi`, that land is the culprit. Otherwise every land from `lo` to `hi` but the last was set aside and any of them may hold the break, so the culprit is unknown. The search assumes, as `git bisect` does, that a land after a red one stays red; to conclude it is unknown it must probe every land it set aside, each a checkout and a check that ends at once. The record's components are those whose `paths` hold a file the culprit's first-parent diff changes, or, with no culprit, a file any of the lands that may hold it change: those from `lo` to `hi` when the search left it unknown, and in `import` mode, which searches nothing, the covered lands. A land with no first parent (the repository's first commit) diffs against the empty tree. When no component's `paths` hold such a file (a land that changed only doc-only paths), the root component.
+
+**What it stops.** A red record is a report: `clm intake` lists it for triage (`orchestrator.triage/intake-verify-failures`) and `clm land` warns a branch touching its components. Once the human takes it in as a `kind: bug` item with `verify_failures`, `clm land` holds code lands on the item's components until a branch whose commit carries `Resolves: backlog/<slug>` for it lands, letting through meanwhile a branch that resolves another item holding the same component (`land/verify-stop`). A host's run never holds a land by itself (`land-locally`).
+
+**The mutation pass** (`mutation-pass`, `mutation-after-land`). A marker says which test claims a requirement, and the land's check says the test passed; neither says the test would fail if the code were wrong. Mutation says that, and it is slow, so it runs here, after the land. CLM names no tool: the project's `[verify] mutate` command gets a plan and writes verdicts, as `[land] check` gets a selection, and it is unset unless the project sets it. A requirement is *due* when one of its citing tests was added, or changed in more than its markers, since the last pass, so a requirement that was only re-cited isn't judged: its tests are the ones an earlier pass saw, or none did. A sample of mutants drawn from a whole component can't judge it either, since such a sample is noticed by the tests of some of its requirements often and by those of others almost never, all of them sound. The plan therefore hands the command the code the lands changed first, and a limit of 20 further mutants from the rest of the component, a constant (`yagni`). Of both, the command tries only mutants of lines the requirement's tests run (`ci/mutate-script`), since a mutant of code they never reach is one no citing test could notice: a component's first mutants are often code such as `Display` impls and getters that the tests of a requirement whose rule is data never run, and the pass would file those sound tests as unproven. A requirement whose tests run lines of its code but none a mutant changes, as when its rule is data, is not judged; one whose tests run none of its code, as an empty test, still reads as unproven, unless a file holding one of its citing tests carries a `clm:reads` marker (`check.affected`). Such a test reads the repository's own files, and the rule it proves can be data there that no `code` line holds and no mutation tool changes: `clm/doc-readers-marked`'s rule is the markers themselves, in test files of half a dozen crates, and its tests run `clm-affected`'s `readers`, none of the root's code, so the pass filed those sound tests as unproven whenever they changed. The plan names each such marker's glob on a `reads` line, so the command can tell a test that reads data from an empty one, and leaves the requirement not judged (`ci/mutate-script`). A layer entry, a capability or an architectural constraint a test cites, has no component code to mutate, so it is never due. A Rust requirement whose rule is code in its test's own file, as `vcs/one-git-layer`'s scan of every crate is, is judged by mutants of that file whenever its tests run no mutant of its code and no other component's code, reads lines or not (`ci/mutate-script`), since `cargo mutants` never mutates a test target and would otherwise leave sound tests filed unproven or never judged. The markers are read per file, as `check.affected`'s readers are: a marker anywhere in the file holding a citing test counts, and one in another file of the same test target does not. So an empty test escapes when it sits in a file whose other tests read files, as the shared `crates/clm/tests/cli.rs` and `crates/clm-check/tests/cli.rs` do; that was accepted over reading only the markers inside the test's own span, since the markers are written once at a file's head and none sits inside a test. Tests that predate the pass are never judged (`backlog/tests-written-before-the-mutation-pass-were-never-judged`). The pass runs after the `verified` record is appended and the outcome announced, and outside the check lock, so it can lose no verdict and hold no land; it keeps the verify tree's lock, so two passes never share the tree, and it gets slots of its own, from one past the build places up to `mutate_jobs` of them, one for each requirement it judges at once, since its tests overlap lands' checks and builds' (`check-runs-one-at-a-time` covers the runs that share slot 0, which this one doesn't). It judges up to `mutate_jobs` requirements at once, cut down to one per 2 GiB of available memory, since each concurrent build of a crate's tests takes one to two gigabytes and the build loop often runs builds beside a verify. A requirement an item named is not judged again when the item goes: the build that mended its test changed the test, which makes it due, and the build that found the test sound and deleted the item has settled it. A pass keeps what it reached however it ends: the command writes each verdict as it is reached, and when it fails, reaches `mutate_minutes`, or is stopped, `clm verify` records the verdicts written and names the due requirements it didn't reach under `left`, which the next pass judges first, with the diff from where they were first due, since a pass that recorded nothing would restart its requirements from the first, and a long pass would have no limit. A pass killed with `clm verify` itself, by `SIGKILL`, still records nothing, and the next pass starts from the same commit. The call's memory file, minute, grace and stop request are its caller's (`Call`), so the crate's tests pass a file, short lengths and a set flag; a stop or the limit can end the command before `coverage.sh` runs, which leaves `[health] lcov` as the last whole pass wrote it.
+
+**Filing** (`files-unproven`). Verify pushes nothing to `main`, so a verdict reaches the tree as a backlog item, landed through `clm land` like any branch: adding a new item lands on checks. What is still to file is found each time from the ledger and from `main`'s history, not remembered: an item is named after the commit of the record that found it, so a filing that failed, or that a refused call or a dry run never made, is made by the next `clm verify --due` on a clone in `local` mode, and an item a build has resolved is not filed twice. Verify deletes its branch on `origin` itself, so none is left when the land fails. A pipeline has the right to push only the ledger, so `pipeline` mode records and leaves the filing to such a clone.
+
+**The kept log** (`kept-log`). Matching a log's name by prefix rather than by the abbreviation `git rev-parse --short` gives now keeps a log found after the repository's abbreviations have grown longer than when the run named it.
+
+## MODIFIED Requirements
+
+### Requirement: verify-due <!-- base: 462c3f79ea38934b -->
+`clm verify --due` SHALL compute the unverified lands of `origin/main` after fetching it and the ledgers, and SHALL find a run due when there is at least one and either the last `verified` record on `origin/main`'s first-parent chain is red, or one of `[verify] triggers` or `[verify] every` holds: `change-done` when an unverified land adds a file `changes/archive/<id>/change.md`, `queue-drained` when no requirement in `origin/main`'s tree is ready to build, which is when every requirement `check.coverage/pending-report` lists there as pending is blocked, by a backlog item or by a requirement it waits on, and so also when none is pending, whatever claims are live, and never when that tree's spec graph has violations, since what is pending is then unknown, `work-done` when `--event work-done` was passed and the mode is `local`, `every.lands` when the unverified lands number at least that many, and `every.days` when the oldest of them was committed at least that many days ago, the settings being those `settings-from-main` reads. When several hold it SHALL name the first that holds of `red-again`, for a red last record, `change-done`, `queue-drained`, `work-done`, `every.lands` and `every.days`. When none holds it SHALL print `verify not-due <why>` and exit 0, appending nothing and running no check, `<why>` being `nothing landed since <sha>` when there is no unverified land, `<sha>` the head abbreviated as `git rev-parse --short` abbreviates it, and `no trigger holds for <n> lands` otherwise. With `--dry-run` it SHALL run and append nothing, print `verify due <trigger>` and exit 0 when a run is due, and print `verify not-due <why>` and exit 3 when not. With no `[verify]` set there, every `clm verify` SHALL print `verify off: no [verify] in <file>`, `<file>` as `settings-from-main` names it, and exit 0.
+
+#### Scenario: a finished change is due
+- GIVEN `[verify]` with `mode = "local"`, `triggers = ["change-done"]`, a `verified` passing record for `origin/main~2`, and two lands since, the second adding `changes/archive/x/change.md`
+- WHEN `clm verify --due --dry-run` runs
+- THEN it prints `verify due change-done` and exits 0, and the ledger is unchanged
+
+#### Scenario: nothing finished
+- GIVEN the same settings, and two lands since the last record, neither adding a file under `changes/archive/`
+- WHEN `clm verify --due` runs
+- THEN it prints a line starting `verify not-due`, exits 0, runs no check and appends nothing
+
+#### Scenario: only blocked requirements remain
+- GIVEN `mode = "local"`, `triggers = ["queue-drained"]`, a passing `verified` record, one land since, and an `origin/main` whose only pending requirements are `a/x`, which a backlog item names in `blocks`, and `b/y`, whose `#### Needs` names `a/x`
+- WHEN `clm verify --due --dry-run` runs
+- THEN it prints `verify due queue-drained` and exits 0
+
+#### Scenario: a requirement is ready
+- GIVEN the same, with a further requirement `c/z` that no test cites and nothing blocks, and a branch `origin/impl/c` committed a minute ago
+- WHEN `clm verify --due --dry-run` runs, and again after a land adds a test citing `c/z` at its current version
+- THEN the first prints a line starting `verify not-due` and exits 3, and the second prints `verify due queue-drained`
+
+#### Scenario: nothing pending
+- GIVEN `triggers = ["queue-drained"]`, a passing `verified` record, one land since, and an `origin/main` with no pending requirement
+- WHEN `clm verify --due --dry-run` runs
+- THEN it prints `verify due queue-drained`
+
+#### Scenario: a spec graph with violations
+- GIVEN `triggers = ["queue-drained"]`, a passing `verified` record, one land since, and an `origin/main` with no pending requirement whose component `a` names in `depends_on` a component the graph doesn't hold
+- WHEN `clm verify --due --dry-run` runs
+- THEN it prints a line starting `verify not-due` and exits 3
+
+#### Scenario: work done only when asked
+- GIVEN `mode = "local"`, `triggers = ["work-done"]` and one land since the last record
+- WHEN `clm verify --due` runs, and then `clm verify --due --event work-done --dry-run`
+- THEN the first prints `verify not-due` and the second `verify due work-done`
+
+#### Scenario: backstop by lands
+- GIVEN `triggers = []`, `every = { lands = 3 }`, and three lands since the last record
+- WHEN `clm verify --due --dry-run` runs
+- THEN it prints `verify due every.lands`
+
+#### Scenario: red stays due
+- GIVEN no triggers, a red `verified` record for `origin/main~1`, and one land since
+- WHEN `clm verify --due --dry-run` runs
+- THEN it prints `verify due red-again`
+
+#### Scenario: nothing landed
+- GIVEN `triggers = ["work-done"]` and a `verified` record for `origin/main`'s head
+- WHEN `clm verify --due --event work-done` runs
+- THEN it prints `verify not-due nothing landed since <sha>` and exits 0
+
+#### Scenario: off
+- GIVEN an `origin/main` whose `clm.toml` has no `[verify]`
+- WHEN `clm verify --due` runs
+- THEN it prints `verify off: no [verify] in origin/main:clm.toml` and exits 0
+
+#### Scenario: the first trigger named
+- GIVEN `mode = "local"`, `triggers = ["change-done", "work-done"]` and `every = { lands = 2 }`
+- WHEN `clm verify --due --event work-done --dry-run` runs: with a red last record and two lands since it, the second adding `changes/archive/x/change.md`; with a passing last record and the same two lands; and with a passing last record and two lands since it, neither adding a file under `changes/archive/`
+- THEN it prints `verify due red-again`, then `verify due change-done`, then `verify due work-done`, exiting 0 each time
+
+#### Scenario: no trigger holds
+- GIVEN `mode = "local"`, `triggers = ["work-done"]`, a passing `verified` record and two lands since
+- WHEN `clm verify --due` runs, and then `clm verify --due --dry-run`
+- THEN the first prints `verify not-due no trigger holds for 2 lands` and exits 0, and the second prints the same line and exits 3
+
+#### Needs
+- config/verify-setting
+- config/committed-settings
+- ledger/verified-record
+
+### Requirement: verify-run <!-- base: ff539674cb3e7a27 -->
+In `local` and `pipeline` mode, a due `clm verify --due` SHALL check `origin/main`'s head out into `.clm/verify-tree` in the CLM root of the main worktree and run `[verify] check` there through `land/shared-check-runner`, with `CLM_SELECTION` naming the output of `clm affected --base <last green commit>` when a green record exists and unset otherwise, so under the clone's `.clm/check.lock`, its output copied to stderr and to `.clm/verify-logs/<sha>.log`, removed when the check passes and kept when it fails. Before a checkout, a verify tree that git doesn't list as a worktree, that isn't whole (no `.git` file at its top, or git run there finding its top elsewhere), or in which the checkout fails SHALL be removed, whatever it is, and added again as a worktree of the clone at the commit. When the selection can't be made, it SHALL print `clm affected failed: <why>; the check runs every test` on stderr and run the check with `CLM_SELECTION` unset, the run going on as any other. It SHALL then append one `verified` record naming the head, the result, the last verified commit as `since`, the unverified lands, the culprit and components (`verify-bisect`), the mode and no `run`, print `verify passed <sha> <n> lands` and exit 0, or print `verify failed <sha> culprit <land|unknown> components <component>...` and the log's path and exit 1. When `ledger`'s append leaves a `verified` record that `clm verify` appends committed on the local ledger branch and unpushed (`ledger/append-refused-push`), here or in `verify-import` or `verify-bisect`, its notes on stderr SHALL hold ``the record is committed locally; `clm reconnect` pushes it``, the outcome line and exit status unchanged. When the check fails, it SHALL then print on stderr, after its other notes and just before the log's path, what `land/check-log`'s refusal holds of the run of the check on the commit it verifies (the head, or the commit `--commit` names), not of a bisect probe: the line ``last 40 lines of `<check>`:``, the last 40 lines of that run's output, and, when a step was open as its output ended (`land/check-log`), the line ``the step open when it ended is `<name>`, lines <first> to <last> of its output``, counted from 1 in the whole output. The step and its lines SHALL be as `land/check-log` names and counts them, and a check that marks no step SHALL get no step line. A result answered from the ledger, a `--bisect` search and an `import` result run no check there and SHALL print no such report. A run that ends before the check exits SHALL append nothing. A write to stderr that fails SHALL neither end the run nor change its result or exit status before the record is appended, and nothing SHALL be printed to stdout before it, so once the check has exited its record is appended whatever becomes of `clm verify`'s stdout and stderr; what the command prints after the record MAY still end it, as `clm/closed-stdout` says.
+
+#### Scenario: passing run
+- GIVEN `mode = "local"`, `triggers = []`, `every = { lands = 1 }`, one land since a passing record, and a `[verify] check` that records `CLM_SELECTION` and its working directory and exits 0
+- WHEN `clm verify --due` runs
+- THEN the check ran in `.clm/verify-tree` on `origin/main`'s head with `CLM_SELECTION` set, the ledger holds a `verified` record for the head with `passed: true` and that one land, and it printed `verify passed <sha> 1 lands` and exited 0
+
+#### Scenario: failing run
+- GIVEN the same settings and a `[verify] check` that exits 1
+- WHEN `clm verify --due` runs
+- THEN it exits 1, prints `verify failed <sha> culprit <the land>` with that land's components and the log's path, and the ledger holds a `verified` record with `passed: false`
+
+#### Scenario: a land waits for the slow check
+- GIVEN a `[verify] check` that appends `start verify` to a log, sleeps 2 seconds and appends `end verify`, and a code branch whose `[land] check` appends `land` to the log
+- WHEN `clm verify --due` starts and `clm land` runs on the branch while it sleeps
+- THEN the log reads `start verify`, `end verify`, `land`, and the land printed `waiting for another check` naming `.clm/check.lock`
+
+#### Scenario: one at a time
+- GIVEN a `[verify] check` that appends `start` to a log, sleeps 2 seconds and appends `end`
+- WHEN two `clm verify --due` start together in one clone
+- THEN the log reads `start`, `end`, `start`, `end`, and one printed `waiting for another check`
+
+#### Scenario: the verdict outlives a failing stderr
+- GIVEN Linux, `mode = "local"`, two lands since a passing record, the first changing a file of component `a`, a `[verify] check` that prints 1000 lines and fails on any tree holding the first land's change, `.clm/check.lock` held by another process that releases it after 1 second, and `clm verify`'s stderr opened on `/dev/full`
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN the ledger holds a `verified` record for the head with `passed: false`, culprit the first land and components `a`, and stdout holds `verify failed <sha> culprit <the first land> components a`, whatever its exit status
+
+#### Scenario: a red run's report
+- GIVEN `mode = "local"`, one land since a passing record, and a `[verify] check` that prints `::group::unit`, the lines `1` to `50` and exits 1
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN stdout holds the `verify failed` line, and stderr, after it, holds ``last 40 lines of `<check>`:``, the lines `11` to `50`, ``the step open when it ended is `unit`, lines 1 to 51 of its output`` and the log's path, in that order
+
+#### Scenario: no step marked
+- GIVEN the same, with a `[verify] check` that prints the lines `1` to `3` and exits 1
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN stderr holds the three lines after ``last 40 lines of `<check>`:``, and no line starting `the step open`
+
+#### Scenario: a broken tree is remade
+- GIVEN `mode = "local"`, `every = { lands = 1 }`, a passing record, and in turn: a verify tree from an earlier run whose `.git` file at its top was removed; and a regular file at the main worktree's `.clm/verify-tree`
+- WHEN, in each case, one land follows and `clm verify --due` runs
+- THEN the check ran in `.clm/verify-tree` on `origin/main`'s head, it printed `verify passed <sha> 1 lands` and exited 0, and git lists `.clm/verify-tree` as a worktree
+
+#### Scenario: a selection that cannot be made
+- GIVEN `mode = "local"`, one land since a passing record that adds `specs/b/SPEC.md` holding text that isn't a spec, and a `[verify] check` that records whether `CLM_SELECTION` is set and exits 0
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN the check ran with `CLM_SELECTION` unset, stderr holds a line starting `clm affected failed: ` and ending `; the check runs every test`, the ledger holds a `verified` record with `passed: true`, and it printed `verify passed` and exited 0
+
+#### Scenario: a record kept local
+- GIVEN `mode = "local"`, one land since a passing record, a `[verify] check` that exits 0, and an `origin` whose `pre-receive` hook refuses every push to `refs/heads/clm/ledger/*`
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN it prints `verify passed <sha> 1 lands` and exits 0, stderr holds ``the record is committed locally; `clm reconnect` pushes it``, and the clone's own ledger branch holds the `verified` record
+
+#### Needs
+- config/verify-setting
+- ledger/verified-record
+- land/shared-check-runner
+
+### Requirement: verify-import <!-- base: dd2aac1d6322bb61 -->
+In `import` mode, `clm verify --due` and `clm verify --import` SHALL read `host`'s `runs` for `[verify] workflow` (`host/list-runs`) and run no check. The newest completed run, in the order `host/list-runs` gives them, whose conclusion is `success` or `failure` on an unverified land SHALL be recorded as a `verified` record for that run's commit, covering the unverified lands up to it, with `passed` from its conclusion, `run` its URL, and `culprit`, for a failing run that covers one land, that land, and null otherwise; a run with any other conclusion, or one not completed, SHALL be no result. With no result it SHALL print `verify pending <head>` and exit 4, appending nothing. `--due` SHALL import only when a trigger holds, as `verify-due` says; `--import` SHALL import whatever result there is. When `host`'s `runs` fails it SHALL exit 1 with its message. In `local` or `pipeline` mode `clm verify --import` SHALL print `verify nothing to import` and exit 0, asking the host nothing.
+
+#### Scenario: a passing run imported
+- GIVEN `mode = "import"`, `workflow = "slow"`, one land since a passing record, and a fake `gh` reporting a completed run of `slow` on that land with conclusion `success`
+- WHEN `clm verify --import` runs
+- THEN the ledger holds a `verified` record for that land with `passed: true` and the run's URL, and it exits 0 having run no check
+
+#### Scenario: still running
+- GIVEN the same, but the run's status is `in_progress`
+- WHEN `clm verify --import` runs
+- THEN it prints `verify pending <sha>`, exits 4 and appends nothing
+
+#### Scenario: a cancelled run is no result
+- GIVEN a completed run on the land with conclusion `cancelled`
+- WHEN `clm verify --import` runs
+- THEN it prints `verify pending <sha>` and appends nothing
+
+#### Scenario: nothing to import elsewhere
+- GIVEN `mode = "local"`
+- WHEN `clm verify --import` runs
+- THEN it prints `verify nothing to import`, exits 0 and calls no `gh`
+
+#### Needs
+- config/verify-setting
+- ledger/verified-record
+- host/list-runs
+
+### Requirement: verify-bisect <!-- base: b2330a006c54370c -->
+When `verify-run` finds a red result over more than one unverified land, it SHALL find the culprit by binary search over the first-parent lands after the last green commit up to the red one, running `[verify] check` with the same selection on each probe in the verify tree, the culprit being the first land on which it fails. Each probe SHALL take the clone's `.clm/check.lock` afresh and let it go when its check ends, so a land of the clone can run its check between two probes. A probe whose check exits 125, 126 or 127 SHALL count as untestable, neither green nor red: the search SHALL set that land aside and probe another of the range left, and SHALL end when the range left holds no land it has not probed. When it ends with untestable lands between the last green probe (or the range's start) and the first red land, the culprit SHALL be unknown: the record SHALL have `culprit: null` and the components whose `paths` hold a file any of those lands or the first red land changes, the outcome SHALL read `culprit unknown`, and stderr SHALL say, after it, `culprit unknown: [verify] check could not run on <n> lands, <first> to <last>, before the first red one, <red>`, each abbreviated as `git rev-parse --short` abbreviates it and `lands` whatever `<n>`; only the run that searched prints it, not `--commit` answering from the record. Otherwise it SHALL record the culprit and the components whose `paths` hold a file the culprit's first-parent diff changes. A land with no first parent SHALL be diffed against the empty tree, and when no component's `paths` hold a changed file the components SHALL be the root component. Over one unverified land, that land is the culprit. In `import` mode the record SHALL have `culprit: null` and the components of every covered land. `clm verify --bisect <sha>`, for a commit a red record names, SHALL run the same search on the machine that runs it and append a red record for that commit naming the culprit and its components, or `culprit: null` and the components of the lands that may hold it when the search leaves it unknown. It SHALL refuse with exit 1, running no check and appending nothing, saying ``no red `verified` record names <sha>, so there is nothing to bisect``, when no record names the commit or the newest that does isn't red, and SHALL refuse a `<sha>` that resolves to no commit or to one off `origin/main`'s first-parent chain as `verify-commit` refuses it.
+
+#### Scenario: the breaking land found
+- GIVEN a passing record for `main`'s commit `g`, three lands after it, `l1` changing `crates/a/x.rs`, `l2` changing `crates/b/y.rs` and `l3` changing `crates/a/z.rs`, components `a` and `b` owning `crates/a/**` and `crates/b/**`, and a `[verify] check` that fails on any tree holding `l2`'s change
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN it prints `verify failed <l3> culprit <l2> components b`, and the record names `l2` and `[b]`
+
+#### Scenario: bisect an imported failure
+- GIVEN `mode = "import"`, a red record for `l3` with `culprit: null`, and the same check and lands
+- WHEN `clm verify --bisect l3` runs
+- THEN a red record for `l3` naming `l2` and `[b]` is appended
+
+#### Scenario: an untestable land is skipped
+- GIVEN the breaking-land fixture with two more lands, `l4` and `l5`, each changing a file under `crates/a/`, and a `[verify] check` that exits 127 on `l3`'s tree and otherwise fails on any tree holding `l2`'s change
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN it prints `verify failed <l5> culprit <l2> components b`, and stderr holds no `culprit unknown` line
+
+#### Scenario: no land before the red one could be tested
+- GIVEN no `verified` record, lands `l1` changing `crates/a/x.rs`, `l2` changing `crates/b/y.rs` and `l3` changing `crates/a/z.rs` on a chain whose first commit `r` adds `README.md`, and a `[verify] check` that exits 127 on every tree but `l3`'s, where it exits 1
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN it prints `verify failed <l3> culprit unknown components a b`, stderr holds `culprit unknown: [verify] check could not run on 3 lands, <r> to <l2>, before the first red one, <l3>`, and the record has `culprit: null` and `[a, b]`
+
+#### Scenario: a script says it can't test
+- GIVEN the breaking-land fixture and a `[verify] check` that exits 125 on `l2`'s tree, 0 on `l1`'s and 1 on `l3`'s
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN it prints `verify failed <l3> culprit unknown components a b`, and stderr holds `culprit unknown: [verify] check could not run on 1 lands, <l2> to <l2>, before the first red one, <l3>`
+
+#### Scenario: only a red commit can be bisected
+- GIVEN the breaking-land fixture with the passing record for `g`, no record for `l3`, and a commit only on a branch
+- WHEN `clm verify --bisect` runs for `g`, for `l3` and for the branch's commit
+- THEN each exits 1, the first two saying ``no red `verified` record names`` the commit and the third that it isn't on `main`, no check ran and nothing was appended
+
+#### Scenario: a land between probes
+- GIVEN `mode = "local"`, a passing record, three lands since, each changing a file of `a`, a `[verify] check` that fails on any tree holding the third land's change, that on the third land's tree waits until a land of the clone waits for `.clm/check.lock`, and that appends `check` to a log as it ends, and a code branch whose `[land] check` appends `land` to the log
+- WHEN `clm verify --due` runs with a trigger holding, and `clm land` runs on the branch beside it
+- THEN the log reads `check`, `land`, `check`, the head's run, the land's and the one probe's, the land succeeded, and the record names the third land as the culprit
+
+#### Needs
+- config/verify-setting
+- ledger/verified-record
+- land/shared-check-runner
+
+### Requirement: culprit-recheck <!-- base: ea199b608da368f4 -->
+When `verify-bisect` names a culprit land whose `landed` record says it re-checked with `none` or `overlap` (`ledger/landed-recheck`), `clm verify` SHALL print on stderr, after its outcome line, `culprit <short sha> re-checked <how> at land; its branch's check and main's were composed from <head key> and <base key>`, `<how>` being `nothing` for `none` and `the overlap, <n> files` (or `the overlap, every test`) for `overlap`, and the keys those of the composed `checked` record for its code key, abbreviated to 12 characters, or `unknown` for both when the fold holds no such record. It SHALL take the culprit's newest `landed` record and, of the `checked` records for its code key, the newest that holds a `basis`, so a whole check recorded for the same key changes nothing. It SHALL say nothing of the failure's cause: a missing fact in the graph, the code and a flaky test all fail this way. Its stdout and the `verified` record SHALL be unchanged.
+
+#### Scenario: a culprit that ran no check
+- GIVEN `verify-bisect`'s breaking-land fixture, with `l2`'s `landed` record holding `recheck: none` and a composed `checked` record for its code key with basis `h` and `b`
+- WHEN `clm verify --due` runs with a trigger holding
+- THEN stdout is as `verify-bisect` says, and stderr holds `culprit <l2> re-checked nothing at land` and both keys
+
+#### Scenario: a culprit that ran its own selection
+- GIVEN the same with `recheck: selected`
+- WHEN `clm verify --due` runs
+- THEN stderr holds no `culprit` line
+
+#### Needs
+- ledger/landed-recheck
+- ledger/composed-check
+
+### Requirement: settings-from-main <!-- base: bbaa1ef1d25a9178 -->
+Every `clm verify` SHALL take `host` from the settings of the CLM root it runs in, and, after fetching `origin`, on every host, every other setting it uses (`[verify]`, `[affected]`, `[land] target_cap_gb` and `max_builds`) but `[env]`, which `verify-env` takes from the commit it checks, as `config/committed-settings` loads them from the CLM root's `clm.toml` committed at `origin/main`, with no repository layer when `origin/main` or that file doesn't exist, each value and error naming that file as `origin/main:clm.toml`, with the CLM root's place in its git repository before `clm.toml` when the root isn't the repository's top. It SHALL never take `[verify]` or `[affected]` from the working tree's `clm.toml`, and SHALL decide whether `[verify]` is set only after the fetch. When those settings set no `[verify]` it SHALL print `verify off: no [verify] in <file>`, naming the file so, and exit 0, running and appending nothing; when they fail to load it SHALL exit 1 with `config`'s message, which names that file. A fetch, or any other git command, ledger read or write or file operation that fails where no other requirement says what follows, SHALL end it with exit 2 and the failure's message, appending nothing more.
+
+#### Scenario: a checkout behind main
+- GIVEN a clone whose checkout's `clm.toml` sets no `[verify]`, and an `origin/main` ahead of it whose `clm.toml` sets `[verify]` with `mode = "local"` and `triggers = ["work-done"]`, with one land since a passing `verified` record
+- WHEN `clm verify --due --event work-done --dry-run` runs in the checkout
+- THEN it prints `verify due work-done` and exits 0
+
+#### Scenario: turned off on main
+- GIVEN a checkout whose `clm.toml` sets `[verify]` with a `check` that writes a file, and an `origin/main` whose `clm.toml` sets none
+- WHEN `clm verify --due --event work-done` runs in the checkout
+- THEN it prints `verify off: no [verify] in origin/main:clm.toml`, exits 0, and the file isn't written
+
+#### Scenario: an invalid setting on main
+- GIVEN an `origin/main` whose `clm.toml` sets `[verify]` with no `check`
+- WHEN `clm verify --due` runs
+- THEN it exits 1 naming `origin/main:clm.toml` and `verify`, and appends nothing
+
+#### Scenario: a CLM root below the top
+- GIVEN a git repository whose CLM root is its directory `sub/`, and an `origin/main` whose `sub/clm.toml` sets no `[verify]`
+- WHEN `clm verify --due` runs in `sub/`
+- THEN it prints `verify off: no [verify] in origin/main:sub/clm.toml` and exits 0
+
+#### Scenario: a git failure
+- GIVEN `[verify]` set on `origin/main`, and in turn: an `origin` whose URL names a directory that doesn't exist; and, with one land since a passing record and a `[verify] check` that exits 0, a `<ref>.lock` file held in place for the clone's own ledger branch
+- WHEN `clm verify --due --dry-run` runs in the first case and `clm verify --due` with a trigger holding in the second
+- THEN each exits 2 with git's message, and the ledger gains no record
+
+#### Needs
+- config/committed-settings
+- config/verify-setting
+
+### Requirement: verify-env <!-- base: fea9542d5ea327f8 -->
+Every run of `[verify] check`, a bisect probe's included, SHALL set in the command's environment each variable of the `env` that `config/env-setting` gives from the CLM root's `clm.toml` at the commit it checks out (`origin/main`'s head, the commit `--commit` names, or the probe's land) and the clone's `clm.local.toml`, never the working tree's `clm.toml`, each replacing any value the caller's environment holds for that name. When there is a last green commit and the `env` of the commit it verifies differs from the one `config/env-setting` gives from the green commit's `clm.toml` and the same `clm.local.toml`, every run of the check for that verification, its probes included, SHALL have `CLM_SELECTION` unset, since a variable can change any test's result. `CLM_LAND_DIR` (`verify-build-dir`) SHALL be as it is without it. An `env` can't be used when `config/env-setting` refuses the table; a git command that fails while reading it ends the run as `settings-from-main` says. When the `env` of the commit whose check it runs as the verification, not as a probe, can't be used, it SHALL refuse with exit 1 and `config`'s message, which names `env` and that commit's `clm.toml` as `<short sha>:clm.toml`, with the CLM root's place in its git repository before `clm.toml` as `settings-from-main` names its file, running no check and appending nothing; for `origin/main`'s head `settings-from-main`'s load refuses first, naming its own file, so this refusal is reached for a `--commit` of an older commit. A bisect probe on a land whose `env` can't be used SHALL run no check there and count as untestable (`verify-bisect`), and where two `env`s are compared, a last green commit's that can't be used, or, under `clm verify --bisect`, the red commit's, SHALL count as differing.
+
+#### Scenario: main's table and the clone's
+- GIVEN a `[verify] check` that writes `$A` and `$B` to a file outside the repository, a checkout whose `clm.toml` sets `[env]` with `A = "checkout"`, an `origin/main` whose `clm.toml` sets `[verify]` with that check and `[env]` with `A = "main"` and `B = "main"`, a `clm.local.toml` with `[env]` setting `B = "local"`, `A=caller` in the caller's environment, and a run due
+- WHEN `clm verify --due` runs in the checkout
+- THEN the file holds `main` for `A` and `local` for `B`
+
+#### Scenario: a probe takes its land's variables
+- GIVEN a passing record, then a land setting `[env]` `A = "1"`, then a land setting `A = "2"`, and a `[verify] check` that fails when `$A` is `2`
+- WHEN `clm verify --due` runs and bisects
+- THEN the probe of the first land ran with `A` set to `1` and passed, and the record names the second land as the culprit
+
+#### Scenario: a changed variable runs every test
+- GIVEN a passing record, then one land that changes only `clm.toml`'s `[env]`, and a `[verify] check` that writes whether `CLM_SELECTION` is set
+- WHEN `clm verify --due` runs
+- THEN the check ran with `CLM_SELECTION` unset
+
+#### Scenario: a table that can't be used
+- GIVEN `mode = "local"`, a passing record for `g`, a land `bad` whose `clm.toml` adds `[env]` with `CLM_X = "1"`, which `config/env-setting` refuses, a land `good` after it that restores `g`'s `clm.toml` and changes a file of component `a`, and a `[verify] check` that records whether `CLM_SELECTION` is set and fails on any tree holding `good`'s change
+- WHEN `clm verify --commit <bad>` runs; then `clm verify --due` with a trigger holding; then, with a ledger whose only `verified` record is a passing one for `bad`, `clm verify --commit <good>`; and, in a fixture of its own holding a passing record for `g`, a land `l1` changing a file of `a`, then `bad`, a red record for `bad`, and a check that fails on any tree holding `l1`'s change, `clm verify --bisect <bad>`
+- THEN the first exits 1 naming `<short bad>:clm.toml` and `env`, runs no check and appends nothing; the second prints `verify failed <good> culprit unknown components a`, stderr holds `culprit unknown: [verify] check could not run on 1 lands, <bad> to <bad>, before the first red one, <good>`, and its red record is appended; the third ran the check with `CLM_SELECTION` unset and appended a red record naming `good` as the culprit; and the fourth ran its probe of `l1` with `CLM_SELECTION` unset and appended a red record for `bad` naming `l1` and `[a]`
+
+#### Needs
+- config/env-setting
+
+### Requirement: kept-log <!-- base: 05b0ad5c1a2d6c5e -->
+`clm-verify` SHALL offer `kept_log(root, commit)`, `root` a CLM root in any worktree of a clone and `commit` a full commit ID, returning the absolute path of the file in `.clm/verify-logs/` in the CLM root of the clone's main worktree, the directory `verify-run` keeps a failed run's log in, whose name is `<name>.log` with `<name>` a prefix of `commit` at least 7 characters long, the longest such name when several match, and none when no file matches, the directory is missing or `root` is in no git repository. It SHALL read no settings and fetch nothing, reading only that directory, and SHALL neither create nor remove a file.
+
+#### Scenario: a red run's log
+- GIVEN a clone with a linked worktree, `mode = "local"`, one land since a passing record and a `[verify] check` that exits 1, and `clm verify --due` run in the main worktree with a trigger holding
+- WHEN `kept_log` is called with the linked worktree's CLM root and the head's full commit ID
+- THEN it returns the path of the log `clm verify` named, which exists
+
+#### Scenario: nothing kept
+- GIVEN the same clone, and a `[verify] check` that exits 0
+- WHEN `clm verify --due` runs and `kept_log` is called with the head's full commit ID
+- THEN it returns none
+
+#### Scenario: a longer name
+- GIVEN `.clm/verify-logs/` holding `<first 7 of commit>.log` and `<first 9 of commit>.log`
+- WHEN `kept_log` is called with `commit`
+- THEN it returns the path of `<first 9 of commit>.log`
+
+#### Scenario: a root outside a repository
+- GIVEN a temporary directory that is in no git repository
+- WHEN `kept_log` is called with it and a full commit ID
+- THEN it returns none, and the directory is as it was
+
+### Requirement: mutation-pass <!-- base: 2212de808b7a56ce -->
+When the settings it follows (`settings-from-main`) set `[verify] mutate`, a `clm verify --due` or `clm verify --commit` in `local` or `pipeline` mode whose check passed SHALL, after appending the `verified` record and printing the outcome line, and holding the verify tree's lock but not `.clm/check.lock`, run the mutation pass on the commit `C` it verified. `P` is the commit the newest `mutated` record names among the commits before `C` on its first-parent chain, or, when there is none, the first parent of the oldest commit of the unbroken run of commits ending at `C` on that chain whose `clm.toml` sets `[verify] mutate`, which is the last commit before the project switched the pass on; a commit sets it when its `clm.toml` parses as TOML and holds a non-empty string there, and any other commit ends the run. A requirement is *due* when, between the trees of `P` and `C`, a test citing it at its current version in `C` (`check.coverage/test-spans`, groups left out) was added, or its lines changed in more than their markers; with no `P`, as when the chain's first commit already sets `mutate`, every requirement a test of `C` cites at its current version is due. An entry of the `capability` or `architecture` layer is never due, whatever cites it. A requirement under `left` in the newest `mutated` record on that chain, `C` included and the newest by `at` among a commit's records, is due as well when a test of `C` cites it at its current version; its `diff` runs from the `since` of the oldest record of the unbroken run of newest records whose `left` names it, so a requirement carried over keeps the change that made it due. So a pass that ends before it judges a requirement loses nothing: the next one judges it, and a pass that records nothing starts from the same commit. For the due requirements it SHALL write a plan file holding, for each, first those under that `left` in the list's order and then the others in ID order, the line `requirement <id>`, then one line `code <path>` for each file its component owns in `C`, then `diff <path>` naming a file that holds `git diff <P> <C>` over those files when that is not empty, then one line `test <file>`, a tab and the test's name for each test citing it in `C`, then one line `reads <glob>` for each distinct glob, in byte order, of the `clm:reads` markers in `C`'s text of the files holding those tests, each the text after `clm:reads ` up to the next whitespace, as `check.affected/affected-readers` reads a reader's glob, then `limit 20`. It SHALL run the command through `sh -c` in the verify tree, with `CLM_MUTATE` naming the plan, `CLM_MUTATE_RESULT` naming an empty file, `CLM_SLOT` set to one more than the clone's `max_builds`, a number that, with the `mutate_jobs` less one numbers after it, no build place and no check holds, so the tests it runs may overlap any other run (`tests-run-concurrently`), `CLM_MUTATE_JOBS` set to the whole number of 2 GiB (2097152 kB) in the `MemAvailable` line of the memory file its call is given, at least 1 and at most `[verify] mutate_jobs`, or to 1 when `mutate_jobs` is unset or that file or line can't be read, `CLM_LAND_DIR` and the `[env]` variables as the check gets them, `CLM_SELECTION` unset whatever the caller's environment holds, and standard input empty, its output copied to stderr, in a process group of its own. `Call::standard(stop)` SHALL give the memory file `/proc/meminfo`, a minute of 60 seconds and a grace of 10 seconds, with `stop` as its stop request. With `[verify] mutate_minutes` set, when the command has run that many of its call's minutes it SHALL send `SIGTERM` to that group, and `SIGKILL` when the command hasn't ended after its call's grace, and print `mutation: stopped at its limit of <m> minutes` on stderr; when its call's stop request is set while the command runs, it SHALL end the command the same way and print `mutation: stopped` on stderr. However the command ends, it SHALL then read from the result file the lines that end in a newline, one per requirement, the last for a requirement holding: `<id> killed`, the tests failed for at least one mutant; `<id> survived <n>`, `<n>` mutants were tried and the tests passed for every one; or `<id> not-judged`; a line of `survived 0` is not judged, a line that doesn't parse and one naming a requirement that isn't due are ignored, and a due requirement with no line is left. It SHALL then append one `mutated` record naming `C`, `P` as `since`, the killed and not-judged IDs, the survived ones as `unproven` entries at their versions in `C`, and the left ones under `left` in the plan's order (`ledger/mutated-record`), and print `mutation: <k> killed, <u> unproven, <n> not judged` on stderr, followed by `, <l> left` when any is left. With nothing due it SHALL run no command and append the record with empty lists. When the command exits non-zero without being ended so, it SHALL print `mutation: <command> failed with status <n>` on stderr before the record's line, and when a signal the pass didn't send ends it, `mutation: <command> was ended by signal <n>`, followed by ` (<name>)` when it is one of `SIGHUP`, `SIGINT`, `SIGQUIT`, `SIGILL`, `SIGTRAP`, `SIGABRT`, `SIGBUS`, `SIGFPE`, `SIGKILL`, `SIGUSR1`, `SIGSEGV`, `SIGUSR2`, `SIGPIPE`, `SIGALRM`, `SIGTERM`, `SIGCHLD`, `SIGCONT`, `SIGSTOP`, `SIGTSTP`, `SIGTTIN`, `SIGTTOU`, `SIGURG`, `SIGXCPU`, `SIGXFSZ`, `SIGVTALRM`, `SIGPROF` and `SIGSYS`, `<name>` that name, and with nothing after the number for any other signal; either way it SHALL still append the record, so the verdicts it reached are kept and the rest are left. Any other failure of the pass, such as a scratch directory it can't make in `TMPDIR`, a git command or file operation that fails, or the record's append failing, SHALL end it with `mutation: <why>; nothing recorded` on stderr and no `mutated` record. The pass SHALL NOT change the outcome line, anything on stdout or the exit status, and SHALL NOT run when the check failed, in `import` mode, for a result answered from the ledger, for a bisect, or with `mutate` unset.
+
+#### Scenario: a new test that notices
+- GIVEN `mutate` set to a fake that copies its plan and writes `a/x killed`, a passing check, a `mutated` record for the last verified commit, and one land since that added `tests/x.rs` with a test `proves_x` citing `a/x` and changed `src/a.rs`, both `a`'s
+- WHEN `clm verify --due` runs
+- THEN the plan holds `requirement a/x`, `code src/a.rs`, `code tests/x.rs`, a `diff` line whose file names `src/a.rs`, `test tests/x.rs` with `proves_x` and `limit 20`; the ledger gains a `mutated` record with `a/x` under `killed`; stdout is the one line `verify passed <sha> 1 lands`; and it exits 0
+
+#### Scenario: a test that notices nothing
+- GIVEN the same with a fake that writes `a/x survived 12`
+- WHEN `clm verify --due` runs
+- THEN the `mutated` record holds `a/x@<version>` under `unproven`, stderr holds `mutation: 0 killed, 1 unproven, 0 not judged`, and it still prints `verify passed` and exits 0
+
+#### Scenario: the first pass fails, and the next loses nothing
+- GIVEN no `mutated` record, a land `S` that set `mutate`, a land `L` after it that added a test citing `a/x` and changed `a`'s code, a `mutate` command that writes nothing and exits 3, and `clm verify --due` run once at `L`, which records a `mutated` record for `L` whose `since` is the first parent of `S` and whose `left` holds `a/x`
+- WHEN a further land adds a test citing `a/y`, the command is replaced by one that copies its plan, and `clm verify --due` runs again
+- THEN the plan holds the block for `a/x`, whose `diff` file holds `L`'s change to `a`'s code, and then the one for `a/y`, and the new `mutated` record's `since` is `L`
+
+#### Scenario: a test that reads the repository's files
+- GIVEN the land of the first scenario, with `tests/x.rs` also holding the markers `clm:reads specs/**` and `clm:reads ARCHITECTURE.md`, and another file of `a`'s holding `clm:reads docs/**` but no test citing `a/x`
+- WHEN `clm verify --due` runs with a fake that copies its plan
+- THEN the block for `a/x` holds `reads ARCHITECTURE.md` and then `reads specs/**`, after its `test` line and before `limit 20`, and no `reads docs/**`
+
+#### Scenario: the pass switched on from the first commit
+- GIVEN no `mutated` record and a chain whose first commit sets `mutate` and holds a test citing `a/x` at its current version
+- WHEN `clm verify --due` runs with a passing check
+- THEN the plan holds a block for `a/x`, with no `diff` line
+
+#### Scenario: only re-cited
+- GIVEN a land since the last pass that changed only the version in the marker of the test citing `a/x`
+- WHEN `clm verify --due` runs
+- THEN the command isn't run, and the `mutated` record's lists are empty
+
+#### Scenario: an item resolved with its test unchanged
+- GIVEN a backlog item naming `a/x` under `unproven` at the last pass's commit, deleted by a land since, with the tests unchanged
+- WHEN `clm verify --due` runs
+- THEN the command isn't run for `a/x`, so a build that found the test sound settles it in one look
+
+#### Scenario: its own slot
+- GIVEN `max_builds` 4 and a fake `mutate` that records `CLM_SLOT`
+- WHEN the pass runs it
+- THEN it recorded `5`
+
+#### Scenario: the command fails part-way
+- GIVEN `a/x`, `a/y` and `a/z` due, and a `mutate` command that writes `a/x killed` and exits 3
+- WHEN `clm verify --due` runs with a passing check
+- THEN the `mutated` record holds `a/x` under `killed` and `a/y` and `a/z` under `left`, stderr names the command and status 3 and then holds `mutation: 1 killed, 0 unproven, 0 not judged, 2 left`, and it prints `verify passed` and exits 0
+
+#### Scenario: a line cut short
+- GIVEN `a/x` and `a/y` due, and a `mutate` command that writes `a/x killed`, a newline and `a/y survived 1` with no newline, and exits 3
+- WHEN `clm verify --due` runs
+- THEN the record holds `a/x` under `killed` and `a/y` under `left`
+
+#### Scenario: the time limit
+- GIVEN `mutate_minutes = 1`, a call whose minute is one second and whose grace is one second, `a/x` and `a/y` due, and a `mutate` command that writes `a/x killed`, starts a child that sleeps, and then ignores `SIGTERM` and sleeps
+- WHEN the pass runs
+- THEN within a few seconds the command and its child no longer run, the record holds `a/x` under `killed` and `a/y` under `left`, stderr holds `mutation: stopped at its limit of 1 minutes`, and the outcome is unchanged
+
+#### Scenario: a stop request
+- GIVEN `a/x` and `a/y` due, and a `mutate` command that writes `a/x killed` and then waits until a file appears
+- WHEN the call's stop request is set once the line is written
+- THEN the command no longer runs, the record holds `a/x` under `killed` and `a/y` under `left`, and stderr holds `mutation: stopped`
+
+#### Scenario: what is left goes first
+- GIVEN the newest `mutated` record's `left` holding `a/z`, and a land since that added a test citing `a/a`
+- WHEN `clm verify --due` runs with a fake that copies its plan
+- THEN the plan's block for `a/z` comes before the one for `a/a`
+
+#### Scenario: jobs follow memory
+- GIVEN `mutate_jobs = 6` and a fake `mutate` that records `CLM_MUTATE_JOBS`
+- WHEN the pass runs with a memory file whose `MemAvailable` reads 5242880 kB, then one whose reads 41943040 kB, then one with no such line, then with `mutate_jobs` unset
+- THEN it recorded `2`, then `6`, then `1`, then `1`
+
+#### Scenario: unset
+- GIVEN a `[verify]` with no `mutate`
+- WHEN `clm verify --due` runs with a passing check
+- THEN no `mutated` record is appended and stderr holds no `mutation:` line
+
+#### Scenario: a red check
+- GIVEN `mutate` set and a check that fails
+- WHEN `clm verify --due` runs
+- THEN the command isn't run
+
+#### Scenario: lands don't wait
+- GIVEN a `mutate` command that waits for a file to appear
+- WHEN `clm verify --due` is in its pass and a land of the clone runs its check
+- THEN the land's check starts before the file appears
+
+#### Scenario: the standard call
+- GIVEN a stop flag
+- WHEN `Call::standard` is called with it
+- THEN the call's memory file is `/proc/meminfo`, its minute 60 seconds, its grace 10 seconds, and its stop request that flag
+
+#### Scenario: a command killed by a signal
+- GIVEN `a/x` and `a/y` due, and `mutate` set to a command line that writes `a/x killed` to its result file and then runs `kill -9 $$`, so the shell `sh -c` runs it in is killed
+- WHEN `clm verify --due` runs with a passing check
+- THEN stderr holds `mutation: <command> was ended by signal 9 (SIGKILL)` and then `mutation: 1 killed, 0 unproven, 0 not judged, 1 left`, the record holds `a/x` under `killed` and `a/y` under `left`, and it prints `verify passed` and exits 0
+
+#### Scenario: lines that aren't verdicts
+- GIVEN `a/x` due and `a/q` not, and a `mutate` command that writes `a/q killed`, `a/x maybe` and `a/x survived many`, each ending in a newline
+- WHEN `clm verify --due` runs with a passing check
+- THEN the record names no `a/q` and holds `a/x` under `left`
+
+#### Scenario: no selection for the pass
+- GIVEN `a/x` due, `CLM_SELECTION=/x` in the caller's environment, and a fake `mutate` that records `${CLM_SELECTION-unset}` and what it reads from standard input
+- WHEN the pass runs it
+- THEN it recorded `unset` and read nothing
+
+#### Scenario: a capability citation
+- GIVEN a `mutated` record for the last verified commit, and one land since that adds a test citing only `capability/c` at its current version
+- WHEN `clm verify --due` runs with a passing check and a fake `mutate` that records that it ran
+- THEN the command isn't run, and the new `mutated` record's lists are empty
+
+#### Scenario: a pass that can't run
+- GIVEN `a/x` due and `TMPDIR` naming a directory that doesn't exist
+- WHEN `clm verify --due` runs with a passing check
+- THEN stderr holds a line starting `mutation: ` and ending `; nothing recorded`, no `mutated` record is appended, and it prints `verify passed` and exits 0
+
+#### Needs
+- config/verify-setting
+- ledger/mutated-record
+- check.coverage/test-spans
+- model/parse-backlog
+
+### Requirement: files-unproven <!-- base: 1425f5090b1900fb -->
+At the end of every `clm verify --due` without `--dry-run`, in `local` mode, whose settings set `[verify] mutate`, whether or not a run was due, and after the mutation pass when one ran, unless the verification ended in a refusal or an error, it SHALL, for each `mutated` record that names a commit `R` on `origin/main`'s first-parent chain and holds `unproven` entries, and for each component those entries name, file the item `backlog/unproven-<component>-<short sha of R>.md` unless a commit after `R` on that chain added a file of that path, so an item a build has since deleted is never filed again, or none of the component's entries names a requirement at its current version in `origin/main`. It SHALL write the items to file in a temporary worktree on a branch `unproven/<short sha of origin/main>` cut from `origin/main`, each with `title` `Tests of <component> notice no change to its code`, `kind: bug`, `components` that component, `unproven` the entries still at their current version, and a body naming each entry's citing tests and `R`; commit them; push the branch and land it with `clm land`, as any branch lands; and delete the branch, here and on `origin`, whether or not it landed. It SHALL print `unproven: filed <n> items for <m> requirements` on stderr when it landed, and `unproven: not filed: <reason>` when any step of the filing failed, leaving the items for the next call. It SHALL NOT change the outcome line, stdout or the exit status. `clm verify --commit`, `--import` and `--bisect`, and `pipeline` and `import` mode, file nothing.
+
+#### Scenario: filed and read as not built
+- GIVEN a `mutated` record for `origin/main`'s head `R` with `unproven` `a/x@<current version>`, and `a/x` current
+- WHEN `clm verify --due` runs with nothing due, and then `clm coverage` runs on the new `origin/main`
+- THEN `origin/main` holds `backlog/unproven-a-<short sha of R>.md`, a `bug` item on `a` with `unproven: [a/x@<version>]`, no branch `unproven/<short sha>` is left on `origin`, and coverage prints `a/x unbuilt`
+
+#### Scenario: already filed
+- GIVEN the same once the item is on `origin/main`
+- WHEN `clm verify --due` runs again
+- THEN it lands nothing
+
+#### Scenario: reworded since
+- GIVEN a `mutated` record with `unproven` `a/x@11111111`, and `a/x` at another version on `origin/main`
+- WHEN `clm verify --due` runs
+- THEN it lands nothing
+
+#### Scenario: resolved by a build
+- GIVEN that item filed, and then deleted by a land
+- WHEN `clm verify --due` runs again
+- THEN it lands nothing
+
+#### Scenario: the land fails
+- GIVEN an entry to file and an `origin` that refuses the push
+- WHEN `clm verify --due` runs
+- THEN stderr holds `unproven: not filed:` with the reason, the exit status is what the verification gave, and a later call files it
+
+#### Scenario: pipeline mode
+- GIVEN `mode = "pipeline"` and an entry to file
+- WHEN `clm verify --due` runs
+- THEN it lands nothing
+
+#### Scenario: a dry run files nothing
+- GIVEN an entry to file for `origin/main`'s commit `R`
+- WHEN `clm verify --due --dry-run` runs; and, after one more land whose `clm.toml` adds `[env]` with `CLM_X = "1"`, `clm verify --due` runs with a trigger holding
+- THEN the first exits as `verify-due` says and the second exits 1 naming `env`, neither prints an `unproven:` line, and `origin/main` gains no item under `backlog/`
+
+#### Needs
+- ledger/mutated-record
+- model/parse-backlog
+- check.coverage/coverage-report
+- orchestrator.triage/triage
+
+## REMOVED Requirements
+
+### Requirement: mutated-through-constructor <!-- base: 899e882032d297c0 -->
