@@ -188,7 +188,7 @@ type Built = (Member, Vec<(String, String)>, Vec<String>);
 struct Member {
     wanted: Wanted,
     head: String,
-    on_origin: bool,
+    on_origin: Option<String>,
     /// Its merge commit as the chain was built to be gated; the pushed one differs in its
     /// message alone.
     commit: String,
@@ -307,9 +307,12 @@ impl Batch<'_, '_, '_> {
     fn build(&self, wanted: &[Wanted]) -> Result<Option<Chain>, Error> {
         let (ctx, repo) = (self.ctx, self.ctx.repo);
         repo.fetch()?;
-        let base = repo
-            .rev(repo.base())?
-            .ok_or_else(|| Error::Refused(format!("no `{}` to land on", repo.base())))?;
+        let base = repo.rev(repo.base())?.ok_or_else(|| {
+            Error::Refused(format!(
+                "no `{}` to land on: push `main` to `origin` with `clm reconnect`, then land",
+                repo.base()
+            ))
+        })?;
         let fold = clm_ledger::fold(&repo.root)?;
         let signed = repo.approval.signed(&base)?;
         if signed {
@@ -365,21 +368,11 @@ impl Batch<'_, '_, '_> {
         vars0: Option<&[(String, String)]>,
     ) -> Result<Built, Error> {
         let (ctx, repo) = (self.ctx, self.ctx.repo);
-        let (head, on_origin) = repo.approval.head(&w.branch, true)?;
-        crate::own_files::check(repo, &w.branch, base, &head)?;
-        crate::deleted_tests::check(repo, Some(&w.branch), base, &head)?;
-        if w.branch.starts_with("spec/") {
-            let files = clm_gate::files_outside_spec_paths(&repo.root, base, &head)
-                .map_err(Error::Refused)?;
-            if !files.is_empty() {
-                return Err(Error::Refused(format!(
-                    "a spec branch holds only spec paths; {} changes {}",
-                    w.branch,
-                    files.join(", ")
-                )));
-            }
-        }
-        let notes = crate::verify_stop::check(repo, base, &head, fold)?;
+        let clm_approval::BranchHead {
+            head,
+            origin: on_origin,
+        } = repo.approval.branch_head(&w.branch, true)?;
+        let notes = crate::judge::judge_head(repo, &w.branch, base, &head, fold)?;
         let tree = unconflicted_tree(repo, tip, &head)?
             .ok_or_else(|| Error::Refused("the branch conflicts with main".into()))?;
         let merge_base = repo.git(&["merge-base", tip, &head])?;
@@ -721,16 +714,20 @@ impl Batch<'_, '_, '_> {
         };
         let m = &chain.members[at];
         let commit = finals.commits[at].clone();
-        cleanup(repo, &m.wanted.branch, &m.head, m.on_origin, &mut warnings);
+        cleanup(
+            repo,
+            &m.wanted.branch,
+            &m.head,
+            m.on_origin.as_deref(),
+            &mut warnings,
+        );
         let mut out = Output {
             warnings: chain.warnings.iter().cloned().chain(warnings).collect(),
             ..Default::default()
         };
-        if m.wanted.branch.starts_with("spec/") {
-            let added = changes_added(repo, &chain.base, &m.head, &m.judged.changes);
-            let tips = propose_tips(repo);
-            release_claims(repo, &commit, &added, &tips, &mut out.warnings);
-        }
+        let added = changes_added(repo, &chain.base, &m.head);
+        let tips = propose_tips(repo);
+        release_claims(repo, &commit, &added, &tips, &mut out.warnings);
         let target_seconds = repo
             .settings
             .land
@@ -752,7 +749,7 @@ impl Batch<'_, '_, '_> {
             "landed {commit} {}",
             kind_words(m.judged.kind, m.judged.review)
         ));
-        if m.wanted.branch.starts_with("impl/") {
+        if m.judged.kind == LandKind::Code {
             free_build_target(repo, &m.wanted.branch, &mut out);
         }
         self.landed = Some(out);
@@ -934,7 +931,6 @@ pub(crate) struct Found {
     pub(crate) commit: String,
     pub(crate) kind: LandKind,
     pub(crate) review: bool,
-    pub(crate) changes: Vec<String>,
 }
 
 /// The `landed` record of a land of `branch` at `head` that is on `main` now: its merge commit
@@ -951,7 +947,6 @@ pub(crate) fn landed_record(
             branch: landed,
             kind,
             review,
-            changes,
             ..
         } = &record.body
         else {
@@ -969,7 +964,6 @@ pub(crate) fn landed_record(
                 commit: commit.clone(),
                 kind: *kind,
                 review: *review,
-                changes: changes.clone(),
             }));
         }
     }

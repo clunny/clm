@@ -12,6 +12,7 @@ mod deleted_tests;
 mod derived;
 mod exe;
 mod finish;
+mod judge;
 mod land;
 mod lock;
 mod own_files;
@@ -36,11 +37,6 @@ pub use reconnect::reconnect;
 pub use runner::{CheckEnv, CheckRun, Step, run_check, run_check_as};
 
 pub use clm_approval::{Env, Output};
-
-/// `clm approve [<branch>]`, which `clm-approval` holds (`land.approval/approve`).
-pub fn approve(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Error> {
-    Ok(clm_approval::approve(root, branch, env)?)
-}
 
 /// Ends a merge commit's message with the trailer `Gate-Rules: <RULES>`, the version of the
 /// gate's rules the land is judged by, in the trailer block that holds any `Change:` or
@@ -112,18 +108,11 @@ impl From<std::io::Error> for Error {
     }
 }
 
-/// The branches deleted from `origin` once landed.
-const CLAIM_PREFIXES: [&str; 3] = ["impl/", "spec/", "propose/"];
-
 /// How a warning a land writes as it happens starts, as the command writes every other one
 /// after the run (`land/commands-in-crate`).
 const WARNING: &str = "clm land: warning: ";
 
 const OFFLINE: &str = "offline: origin can't be reached; push and land when it can";
-
-fn is_claim(branch: &str) -> bool {
-    CLAIM_PREFIXES.iter().any(|p| branch.starts_with(p))
-}
 
 /// The repository a command runs in, with its settings.
 pub(crate) struct Repo<'a> {
@@ -163,9 +152,11 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, tried again after a failure (`land/offline-land`).
+    /// `git fetch --prune origin`, tried again after a failure (`land/offline-land`): pruned,
+    /// since every landed branch is deleted from `origin`, and a tracking ref left behind would
+    /// stand for a branch `origin` no longer holds (`land.approval/branch-head`).
     fn fetch(&self) -> Result<(), Error> {
-        self.fetch_with(&["fetch", clm_git::REMOTE])
+        self.fetch_with(&["fetch", "--prune", clm_git::REMOTE])
     }
 
     /// The fetch `args` through the layer's retrying fetch: `Offline` is the offline refusal,

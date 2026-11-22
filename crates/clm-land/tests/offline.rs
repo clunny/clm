@@ -69,7 +69,7 @@ fn ledger_on_new_origin(f: &Fixture) -> bool {
 
 #[test]
 fn no_host_lands_through_the_clones_own_remote() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let f = Fixture::local();
     let old = f.remote("main");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -106,7 +106,7 @@ fn no_host_lands_through_the_clones_own_remote() {
 
 #[test]
 fn offline_with_a_remote_refuses() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let f = Fixture::new("host = \"github\"");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -125,7 +125,7 @@ fn offline_with_a_remote_refuses() {
 
 #[test]
 fn offline_with_no_host_refuses_too() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let f = Fixture::local();
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -144,7 +144,7 @@ fn offline_with_no_host_refuses_too() {
 
 #[test]
 fn first_push_after_adding_a_remote() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let (f, _) = landed_through_remote();
     let landed = f.remote("main");
     repoint_origin(&f, false);
@@ -161,7 +161,7 @@ fn first_push_after_adding_a_remote() {
 
 #[test]
 fn origin_main_behind_local() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let (f, _) = landed_through_remote();
     let landed = f.remote("main");
     let first = f.parents(&f.path("origin.git"), &landed)[0].clone();
@@ -192,7 +192,7 @@ fn reconnect_names_rebase() {
 
 #[test]
 fn origin_moved() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let (f, _) = landed_through_remote();
     repoint_origin(&f, true);
     let theirs = new_origin(&f, "main");
@@ -204,9 +204,68 @@ fn origin_moved() {
 
 #[test]
 fn reconnect_without_origin_refuses() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let (f, _) = landed_through_remote();
     f.git(&f.work(), &["remote", "remove", "origin"]);
     let why = refused(clm_land::reconnect(&f.work(), &f.env(&[])));
     assert!(why.contains("origin"), "{why}");
+}
+
+#[test]
+fn origin_without_main() {
+    // req:land/offline-land@62e516ef
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    // `origin` an empty bare repository.
+    let bare = f.path("empty.git");
+    f.git(
+        bare.parent().unwrap(),
+        &["init", "-q", "--bare", "-b", "main", bare.to_str().unwrap()],
+    );
+    f.git(
+        &f.work(),
+        &["remote", "set-url", "origin", bare.to_str().unwrap()],
+    );
+    f.git(&f.work(), &["push", "-q", "origin", "impl/a"]);
+    let records = f.records().len();
+    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
+    assert!(why.contains("origin/main"), "{why}");
+    assert!(why.contains("clm reconnect"), "{why}");
+    let heads = f.git(
+        &bare,
+        &["for-each-ref", "--format=%(refname)", "refs/heads/main"],
+    );
+    assert!(heads.is_empty(), "{heads}");
+    assert_eq!(f.records().len(), records);
+}
+
+#[test]
+fn nothing_to_reconnect() {
+    // req:land/offline-land@62e516ef
+    // No `origin` remote.
+    let f = Fixture::new("");
+    f.git(&f.work(), &["remote", "remove", "origin"]);
+    let why = refused(clm_land::reconnect(&f.work(), &f.env(&[])));
+    assert_eq!(why, "no `origin`: add the remote, then reconnect");
+    // A reachable `origin` and no local `main`.
+    let g = Fixture::new("");
+    let before = g.git(&g.path("origin.git"), &["for-each-ref"]);
+    g.git(&g.work(), &["checkout", "-q", "-b", "other"]);
+    g.git(&g.work(), &["branch", "-q", "-D", "main"]);
+    let why = refused(clm_land::reconnect(&g.work(), &g.env(&[])));
+    assert!(why.contains("`main`"), "{why}");
+    assert_eq!(g.git(&g.path("origin.git"), &["for-each-ref"]), before);
+}
+
+#[test]
+fn a_land_prunes_what_origin_deleted() {
+    // `land/land` states a land's fetch prunes; its build cites this test.
+    // A branch deleted on `origin` leaves no tracking ref once a land has fetched.
+    let f = Fixture::new("");
+    f.branch("gone", &[("g.txt", "g\n")]);
+    f.git(&f.path("origin.git"), &["branch", "-q", "-D", "gone"]);
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    let left = f.git(&f.work(), &["for-each-ref", "refs/remotes/origin/gone"]);
+    assert!(left.is_empty(), "{left}");
 }

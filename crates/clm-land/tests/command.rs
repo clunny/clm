@@ -524,8 +524,27 @@ fn a_waiting_land_says_so() {
 }
 
 #[test]
+fn check_only_in_another_root() {
+    // req:land/check-only@fb140143
+    let f = Fixture::new("");
+    let elsewhere = f.path("elsewhere");
+    fs::create_dir_all(&elsewhere).unwrap();
+    let root = f.work();
+    let out = land(
+        &f,
+        &elsewhere,
+        &["--check-only", "--root", root.to_str().unwrap()],
+        &[],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout.lines().last(), Some("checks pass"));
+    let pwd = fs::canonicalize(&root).unwrap();
+    assert_eq!(f.lines("check-pwd.log"), [pwd.display().to_string()]);
+}
+
+#[test]
 fn check_only_checks_the_working_tree() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     let work = f.work();
     // An uncommitted edit: the check runs on the working tree as it stands.
@@ -675,7 +694,7 @@ fn fetch_loses_race(f: &Fixture, always: bool) -> String {
 
 #[test]
 fn fetch_loses_a_ref_race() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let path = fetch_loses_race(&f, false);
@@ -691,7 +710,7 @@ fn fetch_loses_a_ref_race() {
 
 #[test]
 fn fetch_keeps_failing_with_origin_reachable() {
-    // req:land/offline-land@42e20984
+    // req:land/offline-land@62e516ef
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");

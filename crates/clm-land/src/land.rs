@@ -13,7 +13,7 @@ use crate::lock::{Lane, Rank};
 use crate::scratch::Scratch;
 use crate::stderr::Stderr;
 use crate::{CheckHow, Selected};
-use crate::{Env, Error, Output, Repo, Verdict, is_claim};
+use crate::{Env, Error, Output, Repo, Verdict};
 use clm_approval::{Approvals, Policy};
 use clm_model::Priority;
 
@@ -76,7 +76,10 @@ pub(crate) fn land_into(
     // exists, a land knows whether its check will run.
     let prepare = |chain: Option<&str>, woke: bool| -> Result<Prepared, Bail> {
         repo.fetch()?;
-        let (head, on_origin) = repo.approval.head(&branch, true)?;
+        let clm_approval::BranchHead {
+            head,
+            origin: on_origin,
+        } = repo.approval.branch_head(&branch, true)?;
         let fold = clm_ledger::fold(&repo.root)?;
         // A land that waited for the lock may have been landed by the holder, with the lands
         // taken together on one check (`land/batched-lands`).
@@ -94,15 +97,15 @@ pub(crate) fn land_into(
                 on_origin,
             });
         }
-        let base = repo
-            .rev(repo.base())?
-            .ok_or_else(|| Error::Refused(format!("no `{}` to land on", repo.base())))?;
-        // A build holds its own files, before the lock, the merge and any check
-        // (`land/build-holds-own-files`).
-        crate::own_files::check(&repo, &branch, &base, &head)?;
-        // A code branch loses no citing test no approved list names, judged with it
-        // (`land/deleted-tests-approved`).
-        crate::deleted_tests::check(&repo, Some(&branch), &base, &head)?;
+        let base = repo.rev(repo.base())?.ok_or_else(|| {
+            Error::Refused(format!(
+                "no `{}` to land on: push `main` to `origin` with `clm reconnect`, then land",
+                repo.base()
+            ))
+        })?;
+        // The head judged before the lock, the merge and any check: the claim its name makes,
+        // the tests it loses and the components waiting for a fix (`judge`).
+        let warnings = crate::judge::judge_head(&repo, &branch, &base, &head, &fold)?;
         // A signed repository signs this land's record, so a lander without a key is
         // refused before any check runs (`land/signed-land`).
         let signed = repo.approval.signed(&base)?;
@@ -111,22 +114,6 @@ pub(crate) fn land_into(
         }
         // The policy committed at the base, read afresh each attempt.
         let policy = repo.approval.policy(&base)?;
-        // A spec branch holds spec paths only, whatever its gate says
-        // (`land/spec-branch-holds-spec-paths`).
-        if branch.starts_with("spec/") {
-            let files = clm_gate::files_outside_spec_paths(&repo.root, &base, &head)
-                .map_err(Error::Refused)?;
-            if !files.is_empty() {
-                return Err(Error::Refused(format!(
-                    "a spec branch holds only spec paths; {branch} changes {}",
-                    files.join(", ")
-                ))
-                .into());
-            }
-        }
-        // A component whose slow tests broke after a land waits for its fix; the components
-        // of a red result nobody took in yet only warn (`land/verify-stop`).
-        let warnings = crate::verify_stop::check(&repo, &base, &head, &fold)?;
         // 2. The fingerprint, and a request for changes that holds it, before the gate, the
         // lock, the merge and the checks (`land/changes-requested-holds`).
         let fingerprint = repo.approval.fingerprint(&base, &head)?;
@@ -241,7 +228,6 @@ pub(crate) fn land_into(
     let mut overlap_nothing: Option<(String, String)> = None;
     // The head and base whose selection printed nothing, asked once across a restart.
     let mut selection_nothing: Option<(String, String)> = None;
-    let mut claim_tips: BTreeMap<String, String> = BTreeMap::new();
     // Whether the lock was waited for, so the next preparing looks for a land taken together
     // with the holder's (`land/batched-lands`).
     let mut woke = false;
@@ -259,7 +245,14 @@ pub(crate) fn land_into(
                     on_origin,
                 }) => {
                     let mut done = std::mem::take(out);
-                    *out = finish_found(&repo, &branch, &head, on_origin, &found, &mut done);
+                    *out = finish_found(
+                        &repo,
+                        &branch,
+                        &head,
+                        on_origin.as_deref(),
+                        &found,
+                        &mut done,
+                    );
                     return Ok(());
                 }
                 Err(Bail::Unrecorded {
@@ -365,11 +358,9 @@ pub(crate) fn land_into(
             env_vars,
             env_changed,
         } = p;
-        // The `propose/*` claims this attempt's last fetch read, which a spec land releases
-        // leased on them (`land/landed-change-releases-claims`).
-        if branch.starts_with("spec/") {
-            claim_tips = propose_tips(&repo);
-        }
+        // The `propose/*` claims this attempt's last fetch read, which a land that adds a
+        // change releases leased on them (`land/landed-change-releases-claims`).
+        let claim_tips = propose_tips(&repo);
         for warning in warnings {
             if !out.warnings.contains(&warning) {
                 out.warnings.push(warning);
@@ -715,11 +706,15 @@ pub(crate) fn land_into(
                 appended.record.writer
             ));
         }
-        cleanup(&repo, &branch, &head, on_origin, &mut out.warnings);
-        if branch.starts_with("spec/") {
-            let added = changes_added(&repo, &base, &head, &changes);
-            release_claims(&repo, &merge, &added, &claim_tips, &mut out.warnings);
-        }
+        cleanup(
+            &repo,
+            &branch,
+            &head,
+            on_origin.as_deref(),
+            &mut out.warnings,
+        );
+        let added = changes_added(&repo, &base, &head);
+        release_claims(&repo, &merge, &added, &claim_tips, &mut out.warnings);
         if let (Some((seconds, steps)), Some(target)) = (&timed, target_seconds) {
             let past = fold.timed_lands(crate::time_report::LANDS);
             let over = slow.as_deref().map(|s| (s, steps.as_slice()));
@@ -733,7 +728,7 @@ pub(crate) fn land_into(
             Verdict::Spec { review: false } => format!("landed {merge} spec"),
             Verdict::Spec { review: true } => format!("landed {merge} spec review"),
         });
-        if branch.starts_with("impl/") {
+        if matches!(verdict, Verdict::Code) {
             free_build_target(&repo, &branch, out);
         }
         return Ok(());
@@ -750,14 +745,14 @@ enum Bail {
     Found {
         found: crate::batch::Found,
         head: String,
-        on_origin: bool,
+        on_origin: Option<String>,
     },
     /// The head is on `main` through a merge commit no `landed` record names
     /// (`land/unrecorded-land-finished`).
     Unrecorded {
         commit: String,
         head: String,
-        on_origin: bool,
+        on_origin: Option<String>,
     },
 }
 
@@ -785,16 +780,14 @@ pub(crate) fn finish_found(
     repo: &Repo,
     branch: &str,
     head: &str,
-    on_origin: bool,
+    on_origin: Option<&str>,
     found: &crate::batch::Found,
     out: &mut Output,
 ) -> Output {
     cleanup(repo, branch, head, on_origin, &mut out.warnings);
-    if branch.starts_with("spec/")
-        && let Ok(base) = repo.git(&["rev-parse", &format!("{}^1", found.commit)])
-    {
+    if let Ok(base) = repo.git(&["rev-parse", &format!("{}^1", found.commit)]) {
         let tips = propose_tips(repo);
-        let added = changes_added(repo, &base, head, &found.changes);
+        let added = changes_added(repo, &base, head);
         release_claims(repo, &found.commit, &added, &tips, &mut out.warnings);
     }
     out.lines.push(format!(
@@ -802,7 +795,7 @@ pub(crate) fn finish_found(
         found.commit,
         crate::batch::kind_words(found.kind, found.review)
     ));
-    if branch.starts_with("impl/") {
+    if found.kind == LandKind::Code {
         free_build_target(repo, branch, out);
     }
     std::mem::take(out)
@@ -831,15 +824,13 @@ pub(crate) fn approval_hint(approvals: &Approvals, branch: &str, policy: &Policy
     if !approvals.refused.is_empty() {
         hint.push_str("no approval of this diff counts:\n");
         for why in &approvals.refused {
-            hint.push_str(&format!("  {why}\n"));
+            hint.push_str(&format!("{why}\n"));
         }
     }
     // Under `approval = "other"`, the authors' and the lander's own approvals never count.
-    let who = match approvals
-        .refused
-        .iter()
-        .any(|w| w.contains("approval = \"other\""))
-    {
+    // Another person whenever an approval was refused under `approval = "other"`, whatever
+    // the reason.
+    let who = match policy.other && !approvals.refused.is_empty() {
         true => "another person",
         false => "the human",
     };
@@ -1003,8 +994,8 @@ fn overlap_basis(
 /// What step 1 gathers for an attempt.
 struct Prepared {
     head: String,
-    /// Whether `head` is `origin`'s tip of the branch.
-    on_origin: bool,
+    /// `origin`'s tip of the branch as the fetch read it, when `origin` holds it.
+    on_origin: Option<String>,
     base: String,
     /// Whether the repository is signed at `base`.
     signed: bool,
@@ -1126,21 +1117,20 @@ pub(crate) fn push_main(
     }
 }
 
-/// Deletes a landed claim branch from `origin`, leased on `head`, and the local branch when
-/// it is checked out nowhere and holds nothing the land didn't; a failure warns.
+/// Deletes a landed branch from `origin`, whatever its name, when `origin` held it at the
+/// fetch, leased on `origin`'s tip as that fetch read it (`on_origin`), and the local branch
+/// when it is checked out nowhere and holds nothing the land didn't; a failure warns
+/// (`land/landed-branch-cleanup`).
 pub(crate) fn cleanup(
     repo: &Repo,
     branch: &str,
     head: &str,
-    on_origin: bool,
+    on_origin: Option<&str>,
     warnings: &mut Vec<String>,
 ) {
-    if !is_claim(branch) {
-        return;
-    }
-    if on_origin {
+    if let Some(tip) = on_origin {
         let host = clm_host::adapter(repo.settings.host.value);
-        if let Err(e) = host.branch_delete(&repo.root, branch, head) {
+        if let Err(e) = host.branch_delete(&repo.root, branch, tip) {
             let why = match e {
                 clm_host::Error::Refused(why)
                 | clm_host::Error::Git(why)
@@ -1180,29 +1170,31 @@ pub(crate) fn propose_tips(repo: &Repo) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// The ones of `changes` the head adds: neither `changes/<id>/change.md` nor
-/// `changes/archive/<id>/change.md` at the merge base of `base` and `head`.
-pub(crate) fn changes_added(
-    repo: &Repo,
-    base: &str,
-    head: &str,
-    changes: &[String],
-) -> Vec<String> {
+/// The IDs of the changes `head` adds over its merge base with `base`, as
+/// `gate.fingerprint/fingerprint` counts one added: a live `changes/<id>/change.md`, or a new
+/// archived `changes/archive/<id>/change.md`, that the merge base has under neither path.
+/// None when there is no merge base or a listing fails.
+pub(crate) fn changes_added(repo: &Repo, base: &str, head: &str) -> Vec<String> {
     let Ok(merge_base) = repo.git(&["merge-base", base, head]) else {
         return Vec::new();
     };
-    let held = |path: String| {
-        repo.git(&["cat-file", "-e", &format!("{merge_base}:{path}")])
-            .is_ok()
+    let (Ok(before), Ok(after)) = (
+        repo.approval.listing(&merge_base),
+        repo.approval.listing(head),
+    ) else {
+        return Vec::new();
     };
-    changes
+    let mut ids: Vec<String> = clm_gate::added_changes(&before, &after)
         .iter()
-        .filter(|id| {
-            !held(format!("changes/{id}/change.md"))
-                && !held(format!("changes/archive/{id}/change.md"))
+        .filter_map(|path| {
+            let rest = std::str::from_utf8(path).ok()?.strip_prefix("changes/")?;
+            let rest = rest.strip_prefix("archive/").unwrap_or(rest);
+            Some(rest.strip_suffix("/change.md")?.to_string())
         })
-        .cloned()
-        .collect()
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
 }
 
 /// Deletes on `origin` the `propose/<slug>` claim of each item the changes `added` name in
@@ -1218,8 +1210,8 @@ pub(crate) fn release_claims(
     let mut slugs = BTreeSet::new();
     for id in added {
         let text = repo
-            .git(&["show", &format!("{merge}:changes/{id}/change.md")])
-            .or_else(|_| repo.git(&["show", &format!("{merge}:changes/archive/{id}/change.md")]));
+            .git(&["show", &format!("{merge}:./changes/{id}/change.md")])
+            .or_else(|_| repo.git(&["show", &format!("{merge}:./changes/archive/{id}/change.md")]));
         let Some(front) = text
             .ok()
             .and_then(|t| clm_model::parse_change_frontmatter(&t))

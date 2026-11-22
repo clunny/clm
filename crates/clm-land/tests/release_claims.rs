@@ -42,7 +42,7 @@ fn released(out: &clm_land::Output) -> Vec<&String> {
 
 #[test]
 fn claims_on_the_changes_items_released() {
-    // req:land/landed-change-releases-claims@0e64ba8a
+    // req:land/landed-change-releases-claims@29ddf1fc
     let f = Fixture::new("");
     f.write("gate-out", "spec\n");
     items(&f);
@@ -62,7 +62,7 @@ fn claims_on_the_changes_items_released() {
 
 #[test]
 fn moved_claim_kept() {
-    // req:land/landed-change-releases-claims@0e64ba8a
+    // req:land/landed-change-releases-claims@29ddf1fc
     let f = Fixture::new("");
     f.write("gate-out", "spec\n");
     items(&f);
@@ -83,7 +83,7 @@ fn moved_claim_kept() {
 
 #[test]
 fn an_edit_of_a_landed_change_releases_nothing() {
-    // req:land/landed-change-releases-claims@0e64ba8a
+    // req:land/landed-change-releases-claims@29ddf1fc
     let f = Fixture::new("");
     f.write("gate-out", "spec\n");
     items(&f);
@@ -101,20 +101,35 @@ fn an_edit_of_a_landed_change_releases_nothing() {
 
 #[test]
 fn a_code_land_releases_nothing() {
-    // req:land/landed-change-releases-claims@0e64ba8a
+    // req:land/landed-change-releases-claims@29ddf1fc
     let f = Fixture::new("");
-    // Even a gate that calls the land a spec land: the branch isn't `spec/*`.
-    f.write("gate-out", "spec\n");
     items(&f);
-    f.branch("impl/a", &[("changes/c/change.md", CHANGE)]);
+    // The change naming `backlog/q` is on `main` already; the branch adds none.
+    f.commit_files(&[("changes/c/change.md", CHANGE)], "change c");
+    f.git(&f.work(), &["push", "-q", "origin", "main"]);
+    f.branch("impl/a", &[("crates/a/src/lib.rs", "a\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     assert!(on_origin(&f, "q"));
     assert!(released(&out).is_empty());
 }
 
 #[test]
+fn a_change_archived_in_its_branch() {
+    // req:land/landed-change-releases-claims@29ddf1fc
+    let f = Fixture::new("");
+    items(&f);
+    let done = "---\nstatus: done\nresolves: [r]\n---\n\n## Intent\n\nx\n";
+    f.branch("d", &[("changes/archive/d/change.md", done)]);
+    let out = clm_land::land(&f.work(), Some("d"), &f.env(&[])).unwrap();
+    assert_eq!(f.landed().len(), 1);
+    assert!(!on_origin(&f, "r"));
+    assert!(on_origin(&f, "q"));
+    assert_eq!(released(&out), ["released propose/r"], "{:?}", out.warnings);
+}
+
+#[test]
 fn skips_what_it_cannot_read_and_names_a_slug_once() {
-    // req:land/landed-change-releases-claims@0e64ba8a
+    // req:land/landed-change-releases-claims@29ddf1fc
     let f = Fixture::new("");
     f.write("gate-out", "spec\n");
     items(&f);

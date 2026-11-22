@@ -21,7 +21,7 @@ fn on_branch(f: &Fixture) -> String {
 
 #[test]
 fn checks_pass_on_an_uncommitted_edit() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     std::fs::write(f.work().join("a.txt"), "edited\n").unwrap();
     let head = f.rev("HEAD");
@@ -43,7 +43,7 @@ fn checks_pass_on_an_uncommitted_edit() {
 
 #[test]
 fn an_untracked_file_is_an_uncommitted_change() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     std::fs::write(f.work().join("new.txt"), "new\n").unwrap();
     let lines = lines(&f);
@@ -56,7 +56,7 @@ fn an_untracked_file_is_an_uncommitted_change() {
 
 #[test]
 fn a_clean_committed_head_is_recorded_and_the_land_runs_no_check() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     let head = on_branch(&f);
     let lines = lines(&f);
@@ -74,7 +74,7 @@ fn a_clean_committed_head_is_recorded_and_the_land_runs_no_check() {
 
 #[test]
 fn the_record_names_the_command_a_land_names() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     on_branch(&f);
     lines(&f);
@@ -91,7 +91,7 @@ fn the_record_names_the_command_a_land_names() {
 
 #[test]
 fn with_no_check_command_the_record_names_clm_check() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     let toml = "";
     f.commit_files(&[("clm.toml", toml)], "no check");
@@ -112,7 +112,7 @@ fn with_no_check_command_the_record_names_clm_check() {
 
 #[test]
 fn main_moved_after_the_record() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     on_branch(&f);
     lines(&f);
@@ -128,7 +128,7 @@ fn main_moved_after_the_record() {
 
 #[test]
 fn head_behind_main() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     on_branch(&f);
     f.advance_main("crates/b/src/lib.rs", "b\n");
@@ -146,7 +146,7 @@ fn head_behind_main() {
 
 #[test]
 fn a_commit_during_the_check() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     let commits = f.path("bin/commits");
     write_exec(
@@ -167,7 +167,7 @@ fn a_commit_during_the_check() {
 
 #[test]
 fn a_file_made_by_the_check_is_an_uncommitted_change() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     let makes = f.path("bin/makes");
     write_exec(&makes, "#!/bin/sh\necho x > made.txt\n");
@@ -188,7 +188,7 @@ fn a_file_made_by_the_check_is_an_uncommitted_change() {
 
 #[test]
 fn an_edit_the_check_undoes_still_counted() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     // The tree was dirty when the check started, so what it checked isn't `HEAD`'s.
     let f = Fixture::new("");
     let undoes = f.path("bin/undoes");
@@ -211,7 +211,7 @@ fn an_edit_the_check_undoes_still_counted() {
 
 #[test]
 fn check_command_fails() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     f.write("check-fails", "");
     let why = refused(clm_land::check_only(&f.work(), None, &f.env(&[])));
@@ -224,7 +224,7 @@ fn check_command_fails() {
 
 #[test]
 fn clm_check_fails() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     f.write("clm-check-fails", "");
     let why = refused(clm_land::check_only(&f.work(), None, &f.env(&[])));
@@ -234,7 +234,7 @@ fn clm_check_fails() {
 
 #[test]
 fn no_check_command() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     std::fs::write(f.work().join("clm.toml"), "").unwrap();
     let out = clm_land::check_only(&f.work(), None, &f.env(&[])).unwrap();
@@ -245,7 +245,7 @@ fn no_check_command() {
 
 #[test]
 fn with_a_branch() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let why = refused(clm_land::check_only(&f.work(), Some("impl/a"), &f.env(&[])));
@@ -256,7 +256,7 @@ fn with_a_branch() {
 
 #[test]
 fn unreadable_settings() {
-    // req:land/check-only@938e24c2
+    // req:land/check-only@fb140143
     let f = Fixture::new("");
     std::fs::write(f.work().join("clm.toml"), "not = [toml").unwrap();
     let why = refused(clm_land::check_only(&f.work(), None, &f.env(&[])));
