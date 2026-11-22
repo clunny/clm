@@ -15,6 +15,12 @@ use clm_model::Priority;
 use crate::Error;
 use crate::stderr::Stderr;
 
+/// A lock's or a queue's file that can't be made, read, written or locked: a failure naming
+/// its path, exit 2 (`land/lock-queue`).
+fn at(path: &Path) -> impl Fn(std::io::Error) -> Error + '_ {
+    move |e| Error::Git(format!("{}: {e}", path.display()))
+}
+
 /// How long a waiter leaves between two reads of the queue.
 const POLL: Duration = Duration::from_millis(250);
 
@@ -198,48 +204,57 @@ struct Queue {
 impl Queue {
     fn at(lock: &Path) -> Result<Queue, Error> {
         let dir = lock.with_extension("queue");
-        std::fs::create_dir_all(&dir)?;
+        std::fs::create_dir_all(&dir).map_err(at(&dir))?;
         Ok(Queue { dir })
     }
 
     /// The short exclusive lock every read and write of the queue's files happens under.
     fn guard(&self) -> Result<File, Error> {
+        let path = self.dir.join("next.lock");
         let file = File::options()
             .create(true)
             .truncate(false)
             .write(true)
-            .open(self.dir.join("next.lock"))?;
-        file.lock()?;
+            .open(&path)
+            .map_err(at(&path))?;
+        file.lock().map_err(at(&path))?;
         Ok(file)
     }
 
-    fn read(&self, name: &str) -> String {
-        std::fs::read_to_string(self.dir.join(name)).unwrap_or_default()
+    /// The text of the queue's file `name`, empty when it is missing; any other failure to
+    /// read it names it.
+    fn read(&self, name: &str) -> Result<String, Error> {
+        let path = self.dir.join(name);
+        match std::fs::read_to_string(&path) {
+            Ok(text) => Ok(text),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(at(&path)(e)),
+        }
     }
 
     fn write(&self, name: &str, text: &str) -> Result<(), Error> {
-        std::fs::write(self.dir.join(name), text)?;
-        Ok(())
+        let path = self.dir.join(name);
+        std::fs::write(&path, text).map_err(at(&path))
     }
 
-    fn streak(&self) -> u32 {
-        self.read("streak").trim().parse().unwrap_or(0)
+    fn streak(&self) -> Result<u32, Error> {
+        Ok(self.read("streak")?.trim().parse().unwrap_or(0))
     }
 
-    /// The live tickets, removing those of runs that have ended (their lock is free). Call
-    /// under the guard.
+    /// The live tickets, removing those of runs that have ended (their lock is free). A ticket
+    /// that can't be opened, even to read, holds no turn in this reading and stays where it
+    /// is: the lock, not the queue, keeps two runs apart. Call under the guard.
     fn live(&self) -> Result<Vec<Ticket>, Error> {
         let mut live = Vec::new();
-        for entry in std::fs::read_dir(&self.dir)? {
-            let entry = entry?;
+        for entry in std::fs::read_dir(&self.dir).map_err(at(&self.dir))? {
+            let entry = entry.map_err(at(&self.dir))?;
             let Some(ticket) = entry.file_name().to_str().and_then(parse) else {
                 continue;
             };
-            let dead = match File::options().write(true).open(entry.path()) {
+            // Read-only: a lock on a file needs no right to write it.
+            let dead = match File::open(entry.path()) {
                 Ok(file) => file.try_lock().is_ok(),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                // A ticket we can't open is taken as live: safer than failing every run.
-                Err(_) => false,
+                Err(_) => continue,
             };
             if dead {
                 let _ = std::fs::remove_file(alone_mark(&entry.path()));
@@ -276,13 +291,14 @@ pub(crate) fn take_named(
     mut say: impl FnMut(&str),
 ) -> Result<Held, Error> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent).map_err(at(parent))?;
     }
     let lock = File::options()
         .create(true)
         .truncate(false)
         .write(true)
-        .open(path)?;
+        .open(path)
+        .map_err(at(path))?;
     let queue = Queue::at(path)?;
 
     // At once when nothing is in the way; else a ticket, made under the guard.
@@ -301,16 +317,17 @@ pub(crate) fn take_named(
                     });
                 }
                 Err(TryLockError::WouldBlock) => {}
-                Err(TryLockError::Error(e)) => return Err(e.into()),
+                Err(TryLockError::Error(e)) => return Err(at(path)(e)),
             }
         }
         // A lost counter must not hand out a live ticket's name: skip names that exist.
-        let mut counter: u64 = queue.read("next").trim().parse().unwrap_or(0);
+        let mut counter: u64 = queue.read("next")?.trim().parse().unwrap_or(0);
         let (name, ticket_path, file) = loop {
             let name = ticket_name(counter, rank);
             let ticket_path = queue.dir.join(&name);
             let digits = format!("{counter:020}-");
-            let taken = std::fs::read_dir(&queue.dir)?
+            let taken = std::fs::read_dir(&queue.dir)
+                .map_err(at(&queue.dir))?
                 .filter_map(Result::ok)
                 .any(|e| e.file_name().to_string_lossy().starts_with(&digits));
             counter += 1;
@@ -320,12 +337,14 @@ pub(crate) fn take_named(
             let mut file = File::options()
                 .create_new(true)
                 .write(true)
-                .open(&ticket_path)?;
-            file.write_all(content.as_bytes())?;
+                .open(&ticket_path)
+                .map_err(at(&ticket_path))?;
+            file.write_all(content.as_bytes())
+                .map_err(at(&ticket_path))?;
             break (name, ticket_path, file);
         };
         queue.write("next", &counter.to_string())?;
-        file.lock()?;
+        file.lock().map_err(at(&ticket_path))?;
         (name, ticket_path, file)
     };
     // From here the ticket is removed on every path out.
@@ -341,11 +360,11 @@ pub(crate) fn take_named(
         {
             let _guard = queue.guard()?;
             let live = queue.live()?;
-            let holder = queue.read("holder");
+            let holder = queue.read("holder")?;
             let holder = holder.trim();
             let holding = live.iter().any(|t| t.name == holder);
             let waiting: Vec<Ticket> = live.into_iter().filter(|t| t.name != holder).collect();
-            let order = turn_order(&waiting, queue.streak());
+            let order = turn_order(&waiting, queue.streak()?);
             let before = order
                 .iter()
                 .position(|t| t.name == name)
@@ -353,13 +372,13 @@ pub(crate) fn take_named(
             let free = match held.lock.try_lock() {
                 Ok(()) => true,
                 Err(TryLockError::WouldBlock) => false,
-                Err(TryLockError::Error(e)) => return Err(e.into()),
+                Err(TryLockError::Error(e)) => return Err(at(path)(e)),
             };
             if free && before == 0 {
                 let streak = if rank.priority == Priority::P1 {
-                    queue.streak()
+                    queue.streak()?
                 } else if rank.lane == Lane::Priority && order.iter().any(|t| !t.priority_lane()) {
-                    queue.streak() + 1
+                    queue.streak()? + 1
                 } else {
                     0
                 };
@@ -368,7 +387,7 @@ pub(crate) fn take_named(
                 return Ok(held);
             }
             if free {
-                held.lock.unlock()?;
+                held.lock.unlock().map_err(at(path))?;
             }
             // The run holding the lock counts, whether it has a ticket or not.
             let ahead = before + usize::from(holding || !free);
@@ -415,11 +434,11 @@ pub(crate) fn waiting_lands(target: &Path, held: &Held) -> Result<Vec<Waiting>, 
         .filter(|t| Some(&t.name) != own.as_ref())
         .collect();
     let mut out = Vec::new();
-    for ticket in turn_order(&live, queue.streak()) {
+    for ticket in turn_order(&live, queue.streak()?) {
         if alone_mark(&queue.dir.join(&ticket.name)).exists() {
             continue;
         }
-        let branch = queue.read(&ticket.name).trim().to_string();
+        let branch = queue.read(&ticket.name)?.trim().to_string();
         if !branch.is_empty() {
             out.push(Waiting {
                 ticket: ticket.name,
@@ -438,7 +457,8 @@ pub(crate) fn mark_alone(target: &Path, ticket: &str) -> Result<(), Error> {
     let ticket = queue.dir.join(ticket);
     // A ticket that ended meanwhile leaves no mark behind.
     if ticket.exists() {
-        std::fs::write(alone_mark(&ticket), "")?;
+        let mark = alone_mark(&ticket);
+        std::fs::write(&mark, "").map_err(at(&mark))?;
     }
     Ok(())
 }
@@ -481,8 +501,23 @@ mod tests {
     }
 
     #[test]
+    fn a_missing_queue_file_reads_as_its_default_and_an_unreadable_one_names_its_path() {
+        // req:land/lock-queue@32c5dce4
+        let dir = tempfile::tempdir().unwrap();
+        let queue = Queue::at(&lock_path(&dir)).unwrap();
+        assert_eq!(queue.read("holder").unwrap(), "");
+        assert_eq!(queue.streak().unwrap(), 0);
+        // A directory where the file would be can't be read as one.
+        std::fs::create_dir(queue.dir.join("streak")).unwrap();
+        match queue.streak() {
+            Err(Error::Git(why)) => assert!(why.contains("check.queue/streak"), "{why}"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
     fn a_free_lock_is_taken_at_once_and_leaves_no_ticket() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let held = take(&path, Rank::ORDINARY, "p", |_| panic!("said")).unwrap();
@@ -498,7 +533,7 @@ mod tests {
     #[test]
     fn a_run_outside_the_queue_counts_one_ahead_and_is_waited_for() {
         // req:land/check-lock@a6608578
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let held = outsider(&path);
@@ -598,7 +633,7 @@ mod tests {
 
     #[test]
     fn turns_go_in_arrival_order_and_each_line_counts_the_runs_ahead() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let (got, first) = run_in_order(&[
             ("a", Rank::ORDINARY),
             ("b", Rank::ORDINARY),
@@ -610,7 +645,7 @@ mod tests {
 
     #[test]
     fn priority_lane_runs_go_first_but_cannot_starve_the_rest() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let p = rank(Lane::Priority, Priority::P5);
         let (got, _) = run_in_order(&[
             ("o", Rank::ORDINARY),
@@ -628,7 +663,7 @@ mod tests {
 
     #[test]
     fn p1_goes_first_priority_lane_before_ordinary() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let (got, _) = run_in_order(&[
             ("pri5", rank(Lane::Priority, Priority::P5)),
             ("ord1", rank(Lane::Ordinary, Priority::P1)),
@@ -639,7 +674,7 @@ mod tests {
 
     #[test]
     fn below_p1_the_priority_lane_goes_first_then_the_highest_priority() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let (got, _) = run_in_order(&[
             ("ord2", rank(Lane::Ordinary, Priority::P2)),
             ("pri4", rank(Lane::Priority, Priority::P4)),
@@ -651,7 +686,7 @@ mod tests {
 
     #[test]
     fn p1_does_not_wait_for_the_cap() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let (got, _) = run_in_order_after(
             &[
                 ("ord5", Rank::ORDINARY),
@@ -664,7 +699,7 @@ mod tests {
 
     #[test]
     fn a_priority_lane_p1_run_goes_before_the_cap_runs() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let (got, _) = run_in_order_after(
             &[
                 ("ord5", Rank::ORDINARY),
@@ -677,7 +712,7 @@ mod tests {
 
     #[test]
     fn the_cap_lets_an_ordinary_run_pass_after_six_below_p1() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let (got, _) = run_in_order_after(
             &[
                 ("ord5", Rank::ORDINARY),
@@ -690,7 +725,7 @@ mod tests {
 
     #[test]
     fn the_ticket_of_an_ended_run_holds_no_turn() {
-        // req:land/lock-queue@f4acb98c
+        // req:land/lock-queue@32c5dce4
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let outside = outsider(&path);

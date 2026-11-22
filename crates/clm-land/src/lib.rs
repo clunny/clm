@@ -497,14 +497,7 @@ impl<'a> Repo<'a> {
         Ok(clm_ledger::append(&self.root, entry, self.env)?)
     }
 
-    fn append_all(
-        &self,
-        entries: Vec<clm_ledger::Entry>,
-    ) -> Result<Vec<clm_ledger::Appended>, Error> {
-        Ok(clm_ledger::append_all(&self.root, entries, self.env)?)
-    }
-
-    /// `append_all` of a land's records once `main` holds its merge commit: a failure is git's,
+    /// `clm_ledger::append_all` of a land's records once `main` holds its merge commit: a failure is git's,
     /// exit 2, and says that `main` holds the land and that landing `branch` again records it
     /// (`land/land-push-retry`, `land/unrecorded-land-finished`).
     fn append_landed(
