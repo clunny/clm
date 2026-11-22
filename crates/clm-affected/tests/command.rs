@@ -984,6 +984,24 @@ fn a_side_that_selects_everything_leaves_the_others_output() {
 }
 
 #[test]
+fn both_sides_selecting_everything_print_the_first_sides_line() {
+    // req:check.affected/overlap-selection@bc565b43
+    let dir = overlap_repo(
+        "[affected]\nall = [\"Cargo.lock\", \"Cargo.toml\"]\n",
+        "[]",
+        &|r| write(r, "Cargo.lock", "lock 2\n"),
+        &|r| write(r, "Cargo.toml", "toml 2\n"),
+    );
+    let root = dir.path();
+    let out = clm_affected_args(root, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "all Cargo.lock\n");
+    let out = clm_affected_args(root, &["--overlap", "y", "x"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "all Cargo.toml\n");
+}
+
+#[test]
 fn a_reader_on_one_side_meets_its_owner_on_the_other() {
     // req:check.affected/overlap-selection@bc565b43
     let dir = overlap_repo(

@@ -448,7 +448,6 @@ mod cited_ids_tests {
 mod overlap_tests {
     use std::fs;
     use std::path::Path;
-    use std::process::Command;
 
     use tempfile::TempDir;
 
@@ -498,14 +497,18 @@ mod overlap_tests {
     }
 
     fn git(root: &Path, args: &[&str]) {
-        let out = Command::new("git")
-            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
-            .args(["-c", "commit.gpgsign=false"])
-            .args(args)
-            .current_dir(root)
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "git {args:?}: {out:?}");
+        let config = [
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+        ];
+        let all: Vec<&str> = config.iter().chain(args).copied().collect();
+        if let Err(e) = clm_git::git_isolated(root, &all) {
+            panic!("git {args:?}: {e}");
+        }
     }
 
     fn commit_all(root: &Path, message: &str) {
