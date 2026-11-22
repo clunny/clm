@@ -271,7 +271,7 @@ That a build works through its component highest priority first is a session's c
 - land/build-holds-own-files
 
 #### Untested
-The land judges which files a build changes, not the edit: that a wiring edit adds only the build's own entry, and that an edit to a capability test keeps what the capability states, are judgements. A branch named outside `impl/` has no component and isn't judged, and a project whose root names no `wiring` is held to this by its builds' instructions alone (`own-files-at-the-gate`).
+The land judges which files a build changes, not the edit, except that an edit of `clm.toml` is admitted only when it drops `--allow` entries and nothing else (`gate/own-files`): that a wiring edit adds only the build's own entry, and that an edit to a capability test keeps what the capability states, are judgements. A branch named outside `impl/` has no component and isn't judged, and a project whose root names no `wiring` is held to this by its builds' instructions alone (`own-files-at-the-gate`).
 
 ### Constraint: incremental-adoption
 **Checked.** Once the root spec sets `outside`, every tracked code file SHALL be owned by a component or declared `outside`, so an existing codebase is adopted a part at a time and nothing is unowned by accident.

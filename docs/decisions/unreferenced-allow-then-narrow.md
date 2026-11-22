@@ -18,3 +18,5 @@ Rejected:
 - **`--allow <crate>` for each crate with findings.** Shorter, but it switches the detector off for most of the workspace until each clean-up lands.
 - **Fix the detector's false positives first** (`20261027-unreferenced-false-positives`, `unreferenced-signature-types`). Those are `check.unreferenced` spec changes; once one lands and `clm` is reinstalled from that `main`, the kept entries it makes stale are removed in a later branch, so adoption needn't wait.
 - **Install `clm` in `.github/scripts/detector-tools.sh`.** It would replace the developer's own `clm` on every check run, and the build under test is the right binary for the test anyway; `ci/detector-tools` exempts a detector run by `clm` instead.
+
+Later (2026-11-22): the gate's own-files rule counted `clm.toml` as `config`'s for every build, which took away the exception above; `a-build-drops-its-allowance` restores it as a rule of `gate/own-files`.
