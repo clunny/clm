@@ -569,8 +569,8 @@ fn prompt_for(
          `impl/`, `spec/`, `propose/` and `autosync/`, with no claim and any test it adds \
          citing no requirement: delete the item in a commit whose \
          trailer block holds `Resolves: backlog/<slug>`, land it with `clm land <branch>` \
-         once `clm gate --base origin/main` prints `code`, delete the pushed branch with \
-         `clm branch delete <branch>`, and take the item out of `resolves` \
+         once `clm gate --base origin/main` prints `code`, which deletes the pushed branch, \
+         and take the item out of `resolves` \
          (`small-change-no-claim`). When that Design must change, the change edits the \
          Design, keeps the item in `resolves` and adds a `kind: deferred` item for the code. \
          The bugs whose fix is code-only and lies in one \
