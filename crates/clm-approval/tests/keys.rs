@@ -78,19 +78,13 @@ fn a_lands_record() {
     let base = f.git(&work, &["rev-parse", "origin/main"]);
     f.git(&work, &["config", "gpg.format", "ssh"]);
     f.git(&work, &["config", "user.signingkey", key.to_str().unwrap()]);
-    let landed = Body::Landed {
-        commit: base.clone(),
-        branch: "impl/x".into(),
-        kind: LandKind::Code,
-        review: false,
-        fingerprint: "g".into(),
-        code_key: None,
-        changes: vec![],
-        check_seconds: None,
-        steps: vec![],
-        recheck: None,
-        recheck_files: None,
-    };
+    let landed = Body::landed(
+        base.clone(),
+        "impl/x".into(),
+        LandKind::Code,
+        false,
+        "g".into(),
+    );
     let signed = f
         .with_repo(|repo| repo.sign(landed, clm_approval::LAND))
         .unwrap();

@@ -49,19 +49,14 @@ fn land_time_line(clm_toml: &str, expected: &str) {
         "---\ntitle: T\nstatus: active\nowners: []\n---\n",
     );
     write(&root, "clm.toml", clm_toml);
-    let body = Body::Landed {
-        commit: "c1".into(),
-        branch: "impl/a".into(),
-        kind: LandKind::Code,
-        review: false,
-        fingerprint: "f".into(),
-        code_key: None,
-        changes: vec![],
-        check_seconds: Some(50),
-        steps: vec![],
-        recheck: None,
-        recheck_files: None,
-    };
+    let body = Body::landed(
+        "c1".into(),
+        "impl/a".into(),
+        LandKind::Code,
+        false,
+        "f".into(),
+    )
+    .with_check_seconds(Some(50));
     clm_ledger::append(&root, body, &ledger_common::env(dir.path(), &[])).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_clm"))
         .args(["health", "--root"])

@@ -191,19 +191,15 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
         if let Ok(read) = clm_effort::unrecorded(&repo.root, &options, repo.env) {
             entries.extend(read.bodies.into_iter().map(Into::into));
         }
-        let landed = Body::Landed {
-            commit: commit.sha.clone(),
+        let landed = Body::landed(
+            commit.sha.clone(),
             branch,
-            kind: judged.kind,
-            review: judged.review,
-            fingerprint: judged.fingerprint.clone(),
-            code_key: Some(key.clone()),
-            changes: judged.changes.clone(),
-            check_seconds: None,
-            steps: Vec::new(),
-            recheck: None,
-            recheck_files: None,
-        };
+            judged.kind,
+            judged.review,
+            judged.fingerprint.clone(),
+        )
+        .with_code_key(Some(key.clone()))
+        .with_changes(judged.changes.clone());
         entries.push(if signed {
             repo.approval.sign(landed, clm_approval::LAND)?.into()
         } else {

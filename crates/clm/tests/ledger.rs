@@ -39,19 +39,14 @@ fn checked(key: &str) -> Body {
 
 /// A code land of `commit`, its code key `key`.
 fn landed(commit: &str, key: &str) -> Body {
-    Body::Landed {
-        commit: commit.into(),
-        branch: "impl/x".into(),
-        kind: LandKind::Code,
-        review: false,
-        fingerprint: "f".into(),
-        code_key: Some(key.into()),
-        changes: vec![],
-        check_seconds: None,
-        steps: vec![],
-        recheck: None,
-        recheck_files: None,
-    }
+    Body::landed(
+        commit.into(),
+        "impl/x".into(),
+        LandKind::Code,
+        false,
+        "f".into(),
+    )
+    .with_code_key(Some(key.into()))
 }
 
 /// A repository whose `main` holds a merge commit per message: the merge commits.
