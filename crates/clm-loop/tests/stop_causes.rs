@@ -29,7 +29,7 @@ fn a_limit() {
     let until = rfc3339(clm_git::now() + 3600);
     let first = stop(&fx, "build:a", "none", "limit", Some(&until));
     assert_eq!(first, ["wait"], "no action for the stopped run");
-    assert_eq!(fx.ran("run --finish a --returned"), 0, "it keeps its place");
+    assert_eq!(fx.finishes("a"), 0, "it keeps its place");
     assert_eq!(fx.file().run("build:a").unwrap().state, RunState::Stopped);
     assert!(fx.file().conditions.limit_until.is_some());
 
@@ -57,11 +57,7 @@ fn a_limit_resumes_each_time_it_recurs() {
         line(&actions, "resume build:a t-1 ");
     }
     assert_eq!(fx.file().run("build:a").unwrap().stops["limit"], 3);
-    assert_eq!(
-        fx.ran("run --finish a --returned"),
-        0,
-        "a limit never rebuilds"
-    );
+    assert_eq!(fx.finishes("a"), 0, "a limit never rebuilds");
 }
 
 #[test]
@@ -95,7 +91,7 @@ fn an_outage_resumes_at_once_the_first_time() {
     running(&fx, "build:a", "t-1");
     let first = stop(&fx, "build:a", "stopped: network", "outage", None);
     line(&first, "resume build:a t-1 ");
-    assert_eq!(fx.ran("run --finish a --returned"), 0);
+    assert_eq!(fx.finishes("a"), 0);
     // The second stop by the same cause rebuilds.
     let second = stop(&fx, "build:a", "stopped: network", "outage", None);
     assert_eq!(fx.ran("run --finish a --returned"), 1);

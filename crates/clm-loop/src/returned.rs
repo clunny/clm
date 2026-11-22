@@ -264,7 +264,8 @@ pub fn returned(
         let outstanding = std::mem::take(&mut run.resumed);
         Ok((run.clone(), outstanding))
     })?;
-    // A report repeated, such as after a timeout, finishes nothing twice.
+    // A report repeated, such as after a timeout, of a run other than a build (whose returns
+    // are handled above) finishes nothing twice.
     if run.state == RunState::Returned {
         return crate::step::next_actions(options);
     }

@@ -123,6 +123,15 @@ impl Fixture {
         self.calls().iter().filter(|c| *c == args).count()
     }
 
+    /// How many `clm run --finish <component>` the fake ran, with or without `--returned`.
+    pub fn finishes(&self, component: &str) -> usize {
+        let finish = format!("run --finish {component}");
+        self.calls()
+            .iter()
+            .filter(|c| *c == &finish || c.starts_with(&format!("{finish} ")))
+            .count()
+    }
+
     /// `<git common dir>/clm`.
     pub fn loop_dir(&self) -> PathBuf {
         self.work.join(".git/clm")
