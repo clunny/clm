@@ -2960,6 +2960,17 @@ fn a_branch_that_regenerates_nothing_merges_no_other_delta() {
 /// branch `spec/x` applying `x`, whose delta rewrites the first line, on which a `clm rebase`
 /// committed `Merge x into o`. With `origin/main`'s Design hash.
 fn merged_into_o() -> (Repo, String) {
+    let (r, main_hash) = x_over_o();
+    assert_eq!(
+        synced(&r),
+        ["merged design of a into changes/o/deltas/a.md"]
+    );
+    assert_eq!(subject(&r), "Merge x into o");
+    (r, main_hash)
+}
+
+/// [`merged_into_o`] before its `clm rebase`.
+fn x_over_o() -> (Repo, String) {
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -2977,11 +2988,6 @@ fn merged_into_o() -> (Repo, String) {
     );
     pull(&r);
     apply_change(&r, "x", "", &modifies_design(&r, "ONE\ntwo\nthree"));
-    assert_eq!(
-        synced(&r),
-        ["merged design of a into changes/o/deltas/a.md"]
-    );
-    assert_eq!(subject(&r), "Merge x into o");
     (r, main_hash)
 }
 
@@ -3876,4 +3882,141 @@ fn a_branch_adding_scenarios_with_their_code_archives_its_change() {
     assert!(!starts(&synced(&r), "archived"));
     assert_eq!(read(&r.work, "specs/a/SPEC.md"), spec);
     assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
+/// Puts first on this process's `PATH` a stand-in `git` that fails the first `commit` it is
+/// given (its first argument after any `-c <key>=<value>` pairs) as a held `index.lock`
+/// fails one, exit 128, and hands every other call, and every later `commit`, to the real
+/// `git`. Returns the file where it writes the arguments of each `commit` it is given. Each
+/// test that calls it runs in a process of its own.
+fn stand_in_git(r: &Repo) -> PathBuf {
+    let real = Command::new("sh")
+        .args(["-c", "command -v git"])
+        .output()
+        .unwrap();
+    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
+    let bin = r.work.with_file_name("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let (log, failed) = (
+        r.work.with_file_name("commits"),
+        r.work.with_file_name("failed-once"),
+    );
+    write_exec(
+        &bin.join("git"),
+        &format!(
+            "#!/bin/sh\ncmd=\nskip=\nfor a in \"$@\"; do\n  if [ -n \"$skip\" ]; then skip=; \
+             continue; fi\n  if [ \"$a\" = -c ]; then skip=1; continue; fi\n  cmd=$a\n  \
+             break\ndone\nif [ \"$cmd\" = commit ]; then\n  printf '%s\\n' \"$*\" >> '{log}'\n  \
+             if [ ! -e '{failed}' ]; then\n    : > '{failed}'\n    echo \"fatal: Unable to \
+             create '$('{real}' rev-parse --absolute-git-dir)/index.lock': File exists.\" >&2\n    \
+             exit 128\n  fi\nfi\nexec '{real}' \"$@\"\n",
+            log = log.display(),
+            failed = failed.display(),
+        ),
+    );
+    let path = std::env::var("PATH").unwrap_or_default();
+    // SAFETY: nextest runs each test in a process of its own, and no other thread reads the
+    // environment meanwhile.
+    unsafe { std::env::set_var("PATH", format!("{}:{path}", bin.display())) };
+    log
+}
+
+/// Asserts `HEAD` is the commit `subject`, which the stand-in was given twice, with nothing
+/// left staged.
+fn waited_out(r: &Repo, log: &Path, subject_: &str) {
+    assert_eq!(subject(r), subject_);
+    let calls = fs::read_to_string(log).unwrap();
+    let given = calls
+        .lines()
+        .filter(|l| l.contains(&format!("-m {subject_}")))
+        .count();
+    assert_eq!(given, 2, "{calls}");
+    assert_eq!(git(&r.work, &["diff", "--cached", "--name-only"]), "");
+}
+
+#[test]
+fn a_lock_met_at_the_archive_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = with_applied_x("impl/a", "");
+    write(&r.work, "src/test.rs", &citing("a/x", &version(&r, "a/x")));
+    commit(&r.work, "test a/x");
+    let log = stand_in_git(&r);
+    assert_eq!(synced(&r), ["archived x"]);
+    waited_out(&r, &log, "Archive x");
+}
+
+#[test]
+fn a_lock_met_at_the_activate_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = repo("impl/a");
+    write(&r.work, "src/test.rs", &citing("a/p", &version(&r, "a/p")));
+    commit(&r.work, "test a/p");
+    let log = stand_in_git(&r);
+    assert_eq!(synced(&r), ["activated a"]);
+    waited_out(&r, &log, "Activate a");
+}
+
+#[test]
+fn a_lock_met_at_a_file_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "Body.")],
+    );
+    let log = stand_in_git(&r);
+    assert_eq!(synced(&r), ["filed backlog/s.md"]);
+    waited_out(&r, &log, "File s");
+}
+
+#[test]
+fn a_lock_met_at_a_reapply_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = repo("spec/x");
+    apply_change(&r, "x", "", &adds_x());
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_a("specd", "c", &["p", "y"]))],
+    );
+    let log = stand_in_git(&r);
+    assert_eq!(synced(&r), Vec::<String>::new());
+    waited_out(&r, &log, "Re-apply x");
+}
+
+#[test]
+fn a_lock_met_at_a_merge_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let (r, _) = x_over_o();
+    let log = stand_in_git(&r);
+    assert_eq!(
+        synced(&r),
+        ["merged design of a into changes/o/deltas/a.md"]
+    );
+    waited_out(&r, &log, "Merge x into o");
+}
+
+#[test]
+fn a_lock_met_at_a_take_back_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let (r, main_hash) = merged_into_o();
+    specs_as_main(&r);
+    git(&r.work, &["rm", "-rq", "--", "changes/x"]);
+    commit(&r.work, "drop x");
+    let log = stand_in_git(&r);
+    took_back_o(&r, &main_hash);
+    waited_out(&r, &log, "Take back what this branch merged into o");
+}
+
+#[test]
+fn a_lock_met_at_a_rename_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = rename_branch();
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_a("specd", "c", &["p", "w"]))],
+    );
+    let log = stand_in_git(&r);
+    synced(&r);
+    waited_out(&r, &log, "Rename r");
 }
