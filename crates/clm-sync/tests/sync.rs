@@ -867,7 +867,10 @@ fn a_run_stopped_by_a_stale_delta_still_owes_the_report() {
     let left = unfinished(&r);
     assert_eq!(left[..2], ["spec changed a", "changed specs/a/SPEC.md"]);
     let new = version(&r, "a/p");
-    assert!(has(&left, &format!("requirement a/p {old} -> {new}")), "{left:?}");
+    assert!(
+        has(&left, &format!("requirement a/p {old} -> {new}")),
+        "{left:?}"
+    );
 }
 
 #[test]
@@ -895,7 +898,10 @@ fn a_rebase_finished_with_plain_git_still_owes_the_report() {
     let left = unfinished(&r);
     let new = version(&r, "a/p");
     assert_eq!(left[0], "spec changed a", "{left:?}");
-    assert!(has(&left, &format!("requirement a/p {old} -> {new}")), "{left:?}");
+    assert!(
+        has(&left, &format!("requirement a/p {old} -> {new}")),
+        "{left:?}"
+    );
 }
 
 #[test]
@@ -2450,6 +2456,106 @@ fn a_slug_that_isnt_kebab_case_is_skipped_with_a_warning() {
         "{report:?}"
     );
     assert!(!r.work.join("escape.md").exists());
+
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p8", "alice/web", "Not Kebab", "Bad", &["a"], "x")],
+    );
+    let report = sync(&r.work).unwrap();
+    assert!(report.ok, "{report:?}");
+    assert!(!filed(&report.lines), "{report:?}");
+    assert_eq!(
+        report.warnings,
+        [r#"skipped proposal p8 by alice/web: its slug "Not Kebab" isn't lowercase kebab case"#]
+    );
+}
+
+/// A `proposed` record's line at time `at`.
+fn proposed_at(id: &str, at: &str, slug: &str, title: &str) -> String {
+    let mut line: serde_json::Value =
+        serde_json::from_str(&proposed(id, "alice/web", slug, title, &["a"], title)).unwrap();
+    line["at"] = at.into();
+    line.to_string()
+}
+
+#[test]
+fn an_empty_body_files_only_the_proposed_line() {
+    // req:sync/file-proposal-items@d530f460
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "")],
+    );
+
+    assert_eq!(synced(&r), ["filed backlog/s.md"]);
+    assert_eq!(
+        read(&r.work, "backlog/s.md"),
+        "---\ntitle: \"S\"\nkind: idea\ncomponents: [a]\n---\n\nProposed in the web app by \
+         alice/web at 2026-10-28T10:00:00.000Z (record p1).\n"
+    );
+}
+
+#[test]
+fn of_proposals_sharing_a_slug_the_earliest_is_filed() {
+    // req:sync/file-proposal-items@d530f460
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[
+            proposed_at("p1", "2026-10-28T12:00:00.000Z", "s", "Later"),
+            proposed_at("p3", "2026-10-28T09:00:00.000Z", "s", "Earlier, higher ID"),
+            proposed_at("p2", "2026-10-28T09:00:00.000Z", "s", "Earlier, lower ID"),
+        ],
+    );
+
+    assert_eq!(synced(&r), ["filed backlog/s.md"]);
+    let item = read(&r.work, "backlog/s.md");
+    assert!(item.contains("title: \"Earlier, lower ID\""), "{item}");
+    assert!(item.contains("(record p2)"), "{item}");
+}
+
+#[test]
+fn a_fold_warning_is_passed_on() {
+    // req:sync/file-proposal-items@d530f460
+    let r = repo("impl/a");
+    ledger(&r, "bob/web", &["not a record".to_string()]);
+
+    let report = sync(&r.work).unwrap();
+    assert!(report.ok, "{report:?}");
+    assert!(
+        report.warnings.iter().any(|w| w.starts_with("ledger: ")),
+        "{report:?}"
+    );
+}
+
+#[test]
+fn a_ledger_that_cant_be_read_files_nothing() {
+    // req:sync/file-proposal-items@d530f460
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "Body.")],
+    );
+    stand_in(
+        &r,
+        "case \"$*\" in *for-each-ref*clm/ledger/*) echo 'fatal: no ledger' >&2; exit 1;; esac\n",
+    );
+
+    let report = sync(&r.work).unwrap();
+    assert!(report.ok, "{report:?}");
+    assert!(!filed(&report.lines), "{report:?}");
+    assert!(
+        report.warnings.iter().any(|w| w
+            .starts_with("no proposals filed: the ledger can't be read: ")
+            && w.contains("no ledger")),
+        "{report:?}"
+    );
+    assert!(!r.work.join("backlog/s.md").exists());
 }
 
 #[test]
@@ -2618,6 +2724,24 @@ fn a_failed_commit_leaves_no_reconsider_item() {
 
     assert!(matches!(sync(&r.work), Err(Error::Git(_))));
     assert!(!r.work.join("backlog/reconsider-a-x.md").exists());
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
+
+    // A proposal's item likewise.
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "Body.")],
+    );
+    let hook = r.work.join(git(
+        &r.work,
+        &["rev-parse", "--git-path", "hooks/pre-commit"],
+    ));
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    write_exec(&hook, "#!/bin/sh\nexit 1\n");
+
+    assert!(matches!(sync(&r.work), Err(Error::Git(_))));
+    assert!(!r.work.join("backlog/s.md").exists());
     assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
 }
 
@@ -3676,6 +3800,19 @@ fn a_rename_in_a_subdirectory_root_keeps_its_items_and_follows_main_outside() {
 }
 
 #[test]
+fn an_untracked_file_main_adds_stops_a_rename() {
+    // req:sync/regenerate-renames@bab1ba9e
+    let r = rename_branch();
+    main_moves(&r, &[("src/t.rs", "#[test]\nfn t() {}\n")]);
+    write(&r.work, "src/t.rs", "mine\n");
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    assert_eq!(unfinished(&r), ["uncommitted src/t.rs"]);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+    assert_eq!(read(&r.work, "src/t.rs"), "mine\n");
+}
+
+#[test]
 fn an_untracked_file_main_adds_outside_the_root_stops_a_rename() {
     // req:sync/regenerate-renames@e831ba37
     let r = rename_branch_in_tool();
@@ -3919,6 +4056,30 @@ fn a_branch_adding_scenarios_with_their_code_archives_its_change() {
 /// `git`. Returns the file where it writes the arguments of each `commit` it is given. Each
 /// test that calls it runs in a process of its own.
 fn stand_in_git(r: &Repo) -> PathBuf {
+    let (log, failed) = (
+        r.work.with_file_name("commits"),
+        r.work.with_file_name("failed-once"),
+    );
+    stand_in(
+        r,
+        &format!(
+            "cmd=\nskip=\nfor a in \"$@\"; do\n  if [ -n \"$skip\" ]; then skip=; continue; fi\n  \
+             if [ \"$a\" = -c ]; then skip=1; continue; fi\n  cmd=$a\n  break\ndone\n\
+             if [ \"$cmd\" = commit ]; then\n  printf '%s\\n' \"$*\" >> '{log}'\n  \
+             if [ ! -e '{failed}' ]; then\n    : > '{failed}'\n    echo \"fatal: Unable to \
+             create '$(\"$real\" rev-parse --absolute-git-dir)/index.lock': File exists.\" >&2\n    \
+             exit 128\n  fi\nfi\n",
+            log = log.display(),
+            failed = failed.display(),
+        ),
+    );
+    log
+}
+
+/// Puts first on this process's `PATH` a stand-in `git` that runs `script`, with `$real`
+/// the real `git`, and then hands the call to the real `git`. Each test that calls it runs
+/// in a process of its own.
+fn stand_in(r: &Repo, script: &str) {
     let real = Command::new("sh")
         .args(["-c", "command -v git"])
         .output()
@@ -3926,28 +4087,14 @@ fn stand_in_git(r: &Repo) -> PathBuf {
     let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
     let bin = r.work.with_file_name("bin");
     fs::create_dir_all(&bin).unwrap();
-    let (log, failed) = (
-        r.work.with_file_name("commits"),
-        r.work.with_file_name("failed-once"),
-    );
     write_exec(
         &bin.join("git"),
-        &format!(
-            "#!/bin/sh\ncmd=\nskip=\nfor a in \"$@\"; do\n  if [ -n \"$skip\" ]; then skip=; \
-             continue; fi\n  if [ \"$a\" = -c ]; then skip=1; continue; fi\n  cmd=$a\n  \
-             break\ndone\nif [ \"$cmd\" = commit ]; then\n  printf '%s\\n' \"$*\" >> '{log}'\n  \
-             if [ ! -e '{failed}' ]; then\n    : > '{failed}'\n    echo \"fatal: Unable to \
-             create '$('{real}' rev-parse --absolute-git-dir)/index.lock': File exists.\" >&2\n    \
-             exit 128\n  fi\nfi\nexec '{real}' \"$@\"\n",
-            log = log.display(),
-            failed = failed.display(),
-        ),
+        &format!("#!/bin/sh\nreal='{real}'\n{script}exec \"$real\" \"$@\"\n"),
     );
     let path = std::env::var("PATH").unwrap_or_default();
     // SAFETY: nextest runs each test in a process of its own, and no other thread reads the
     // environment meanwhile.
     unsafe { std::env::set_var("PATH", format!("{}:{path}", bin.display())) };
-    log
 }
 
 /// Asserts `HEAD` is the commit `subject`, which the stand-in was given twice, with nothing
