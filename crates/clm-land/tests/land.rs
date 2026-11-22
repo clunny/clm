@@ -5,7 +5,7 @@ use common::{Fixture, refused};
 
 #[test]
 fn code_branch_lands() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
@@ -62,7 +62,7 @@ fn code_branch_lands() {
 
 #[test]
 fn already_checked_code() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     let head = f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();
@@ -89,7 +89,7 @@ fn already_checked_code() {
 
 #[test]
 fn unapproved_hard_branch() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("gate-out", "spec review\n");
     f.write("needs-approval", "");
@@ -103,7 +103,7 @@ fn unapproved_hard_branch() {
 
 #[test]
 fn land_prints_review() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("gate-out", "spec review\n");
     f.write("needs-approval", "");
@@ -142,7 +142,7 @@ fn land_prints_review() {
 
 #[test]
 fn stale_approval() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("gate-out", "spec review\n");
     f.write("needs-approval", "");
@@ -167,7 +167,7 @@ fn stale_approval() {
 
 #[test]
 fn main_moves() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("move-main", "");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -187,7 +187,7 @@ fn main_moves() {
 
 #[test]
 fn conflict() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let main = f.advance_main("b.txt", "other\n");
@@ -199,7 +199,7 @@ fn conflict() {
 
 #[test]
 fn check_fails() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -212,7 +212,7 @@ fn check_fails() {
 
 #[test]
 fn from_main() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     let why = refused(clm_land::land(&f.work(), None, &f.env(&[])));
     assert!(why.contains("`main` can't be landed"), "{why}");
@@ -220,7 +220,7 @@ fn from_main() {
 
 #[test]
 fn unpushed_impl_commits_refused() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -333,7 +333,7 @@ fn the_local_branch() {
 
 #[test]
 fn spec_land_that_needs_no_review() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("gate-out", "spec\n");
     f.branch("spec/y", &[("changes/y/change.md", "y\n")]);
@@ -394,7 +394,7 @@ fn a_light_land() {
 
 #[test]
 fn checked_with_another_command() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();
@@ -412,7 +412,7 @@ fn checked_with_another_command() {
 
 #[test]
 fn clm_check_fails() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("clm-check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -425,12 +425,14 @@ fn clm_check_fails() {
 
 #[test]
 fn specs_changed_on_both_sides() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
-    f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
-    // Main changes the same file, at a different line, so git merges it cleanly.
-    let main = f.advance_main("specs/x/SPEC.md", "# x\n\n\n\n\nmain\n");
-    let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
+    f.commit_files(&[("specs/x/SPEC.md", "# x\n\n\n\n\n\n")], "specs");
+    f.git(&f.work(), &["push", "-q", "origin", "main"]);
+    f.branch("impl/a", &[("specs/x/SPEC.md", "# x, a\n\n\n\n\n\n")]);
+    // Main changes the same file, at another line, so git merges it cleanly.
+    let main = f.advance_main("specs/x/SPEC.md", "# x\n\n\n\n\n\nmain\n");
+    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
     assert!(why.contains("clm rebase"), "{why}");
     assert!(f.lines("check.log").is_empty());
     assert_eq!(f.remote("main"), main);
@@ -438,7 +440,7 @@ fn specs_changed_on_both_sides() {
 
 #[test]
 fn main_keeps_moving() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("move-main", "always");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -526,7 +528,7 @@ fn the_head_it_lands() {
 
 #[test]
 fn unpushed_propose_lands_from_local() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.branch("propose/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -539,7 +541,7 @@ fn unpushed_propose_lands_from_local() {
 
 #[test]
 fn clm_in_a_subdirectory() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::nested();
     f.branch("impl/a", &[("b.txt", "b\n")]);
     clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();

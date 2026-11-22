@@ -436,7 +436,7 @@ fn tickets(f: &Fixture) -> usize {
 #[test]
 fn a_waiting_land_that_lost_a_test_is_not_taken_with_another() {
     // req:land/deleted-tests-approved@90e1578b
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = with_tests();
     f.branch("impl/a", &[("a.txt", "a2\n")]);
     f.branch("impl/b", &[("b.txt", "b\n")]);

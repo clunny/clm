@@ -80,7 +80,7 @@ fn landed_for(f: &Fixture) -> Vec<(String, String, Option<u64>, Option<String>)>
 
 #[test]
 fn lands_taken_together_pushed_and_not_recorded() {
-    // req:land/unrecorded-land-finished@6700f3ee
+    // req:land/unrecorded-land-finished@3c6b2dbc
     let f = Fixture::new("");
     for n in ["a", "b", "c"] {
         f.branch(&format!("impl/{n}"), &[(&format!("{n}.txt"), "x\n")]);
@@ -106,7 +106,7 @@ fn lands_taken_together_pushed_and_not_recorded() {
 
 #[test]
 fn a_land_alone_pushed_and_not_recorded() {
-    // req:land/unrecorded-land-finished@6700f3ee
+    // req:land/unrecorded-land-finished@3c6b2dbc
     let f = Fixture::new("");
     f.branch("impl/a", &[("a.txt", "x\n")]);
     let (commits, _) = pushed(&f, &["impl/a"]);
@@ -149,7 +149,7 @@ fn a_light_land_pushed_and_not_recorded() {
 
 #[test]
 fn the_land_that_pushed_is_still_running() {
-    // req:land/unrecorded-land-finished@6700f3ee
+    // req:land/unrecorded-land-finished@3c6b2dbc
     let f = Fixture::new("");
     for n in ["a", "b"] {
         f.branch(&format!("impl/{n}"), &[(&format!("{n}.txt"), "x\n")]);
@@ -184,7 +184,7 @@ fn the_land_that_pushed_is_still_running() {
 
 #[test]
 fn a_merge_no_land_made() {
-    // req:land/unrecorded-land-finished@6700f3ee
+    // req:land/unrecorded-land-finished@3c6b2dbc
     let f = Fixture::new("");
     f.branch("impl/a", &[("a.txt", "x\n")]);
     let (commits, _) = pushed(&f, &["impl/a"]);
@@ -199,7 +199,7 @@ fn a_merge_no_land_made() {
 
 #[test]
 fn an_unapproved_branch_pushed_by_hand() {
-    // req:land/unrecorded-land-finished@6700f3ee
+    // req:land/unrecorded-land-finished@3c6b2dbc
     let f = Fixture::new("");
     f.branch("impl/a", &[("a.txt", "x\n")]);
     let (commits, _) = pushed(&f, &["impl/a"]);

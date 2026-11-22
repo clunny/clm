@@ -92,7 +92,7 @@ fn landed_lines(out: &clm_land::Output) -> String {
 
 #[test]
 fn three_waiting_lands_one_check() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     for n in ["a", "b", "c"] {
@@ -154,7 +154,7 @@ fn three_waiting_lands_one_check() {
 
 #[test]
 fn a_land_that_conflicts_with_one_before_it() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     f.branch("impl/a", &[("a2.txt", "x\n")]);
@@ -176,7 +176,7 @@ fn a_land_that_conflicts_with_one_before_it() {
 
 #[test]
 fn a_land_the_gate_refuses_once_another_is_merged_before_it() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     f.branch("impl/a", &[("a_file.txt", "x\n")]);
@@ -210,7 +210,7 @@ fn a_land_the_gate_refuses_once_another_is_merged_before_it() {
 
 #[test]
 fn the_selection_covers_what_two_of_them_share() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("readers-out", "file crates/a/tests/r.rs\n");
     f.write("overlap-out", "file crates/c/tests/t.rs\n");
@@ -231,7 +231,7 @@ fn the_selection_covers_what_two_of_them_share() {
 
 #[test]
 fn a_land_with_another_check_environment() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     f.branch("impl/a", &[("a_file.txt", "x\n")]);
@@ -341,7 +341,7 @@ fn a_land_behind_in_specs_waits() {
 
 #[test]
 fn a_ticket_that_names_no_branch_is_left_to_wait() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     f.branch("impl/a", &[("a_file.txt", "x\n")]);
@@ -618,7 +618,7 @@ fn more_than_four_suspects_are_halved() {
 
 #[test]
 fn a_land_alone_lands_as_before() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.branch("impl/a", &[("a_file.txt", "x\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();

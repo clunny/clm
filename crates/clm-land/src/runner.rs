@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn check_runs_outside_ci() {
-        // req:land/land@f4bd0a7c
+        // req:land/land@db059c83
         let env = CheckEnv {
             set: vec![("CARGO_TARGET_DIR".into(), "/r/.clm/land".into())],
             unset: vec!["CI".into()],
