@@ -758,12 +758,12 @@ It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marke
 - capability/land-safely
 
 ### Requirement: removal-markers
-`scan`'s `remove_by` SHALL hold a removal marker wherever the text `clm:remove-by ` is not preceded by an ASCII letter, digit or `_`, and is followed by a change ID: eight ASCII digits, `-`, and one or more characters of `a-z`, `0-9` and `-`, the ID running to the first character that is none of those; other text SHALL give none. So a marker is one exactly when `check.unreferenced/removal-marked` accepts it, and `check/remove-by-markers` checks every marker `clm unreferenced` skips an item for. A character before `clm:` other than an ASCII letter, digit or `_`, a non-ASCII letter included, SHALL NOT keep the text from being a marker.
+In every file `scan` reads, its `remove_by` SHALL hold a removal marker wherever the text `clm:remove-by ` is not preceded by an ASCII letter, digit or `_`, and is followed by a change ID: eight ASCII digits, `-`, and one or more characters of `a-z`, `0-9` and `-`, the ID running to the first character that is none of those; other text SHALL give none. So a marker's text is one exactly when `check.unreferenced/removal-marked` accepts it as a marker's text, and `check/remove-by-markers` checks every marker `clm unreferenced` skips an item for. A character before `clm:` other than an ASCII letter, digit or `_`, a non-ASCII letter included, SHALL NOT keep the text from being a marker.
 
 #### Scenario: what may come before a marker
 - GIVEN a directory in no git work tree holding `m.rs`, whose lines hold, built so that no whole marker appears in the test's own file, `// clm:remove-by 20260101-plain`, `// éclm:remove-by 20260101-accented`, `// (clm:remove-by 20260101-bracketed`, `// xclm:remove-by 20260101-letter`, `// 1clm:remove-by 20260101-digit`, `// _clm:remove-by 20260101-underscore`, `// clm:remove-by 2026010-short`, `// clm:remove-by ２０２６０１０１-wide` (full-width digits), `// clm:remove-by 20260101-` and `// clm:remove-by soon`
 - WHEN `scan` runs on it
-- THEN its `remove_by` holds exactly the IDs `20260101-plain`, `20260101-accented` and `20260101-bracketed`
+- THEN its `remove_by` holds exactly the IDs, in any order, `20260101-plain`, `20260101-accented` and `20260101-bracketed`
 
 #### Serves
 - capability/no-dead-weight
