@@ -20,27 +20,37 @@ pub struct RequirementSpan {
     pub lines: Range<usize>,
 }
 
-/// `true` for each line that is a fence marker or inside a fenced code block.
+/// `true` for each line that opens or closes a fenced code block or lies inside one, read
+/// as CommonMark reads fences (`code-fences`): a run of three or more backticks or tildes
+/// after leading white space opens one, unless the run is of backticks and another
+/// backtick follows it; the first later line that, trimmed, is only a run of the same
+/// character at least as long closes it; an unclosed fence runs to the end.
 pub fn fence_mask(lines: &[&str]) -> Vec<bool> {
-    let mut fence: Option<&str> = None;
+    let mut open: Option<(char, usize)> = None;
     lines
         .iter()
-        .map(|line| {
-            let trimmed = line.trim_start();
-            let marker = ["```", "~~~"].into_iter().find(|m| trimmed.starts_with(m));
-            match (fence, marker) {
-                (None, Some(m)) => {
-                    fence = Some(m);
-                    true
+        .map(|line| match open {
+            Some((c, len)) => {
+                let t = line.trim();
+                if t.len() >= len && t.chars().all(|x| x == c) {
+                    open = None;
                 }
-                (Some(f), Some(m)) if f == m => {
-                    fence = None;
-                    true
-                }
-                (f, _) => f.is_some(),
+                true
+            }
+            None => {
+                open = fence_opener(line);
+                open.is_some()
             }
         })
         .collect()
+}
+
+/// The fence `line` opens, as (character, run length).
+fn fence_opener(line: &str) -> Option<(char, usize)> {
+    let t = line.trim_start();
+    let c = t.chars().next().filter(|&c| c == '`' || c == '~')?;
+    let len = t.len() - t.trim_start_matches(c).len();
+    (len >= 3 && !(c == '`' && t[len..].contains('`'))).then_some((c, len))
 }
 
 pub fn section_spans(lines: &[&str]) -> Vec<SectionSpan> {
