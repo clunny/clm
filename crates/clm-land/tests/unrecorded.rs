@@ -120,6 +120,34 @@ fn a_land_alone_pushed_and_not_recorded() {
 }
 
 #[test]
+fn a_light_land_pushed_and_not_recorded() {
+    // req:land/unrecorded-land-finished@3c6b2dbc
+    // Finished, it is recorded as its own land would have recorded it: light.
+    let f = Fixture::new("");
+    f.write("gate-out", "light\n");
+    f.branch("impl/a", &[("a.txt", "x\n")]);
+    let (commits, _) = pushed(&f, &["impl/a"]);
+    f.mark_checked(&commits[0]);
+    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    assert_eq!(out.lines[0], format!("landed {} light", commits[0]));
+    match &f.landed()[..] {
+        [
+            Body::Landed {
+                kind,
+                light,
+                review,
+                ..
+            },
+        ] => {
+            assert_eq!(*kind, clm_ledger::LandKind::Code);
+            assert!(*light);
+            assert!(!*review);
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn the_land_that_pushed_is_still_running() {
     // req:land/unrecorded-land-finished@6700f3ee
     let f = Fixture::new("");

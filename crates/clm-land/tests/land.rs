@@ -350,6 +350,49 @@ fn spec_land_that_needs_no_review() {
 }
 
 #[test]
+fn a_light_land() {
+    // req:land/land@db059c83
+    let f = Fixture::new("");
+    f.write("gate-out", "light\n");
+    f.branch(
+        "impl/a",
+        &[("b.txt", "b\n"), ("changes/x/change.md", "x\n")],
+    );
+    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    let main = f.remote("main");
+    let origin = f.path("origin.git");
+    assert_eq!(f.lines("check.log"), [f.tree(&origin, &main)]);
+    assert_eq!(out.lines, [format!("landed {main} light")]);
+    match &f.landed()[..] {
+        [
+            Body::Landed {
+                kind,
+                review,
+                light,
+                changes,
+                ..
+            },
+        ] => {
+            assert_eq!(*kind, LandKind::Code);
+            assert!(*light);
+            assert!(!*review);
+            assert!(changes.is_empty(), "{changes:?}");
+        }
+        other => panic!("{other:?}"),
+    }
+    let message = f.git(&origin, &["log", "-1", "--format=%B", &main]);
+    assert!(!message.contains("Change:"), "{message}");
+    // A land not light holds no `light`.
+    f.write("gate-out", "code\n");
+    f.branch("impl/b", &[("c.txt", "c\n")]);
+    clm_land::land(&f.work(), Some("impl/b"), &f.env(&[])).unwrap();
+    assert!(matches!(
+        f.landed().last(),
+        Some(Body::Landed { light: false, .. })
+    ));
+}
+
+#[test]
 fn checked_with_another_command() {
     // req:land/land@f4bd0a7c
     let f = Fixture::new("");

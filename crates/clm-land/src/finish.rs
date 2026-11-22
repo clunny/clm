@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use clm_ledger::{Body, Entry, Fold};
+use clm_ledger::{Entry, Fold};
 
 use crate::batch::{Found, judge};
 use crate::lock::{self, Rank};
@@ -191,15 +191,11 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
         if let Ok(read) = clm_effort::unrecorded(&repo.root, &options, repo.env) {
             entries.extend(read.bodies.into_iter().map(Into::into));
         }
-        let landed = Body::landed(
-            commit.sha.clone(),
-            branch,
-            judged.kind,
-            judged.review,
-            judged.fingerprint.clone(),
-        )
-        .with_code_key(Some(key.clone()))
-        .with_changes(judged.changes.clone());
+        let landed = judged
+            .verdict
+            .landed(commit.sha.clone(), branch, judged.fingerprint.clone())
+            .with_code_key(Some(key.clone()))
+            .with_changes(judged.changes.clone());
         entries.push(if signed {
             repo.approval.sign(landed, clm_approval::LAND)?.into()
         } else {
@@ -208,8 +204,7 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
         if target {
             found = Some(Found {
                 commit: commit.sha.clone(),
-                kind: judged.kind,
-                review: judged.review,
+                verdict: judged.verdict,
             });
         }
     }

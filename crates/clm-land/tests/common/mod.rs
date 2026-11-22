@@ -33,14 +33,19 @@ elif [[ " $* " == *" --readers "* ]]; then
 elif [ -e "$DIR/affected-out" ]; then cat "$DIR/affected-out"; fi
 "#;
 
-/// Logs HEAD and its args, prints `gate-out`. With `needs-approval` present it blocks with
+/// Logs HEAD and its args, prints `gate-out`, or `gate-out.<branch>` (each `/` written as
+/// `-`) when it exists for the branch HEAD's subject names (`<branch>`, as `Fixture::branch`
+/// commits, or `Merge <branch> into main`). With `needs-approval` present it blocks with
 /// `gate/approval` unless given `--approved`.
 const FAKE_GATE: &str = r#"
 echo "$(git rev-parse HEAD) $*" >> "$DIR/gate.log"
 lock="$DIR/work/.clm/land.lock"; [ -d "$DIR/work/proj" ] && lock="$DIR/work/proj/.clm/land.lock"
 if [ -e "$lock" ] && ! flock -n "$lock" true; then echo held; else echo free; fi >> "$DIR/gate-lock.log"
 echo gate >> "$DIR/order.log"
-cat "$DIR/gate-out"
+subject=$(git log -1 --format=%s HEAD)
+named=${subject#Merge }; named=${named% into main}
+out="$DIR/gate-out.$(printf %s "$named" | tr / -)"
+if [ -e "$out" ]; then cat "$out"; else cat "$DIR/gate-out"; fi
 if [ -e "$DIR/needs-approval" ] && [[ " $* " != *" --approved"* ]]; then
   echo "gate/approval: this change needs review"
   exit 1

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use clm_git::REMOTE;
-use clm_ledger::{Basis, Body, Entry, LandKind, Recheck};
+use clm_ledger::{Basis, Body, Entry, Recheck};
 
 use crate::exe::Exe;
 use crate::lock;
@@ -416,7 +416,7 @@ pub(crate) fn land_into(
         // 5. The merge commit, checked out. A head behind in `specs/` adds or applies a
         // change, so it lands as a spec land.
         let mut message = format!("Merge {branch} into main");
-        let spec_land = head_verdict.is_none_or(|v| matches!(v, Verdict::Spec { .. }));
+        let spec_land = head_verdict.is_none_or(Verdict::spec);
         if let (true, Some(id)) = (spec_land, changes.first()) {
             message.push_str(&format!("\n\nChange: {id}"));
         }
@@ -646,17 +646,10 @@ pub(crate) fn land_into(
             }
         }
         let verdict = repo.gate(exe, dir.path(), approved, &hint)?;
-        let (kind, review) = match verdict {
-            Verdict::Code => (LandKind::Code, false),
-            Verdict::Spec { review } => (LandKind::Spec, review),
-        };
         // Only a spec land names its changes.
-        let changes = if kind == LandKind::Spec {
-            changes
-        } else {
-            Vec::new()
-        };
-        let landed = Body::landed(merge.clone(), branch.clone(), kind, review, fingerprint)
+        let changes = if verdict.spec() { changes } else { Vec::new() };
+        let landed = verdict
+            .landed(merge.clone(), branch.clone(), fingerprint)
             .with_code_key(Some(key))
             .with_changes(changes.clone())
             .with_check_seconds(timing.as_ref().map(|t| t.seconds))
@@ -723,12 +716,10 @@ pub(crate) fn land_into(
         }
 
         // 9. What landed.
-        out.lines.push(match verdict {
-            Verdict::Code => format!("landed {merge} code"),
-            Verdict::Spec { review: false } => format!("landed {merge} spec"),
-            Verdict::Spec { review: true } => format!("landed {merge} spec review"),
-        });
-        if matches!(verdict, Verdict::Code) {
+        out.lines
+            .push(format!("landed {merge} {}", verdict.words()));
+        // A light land is a code land (`land/build-target-freed`).
+        if !verdict.spec() {
             free_build_target(&repo, &branch, out);
         }
         return Ok(());
@@ -790,12 +781,9 @@ pub(crate) fn finish_found(
         let added = changes_added(repo, &base, head);
         release_claims(repo, &found.commit, &added, &tips, &mut out.warnings);
     }
-    out.lines.push(format!(
-        "landed {} {}",
-        found.commit,
-        crate::batch::kind_words(found.kind, found.review)
-    ));
-    if found.kind == LandKind::Code {
+    out.lines
+        .push(format!("landed {} {}", found.commit, found.verdict.words()));
+    if !found.verdict.spec() {
         free_build_target(repo, branch, out);
     }
     std::mem::take(out)

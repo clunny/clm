@@ -6,7 +6,7 @@ mod common;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use clm_ledger::{Basis, Body, Recheck};
+use clm_ledger::{Basis, Body, LandKind, Recheck};
 use common::Fixture;
 
 /// Holds `.clm/land.lock` as another process would, with no ticket.
@@ -244,6 +244,52 @@ fn a_land_with_another_check_environment() {
     let outs = land_all(&f, &["a", "b"], held);
     assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
     assert_eq!(starts(&f), 2, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
+fn a_light_land_taken_with_another() {
+    // req:land/batched-lands@ba7cbebe
+    let f = Fixture::new("");
+    f.write("check-sleeps", "1");
+    f.write("gate-out.impl-a", "light\n");
+    for n in ["a", "b"] {
+        f.branch(&format!("impl/{n}"), &[(&format!("{n}_file.txt"), "x\n")]);
+    }
+    let held = hold(&f);
+    // `impl/b` waits first, so it holds the lock and takes `impl/a` with it.
+    let outs = land_all(&f, &["b", "a"], held);
+    let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
+    assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    let commit_of = |branch: &str| {
+        f.git(
+            &f.work(),
+            &[
+                "log",
+                "--first-parent",
+                "--format=%H",
+                &format!("--grep=^Merge {branch} into main$"),
+                "origin/main",
+            ],
+        )
+    };
+    let (a, b) = (commit_of("impl/a"), commit_of("impl/b"));
+    assert_eq!(landed_lines(&outs[0]), format!("landed {b} code"));
+    assert_eq!(landed_lines(&outs[1]), format!("landed {a} light"));
+    let light_of = |c: &str| {
+        f.landed().into_iter().find_map(|body| match body {
+            Body::Landed {
+                commit,
+                kind,
+                light,
+                review,
+                ..
+            } if commit == c => Some((kind, light, review)),
+            _ => None,
+        })
+    };
+    assert_eq!(light_of(&a), Some((LandKind::Code, true, false)));
+    assert_eq!(light_of(&b), Some((LandKind::Code, false, false)));
 }
 
 #[test]

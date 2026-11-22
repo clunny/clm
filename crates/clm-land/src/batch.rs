@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use clm_ledger::{Basis, Body, Entry, Fold, LandKind, Recheck, TimedStep};
+use clm_ledger::{Basis, Body, Entry, Fold, Recheck, TimedStep};
 
 use crate::land::{
     ON_MERGE, Pushed, changes_added, cleanup, free_build_target, propose_tips, push_main,
@@ -47,8 +47,7 @@ pub(crate) enum Outcome {
 /// What a judged merge commit is: the land's kind, fingerprint and change IDs.
 pub(crate) struct Judged {
     pub(crate) fingerprint: String,
-    pub(crate) kind: LandKind,
-    pub(crate) review: bool,
+    pub(crate) verdict: Verdict,
     pub(crate) changes: Vec<String>,
 }
 
@@ -85,18 +84,13 @@ pub(crate) fn judge(
     if derived {
         crate::derived::check(repo, first, head, dir.path())?;
     }
-    let (kind, review) = match verdict {
-        Verdict::Code => (LandKind::Code, false),
-        Verdict::Spec { review } => (LandKind::Spec, review),
-    };
-    let changes = match kind {
-        LandKind::Spec => repo.approval.changes(head)?,
-        LandKind::Code => Vec::new(),
+    let changes = match verdict.spec() {
+        true => repo.approval.changes(head)?,
+        false => Vec::new(),
     };
     Ok(Judged {
         fingerprint,
-        kind,
-        review,
+        verdict,
         changes,
     })
 }
@@ -426,11 +420,7 @@ impl Batch<'_, '_, '_> {
         for m in &chain.members {
             let prev = commits.last().unwrap_or(&chain.base).clone();
             let mut message = format!("Merge {} into main", m.wanted.branch);
-            let change = m
-                .judged
-                .changes
-                .first()
-                .filter(|_| m.judged.kind == LandKind::Spec);
+            let change = m.judged.changes.first().filter(|_| m.judged.verdict.spec());
             if let Some(id) = change {
                 message.push_str(&format!("\n\nChange: {id}"));
             }
@@ -654,23 +644,24 @@ impl Batch<'_, '_, '_> {
             let mut entries: Vec<Entry> = Vec::new();
             for (i, m) in chain.members.iter().enumerate() {
                 entries.extend(efforts[i].iter().cloned().map(Into::into));
-                let landed = Body::landed(
-                    finals.commits[i].clone(),
-                    m.wanted.branch.clone(),
-                    m.judged.kind,
-                    m.judged.review,
-                    m.judged.fingerprint.clone(),
-                )
-                .with_code_key(Some(finals.key.clone()))
-                .with_changes(m.judged.changes.clone())
-                .with_check_seconds((i == 0).then_some(kept.seconds))
-                .with_steps(if i == 0 {
-                    kept.steps.clone()
-                } else {
-                    Vec::new()
-                })
-                .with_recheck(Some(kept.recheck))
-                .with_recheck_files(kept.files);
+                let landed = m
+                    .judged
+                    .verdict
+                    .landed(
+                        finals.commits[i].clone(),
+                        m.wanted.branch.clone(),
+                        m.judged.fingerprint.clone(),
+                    )
+                    .with_code_key(Some(finals.key.clone()))
+                    .with_changes(m.judged.changes.clone())
+                    .with_check_seconds((i == 0).then_some(kept.seconds))
+                    .with_steps(if i == 0 {
+                        kept.steps.clone()
+                    } else {
+                        Vec::new()
+                    })
+                    .with_recheck(Some(kept.recheck))
+                    .with_recheck_files(kept.files);
                 // Signed before the push, so a holder that can't sign lands no batch.
                 entries.push(if chain.signed {
                     repo.approval.sign(landed, clm_approval::LAND)?.into()
@@ -745,11 +736,9 @@ impl Batch<'_, '_, '_> {
             out.warnings
                 .extend(crate::time_report::lines(seconds, target, over, &past));
         }
-        out.lines.push(format!(
-            "landed {commit} {}",
-            kind_words(m.judged.kind, m.judged.review)
-        ));
-        if m.judged.kind == LandKind::Code {
+        out.lines
+            .push(format!("landed {commit} {}", m.judged.verdict.words()));
+        if !m.judged.verdict.spec() {
             free_build_target(repo, &m.wanted.branch, &mut out);
         }
         self.landed = Some(out);
@@ -901,15 +890,6 @@ impl Batch<'_, '_, '_> {
     }
 }
 
-/// The words after `landed <sha>` for a land of `kind`.
-pub(crate) fn kind_words(kind: LandKind, review: bool) -> &'static str {
-    match (kind, review) {
-        (LandKind::Code, _) => "code",
-        (LandKind::Spec, false) => "spec",
-        (LandKind::Spec, true) => "spec review",
-    }
-}
-
 /// `part` as the file `CLM_SELECTION` names.
 fn write_selection(repo: &Repo, part: &Part) -> Result<Selection, Error> {
     let dir = tempfile::Builder::new()
@@ -929,8 +909,7 @@ fn write_selection(repo: &Repo, part: &Part) -> Result<Selection, Error> {
 /// together wrote, when the land that waited for it finds it (`land/batched-lands`).
 pub(crate) struct Found {
     pub(crate) commit: String,
-    pub(crate) kind: LandKind,
-    pub(crate) review: bool,
+    pub(crate) verdict: Verdict,
 }
 
 /// The `landed` record of a land of `branch` at `head` that is on `main` now: its merge commit
@@ -947,6 +926,7 @@ pub(crate) fn landed_record(
             branch: landed,
             kind,
             review,
+            light,
             ..
         } = &record.body
         else {
@@ -962,8 +942,7 @@ pub(crate) fn landed_record(
         {
             return Ok(Some(Found {
                 commit: commit.clone(),
-                kind: *kind,
-                review: *review,
+                verdict: Verdict::of_record(*kind, *review, *light),
             }));
         }
     }

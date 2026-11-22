@@ -27,6 +27,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use clm_ledger::{Body, LandKind};
 use stderr::Stderr;
 
 pub use cap::{Capped, cap_directory};
@@ -207,6 +208,7 @@ impl<'a> Repo<'a> {
         let first = stdout.lines().next().unwrap_or_default();
         match first.split_whitespace().collect::<Vec<_>>()[..] {
             ["code"] => Ok(Verdict::Code),
+            ["light"] => Ok(Verdict::Light),
             ["spec"] => Ok(Verdict::Spec { review: false }),
             ["spec", "review"] => Ok(Verdict::Spec { review: true }),
             _ => Err(Error::Refused(format!(
@@ -592,4 +594,42 @@ pub(crate) enum Verdict {
     Spec {
         review: bool,
     },
+    /// Scenarios added with the code that proves them (`gate/light`): landed and recorded as
+    /// code, with `light` true (`ledger/landed-record-fields`).
+    Light,
+}
+
+impl Verdict {
+    /// The verdict a `landed` record states.
+    pub(crate) fn of_record(kind: LandKind, review: bool, light: bool) -> Verdict {
+        match kind {
+            LandKind::Spec => Verdict::Spec { review },
+            LandKind::Code if light => Verdict::Light,
+            LandKind::Code => Verdict::Code,
+        }
+    }
+
+    /// A `landed` record of this kind: `Body::landed` with `light` set for a light land.
+    pub(crate) fn landed(self, commit: String, branch: String, fingerprint: String) -> Body {
+        let (kind, review) = match self {
+            Verdict::Code | Verdict::Light => (LandKind::Code, false),
+            Verdict::Spec { review } => (LandKind::Spec, review),
+        };
+        Body::landed(commit, branch, kind, review, fingerprint).with_light(self == Verdict::Light)
+    }
+
+    /// Whether the land is of a spec branch, which alone names its changes.
+    pub(crate) fn spec(self) -> bool {
+        matches!(self, Verdict::Spec { .. })
+    }
+
+    /// The words after `landed <sha>`: the gate's first line.
+    pub(crate) fn words(self) -> &'static str {
+        match self {
+            Verdict::Code => "code",
+            Verdict::Light => "light",
+            Verdict::Spec { review: false } => "spec",
+            Verdict::Spec { review: true } => "spec review",
+        }
+    }
 }
