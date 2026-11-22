@@ -25,7 +25,7 @@ pub use lists::{
     uncited_tests, uncounted,
 };
 pub use pending::{Pending, owner, pending, waits};
-pub use spans::{TestSpan, markers_outside_tests, tests_in};
+pub use spans::{TestSpan, holds_tests, markers_outside_tests, tests_in};
 pub use status::{
     ChangeProgress, Row, StatusReport, change_progress, complete_changes, moved_to, status_report,
 };
