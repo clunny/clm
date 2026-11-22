@@ -372,5 +372,13 @@ fn a_bisected_record_kept_local() {
         "{:?}",
         out.notes
     );
-    assert_eq!(last_red(&f), (Some(l2), vec!["b".to_string()]));
+    // The clone's own ledger branch holds the record.
+    let own = f.own_records();
+    assert!(
+        matches!(
+            own.last(),
+            Some(Body::Verified { passed: false, culprit: Some(c), .. }) if *c == l2
+        ),
+        "{own:?}"
+    );
 }

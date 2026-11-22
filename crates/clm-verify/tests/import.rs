@@ -360,5 +360,10 @@ fn an_imported_record_kept_local() {
         "{:?}",
         out.notes
     );
-    assert!(matches!(last_body(&f), Body::Verified { commit, passed: true, .. } if commit == l));
+    // The clone's own ledger branch holds the record.
+    let own = f.own_records();
+    assert!(
+        matches!(own.last(), Some(Body::Verified { commit, passed: true, .. }) if *commit == l),
+        "{own:?}"
+    );
 }

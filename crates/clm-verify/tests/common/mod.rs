@@ -372,6 +372,32 @@ impl Fixture {
         all
     }
 
+    /// The `verified` records on the work clone's own ledger branches alone, whatever
+    /// `origin` holds.
+    pub fn own_records(&self) -> Vec<Body> {
+        let work = self.work();
+        let refs = self.git(
+            &work,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/heads/clm/ledger/",
+            ],
+        );
+        let mut all = Vec::new();
+        for name in refs.lines() {
+            let text = self.git(&work, &["show", &format!("{name}:records.jsonl")]);
+            let fold = clm_ledger::fold_records(&[(name, text.as_str())]);
+            all.extend(
+                fold.records
+                    .into_iter()
+                    .map(|r| r.body)
+                    .filter(|b| matches!(b, Body::Verified { .. })),
+            );
+        }
+        all
+    }
+
     pub fn verify_tree(&self) -> PathBuf {
         fs::canonicalize(self.work())
             .unwrap()
