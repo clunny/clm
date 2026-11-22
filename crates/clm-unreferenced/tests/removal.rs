@@ -106,6 +106,34 @@ fn scenario_marked_in_typescript_and_python() {
 }
 
 #[test]
+fn a_marker_names_a_change_id() {
+    // req:check.unreferenced/removal-marked@e3696365
+    let key = concat!("clm:remove", "-by ");
+    let lib = format!(
+        "// {key}2026O101-a-rename\npub fn letter_in_date() {{}}\n\
+         // {key}202601011-a\npub fn nine_digits() {{}}\n\
+         // {key}20260101-Rename\npub fn upper_slug() {{}}\n\
+         // {key}20260101-\npub fn no_slug() {{}}\n\
+         // see _{key}20260101-a-rename\npub fn underscored() {{}}\n\
+         // see ({key}20260101-a-rename)\npub fn in_parens() {{}}\n"
+    );
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", &manifest("a")),
+        ("crates/a/src/lib.rs", &lib),
+    ]);
+    assert_eq!(
+        names(dir.path()),
+        [
+            "a::letter_in_date",
+            "a::nine_digits",
+            "a::no_slug",
+            "a::underscored",
+            "a::upper_slug"
+        ]
+    );
+}
+
+#[test]
 fn typescript_and_python_markers_on_other_declarations() {
     // req:check.unreferenced/removal-marked@e3696365
     let index = format!(
