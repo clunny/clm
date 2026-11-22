@@ -96,11 +96,7 @@ fn approve_from(s: &Signed, user: &str, key: Option<&Path>) {
         None => {
             f.append(
                 &clone,
-                Body::Approved {
-                    fingerprint: f.fingerprint("spec/x"),
-                    branch: "spec/x".into(),
-                    change: Some("x".into()),
-                },
+                Body::approved(f.fingerprint("spec/x"), "spec/x".into(), Some("x".into())),
             );
         }
     }
