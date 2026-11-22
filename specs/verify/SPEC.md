@@ -185,6 +185,7 @@ In `local` and `pipeline` mode, a due `clm verify --due` SHALL check `origin/mai
 - config/verify-setting
 - ledger/verified-record
 - land/shared-check-runner
+- check.unreferenced/removal-marked
 
 ### Requirement: verify-import
 In `import` mode, `clm verify --due` and `clm verify --import` SHALL read `host`'s `runs` for `[verify] workflow` (`host/list-runs`) and run no check. The newest completed run, in the order `host/list-runs` gives them, whose conclusion is `success` or `failure` on an unverified land SHALL be recorded as a `verified` record for that run's commit, covering the unverified lands up to it, with `passed` from its conclusion, `run` its URL, and `culprit`, for a failing run that covers one land, that land, and null otherwise; a run with any other conclusion, or one not completed, SHALL be no result. With no result it SHALL print `verify pending <head>` and exit 4, appending nothing. `--due` SHALL import only when a trigger holds, as `verify-due` says; `--import` SHALL import whatever result there is. When `host`'s `runs` fails it SHALL exit 1 with its message. In `local` or `pipeline` mode `clm verify --import` SHALL print `verify nothing to import` and exit 0, asking the host nothing.
