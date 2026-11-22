@@ -265,14 +265,19 @@ fn accepted_decision(root: &Path, sha: &str, name: &str) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Rated {
     Code,
-    Spec { review: bool },
+    /// Recorded as a land of a branch the gate read as `light` (`landed-record-fields`): only
+    /// whether it needed review is recomputed.
+    Light,
+    Spec {
+        review: bool,
+    },
     Mixed,
 }
 
 impl Rated {
     fn rank(self) -> u8 {
         match self {
-            Rated::Code | Rated::Spec { review: false } => 0,
+            Rated::Code | Rated::Light | Rated::Spec { review: false } => 0,
             Rated::Spec { review: true } => 1,
             Rated::Mixed => 2,
         }
@@ -287,6 +292,11 @@ impl Rated {
     /// for its approval whatever its kind.
     fn recorded(record: &Record) -> Option<Self> {
         match &record.body {
+            Body::Landed {
+                light: true,
+                review: false,
+                ..
+            } => Some(Rated::Light),
             Body::Landed {
                 kind: LandKind::Code,
                 review: false,
@@ -311,11 +321,13 @@ impl Rated {
     }
 }
 
-/// As `clm land` prints a kind: `code`, `spec`, `spec review`, `mixed`.
+/// As `clm land` prints a kind: `code`, `spec`, `spec review`, `mixed`, or `light` for a
+/// land recorded light.
 impl std::fmt::Display for Rated {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Rated::Code => "code",
+            Rated::Light => "light",
             Rated::Mixed => "mixed",
             Rated::Spec { review: false } => "spec",
             Rated::Spec { review: true } => "spec review",
@@ -376,6 +388,22 @@ fn audit_signed(
         // included, is named and judged by its record, and the walk goes on
         // (`verify-unrated-land`).
         match clm_gate::evaluate_by(root, first, sha, false, rules) {
+            // A light land is judged only by whether it needed review, as the gate's rules
+            // version decides it, whatever kind the gate gives: the gate's `review` for a spec
+            // branch, and whether its spec part would need review for any other.
+            Ok(outcome) if rated == Rated::Light => {
+                let review = match outcome.kind {
+                    clm_gate::Kind::Spec => outcome.review,
+                    _ => outcome.spec_part_review,
+                };
+                if review {
+                    findings.push(finding(
+                        "ledger/understated-land",
+                        format!("landed {sha}: recorded light, the gate gives spec review"),
+                    ));
+                    needs_review = true;
+                }
+            }
             Ok(outcome) => {
                 let gate = Rated::gate(&outcome);
                 if gate.rank() > rated.rank() {
