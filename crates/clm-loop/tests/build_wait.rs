@@ -40,7 +40,16 @@ fn a_place_frees() {
     thread::spawn(move || {
         let _ = tx.send(wait(&options, 1.0));
     });
-    thread::sleep(Duration::from_millis(700));
+    // `wait` reads the places it starts with before its first `clm wrap-up`, so the place is
+    // freed only once that call is seen: a fixed sleep let a loaded host free it first.
+    let started = Instant::now();
+    while fx.ran("wrap-up") == 0 {
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "wait never ran clm wrap-up"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
     assert!(rx.try_recv().is_err(), "no place is free yet");
     let freed = Instant::now();
     clm_orchestrator::free_place(&fx.work, "b").unwrap();
