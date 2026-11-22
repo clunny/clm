@@ -83,7 +83,7 @@ exit 0
 
 #[test]
 fn land_records_effort() {
-    // req:land/records-effort@2fbdf1d7
+    // req:land/records-effort@d92140d8
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     session(&f, "impl/a");
@@ -100,7 +100,7 @@ fn land_records_effort() {
 
 #[test]
 fn land_without_transcripts_lands() {
-    // req:land/records-effort@2fbdf1d7
+    // req:land/records-effort@d92140d8
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     clm_repository(&f);
@@ -119,7 +119,7 @@ fn land_without_transcripts_lands() {
 
 #[test]
 fn refused_push_records_once() {
-    // req:land/records-effort@2fbdf1d7
+    // req:land/records-effort@d92140d8
     let f = Fixture::new("");
     f.hook(Some(&main_hook("[ \"$n\" -eq 1 ]")));
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -132,7 +132,7 @@ fn refused_push_records_once() {
 
 #[test]
 fn push_never_taken_records_nothing() {
-    // req:land/records-effort@2fbdf1d7
+    // req:land/records-effort@d92140d8
     let f = Fixture::new("");
     f.hook(Some(&main_hook("true")));
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -143,7 +143,7 @@ fn push_never_taken_records_nothing() {
 
 #[test]
 fn effort_failure_warns_and_lands() {
-    // req:land/records-effort@2fbdf1d7
+    // req:land/records-effort@d92140d8
     // Not a CLM repository to `clm effort record`: refused, so a warning, and the land stands.
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);

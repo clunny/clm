@@ -6,7 +6,7 @@ use common::Fixture;
 
 #[test]
 fn a_check_only_run_in_a_builds_place() {
-    // req:land/check-slot@6585595e
+    // req:land/check-slot@2d86f394
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.place("a", 2, "impl/a");
@@ -18,7 +18,7 @@ fn a_check_only_run_in_a_builds_place() {
 
 #[test]
 fn a_land() {
-    // req:land/check-slot@6585595e
+    // req:land/check-slot@2d86f394
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.place("a", 2, "impl/a");
@@ -29,7 +29,7 @@ fn a_land() {
 
 #[test]
 fn outside_a_place() {
-    // req:land/check-slot@6585595e
+    // req:land/check-slot@2d86f394
     let f = Fixture::new("");
     f.branch("x", &[("b.txt", "b\n")]);
     f.place("a", 3, "impl/a");
@@ -46,7 +46,7 @@ fn outside_a_place() {
 
 #[test]
 fn a_detached_head_is_slot_0_whatever_a_place_names() {
-    // req:land/check-slot@6585595e
+    // req:land/check-slot@2d86f394
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.place("a", 2, "impl/a");

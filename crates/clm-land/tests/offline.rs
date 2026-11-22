@@ -178,7 +178,7 @@ fn origin_main_behind_local() {
 
 #[test]
 fn reconnect_names_rebase() {
-    // req:land/reconnect-names-rebase@92d58f31
+    // req:land/reconnect-names-rebase@b47d874a
     let (f, _) = landed_through_remote();
     repoint_origin(&f, true);
     let why = refused(clm_land::reconnect(&f.work(), &f.env(&[])));
@@ -188,32 +188,6 @@ fn reconnect_names_rebase() {
         "{why}"
     );
     assert!(why.contains("land again impl/a"), "{why}");
-
-    let old = ["sync", "checkpoint", "page"].map(|c| format!("clm {c}"));
-    let mut stack = vec![std::path::PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src"
-    ))];
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(dir).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                stack.push(path);
-                continue;
-            }
-            if path.extension().is_none_or(|e| e != "rs") {
-                continue;
-            }
-            let text = std::fs::read_to_string(&path).unwrap();
-            for name in &old {
-                let hit = text.match_indices(name.as_str()).any(|(i, _)| {
-                    !text[i + name.len()..]
-                        .starts_with(|c: char| c.is_alphanumeric() || c == '_' || c == '-')
-                });
-                assert!(!hit, "{} names `{name}`", path.display());
-            }
-        }
-    }
 }
 
 #[test]

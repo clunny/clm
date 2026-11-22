@@ -28,7 +28,7 @@ fn landed_key(f: &Fixture) -> String {
 
 #[test]
 fn the_upgrade_stamp_only() {
-    // req:land/settings-unchanged-is-checked@d27ea07f
+    // req:land/settings-unchanged-is-checked@d03715e9
     let f = Fixture::new("");
     let stamped = toml_with(&f, "upgraded = \"20260101-x\"");
     f.branch("impl/a", &[("clm.toml", &stamped), ("docs/x.md", "# x\n")]);
@@ -49,7 +49,7 @@ fn the_upgrade_stamp_only() {
 
 #[test]
 fn a_comment_only() {
-    // req:land/settings-unchanged-is-checked@d27ea07f
+    // req:land/settings-unchanged-is-checked@d03715e9
     let f = Fixture::new("");
     let commented = format!(
         "{}\n# [detectors]\n# name = \"x\"\n",
@@ -64,7 +64,7 @@ fn a_comment_only() {
 
 #[test]
 fn a_reader_of_clm_toml() {
-    // req:land/settings-unchanged-is-checked@d27ea07f
+    // req:land/settings-unchanged-is-checked@d03715e9
     let f = Fixture::new("");
     let stamped = toml_with(&f, "upgraded = \"20260101-x\"");
     f.branch("impl/a", &[("clm.toml", &stamped), ("docs/x.md", "# x\n")]);
@@ -79,7 +79,7 @@ fn a_reader_of_clm_toml() {
 
 #[test]
 fn a_setting_changed() {
-    // req:land/settings-unchanged-is-checked@d27ea07f
+    // req:land/settings-unchanged-is-checked@d03715e9
     let f = Fixture::new("");
     // `[land] check` differs from the one the `checked` record names.
     let text = toml_with(&f, "upgraded = \"20260101-x\"");
@@ -103,7 +103,7 @@ fn a_setting_changed() {
 
 #[test]
 fn code_changed_too() {
-    // req:land/settings-unchanged-is-checked@d27ea07f
+    // req:land/settings-unchanged-is-checked@d03715e9
     let f = Fixture::new("");
     let stamped = toml_with(&f, "upgraded = \"20260101-x\"");
     f.branch(
@@ -121,7 +121,7 @@ fn code_changed_too() {
 
 #[test]
 fn no_record_for_the_old_key() {
-    // req:land/settings-unchanged-is-checked@d27ea07f
+    // req:land/settings-unchanged-is-checked@d03715e9
     let f = Fixture::new("");
     let stamped = toml_with(&f, "upgraded = \"20260101-x\"");
     f.branch("impl/a", &[("clm.toml", &stamped)]);

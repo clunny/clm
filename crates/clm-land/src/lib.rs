@@ -159,7 +159,7 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, tried again after a failure (`land/fetch-retry-in-layer`).
+    /// `git fetch origin`, tried again after a failure (`land/offline-land`).
     fn fetch(&self) -> Result<(), Error> {
         self.fetch_with(&["fetch", clm_git::REMOTE])
     }

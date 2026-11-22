@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn over_the_cap_clears_and_keeps_link_targets() {
-        // req:land/shared-target-cap@07ebae61
+        // req:land/shared-target-cap@d61b0e32
         let dir = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
         let target = dir.path().join("x");
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn under_the_cap_returns_nothing() {
-        // req:land/shared-target-cap@07ebae61
+        // req:land/shared-target-cap@d61b0e32
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("f"), [0u8; 10]).unwrap();
         assert_eq!(cap_directory(dir.path(), ".clm/x", 1), None);
@@ -131,14 +131,14 @@ mod tests {
 
     #[test]
     fn no_directory_returns_nothing() {
-        // req:land/shared-target-cap@07ebae61
+        // req:land/shared-target-cap@d61b0e32
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(cap_directory(&dir.path().join("none"), ".clm/x", 1), None);
     }
 
     #[test]
     fn unreadable_entry_warns_and_removes_nothing() {
-        // req:land/shared-target-cap@07ebae61
+        // req:land/shared-target-cap@d61b0e32
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let sub = dir.path().join("sub");
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn failed_removal_warns() {
-        // req:land/shared-target-cap@07ebae61
+        // req:land/shared-target-cap@d61b0e32
         use std::os::unix::fs::PermissionsExt;
         let parent = tempfile::tempdir().unwrap();
         let dir = parent.path().join("x");

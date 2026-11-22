@@ -57,7 +57,7 @@ fn has_recheck_line(warnings: &[String]) -> bool {
 
 #[test]
 fn main_moved_on_an_unrelated_component() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     let (head, base, basis, merge_base) = moved(&f);
     // The check lock held by another process: the land takes neither lock, so it doesn't wait.
@@ -106,7 +106,7 @@ fn main_moved_on_an_unrelated_component() {
 
 #[test]
 fn a_dependant_of_both() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     let (head, base, basis, _) = moved(&f);
     f.write("overlap-out", "file crates/c/tests/t.rs\n");
@@ -134,7 +134,7 @@ fn a_dependant_of_both() {
 
 #[test]
 fn an_all_line_runs_every_test() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     moved(&f);
     f.write("overlap-out", "all crates/c/Cargo.toml\n");
@@ -151,7 +151,7 @@ fn an_all_line_runs_every_test() {
 
 #[test]
 fn the_overlap_fails() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     moved(&f);
     f.write("affected-fails", "");
@@ -170,7 +170,7 @@ fn the_overlap_fails() {
 
 #[test]
 fn the_head_was_never_checked_whole() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     let base = f.advance_main("crates/b/src/lib.rs", "// b\n");
@@ -189,7 +189,7 @@ fn the_head_was_never_checked_whole() {
 
 #[test]
 fn mains_head_was_not_checked() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     let base = f.advance_main("crates/b/src/lib.rs", "// b\n");
@@ -203,7 +203,7 @@ fn mains_head_was_not_checked() {
 
 #[test]
 fn a_head_that_contains_main_is_not_composed() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     f.mark_checked("origin/impl/a");
@@ -219,7 +219,7 @@ fn a_head_that_contains_main_is_not_composed() {
 
 #[test]
 fn checks_made_with_another_command_do_not_count() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     let base = f.advance_main("crates/b/src/lib.rs", "// b\n");
@@ -241,7 +241,7 @@ fn checks_made_with_another_command_do_not_count() {
 
 #[test]
 fn a_land_says_how_it_checked() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     f.mark_checked("origin/main");
@@ -281,7 +281,7 @@ fn main_moves_during_the_check(f: &Fixture, first: &str, other: &str) -> clm_lan
 
 #[test]
 fn main_moved_during_the_check_on_an_unrelated_component() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "// b\n")]);
@@ -328,7 +328,7 @@ fn main_moved_during_the_check_on_an_unrelated_component() {
 
 #[test]
 fn main_moved_during_a_readers_check() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "// b\n")]);
@@ -347,7 +347,7 @@ fn main_moved_during_a_readers_check() {
 
 #[test]
 fn main_moved_during_the_check_with_a_dependant_in_common() {
-    // req:land/overlap-recheck@0431f136
+    // req:land/overlap-recheck@03dcd5dc
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "// b\n")]);

@@ -264,7 +264,7 @@ fn pushed_though_git_failed() {
 
 #[test]
 fn checked_code_takes_no_lock() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();
@@ -299,7 +299,7 @@ fn checked_code_takes_no_lock() {
 
 #[test]
 fn a_waiting_land_says_so() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     // Another process's land holds the lock, through a file of this test's own.

@@ -406,7 +406,7 @@ fn clm_in_a_subdirectory_builds_under_its_own_clm_directory() {
 #[test]
 fn land_from_a_linked_worktree() {
     // req:land/shared-land-target@2c8695d7
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let linked = f.path("linked");
@@ -443,7 +443,7 @@ fn land_from_a_linked_worktree() {
 
 #[test]
 fn lock_held_through_the_gate_on_the_merge_and_the_push() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     // `origin`'s hook logs whether the lock is held when `main` is pushed.
@@ -475,7 +475,7 @@ done"#,
 #[test]
 fn caller_target_changes_nothing() {
     // req:land/shared-land-target@2c8695d7
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let env = f.env(&[("CARGO_TARGET_DIR", "/elsewhere")]);
@@ -496,7 +496,7 @@ fn caller_target_changes_nothing() {
 
 #[test]
 fn lock_released_after_a_failing_check() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.write("check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -520,7 +520,7 @@ fn lock_released_after_a_failing_check() {
 
 #[test]
 fn conflict_takes_no_lock() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.advance_main("b.txt", "other\n");
@@ -855,7 +855,6 @@ fn capped(cap: bool, size: &str) -> Fixture {
 #[test]
 fn target_over_the_cap_cleared() {
     // req:land/land-target-cap@69c8919e
-    // req:land/shared-target-cap@07ebae61
     let f = capped(true, "2000000000");
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     assert!(out.lines.last().unwrap().starts_with("landed "), "{out:?}");

@@ -12,7 +12,7 @@ fn with_env_a(f: &Fixture) -> String {
 
 #[test]
 fn the_clones_value_wins_and_no_table_leaves_the_callers() {
-    // req:land/check-env@a52574c4
+    // req:land/check-env@b99a4ca7
     // SAFETY: the only test of this binary that sets or reads this variable's value in its
     // process; the others never name it.
     unsafe { std::env::set_var("RELAY_SERVER_IMAGE", "relay:shell") };
@@ -43,7 +43,7 @@ fn the_clones_value_wins_and_no_table_leaves_the_callers() {
 
 #[test]
 fn variables_are_named_in_byte_order() {
-    // req:land/check-env@a52574c4
+    // req:land/check-env@b99a4ca7
     let f = Fixture::new("[env]\nb = \"2\"\nB = \"1\"\nA = \"x\"\n");
     clm_land::check_only(&f.work(), None, &f.env(&[])).unwrap();
     assert_eq!(
@@ -54,7 +54,7 @@ fn variables_are_named_in_byte_order() {
 
 #[test]
 fn a_record_under_other_variables() {
-    // req:land/check-env@a52574c4
+    // req:land/check-env@b99a4ca7
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.mark_checked("impl/a");
@@ -73,7 +73,7 @@ fn a_record_under_other_variables() {
 
 #[test]
 fn a_record_under_the_same_variables_counts() {
-    // req:land/check-env@a52574c4
+    // req:land/check-env@b99a4ca7
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.write("work/clm.local.toml", "[env]\nA = \"1\"\n");
@@ -95,7 +95,7 @@ fn a_record_under_the_same_variables_counts() {
 
 #[test]
 fn a_changed_variable_runs_every_test() {
-    // req:land/check-env@a52574c4
+    // req:land/check-env@b99a4ca7
     let f = Fixture::new("");
     let changed = with_env_a(&f);
     f.branch("impl/a", &[("clm.toml", &changed)]);
