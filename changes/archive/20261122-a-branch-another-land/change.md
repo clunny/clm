@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-branch-another-land-already-took-onto-main-lands-again-as-an]
 ---
 
