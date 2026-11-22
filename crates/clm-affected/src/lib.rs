@@ -14,7 +14,8 @@ use clm_model::Graph;
 
 pub use command::{Args, Settings, command};
 pub use readers::{readers, reads_in};
-pub use select::{Changed, Selection, overlap, select};
+use select::overlap;
+pub use select::{Changed, Selection, select};
 pub use why::why_chain;
 
 /// The selection for the working tree of `root` against the merge base of `base` and `HEAD`,
@@ -35,7 +36,12 @@ pub fn affected(root: &Path, base: &str, all: &[String]) -> Result<Selection, Fa
 
 /// The lines saying why the change selects `path` (`why_chain`), with `all` the
 /// `[affected] all` globs as for `affected`. Refused as `affected` is.
-pub fn why(root: &Path, base: &str, path: &str, all: &[String]) -> Result<Vec<String>, Failure> {
+pub(crate) fn why(
+    root: &Path,
+    base: &str,
+    path: &str,
+    all: &[String],
+) -> Result<Vec<String>, Failure> {
     let (graph, differing, scan) = inputs(root, base)?;
     Ok(why_chain(
         &graph,
@@ -231,7 +237,7 @@ fn names(out: &[u8]) -> Vec<String> {
 /// `to` counts as a file when it leads to one as a checkout's link would, judged in the tree
 /// `to` extracts to (`leads_to_file`). Refused as `affected` is when the graph can't be
 /// loaded.
-pub fn affected_between(
+pub(crate) fn affected_between(
     root: &Path,
     from: &str,
     to: &str,
@@ -433,5 +439,130 @@ mod cited_ids_tests {
             marker("a/inside@0123abcd")
         );
         assert_eq!(cited_ids(&text), ["a/outside", "a/inside"]);
+    }
+}
+
+/// `overlap`: what two selections can both break, and `affected_between`, the selection
+/// between two commits it is applied to.
+#[cfg(test)]
+mod overlap_tests {
+    use std::fs;
+    use std::path::Path;
+
+    use tempfile::TempDir;
+
+    use super::{Selection, affected_between, overlap};
+
+    fn nodes(nodes: &[&str], files: &[&str]) -> Selection {
+        Selection::Nodes {
+            nodes: nodes.iter().map(|s| s.to_string()).collect(),
+            files: files.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    fn all(path: &str) -> Selection {
+        Selection::All(path.to_string())
+    }
+
+    #[test]
+    fn both_everything_gives_the_first() {
+        // req:check.affected/overlap-selection@bc565b43
+        assert_eq!(overlap(all("a"), all("b")), all("a"));
+    }
+
+    #[test]
+    fn one_everything_gives_the_other_unchanged() {
+        // req:check.affected/overlap-selection@bc565b43
+        let other = nodes(&["c"], &["f"]);
+        assert_eq!(overlap(all("a"), other.clone()), other);
+        assert_eq!(overlap(other.clone(), all("a")), other);
+    }
+
+    #[test]
+    fn otherwise_the_components_and_files_both_hold() {
+        // req:check.affected/overlap-selection@bc565b43
+        let a = nodes(&["a", "c", "d"], &["f1", "f2", "f4"]);
+        let b = nodes(&["b", "c", "d"], &["f2", "f3", "f4"]);
+        assert_eq!(overlap(a, b), nodes(&["c", "d"], &["f2", "f4"]));
+        assert_eq!(
+            overlap(nodes(&["a"], &["x"]), nodes(&["b"], &[])),
+            nodes(&[], &[])
+        );
+    }
+
+    fn write(root: &Path, rel: &str, content: &str) {
+        let path = root.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    fn git(root: &Path, args: &[&str]) {
+        let config = [
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+        ];
+        let all: Vec<&str> = config.iter().chain(args).copied().collect();
+        if let Err(e) = clm_git::git_isolated(root, &all) {
+            panic!("git {args:?}: {e}");
+        }
+    }
+
+    fn commit_all(root: &Path, message: &str) {
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-q", "-m", message]);
+    }
+
+    fn spec(paths: &str, depends_on: &str) -> String {
+        format!(
+            "---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: {depends_on}\n---\n"
+        )
+    }
+
+    #[test]
+    fn affected_between_gives_the_selection_between_two_commits() {
+        // req:check.affected/overlap-selection@bc565b43
+        // `a`, `b` on `a`, and `c` on nothing; `main`, then `x` changing `a`'s file and `y`
+        // changing `b`'s, each from `main`.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        git(root, &["init", "-q", "-b", "main"]);
+        write(root, "clm.toml", "");
+        write(root, "specs/SPEC.md", &spec("[\"clm.toml\"]", "[]"));
+        write(root, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", "[]"));
+        write(root, "specs/b/SPEC.md", &spec("[\"crates/b/**\"]", "[a]"));
+        write(root, "specs/c/SPEC.md", &spec("[\"crates/c/**\"]", "[]"));
+        for id in ["a", "b", "c"] {
+            write(root, &format!("crates/{id}/src/lib.rs"), "fn f() {}\n");
+        }
+        commit_all(root, "start");
+        git(root, &["switch", "-q", "-c", "x"]);
+        write(root, "crates/a/src/lib.rs", "fn changed() {}\n");
+        commit_all(root, "x");
+        git(root, &["switch", "-q", "-c", "y", "main"]);
+        write(root, "crates/b/src/lib.rs", "fn changed() {}\n");
+        commit_all(root, "y");
+        // The working tree, `y` checked out with `c` changed and a file untracked, is not read.
+        write(root, "crates/c/src/lib.rs", "fn uncommitted() {}\n");
+        write(root, "crates/c/src/new.rs", "fn untracked() {}\n");
+
+        let x = affected_between(root, "main", "x", &[]).unwrap();
+        // `a` changed, and `b` depends on it; each owns its file.
+        assert_eq!(
+            x,
+            nodes(&["a", "b"], &["crates/a/src/lib.rs", "crates/b/src/lib.rs"])
+        );
+        let y = affected_between(root, "main", "y", &[]).unwrap();
+        assert_eq!(y, nodes(&["b"], &["crates/b/src/lib.rs"]));
+        // What both can break.
+        assert_eq!(overlap(x, y), nodes(&["b"], &["crates/b/src/lib.rs"]));
+        // The `[affected] all` globs given select everything for a change they match.
+        assert_eq!(
+            affected_between(root, "main", "x", &["crates/a/**".to_string()]).unwrap(),
+            all("crates/a/src/lib.rs")
+        );
     }
 }

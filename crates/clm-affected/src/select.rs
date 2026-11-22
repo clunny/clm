@@ -117,7 +117,7 @@ fn with_dependants(graph: &Graph, mut nodes: BTreeSet<String>) -> BTreeSet<Strin
 
 /// What both selections can break: when both are `All`, the first; when one is, the other;
 /// otherwise the components and files both hold, each sorted.
-pub fn overlap(a: Selection, b: Selection) -> Selection {
+pub(crate) fn overlap(a: Selection, b: Selection) -> Selection {
     match (a, b) {
         (first @ Selection::All(_), Selection::All(_)) => first,
         (Selection::All(_), other) | (other, Selection::All(_)) => other,
