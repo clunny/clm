@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-workaround-flag-filed-in-error-can-only-be-withdrawn-by]
 ---
 
