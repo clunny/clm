@@ -13,7 +13,7 @@ How far the code has caught up with the spec, for `check` and for every componen
 
 Crate `clm-coverage`. Its library:
 - `Marker { id, version, path, line }`: a marker at a file's line (1-based), `version` none for a bare marker; it displays as `<file>:<line>`. `State`, one of `Current`, `Behind`, `Unbuilt` and `Obsolete`, and `STATE_NAMES`, each `State` with the word the reports print for it (`state-names`).
-- `tests_in(path, text)`: the tests and named groups of tests in one file, each a `TestSpan { name, group, first, last }`, and `markers_outside_tests(path, text)`: the `req:` markers on none of those lines (`test-spans`). `marker_spans(text)`: every `req:` marker in a text, inside a test or not, each a `MarkerSpan { id, version, range }` with its byte range (`marker-spans`).
+- `tests_in(path, text)`: the tests and named groups of tests in one file, each a `TestSpan { name, group, first, last }`, and `markers_outside_tests(path, text)`: the `req:` markers on none of those lines (`test-spans`). `marker_spans(text)`: every `req:` marker in a text, inside a test or not, each a `MarkerSpan { id, version, range }` with its byte range (`marker-spans`). `holds_tests(path)`: whether a path's extension is one `tests_in` reads, so a file for which it is false holds no test whatever its text (`test-holding-paths`), which `land` reads to skip the files that can hold none.
 - `markers_in(path, text)`: the `req:` markers in one file that count, those inside a test (`markers-in-tests`), none for a file whose extension is `md`; `scan(root)`, with the default feature `checkout`: the markers of every file a checkout lists, or of the files under `root` where `git ls-files` fails (`markers-from-files`), as `Scan { req, outside, remove_by }`: `req`, the `req:` markers that count (`markers-in-tests`); `outside`, the `req:` markers on no line of a test or group (`test-spans`); and `remove_by`, the `clm:remove-by` markers, each `id` a change's. `read_files(root)`, with the same feature: the files `scan` reads, each as its path relative to `root` and its text, sorted by path (`markers-from-files`), in the form `obsolete_tests`, `deleted_tests` and `uncited_tests` take.
 - `report(graph, markers)`: each requirement's `Coverage { id, state, version, markers, proof }`, human-layer entries included, every architecture entry, and a capability holding `#### Untested`, carrying its `Proof` (`Enforced`, `Pending`, `Untested` or `Unenforced`) in place of markers; each displays as its `clm coverage` line (`coverage-report`).
 - `pending(graph, markers)`: each component's pending requirements, each a `Pending { id, node, version, state, cited, markers, priority, blocked_by, waits_on }`, `node` the component its line is pending on, displaying as its `clm pending` line (`pending-report`), and `waits(lines, line)`: the lines of that list one of its lines waits on (`wait-lines`). A reader of `waits_on` takes the component of a wait from `waits`, never from the ID's own first part: an obsolete requirement is pending on the owners of the files that cite it, and its line on its own component waits on its own ID.
@@ -745,3 +745,14 @@ It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marke
 #### Serves
 - capability/build-from-spec
 - architecture/component-reconciliation
+
+### Requirement: test-holding-paths
+`clm-coverage` SHALL offer `holds_tests(path)`, true exactly when the path's extension, compared as written, is one `test-spans` finds tests by (`rs`; `ts`, `tsx`, `mts`, `cts`, `js`, `jsx`, `mjs` and `cjs`; and `py`), so that `tests_in` and `markers_outside_tests` return nothing, whatever the text, for every path for which it is false. It SHALL run no process and SHALL build without the `checkout` feature.
+
+#### Scenario: which paths can hold a test
+- GIVEN the paths `a.rs`, `a.test.ts`, `x.mjs`, `e.spec.tsx`, `test_a.py`, `a_test.go`, `README.md`, `Cargo.lock`, `rs` and `lib.RS`
+- WHEN `holds_tests` runs on each
+- THEN it is true for the first five and false for the rest
+
+#### Serves
+- capability/land-safely
