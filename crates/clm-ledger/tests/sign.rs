@@ -158,6 +158,7 @@ fn signed_message_keeps_the_line_as_written() {
         commit: "c".into(),
         branch: "impl/x".into(),
         kind: clm_ledger::LandKind::Code,
+        light: false,
         review: false,
         fingerprint: "f".into(),
         code_key: None,

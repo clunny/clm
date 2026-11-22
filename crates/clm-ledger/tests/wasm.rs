@@ -109,6 +109,7 @@ fn fold_records_is_the_fold() {
             commit: "c".into(),
             branch: "b".into(),
             kind: clm_ledger::LandKind::Spec,
+            light: false,
             review: false,
             fingerprint: "f".into(),
             code_key: None,

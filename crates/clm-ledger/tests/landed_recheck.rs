@@ -8,6 +8,7 @@ fn landed(commit: &str, recheck: Option<Recheck>, recheck_files: Option<u64>) ->
         commit: commit.into(),
         branch: "impl/x".into(),
         kind: LandKind::Code,
+        light: false,
         review: false,
         fingerprint: "f".into(),
         code_key: None,

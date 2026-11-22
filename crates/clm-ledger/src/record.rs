@@ -99,6 +99,11 @@ pub enum Body {
         /// Written `land_kind`: the record's own `kind` is `landed`.
         #[serde(rename = "land_kind")]
         kind: LandKind,
+        /// Whether the land was of a branch the gate reads as `light` (`gate/light`), whose
+        /// `kind` is then `code`. Written only when true, so a `clm` that knows no `light`
+        /// reads the land as a code land; a line without it is not light.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        light: bool,
         /// Whether the land needed a human's review (`gate/needs-review`); false for a code
         /// land. Read from `tier` on a record written before review became yes or no:
         /// `HARD` is true, anything else false (`yes-no-review`).
@@ -456,6 +461,7 @@ impl Body {
             commit,
             branch,
             kind,
+            light: false,
             review,
             fingerprint,
             code_key: None,
@@ -465,6 +471,15 @@ impl Body {
             recheck: None,
             recheck_files: None,
         }
+    }
+
+    /// A `landed` body with `light` as whether it was a light land, and any other body
+    /// unchanged (`landed-record-fields`).
+    pub fn with_light(mut self, light: bool) -> Body {
+        if let Body::Landed { light: slot, .. } = &mut self {
+            *slot = light;
+        }
+        self
     }
 
     /// A `landed` body with `code_key` as its code key, and any other body unchanged.

@@ -303,10 +303,12 @@ pub fn show(fold: &Fold) -> Vec<String> {
                     commit,
                     branch,
                     kind,
+                    light,
                     review,
                     ..
                 } => {
                     let kind = match kind {
+                        _ if *light => "light",
                         LandKind::Spec => "spec",
                         LandKind::Code => "code",
                     };

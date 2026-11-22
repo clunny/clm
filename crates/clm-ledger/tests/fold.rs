@@ -16,6 +16,7 @@ fn landed(commit: &str) -> Body {
         commit: commit.into(),
         branch: "impl/x".into(),
         kind: LandKind::Code,
+        light: false,
         review: false,
         fingerprint: "g".into(),
         code_key: None,
@@ -228,13 +229,14 @@ fn fold_records_counts_a_duplicate_id_once_and_skips_blank_lines() {
 
 #[test]
 fn landed_record_written_flat() {
-    // req:ledger/landed-record-fields@ab130936
+    // req:ledger/landed-record-fields@f3f44c52
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     let body = Body::Landed {
         commit: "c".into(),
         branch: "impl/x".into(),
         kind: LandKind::Code,
+        light: false,
         review: false,
         fingerprint: "f".into(),
         code_key: Some("k".into()),
@@ -257,17 +259,80 @@ fn landed_record_written_flat() {
     }
     assert!(!line.contains("tier"), "{line}");
     assert_eq!(line.matches(r#""kind""#).count(), 1, "{line}");
+    // A land that isn't light leaves the field out.
+    assert!(!line.contains("light"), "{line}");
+}
+
+#[test]
+fn a_light_land() {
+    // req:ledger/landed-record-fields@f3f44c52
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let a = clone_with_origin(home, "a", "A");
+    let body = Body::landed(
+        "c".into(),
+        "impl/x".into(),
+        LandKind::Code,
+        false,
+        "f".into(),
+    );
+    assert!(
+        matches!(&body, Body::Landed { light: false, .. }),
+        "{body:?}"
+    );
+    let appended = clm_ledger::append(&a, body.with_light(true), &env(home, &[])).unwrap();
+    let record = &appended.record;
+    let branch = format!("clm/ledger/{}", record.writer);
+    let line = sh(&a, &["show", &format!("{branch}:records.jsonl")]);
+    assert!(line.contains(r#""land_kind":"code""#), "{line}");
+    assert!(line.contains(r#""light":true"#), "{line}");
+
+    let fold = clm_ledger::fold(&a).unwrap();
+    assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
+    let land = &fold.lands["c"][0];
+    assert!(
+        matches!(
+            &land.body,
+            Body::Landed {
+                kind: LandKind::Code,
+                light: true,
+                ..
+            }
+        ),
+        "{land:?}"
+    );
+    assert_eq!(
+        clm_ledger::show(&fold),
+        [format!(
+            "landed c impl/x light - {} {}",
+            record.writer, record.at
+        )]
+    );
+    // Set off again; on any other body, nothing.
+    let off = land.body.clone().with_light(false);
+    assert!(matches!(&off, Body::Landed { light: false, .. }), "{off:?}");
+    let checked = Body::Checked {
+        code_key: "k".into(),
+        command: "true".into(),
+        basis: None,
+    };
+    assert_eq!(checked.clone().with_light(true), checked);
 }
 
 #[test]
 fn landed_record_written_before_the_code_key() {
-    // req:ledger/landed-record-fields@ab130936
+    // req:ledger/landed-record-fields@f3f44c52
     let line = r#"{"id":"1","writer":"a/1","at":"2026-01-01T00:00:00.000Z","kind":"landed","commit":"c","branch":"impl/x","land_kind":"code","tier":null,"fingerprint":"f","changes":[]}"#;
     let fold = clm_ledger::fold_records(&[("origin/clm/ledger/a/1", line)]);
     assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
     let land = &fold.lands["c"][0];
     assert!(
         matches!(&land.body, Body::Landed { code_key: None, .. }),
+        "{land:?}"
+    );
+    // A line without `light` reads as not light.
+    assert!(
+        matches!(&land.body, Body::Landed { light: false, .. }),
         "{land:?}"
     );
     // An unknown key is left out when written, not written `null`.
@@ -413,7 +478,7 @@ fn legacy_land(commit: &str, tier: &str) -> String {
 
 #[test]
 fn legacy_tier_reads_as_review() {
-    // req:ledger/landed-record-fields@ab130936
+    // req:ledger/landed-record-fields@f3f44c52
     let text = [
         legacy_land("h", r#""HARD""#),
         legacy_land("s", r#""SOFT""#),
@@ -435,7 +500,7 @@ fn legacy_tier_reads_as_review() {
 
 #[test]
 fn landed_writes_review() {
-    // req:ledger/landed-record-fields@ab130936
+    // req:ledger/landed-record-fields@f3f44c52
     let mut body = landed("c");
     if let Body::Landed { review, kind, .. } = &mut body {
         (*review, *kind) = (true, LandKind::Spec);
