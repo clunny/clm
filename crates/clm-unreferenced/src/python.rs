@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use tree_sitter::{Node, Parser};
 
-use crate::{Carrier, Finding, Mentions, Source, ascii_words, one_line, words_outside};
+use crate::{Before, Carrier, Finding, Mentions, Source, ascii_words, one_line, words_outside};
 
 /// The `pyproject.toml` tables whose string values name entry points.
 const SCRIPT_TABLES: [&[&str]; 3] = [
@@ -52,8 +52,13 @@ struct Spec<'s> {
 
 /// What a top-level statement binds, in order.
 enum Binding<'s> {
-    /// A `def`, `class` or assignment, at its 1-based line.
-    Defined { name: &'s str, line: usize },
+    /// A `def`, `class` or assignment, at its 1-based line, and whether a removal marker holds
+    /// it.
+    Defined {
+        name: &'s str,
+        line: usize,
+        marked: bool,
+    },
     /// `from <spec> import imported as name`.
     From {
         name: &'s str,
@@ -82,6 +87,8 @@ struct Declared<'s> {
     line: usize,
     /// The name it is defined as.
     word: &'s str,
+    /// Whether a removal marker holds the definition.
+    marked: bool,
 }
 
 /// The names the Python packages in `sources` expose that nothing outside their package
@@ -184,6 +191,10 @@ pub(crate) fn findings(
             .collect();
         let carried = mentions.carried(index, &carriers, HashSet::new());
         for (name, declared) in items {
+            // A marked definition is the old path of a removal: never listed.
+            if declared.marked {
+                continue;
+            }
             if !(mentions.outside(name, index) || carried.contains(name)) {
                 findings.push(Finding {
                     path: declared.path.to_string_lossy().into_owned(),
@@ -343,11 +354,16 @@ impl<'g, 's> Graph<'g, 's> {
         let mut found = None;
         for binding in &module.bindings {
             match *binding {
-                Binding::Defined { name: n, line } if n == name => {
+                Binding::Defined {
+                    name: n,
+                    line,
+                    marked,
+                } if n == name => {
                     found = Some(Declared {
                         path,
                         line,
                         word: n,
+                        marked,
                     });
                     break;
                 }
@@ -533,6 +549,7 @@ impl<'s> Reader<'s> {
         let mut names = Vec::new();
         self.targets(left, &mut names);
         let line = statement.start_position().row + 1;
+        let marked = self.marked(statement);
         if let Some(annotation) = node.child_by_field_name("type") {
             let words: Vec<String> = self
                 .words(annotation)
@@ -547,7 +564,9 @@ impl<'s> Reader<'s> {
             }
         }
         for name in names {
-            module.bindings.push(Binding::Defined { name, line });
+            module
+                .bindings
+                .push(Binding::Defined { name, line, marked });
         }
         // A chain, `a = b = 1`, nests the rest as the right side.
         if let Some(right) = right.filter(|r| r.kind() == "assignment") {
@@ -594,6 +613,7 @@ impl<'s> Reader<'s> {
         module.bindings.push(Binding::Defined {
             name,
             line: node.start_position().row + 1,
+            marked: self.marked(node),
         });
         if !words.is_empty() {
             module.carriers.push(Carrier {
@@ -601,6 +621,18 @@ impl<'s> Reader<'s> {
                 words,
             });
         }
+    }
+
+    /// Whether a removal marker holds the statement `node`: among the comments and decorators
+    /// before it, or before the decorated definition it opens, a comment that starts its own
+    /// line.
+    fn marked(&self, node: Node) -> bool {
+        let before = |n: Node| match n.kind() {
+            "comment" => Before::Comment,
+            "decorator" => Before::Passed,
+            _ => Before::Stop,
+        };
+        crate::marked(self.text, node, before, &["decorated_definition"])
     }
 
     /// The words of every annotation (`type` node) under `node`.

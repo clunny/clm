@@ -306,6 +306,73 @@ pub(crate) fn words_outside<'s>(
     words
 }
 
+/// What a node before a declaration is, as `marked` walks back over it.
+pub(crate) enum Before {
+    /// A comment that may hold a marker: plain or an outer doc comment.
+    Comment,
+    /// An attribute, a decorator or an inner doc comment: walked over, holding nothing.
+    Passed,
+    /// Anything else, which ends the walk.
+    Stop,
+}
+
+/// Whether a removal marker holds the declaration at `node`: a comment that starts its own
+/// line and holds a marker, among the comments and attributes directly before it, counted
+/// from its outermost node, the first `wrappers` parent it opens.
+pub(crate) fn marked(
+    text: &str,
+    mut node: Node,
+    before: impl Fn(Node) -> Before,
+    wrappers: &[&str],
+) -> bool {
+    loop {
+        let mut sibling = node.prev_named_sibling();
+        while let Some(s) = sibling {
+            match before(s) {
+                Before::Stop => return false,
+                Before::Comment
+                    if starts_line(text, s.start_byte()) && holds_marker(&text[s.byte_range()]) =>
+                {
+                    return true;
+                }
+                _ => {}
+            }
+            sibling = s.prev_named_sibling();
+        }
+        match node.parent() {
+            Some(parent) if wrappers.contains(&parent.kind()) => node = parent,
+            _ => return false,
+        }
+    }
+}
+
+/// Whether only white space comes before byte `at` on its line of `text`.
+fn starts_line(text: &str, at: usize) -> bool {
+    text[..at]
+        .rsplit('\n')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .is_empty()
+}
+
+/// Whether `text` holds a removal marker: `clm:remove-by ` not preceded by an ASCII letter,
+/// digit or `_`, then a change ID, eight ASCII digits, `-` and one or more of `a-z`, `0-9`
+/// and `-`.
+fn holds_marker(text: &str) -> bool {
+    const KEY: &str = "clm:remove-by ";
+    text.match_indices(KEY).any(|(at, _)| {
+        let glued = text[..at]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+        let id = &text.as_bytes()[at + KEY.len()..];
+        let digits = id.len() > 9 && id[..8].iter().all(u8::is_ascii_digit) && id[8] == b'-';
+        let slug = |c: &u8| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-';
+        !glued && digits && slug(&id[9])
+    })
+}
+
 /// The runs of ASCII letters, digits and `_` in `text`.
 pub(crate) fn ascii_words(text: &str) -> impl Iterator<Item = &str> {
     text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
