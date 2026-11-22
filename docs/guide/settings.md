@@ -16,6 +16,8 @@ A table such as `[land]` is one setting: the first file that sets it supplies al
 
 Not every file may set every setting. The project's settings, which decide how its checks and reviews run, can be set only in `clm.toml` or `clm.local.toml`, so nobody weakens a project's checks from their own file. `writer` names a person, so `clm.toml` never sets it. Each section below says where its setting may go.
 
+`clm verify` is the exception: it judges `origin/main`, so it takes every setting it follows from the `clm.toml` committed there, which it fetches first, never from your checkout's file; `clm.local.toml` still wins over it.
+
 `clm config list` prints every setting with its value and where it came from; `clm config get <key>` prints one. Both fail, naming the file and the setting, when a value isn't one CLM accepts.
 
 ## How a change lands
