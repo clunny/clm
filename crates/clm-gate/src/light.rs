@@ -202,17 +202,21 @@ fn scenarios_added<'g>(
     if norm(&before.design) != norm(&after.design) {
         return changed("Design");
     }
+    // The same IDs, as a set: a reorder alone is no change of them.
     let ids = |n: &Node| {
         n.requirements
             .iter()
             .map(|r| r.id.clone())
-            .collect::<Vec<_>>()
+            .collect::<BTreeSet<_>>()
     };
     if ids(before) != ids(after) {
         return changed("set of requirements");
     }
     let mut added = Vec::new();
-    for (was, now) in before.requirements.iter().zip(&after.requirements) {
+    for now in &after.requirements {
+        let Some(was) = before.requirements.iter().find(|r| r.id == now.id) else {
+            return changed("set of requirements");
+        };
         let (was_statement, was_blocks) = blocks(was);
         let (now_statement, now_blocks) = blocks(now);
         if was_statement != now_statement {

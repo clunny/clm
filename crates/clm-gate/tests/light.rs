@@ -173,7 +173,14 @@ fn scenario_scenarios_added_with_their_code() {
 #[test]
 fn scenario_what_a_light_branch_carries_beside_it() {
     type Variant = fn(&Path);
-    let variants: [(&str, Variant); 4] = [
+    let variants: [(&str, Variant); 5] = [
+        ("a human step filed", |d| {
+            write(
+                d,
+                "backlog/h.md",
+                "---\ntitle: H\nkind: human-task\n---\nH.\n",
+            );
+        }),
         ("a status flip", |d| {
             write(
                 d,
@@ -226,7 +233,10 @@ fn scenario_what_a_light_branch_carries_beside_it() {
 #[test]
 fn scenario_a_branch_light_doesnt_take() {
     type Variant = fn(&Path);
-    let variants: [(&[&str], Variant); 8] = [
+    let variants: [(&[&str], Variant); 9] = [
+        (&["no test cites `a/x`"], |d| {
+            write(d, "crates/a/tests/t.rs", "#[test]\nfn t() {}\n");
+        }),
         // beyond the scenario: an archived change not `done`, and a block other than a
         // scenario added
         (&["`changes/archive/c/change.md`", "done"], |d| {
@@ -297,6 +307,22 @@ fn scenario_a_branch_light_doesnt_take() {
             assert!(why.contains(word), "{named:?}: {why}");
         }
     }
+    // another component's file is refused whether or not the root sets `wiring`
+    let dir = repo(None, false);
+    let d = dir.path();
+    add_scenario(d);
+    prove(d);
+    write(d, "crates/b/src/lib.rs", "pub fn b2() {}\n");
+    commit(d, "s");
+    let out = outcome(d);
+    assert_eq!(out.kind, Kind::Mixed);
+    assert!(
+        out.violations[0]
+            .message
+            .contains("`crates/b/src/lib.rs` is owned by `b`"),
+        "{:?}",
+        out.violations
+    );
 }
 
 // req:gate/evaluate-at@a51bf198
