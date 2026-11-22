@@ -54,7 +54,7 @@ fn orphan(fx: &Fixture) {
 
 #[test]
 fn a_dead_sessions_build_released() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     let (tree, c) = built_branch(&fx);
     orphan(&fx);
@@ -86,7 +86,7 @@ fn a_dead_sessions_build_released() {
 
 #[test]
 fn a_live_run_is_refused() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     built_branch(&fx);
     fx.add_run(run(
@@ -114,7 +114,7 @@ fn a_live_run_is_refused() {
 
 #[test]
 fn an_orphan_a_take_over_holds_is_refused() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     built_branch(&fx);
     let mut r = run(
@@ -140,7 +140,7 @@ fn an_orphan_a_take_over_holds_is_refused() {
 
 #[test]
 fn a_stopped_run_may_be_released() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     built_branch(&fx);
     fx.add_run(run(
@@ -156,7 +156,7 @@ fn a_stopped_run_may_be_released() {
 
 #[test]
 fn another_clones_claim_is_left_alone() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     built_branch(&fx);
     fx.set("branch-exit", "1");
@@ -176,7 +176,7 @@ fn another_clones_claim_is_left_alone() {
 
 #[test]
 fn a_git_failure_of_the_delete_exits_2() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     fx.set("branch-exit", "2");
     fx.set("branch-reason", "git failed");
@@ -186,33 +186,29 @@ fn a_git_failure_of_the_delete_exits_2() {
 
 #[test]
 fn nothing_to_release() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     let lines = release(&fx.options(), "a").unwrap();
     assert!(lines.iter().all(|l| !l.starts_with("kept")), "{lines:?}");
 }
 
 #[test]
-fn a_planned_run_is_refused_and_a_returned_one_is_not() {
-    // req:orchestrator.loop/release@4d5201e5
-    let fx = Fixture::new();
-    built_branch(&fx);
-    fx.add_run(run(
-        "build:a",
-        Kind::Build,
-        "sonnet",
-        RunState::Planned,
-        None,
-    ));
-    assert!(release(&fx.options(), "a").is_err());
-    fx.change_run("build:a", |r| r.state = RunState::Returned);
-    release(&fx.options(), "a").unwrap();
-    assert!(fx.file().run("build:a").is_none());
+fn a_printed_build_released() {
+    // req:orchestrator.loop/release@ebbd6c47
+    for state in [RunState::Planned, RunState::Returned] {
+        let fx = Fixture::new();
+        built_branch(&fx);
+        fx.add_run(run("build:a", Kind::Build, "sonnet", state, None));
+        release(&fx.options(), "a").unwrap_or_else(|e| panic!("{state:?}: {e}"));
+        assert_eq!(fx.ran("branch delete impl/a"), 1, "{state:?}");
+        assert_eq!(fx.ran("run --finish a"), 1, "{state:?}");
+        assert!(fx.file().run("build:a").is_none(), "{state:?}");
+    }
 }
 
 #[test]
 fn a_hold_that_went_quiet_lets_the_release_go_ahead() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     built_branch(&fx);
     orphan(&fx);
@@ -229,7 +225,7 @@ fn a_hold_that_went_quiet_lets_the_release_go_ahead() {
 
 #[test]
 fn the_kept_name_carries_a_utc_time_and_the_actions_follow() {
-    // req:orchestrator.loop/release@4d5201e5
+    // req:orchestrator.loop/release@ebbd6c47
     let fx = Fixture::new();
     built_branch(&fx);
     let lines = release(&fx.options(), "a").unwrap();

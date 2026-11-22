@@ -16,7 +16,7 @@ pub fn release(options: &Options, component: &str) -> Result<Vec<String>, Failur
     clm_git::fetch(root)?;
     refresh_holds(options)?;
     if let Some(run) = state::read(root).and_then(|f| f.run(&name).cloned()) {
-        let live = !run.orphan && matches!(run.state, RunState::Planned | RunState::Running);
+        let live = !run.orphan && run.state == RunState::Running;
         if live || (run.orphan && run.hold.is_some()) {
             return Err(Failure::Refused(format!(
                 "{name} is still running or held by a session taken over; \
