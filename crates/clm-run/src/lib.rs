@@ -1163,7 +1163,8 @@ fn merged_tree(root: &Path, main: &str, branch: &str) -> Result<Option<String>, 
 
 /// `clm run --finish <node>`, once a build's subagent has returned (`build-places`): frees
 /// the place `<node>` and, when `impl/<node>` has landed, removes each clean worktree under
-/// the main worktree's `.claude/worktrees/` that has it checked out. Reads no queue state,
+/// the main worktree's `.claude/worktrees/` that has it checked out and whose lock no
+/// running process holds (`vcs/held-lock`). Reads no queue state,
 /// so it works for any node. Returns what it did, one line each. A relative `root` is read
 /// from `cwd`, the directory it runs in, whose worktree is never removed.
 pub fn finish(root: &Path, cwd: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
@@ -1205,7 +1206,16 @@ pub fn finish(root: &Path, cwd: &Path, node: &str, expiry_hours: u64) -> Result<
             {
                 continue;
             }
-            if clean(&wt.path)? {
+            if !clean(&wt.path)? {
+                done.push(format!("kept {}: uncommitted changes", wt.path.display()));
+            } else if wt.held {
+                // A build still running there, waiting on its land or writing its report
+                // (`a-held-lock-keeps-a-worktree`): kept, and left locked.
+                done.push(format!(
+                    "kept {}: a running process holds its lock",
+                    wt.path.display()
+                ));
+            } else {
                 done.push(match clm_git::remove_worktree(root, &wt.path).map_err(|e| e.to_string()) {
                     Ok(()) => format!("removed {}", wt.path.display()),
                     Err(why) => format!(
@@ -1214,8 +1224,6 @@ pub fn finish(root: &Path, cwd: &Path, node: &str, expiry_hours: u64) -> Result<
                         why.replace('\n', " ").trim()
                     ),
                 });
-            } else {
-                done.push(format!("kept {}: uncommitted changes", wt.path.display()));
             }
         }
     }
