@@ -150,14 +150,7 @@ fn scenario_hand_edit_under_specs_refused() {
     f.git(&work, &["push", "-q", "origin", "spec/x"]);
     f.git(&work, &["checkout", "-q", "main"]);
     let fp = f.fingerprint("spec/x");
-    f.append(
-        &work,
-        Body::Approved {
-            fingerprint: fp,
-            branch: "spec/x".into(),
-            change: Some("x".into()),
-        },
-    );
+    f.append(&work, Body::approved(fp, "spec/x".into(), Some("x".into())));
     let old = f.remote("main");
     let why = refused(clm_land::land(&work, Some("spec/x"), &f.env(&[])));
     assert!(why.contains("land/derived-specs"), "{why}");

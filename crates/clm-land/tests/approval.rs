@@ -15,11 +15,7 @@ fn approved_by(settings: &str, approver: Option<&str>) -> Fixture {
     };
     let record = f.append(
         &repo,
-        Body::Approved {
-            fingerprint: f.fingerprint("spec/x"),
-            branch: "spec/x".into(),
-            change: Some("x".into()),
-        },
+        Body::approved(f.fingerprint("spec/x"), "spec/x".into(), Some("x".into())),
     );
     let person = record.writer.split('/').next().unwrap().to_owned();
     assert_eq!(
@@ -70,11 +66,7 @@ fn branch_sets(f: &Fixture, base: &str, head: &str) {
     f.git(&f.work(), &["checkout", "-q", "spec/x"]);
     f.append(
         &f.work(),
-        Body::Approved {
-            fingerprint,
-            branch: "spec/x".into(),
-            change: Some("x".into()),
-        },
+        Body::approved(fingerprint, "spec/x".into(), Some("x".into())),
     );
 }
 

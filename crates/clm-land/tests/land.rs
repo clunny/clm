@@ -111,11 +111,7 @@ fn land_prints_review() {
     let fp = f.fingerprint("spec/x");
     f.append(
         &f.work(),
-        Body::Approved {
-            fingerprint: fp.clone(),
-            branch: "spec/x".into(),
-            change: Some("x".into()),
-        },
+        Body::approved(fp.clone(), "spec/x".into(), Some("x".into())),
     );
     let out = clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
     let main = f.remote("main");
@@ -154,11 +150,7 @@ fn stale_approval() {
     let old_fingerprint = f.fingerprint("spec/x");
     f.append(
         &f.work(),
-        Body::Approved {
-            fingerprint: old_fingerprint.clone(),
-            branch: "spec/x".into(),
-            change: Some("x".into()),
-        },
+        Body::approved(old_fingerprint.clone(), "spec/x".into(), Some("x".into())),
     );
     // A content change moves the fingerprint on.
     let work = f.work();
