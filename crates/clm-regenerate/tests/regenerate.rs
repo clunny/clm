@@ -1969,6 +1969,12 @@ fn a_base_taken_back_is_merged_again_when_main_moved() {
     assert_eq!(merged, ["merged design of a into changes/o/deltas/a.md"]);
     assert!(left.is_empty(), "{left:?}");
     assert_eq!(subject(&r), "Merge main and x into o");
+    // One commit for the take-back and the merge together.
+    let subjects = subjects_since_main(&r);
+    assert!(
+        !subjects.iter().any(|s| s.starts_with("Take back")),
+        "{subjects:?}"
+    );
     let tree_design = hash(&r, "design");
     assert_ne!(tree_design, b.hx);
     assert_eq!(
@@ -2181,4 +2187,111 @@ fn a_crlf_delta_is_not_taken_back() {
         fs::read(r.work.join("changes/o/deltas/a.md")).unwrap(),
         crlf.as_bytes()
     );
+}
+
+#[test]
+fn a_base_two_commits_set_is_taken_back_past_both() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(false, "Merge x into o");
+    // `x` edits a second paragraph, and a second merge sets `o`'s base past the first one's.
+    x_becomes(&r, &design_delta(&b.h1, "X1\n\nX2\n\nthree"));
+    let hx2 = {
+        let spec = r.work.join("specs/a/SPEC.md");
+        let text = read(&r.work, "specs/a/SPEC.md").replace(
+            "## Design\nX1\n\ntwo\n\nthree",
+            "## Design\nX1\n\nX2\n\nthree",
+        );
+        fs::write(&spec, text).unwrap();
+        hash(&r, "design")
+    };
+    let merged = both_delta(&b.c1, &hx2, "OC1\n\nc2\n\nc3", "X1\n\nX2\n\nO3");
+    write(&r.work, "changes/o/deltas/a.md", &merged);
+    commit(&r.work, "Merge x into o again");
+    x_becomes(&r, &adds_x());
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert_eq!(merged, [took_back_o(&b.h1)]);
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), o_on_main(&r));
+}
+
+#[test]
+fn other_deltas_refuses_an_uncommitted_delta_edit() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, _, o) = other_change_on_main("one\n\ntwo\n\nTHREE", "X1\n\ntwo\n\nthree");
+    let mut t = tree(&r, &["x"]);
+    settle(&r, &t);
+    let edited = format!("{o}\n");
+    write(&r.work, "changes/o/deltas/a.md", &edited);
+    let before = repository_state(&r);
+
+    let ids = ["x".to_string()];
+    match t.other_deltas(&r.work, &ids, &onto(&r)) {
+        Err(Error::Refused(why)) => assert!(why.contains("changes/o/deltas/a.md"), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(lines) => panic!("merged over an uncommitted edit: {lines:?}"),
+    }
+    assert_eq!(repository_state(&r), before);
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), edited);
+}
+
+#[test]
+fn a_clm_root_in_a_subdirectory_merges_against_main_history() {
+    // req:sync.regenerate/stale-delta-diff@ad6dfe43
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let r = repo("spec/x");
+    let sub = r.work.join("sub");
+    main_moves(
+        &r,
+        &[
+            ("sub/specs/SPEC.md", ROOT),
+            (
+                "sub/specs/a/SPEC.md",
+                &node_a("specd", "one\ntwo\nthree", &["p"]),
+            ),
+        ],
+    );
+    pull(&r);
+    let base = clm_model::load(&sub).0.nodes["a"].hashes.contract.clone();
+    write(
+        &sub,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n# x\n",
+    );
+    write(
+        &sub,
+        "changes/x/deltas/a.md",
+        &contract_delta(&base, "ONE\ntwo\nthree"),
+    );
+    clm_apply::apply(&sub, "x").unwrap();
+    commit(&r.work, "Apply x");
+    main_moves(
+        &r,
+        &[(
+            "sub/specs/a/SPEC.md",
+            &node_a("specd", "one\ntwo\nTHREE", &["p"]),
+        )],
+    );
+
+    let onto = onto(&r);
+    match regenerated(&sub, &onto, &["x".to_string()], true).unwrap() {
+        Regenerated::Tree(t) => {
+            assert_eq!(
+                t.merged,
+                ["merged contract of a into changes/x/deltas/a.md"]
+            );
+            let spec = tree_text(&t, "specs/a/SPEC.md");
+            assert!(spec.contains("## Contract\nONE\ntwo\nTHREE\n"), "{spec}");
+        }
+        Regenerated::Stopped { left, .. } => panic!("{left:?}"),
+    }
+    assert_eq!(subject(&r), "Merge main into x");
+    let edited = read(&sub, "changes/x/deltas/a.md") + "\n";
+    write(&sub, "changes/x/deltas/a.md", &edited);
+    match regenerated(&sub, &onto, &["x".to_string()], true) {
+        Err(Error::Refused(why)) => assert!(why.starts_with("changes/x/deltas/a.md "), "{why}"),
+        Err(e) => panic!("{e:?}"),
+        Ok(_) => panic!("merged over an uncommitted edit"),
+    }
 }

@@ -53,12 +53,12 @@ impl Edits {
             .or_insert_with(|| original.to_string());
     }
 
-    /// Writes into `root` each delta file whose text in `tree` now differs from `HEAD`'s, and
-    /// commits them, and nothing else, in one commit: `Merge <movers> into <change>` when a
-    /// `merged` line names one of them, else `Take back what this branch merged into
-    /// <change>`. Returns, for each element whose text or base differs from `HEAD`'s copy,
-    /// in the order first made, `merged <element> of <node> into <path>` when the merge
-    /// merged it, else `took back <element> of <node> in <path> to base <base>`.
+    /// Writes into `root` each delta file with an element whose text or base in `tree` now
+    /// differs from `HEAD`'s copy, and commits them, and nothing else, in one commit: `Merge
+    /// <movers> into <change>` when a `merged` line names one of them, else `Take back what
+    /// this branch merged into <change>`. Returns, for each such element, in the order first
+    /// made, `merged <element> of <node> into <path>` when the merge merged it, else `took
+    /// back <element> of <node> in <path> to base <base>`.
     pub(crate) fn finish(self, root: &Path, tree: &Path) -> Result<Vec<String>, Error> {
         let mut finals = BTreeMap::new();
         for path in self.head.keys() {
@@ -69,14 +69,22 @@ impl Edits {
         let mut movers = Movers::default();
         let mut merged_any = false;
         let mut done: Vec<(&Path, &str)> = Vec::new();
+        let mut files: Vec<String> = Vec::new();
         for m in &self.made {
             if done.contains(&(m.path.as_path(), m.element.as_str())) {
                 continue;
             }
             done.push((&m.path, &m.element));
-            let now = element_in(&m.path, &finals[&m.path], &m.element);
-            if now == element_in(&m.path, &self.head[&m.path], &m.element) {
+            let (Some(head), Some(last)) = (self.head.get(&m.path), finals.get(&m.path)) else {
                 continue;
+            };
+            let now = element_in(&m.path, last, &m.element);
+            if now == element_in(&m.path, head, &m.element) {
+                continue;
+            }
+            let file = m.path.to_string_lossy().into_owned();
+            if !files.contains(&file) {
+                files.push(file);
             }
             let path = m.path.display();
             let merged: Vec<&Movers> = self
@@ -97,12 +105,6 @@ impl Edits {
                 lines.push(format!("merged {} of {} into {path}", m.element, m.node));
             }
         }
-        let files: Vec<String> = self
-            .head
-            .iter()
-            .filter(|(path, text)| finals[path] != **text)
-            .map(|(path, _)| path.to_string_lossy().into_owned())
-            .collect();
         if files.is_empty() {
             return Ok(lines);
         }
@@ -144,14 +146,16 @@ pub(crate) fn refuse_uncommitted<'a>(
     let mut args = vec!["status", "--porcelain", "-z", "--untracked-files=no", "--"];
     args.extend(paths.iter().map(String::as_str));
     let out = run(root, &args, Options::default())?;
-    let first = out.split(|&b| b == 0).find(|entry| entry.len() > 3);
-    match first {
-        Some(entry) => Err(Error::Refused(format!(
-            "{} differs from `HEAD`: commit the edit or undo it, then run again",
-            String::from_utf8_lossy(&entry[3..])
-        ))),
-        None => Ok(()),
-    }
+    let Some(entry) = out.split(|&b| b == 0).find(|entry| entry.len() > 3) else {
+        return Ok(());
+    };
+    // Status names the file from the repository's top; name it from the CLM root.
+    let prefix = git(root, &["rev-parse", "--show-prefix"])?;
+    let file = String::from_utf8_lossy(&entry[3..]).into_owned();
+    let file = file.strip_prefix(&prefix).unwrap_or(&file);
+    Err(Error::Refused(format!(
+        "{file} differs from `HEAD`: commit the edit or undo it, then run again"
+    )))
 }
 
 /// The delta file at `path` (CLM-root-relative, under its change's directory) with `text`,
