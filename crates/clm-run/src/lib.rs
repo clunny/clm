@@ -1303,7 +1303,7 @@ fn free(root: &Path, node: &str, branch: &str, holder: &Holder) -> Result<(), Er
 /// it landed (`merged-claims-released`): a clean worktree on it, then the local branch. Both
 /// hold nothing `origin/main` lacks. A landed worktree whose lock a running process holds
 /// (`vcs/held-lock`) may still be in use, so it is kept and the run refused
-/// (`a-held-lock-keeps-a-worktree`).
+/// (`a-held-lock-keeps-a-worktree`) until `clm run --finish <node> --returned` removes it.
 fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
     let local = format!("refs/heads/{branch}");
     let holder = checked_out(root, node, branch)?;
@@ -1314,8 +1314,9 @@ fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
             if h.held {
                 return Err(Error::Refused(format!(
                     "{} has the landed `{branch}` checked out and a running process holds \
-                     its lock, so it may still be in use; run `{node}` again once that \
-                     process has ended, or, when nothing works in it any more, run \
+                     its lock, so it may still be in use; once its build has handed back, \
+                     run `clm run --finish {node} --returned`, which removes it, and run \
+                     `{node}` again, or, when nothing works in it any more, run \
                      `git worktree unlock {}` first",
                     h.path.display(),
                     h.path.display()

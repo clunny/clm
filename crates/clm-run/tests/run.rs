@@ -1628,6 +1628,7 @@ fn scenario_a_returned_builds_worktree_removed() {
     ] {
         assert!(out.contains(line), "{line}: {out}");
     }
+    assert!(out.find("landed impl/b") < out.find("removed"), "{out}");
     assert!(!out.contains("kept"), "{out}");
 }
 
