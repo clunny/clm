@@ -118,6 +118,23 @@ fn unsigned_approval_refused() {
 }
 
 #[test]
+fn an_unsigned_approval_refused_under_other_asks_another_person() {
+    // req:land/approval-policy@822b3d40
+    let s = signed_repo("approval = \"other\"", true);
+    let f = &s.f;
+    use_key(f, &f.work(), &s.christopher);
+    hard_branch(f, None);
+    approve_from(&s, "Dana", None);
+    let why = refused(clm_land::land(&f.work(), Some("spec/x"), &env(f)));
+    assert!(why.contains("not signed"), "{why}");
+    assert_eq!(
+        why.lines().last(),
+        Some("ask another person to run `clm approve spec/x`"),
+        "{why}"
+    );
+}
+
+#[test]
 fn forged_name_refused() {
     // req:land/signed-land@f69e5dbb
     let s = signed_repo("approval = \"other\"", true);

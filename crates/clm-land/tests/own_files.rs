@@ -276,6 +276,7 @@ fn a_file_outside_the_root_names_no_owner() {
     let old = f.remote("main");
     let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
     assert_eq!(why, line);
+    assert!(f.lines("check.log").is_empty());
     assert_eq!(f.remote("main"), old);
     assert!(f.records().is_empty());
     // The build's pre-check prints the same line.

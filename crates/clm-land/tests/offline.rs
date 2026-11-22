@@ -259,7 +259,7 @@ fn nothing_to_reconnect() {
 
 #[test]
 fn a_land_prunes_what_origin_deleted() {
-    // req:land/offline-land@62e516ef
+    // `land/land` states a land's fetch prunes; its build cites this test.
     // A branch deleted on `origin` leaves no tracking ref once a land has fetched.
     let f = Fixture::new("");
     f.branch("gone", &[("g.txt", "g\n")]);

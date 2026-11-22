@@ -828,11 +828,9 @@ pub(crate) fn approval_hint(approvals: &Approvals, branch: &str, policy: &Policy
         }
     }
     // Under `approval = "other"`, the authors' and the lander's own approvals never count.
-    let who = match approvals
-        .refused
-        .iter()
-        .any(|w| w.contains("approval = \"other\""))
-    {
+    // Another person whenever an approval was refused under `approval = "other"`, whatever
+    // the reason.
+    let who = match policy.other && !approvals.refused.is_empty() {
         true => "another person",
         false => "the human",
     };
@@ -1212,8 +1210,8 @@ pub(crate) fn release_claims(
     let mut slugs = BTreeSet::new();
     for id in added {
         let text = repo
-            .git(&["show", &format!("{merge}:changes/{id}/change.md")])
-            .or_else(|_| repo.git(&["show", &format!("{merge}:changes/archive/{id}/change.md")]));
+            .git(&["show", &format!("{merge}:./changes/{id}/change.md")])
+            .or_else(|_| repo.git(&["show", &format!("{merge}:./changes/archive/{id}/change.md")]));
         let Some(front) = text
             .ok()
             .and_then(|t| clm_model::parse_change_frontmatter(&t))
