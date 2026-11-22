@@ -293,6 +293,53 @@ fn a_light_land_taken_with_another() {
 }
 
 #[test]
+fn a_land_behind_in_specs_waits() {
+    // req:land/batched-lands@ba7cbebe
+    let f = Fixture::new("");
+    f.write("check-sleeps", "1");
+    f.write("gate-out.spec-b", "spec\n");
+    // A test reads `specs/`, so the spec land, on code already checked, runs the check too.
+    f.write("readers-out", "file crates/b/tests/r.rs\n");
+    f.applied_spec_branch("b", "b");
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    // `main` has changed `spec/b`'s `specs/b/SPEC.md` since it was made, on another line, so
+    // git merges the two without a conflict.
+    let moved = common::node("B", &["p"]).replace("## Design\nd", "## Design\nfrom main");
+    f.advance_main("specs/b/SPEC.md", &moved);
+    let held = hold(&f);
+    let env = f.env(&[]);
+    let outs: Vec<_> = std::thread::scope(|s| {
+        let mut runs = Vec::new();
+        for (i, branch) in ["impl/a", "spec/b"].into_iter().enumerate() {
+            let (env, work) = (&env, f.work());
+            runs.push(s.spawn(move || clm_land::land(&work, Some(branch), env)));
+            wait_for_tickets(&f.work(), i + 1);
+        }
+        drop(held);
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    });
+    let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
+    // Two checks: `impl/a` alone, then `spec/b` on its own turn.
+    assert_eq!(starts(&f), 2, "{:?}", f.lines("check-order.log"));
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    assert_eq!(
+        subjects(&f)[..2],
+        ["Merge spec/b into main", "Merge impl/a into main"]
+    );
+    // The first check ran on `impl/a` merged alone.
+    let first = f.git(&f.work(), &["rev-parse", "origin/main~1^{tree}"]);
+    assert_eq!(f.lines("check-order.log")[0], format!("start {first}"));
+    assert!(landed_lines(&outs[0]).ends_with(" code"), "{:?}", outs[0]);
+    assert!(landed_lines(&outs[1]).ends_with(" spec"), "{:?}", outs[1]);
+    // Its `specs/` regenerated onto `main`: both sides' requirements.
+    let spec = f.git(&f.work(), &["show", "origin/main:specs/b/SPEC.md"]);
+    for r in ["p", "r"] {
+        assert!(spec.contains(&format!("Requirement: {r}\n")), "{spec}");
+    }
+    assert!(spec.contains("## Design\nfrom main"), "{spec}");
+}
+
+#[test]
 fn a_ticket_that_names_no_branch_is_left_to_wait() {
     // req:land/batched-lands@dbe8f4c4
     let f = Fixture::new("");

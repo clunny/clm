@@ -513,6 +513,65 @@ impl Fixture {
     pub fn check_command(&self) -> String {
         self.path("bin/check").display().to_string()
     }
+
+    /// `main` (on `origin` too) with node `component` (requirement `p`), and `spec/<id>`
+    /// adding change `id`, applied, whose delta adds `<component>/r`, with `specs/` as
+    /// applying it gives, pushed. The work clone is on `main` after.
+    pub fn applied_spec_branch(&self, id: &str, component: &str) {
+        let work = self.work();
+        let path = format!("specs/{component}/SPEC.md");
+        self.commit_files(
+            &[
+                ("specs/SPEC.md", SPEC_ROOT),
+                (&path, &node(&component.to_uppercase(), &["p"])),
+            ],
+            "nodes",
+        );
+        self.git(&work, &["push", "-q", "origin", "main"]);
+        let branch = format!("spec/{id}");
+        self.git(&work, &["checkout", "-q", "-b", &branch]);
+        self.commit_files(
+            &[
+                (
+                    &format!("changes/{id}/change.md"),
+                    "---\nstatus: proposed\n---\n\n## Intent\nAdd r.\n",
+                ),
+                (
+                    &format!("changes/{id}/deltas/{component}.md"),
+                    &format!(
+                        "---\ncomponent: {component}\n---\n## ADDED Requirements\n{}",
+                        requirement("r")
+                    ),
+                ),
+            ],
+            &format!("propose {id}"),
+        );
+        clm_apply::apply(&work, id).unwrap();
+        self.git(&work, &["add", "-A"]);
+        self.git(&work, &["commit", "-q", "-m", &format!("apply {id}")]);
+        self.git(&work, &["push", "-q", "origin", &branch]);
+        self.git(&work, &["checkout", "-q", "main"]);
+    }
+}
+
+/// The root node of a spec graph.
+pub const SPEC_ROOT: &str = "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nr\n";
+
+/// A requirement `slug` with one scenario.
+pub fn requirement(slug: &str) -> String {
+    format!("\n### Requirement: {slug}\nIt SHALL {slug}.\n\n#### Scenario: s\n- ok\n")
+}
+
+/// A `specd` node `title` holding `reqs`.
+pub fn node(title: &str, reqs: &[&str]) -> String {
+    let mut s = format!(
+        "---\ntitle: {title}\nstatus: specd\nowners: []\n---\n\n## Contract\nc\n\n\
+         ## Design\nd\n\n## Requirements\n"
+    );
+    for r in reqs {
+        s.push_str(&requirement(r));
+    }
+    s
 }
 
 /// The message of a refusal.
