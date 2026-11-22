@@ -186,9 +186,11 @@ impl Host for Azure {
         let branch = current_branch(root)?.ok_or_else(|| {
             Error::Refused("`HEAD` is detached; check out the page's branch".into())
         })?;
-        let id = active(root, &branch)?
-            .and_then(|open| open["pullRequestId"].as_u64())
+        let open = active(root, &branch)?
             .ok_or_else(|| Error::Refused(format!("`{branch}` has no active pull request")))?;
+        let id = open["pullRequestId"].as_u64().ok_or_else(|| {
+            Error::Git("az repos pr: no pullRequestId or repository.webUrl in the answer".into())
+        })?;
         let id = id.to_string();
         let (file, _cuts) = with_cuts(root, &branch, &file)?;
         let (file, _guard) = fitted(root, &branch, &file)?;

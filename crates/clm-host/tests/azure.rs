@@ -297,7 +297,7 @@ const NO_FIELDS: &str = "az repos pr create: no pullRequestId or repository.webU
 
 #[test]
 fn opened_but_unread() {
-    // req:host/azure-unreadable-answer@d62c6d57
+    // req:host/azure-unreadable-answer@44460c25
     let listed = format!("[{}]", pull_request(12));
     with_fakes(&[], "spec/x", "b", |root, dir| {
         fake_az_listing_late(dir, &listed, UNREAD);
@@ -320,7 +320,7 @@ fn opened_but_unread() {
 
 #[test]
 fn nothing_to_read() {
-    // req:host/azure-unreadable-answer@d62c6d57
+    // req:host/azure-unreadable-answer@44460c25
     let answers = [
         ("pr list", "[]"),
         ("pr create", "{\"status\":\n   \"active\"}"),
@@ -338,7 +338,7 @@ fn nothing_to_read() {
 
 #[test]
 fn a_listing_without_fields_fails_too() {
-    // req:host/azure-unreadable-answer@d62c6d57
+    // req:host/azure-unreadable-answer@44460c25
     with_fakes(&[], "spec/x", "b", |root, dir| {
         fake_az_listing_late(dir, &format!("[{UNREAD}]"), UNREAD);
         let err = Azure
@@ -352,8 +352,34 @@ fn a_listing_without_fields_fails_too() {
 }
 
 #[test]
+fn scenario_listed_without_fields() {
+    // req:host/azure-unreadable-answer@44460c25
+    let listed = format!("[{UNREAD}]");
+    let answers = [("pr list", listed.as_str()), ("", "{}")];
+    with_fakes(&answers, "spec/x", "## Intent", |root, dir| {
+        let file = root.join("body.md");
+        let opened = Azure.page_open(root, "spec/x", "x", &file).unwrap_err();
+        let updated = Azure.page_body(root, &file).unwrap_err();
+        for err in [opened, updated] {
+            let Error::Git(why) = &err else {
+                panic!("{err:?}")
+            };
+            assert!(
+                why.contains("no pullRequestId or repository.webUrl in the answer"),
+                "{why}"
+            );
+        }
+        let az = calls(dir, "az");
+        assert!(
+            !az.contains("pr create") && !az.contains("pr update"),
+            "{az}"
+        );
+    });
+}
+
+#[test]
 fn the_answer_is_cut_to_500_characters() {
-    // req:host/azure-unreadable-answer@d62c6d57
+    // req:host/azure-unreadable-answer@44460c25
     let long = format!("{{\"x\": \"{}\"}}", "a".repeat(900));
     let answers = [("pr list", "[]"), ("pr create", long.as_str())];
     with_fakes(&answers, "spec/x", "b", |root, _| {
@@ -371,7 +397,7 @@ fn the_answer_is_cut_to_500_characters() {
 
 #[test]
 fn an_answer_that_is_not_json_names_the_parse_error() {
-    // req:host/azure-unreadable-answer@d62c6d57
+    // req:host/azure-unreadable-answer@44460c25
     let answers = [("pr list", "[]"), ("pr create", "not json")];
     with_fakes(&answers, "spec/x", "b", |root, _| {
         let err = Azure
