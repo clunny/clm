@@ -5,7 +5,7 @@ use common::{Fixture, refused};
 
 #[test]
 fn code_branch_lands() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
@@ -62,7 +62,7 @@ fn code_branch_lands() {
 
 #[test]
 fn already_checked_code() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     let head = f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();
@@ -89,7 +89,7 @@ fn already_checked_code() {
 
 #[test]
 fn unapproved_hard_branch() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("gate-out", "spec review\n");
     f.write("needs-approval", "");
@@ -103,7 +103,7 @@ fn unapproved_hard_branch() {
 
 #[test]
 fn land_prints_review() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("gate-out", "spec review\n");
     f.write("needs-approval", "");
@@ -142,7 +142,7 @@ fn land_prints_review() {
 
 #[test]
 fn stale_approval() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("gate-out", "spec review\n");
     f.write("needs-approval", "");
@@ -167,11 +167,19 @@ fn stale_approval() {
 
 #[test]
 fn main_moves() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("move-main", "");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
-    clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    // Found by the fetch in its push turn, the move starts the next attempt unsaid.
+    assert!(
+        out.warnings
+            .iter()
+            .all(|w| !w.contains("main moved during attempt")),
+        "{:?}",
+        out.warnings
+    );
     let moved = f.lines("moved").remove(0);
     let main = f.remote("main");
     let origin = f.path("origin.git");
@@ -187,7 +195,7 @@ fn main_moves() {
 
 #[test]
 fn conflict() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let main = f.advance_main("b.txt", "other\n");
@@ -199,7 +207,7 @@ fn conflict() {
 
 #[test]
 fn check_fails() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -212,7 +220,7 @@ fn check_fails() {
 
 #[test]
 fn from_main() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     let why = refused(clm_land::land(&f.work(), None, &f.env(&[])));
     assert!(why.contains("`main` can't be landed"), "{why}");
@@ -220,7 +228,7 @@ fn from_main() {
 
 #[test]
 fn unpushed_impl_commits_refused() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -333,7 +341,7 @@ fn the_local_branch() {
 
 #[test]
 fn spec_land_that_needs_no_review() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("gate-out", "spec\n");
     f.branch("spec/y", &[("changes/y/change.md", "y\n")]);
@@ -350,8 +358,51 @@ fn spec_land_that_needs_no_review() {
 }
 
 #[test]
+fn a_light_land() {
+    // req:land/land@db059c83
+    let f = Fixture::new("");
+    f.write("gate-out", "light\n");
+    f.branch(
+        "impl/a",
+        &[("b.txt", "b\n"), ("changes/x/change.md", "x\n")],
+    );
+    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    let main = f.remote("main");
+    let origin = f.path("origin.git");
+    assert_eq!(f.lines("check.log"), [f.tree(&origin, &main)]);
+    assert_eq!(out.lines, [format!("landed {main} light")]);
+    match &f.landed()[..] {
+        [
+            Body::Landed {
+                kind,
+                review,
+                light,
+                changes,
+                ..
+            },
+        ] => {
+            assert_eq!(*kind, LandKind::Code);
+            assert!(*light);
+            assert!(!*review);
+            assert!(changes.is_empty(), "{changes:?}");
+        }
+        other => panic!("{other:?}"),
+    }
+    let message = f.git(&origin, &["log", "-1", "--format=%B", &main]);
+    assert!(!message.contains("Change:"), "{message}");
+    // A land not light holds no `light`.
+    f.write("gate-out", "code\n");
+    f.branch("impl/b", &[("c.txt", "c\n")]);
+    clm_land::land(&f.work(), Some("impl/b"), &f.env(&[])).unwrap();
+    assert!(matches!(
+        f.landed().last(),
+        Some(Body::Landed { light: false, .. })
+    ));
+}
+
+#[test]
 fn checked_with_another_command() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();
@@ -369,7 +420,7 @@ fn checked_with_another_command() {
 
 #[test]
 fn clm_check_fails() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("clm-check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -382,12 +433,14 @@ fn clm_check_fails() {
 
 #[test]
 fn specs_changed_on_both_sides() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
-    f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
-    // Main changes the same file, at a different line, so git merges it cleanly.
-    let main = f.advance_main("specs/x/SPEC.md", "# x\n\n\n\n\nmain\n");
-    let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
+    f.commit_files(&[("specs/x/SPEC.md", "# x\n\n\n\n\n\n")], "specs");
+    f.git(&f.work(), &["push", "-q", "origin", "main"]);
+    f.branch("impl/a", &[("specs/x/SPEC.md", "# x, a\n\n\n\n\n\n")]);
+    // Main changes the same file, at another line, so git merges it cleanly.
+    let main = f.advance_main("specs/x/SPEC.md", "# x\n\n\n\n\n\nmain\n");
+    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
     assert!(why.contains("clm rebase"), "{why}");
     assert!(f.lines("check.log").is_empty());
     assert_eq!(f.remote("main"), main);
@@ -395,7 +448,7 @@ fn specs_changed_on_both_sides() {
 
 #[test]
 fn main_keeps_moving() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.write("move-main", "always");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -406,34 +459,84 @@ fn main_keeps_moving() {
 }
 
 #[test]
-fn origin_branch_ahead_of_local() {
-    // req:land/land@f4bd0a7c
+fn the_head_it_lands() {
+    // req:land/land@db059c83
     let f = Fixture::new("");
-    f.branch("impl/a", &[("b.txt", "b\n")]);
-    // Another clone pushes on; the local `impl/a` is behind it.
+    let work = f.work();
+    let origin = f.path("origin.git");
     let other = f.path("other");
+    // Refused, with nothing pushed and nothing appended.
+    let refused_with = |branch: Option<&str>, dir: &std::path::Path| {
+        let (main, records) = (f.remote("main"), f.records().len());
+        let why = refused(clm_land::land(dir, branch, &f.env(&[])));
+        assert_eq!(f.remote("main"), main, "{why}");
+        assert_eq!(f.records().len(), records, "{why}");
+        why
+    };
+    // `origin/impl/a` one commit ahead of the local `impl/a`: behind, refused with what to do.
+    f.branch("impl/a", &[("b.txt", "b\n")]);
     f.git(&other, &["fetch", "-q", "origin", "impl/a"]);
     f.git(&other, &["checkout", "-q", "-b", "impl/a", "FETCH_HEAD"]);
     std::fs::write(other.join("c.txt"), "c\n").unwrap();
     f.git(&other, &["add", "-A"]);
     f.git(&other, &["commit", "-q", "-m", "more"]);
     f.git(&other, &["push", "-q", "origin", "impl/a"]);
-    // A local branch behind `origin`'s is refused, with what to do (`land.approval/branch-head`).
-    let old = f.remote("main");
-    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
-    assert!(why.contains("behind `origin/impl/a`"), "{why}");
-    assert_eq!(f.remote("main"), old);
-    // With no local branch, `origin`'s tip lands.
-    f.git(&f.work(), &["branch", "-q", "-D", "impl/a"]);
+    let why = refused_with(Some("impl/a"), &work);
+    assert!(why.contains("`impl/a` is behind `origin/impl/a`"), "{why}");
+    // With no local `impl/a`, `origin`'s tip lands.
+    f.git(&work, &["branch", "-q", "-D", "impl/a"]);
     let newer = f.git(&other, &["rev-parse", "HEAD"]);
-    clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
-    let main = f.remote("main");
-    assert_eq!(f.parents(&f.path("origin.git"), &main)[1], newer);
+    clm_land::land(&work, Some("impl/a"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&origin, "main")[1], newer);
+    // `fix-x` pushed with one more local commit: the local tip lands.
+    f.branch("fix-x", &[("x.txt", "x\n")]);
+    f.git(&work, &["checkout", "-q", "fix-x"]);
+    let local = f.commit_files(&[("x2.txt", "x2\n")], "more");
+    f.git(&work, &["checkout", "-q", "main"]);
+    clm_land::land(&work, Some("fix-x"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&origin, "main")[1], local);
+    // `fix-z` pushed and then diverged locally by an amended commit: refused.
+    f.git(&work, &["pull", "-q", "--ff-only", "origin", "main"]);
+    f.branch("fix-z", &[("z.txt", "z\n")]);
+    f.git(&work, &["checkout", "-q", "fix-z"]);
+    f.git(&work, &["commit", "-q", "--amend", "-m", "amended"]);
+    f.git(&work, &["checkout", "-q", "main"]);
+    let why = refused_with(Some("fix-z"), &work);
+    assert!(why.contains("`fix-z` has diverged"), "{why}");
+    // `fix-y`, which `origin` doesn't hold: its local tip lands.
+    f.git(&work, &["checkout", "-q", "-b", "fix-y", "main"]);
+    let local = f.commit_files(&[("y.txt", "y\n")], "fix-y");
+    f.git(&work, &["checkout", "-q", "main"]);
+    clm_land::land(&work, Some("fix-y"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&origin, "main")[1], local);
+    // `gone`, pushed and since deleted on `origin` by another clone: the fetch prunes it, so
+    // its local tip lands.
+    let local = f.branch("gone", &[("g.txt", "g\n")]);
+    f.git(&work, &["fetch", "-q", "origin"]);
+    f.git(&other, &["push", "-q", "origin", "--delete", "gone"]);
+    assert_ne!(f.git(&work, &["branch", "-r", "--list", "origin/gone"]), "");
+    let out = clm_land::land(&work, Some("gone"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&origin, "main")[1], local);
+    // The fetch pruned it: it reads as a branch `origin` doesn't hold, with nothing to delete
+    // there.
+    assert_eq!(f.git(&work, &["branch", "-r", "--list", "origin/gone"]), "");
+    assert!(
+        out.warnings.iter().all(|w| !w.contains("`gone`")),
+        "{:?}",
+        out.warnings
+    );
+    // `nope`, nowhere.
+    let why = refused_with(Some("nope"), &work);
+    assert!(why.contains("`nope`"), "{why}");
+    // A detached checkout, no branch named.
+    f.git(&work, &["checkout", "-q", "--detach", "main"]);
+    let why = refused_with(None, &work);
+    assert!(why.contains("name the branch"), "{why}");
 }
 
 #[test]
 fn unpushed_propose_lands_from_local() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::new("");
     f.branch("propose/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -446,7 +549,7 @@ fn unpushed_propose_lands_from_local() {
 
 #[test]
 fn clm_in_a_subdirectory() {
-    // req:land/land@f4bd0a7c
+    // req:land/land@db059c83
     let f = Fixture::nested();
     f.branch("impl/a", &[("b.txt", "b\n")]);
     clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
@@ -729,6 +832,22 @@ fn a_code_land_of_any_name_frees_its_target() {
             format!("removed {}", canonical.display())
         ]
     );
+}
+
+#[test]
+fn a_light_land_frees_its_target() {
+    // req:land/land-frees-build-target@17131754
+    let f = Fixture::new("");
+    f.write("gate-out", "light\n");
+    f.branch("fix-x", &[("x.txt", "x\n")]);
+    let linked = f.linked("linked", "fix-x");
+    let target = linked.join("target");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::write(target.join("file"), "x").unwrap();
+    let out = clm_land::land(&linked, None, &f.env(&[])).unwrap();
+    assert!(!target.exists(), "{:?}", out.lines);
+    let main = f.remote("main");
+    assert_eq!(out.lines[0], format!("landed {main} light"));
 }
 
 #[test]

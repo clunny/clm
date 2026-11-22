@@ -6,7 +6,7 @@ mod common;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use clm_ledger::{Basis, Body, Recheck};
+use clm_ledger::{Basis, Body, LandKind, Recheck};
 use common::Fixture;
 
 /// Holds `.clm/land.lock` as another process would, with no ticket.
@@ -92,7 +92,7 @@ fn landed_lines(out: &clm_land::Output) -> String {
 
 #[test]
 fn three_waiting_lands_one_check() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     for n in ["a", "b", "c"] {
@@ -154,7 +154,7 @@ fn three_waiting_lands_one_check() {
 
 #[test]
 fn a_land_that_conflicts_with_one_before_it() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     f.branch("impl/a", &[("a2.txt", "x\n")]);
@@ -176,7 +176,7 @@ fn a_land_that_conflicts_with_one_before_it() {
 
 #[test]
 fn a_land_the_gate_refuses_once_another_is_merged_before_it() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     f.branch("impl/a", &[("a_file.txt", "x\n")]);
@@ -210,7 +210,7 @@ fn a_land_the_gate_refuses_once_another_is_merged_before_it() {
 
 #[test]
 fn the_selection_covers_what_two_of_them_share() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("readers-out", "file crates/a/tests/r.rs\n");
     f.write("overlap-out", "file crates/c/tests/t.rs\n");
@@ -231,7 +231,7 @@ fn the_selection_covers_what_two_of_them_share() {
 
 #[test]
 fn a_land_with_another_check_environment() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     f.branch("impl/a", &[("a_file.txt", "x\n")]);
@@ -247,8 +247,101 @@ fn a_land_with_another_check_environment() {
 }
 
 #[test]
+fn a_light_land_taken_with_another() {
+    // req:land/batched-lands@ba7cbebe
+    let f = Fixture::new("");
+    f.write("check-sleeps", "1");
+    f.write("gate-out.impl-a", "light\n");
+    for n in ["a", "b"] {
+        f.branch(&format!("impl/{n}"), &[(&format!("{n}_file.txt"), "x\n")]);
+    }
+    let held = hold(&f);
+    // `impl/b` waits first, so it holds the lock and takes `impl/a` with it.
+    let outs = land_all(&f, &["b", "a"], held);
+    let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
+    assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    let commit_of = |branch: &str| {
+        f.git(
+            &f.work(),
+            &[
+                "log",
+                "--first-parent",
+                "--format=%H",
+                &format!("--grep=^Merge {branch} into main$"),
+                "origin/main",
+            ],
+        )
+    };
+    let (a, b) = (commit_of("impl/a"), commit_of("impl/b"));
+    assert_eq!(landed_lines(&outs[0]), format!("landed {b} code"));
+    assert_eq!(landed_lines(&outs[1]), format!("landed {a} light"));
+    let light_of = |c: &str| {
+        f.landed().into_iter().find_map(|body| match body {
+            Body::Landed {
+                commit,
+                kind,
+                light,
+                review,
+                ..
+            } if commit == c => Some((kind, light, review)),
+            _ => None,
+        })
+    };
+    assert_eq!(light_of(&a), Some((LandKind::Code, true, false)));
+    assert_eq!(light_of(&b), Some((LandKind::Code, false, false)));
+}
+
+#[test]
+fn a_land_behind_in_specs_waits() {
+    // req:land/batched-lands@ba7cbebe
+    let f = Fixture::new("");
+    f.write("check-sleeps", "1");
+    f.write("gate-out.spec-b", "spec\n");
+    // A test reads `specs/`, so the spec land, on code already checked, runs the check too.
+    f.write("readers-out", "file crates/b/tests/r.rs\n");
+    f.applied_spec_branch("b", "b");
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    // `main` has changed `spec/b`'s `specs/b/SPEC.md` since it was made, on another line, so
+    // git merges the two without a conflict.
+    let moved = common::node("B", &["p"]).replace("## Design\nd", "## Design\nfrom main");
+    f.advance_main("specs/b/SPEC.md", &moved);
+    let held = hold(&f);
+    let env = f.env(&[]);
+    let outs: Vec<_> = std::thread::scope(|s| {
+        let mut runs = Vec::new();
+        for (i, branch) in ["impl/a", "spec/b"].into_iter().enumerate() {
+            let (env, work) = (&env, f.work());
+            runs.push(s.spawn(move || clm_land::land(&work, Some(branch), env)));
+            wait_for_tickets(&f.work(), i + 1);
+        }
+        drop(held);
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    });
+    let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
+    // Two checks: `impl/a` alone, then `spec/b` on its own turn.
+    assert_eq!(starts(&f), 2, "{:?}", f.lines("check-order.log"));
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    assert_eq!(
+        subjects(&f)[..2],
+        ["Merge spec/b into main", "Merge impl/a into main"]
+    );
+    // The first check ran on `impl/a` merged alone.
+    let first = f.git(&f.work(), &["rev-parse", "origin/main~1^{tree}"]);
+    assert_eq!(f.lines("check-order.log")[0], format!("start {first}"));
+    assert!(landed_lines(&outs[0]).ends_with(" code"), "{:?}", outs[0]);
+    assert!(landed_lines(&outs[1]).ends_with(" spec"), "{:?}", outs[1]);
+    // Its `specs/` regenerated onto `main`: both sides' requirements.
+    let spec = f.git(&f.work(), &["show", "origin/main:specs/b/SPEC.md"]);
+    for r in ["p", "r"] {
+        assert!(spec.contains(&format!("Requirement: {r}\n")), "{spec}");
+    }
+    assert!(spec.contains("## Design\nfrom main"), "{spec}");
+}
+
+#[test]
 fn a_ticket_that_names_no_branch_is_left_to_wait() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.write("check-sleeps", "1");
     f.branch("impl/a", &[("a_file.txt", "x\n")]);
@@ -525,7 +618,7 @@ fn more_than_four_suspects_are_halved() {
 
 #[test]
 fn a_land_alone_lands_as_before() {
-    // req:land/batched-lands@dbe8f4c4
+    // req:land/batched-lands@ba7cbebe
     let f = Fixture::new("");
     f.branch("impl/a", &[("a_file.txt", "x\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();

@@ -531,7 +531,6 @@ dependencies = [
  "clm-rename",
  "serde_json",
  "tempfile",
- "toml",
 ]
 
 [[package]]

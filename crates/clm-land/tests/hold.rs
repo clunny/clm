@@ -10,6 +10,13 @@ fn approved(id: &str, writer: &str, at: &str, fingerprint: &str) -> Value {
            "fingerprint": fingerprint, "branch": "spec/x", "change": "x"})
 }
 
+/// `approved`, naming the requests it clears.
+fn clearing(id: &str, writer: &str, at: &str, fingerprint: &str, clears: &[&str]) -> Value {
+    let mut record = approved(id, writer, at, fingerprint);
+    record["clears"] = json!(clears);
+    record
+}
+
 fn requested(writer: &str, at: &str, fingerprint: &str, text: &str) -> Value {
     json!({"id": "r1", "writer": writer, "at": at, "kind": "changes_requested",
            "branch": "spec/x", "fingerprint": fingerprint, "text": text})
@@ -50,7 +57,7 @@ fn held(settings: &str) -> (Fixture, String) {
 
 #[test]
 fn held_branch_refused() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     let (f, _) = held("");
     let old = f.remote("main");
     let refs = |f: &Fixture| {
@@ -84,7 +91,7 @@ fn held_branch_refused() {
 
 #[test]
 fn a_request_at_another_fingerprint_doesnt_hold() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     let (f, fp) = held("");
     let other = "0".repeat(fp.len());
     f.web_ledger(
@@ -97,7 +104,7 @@ fn a_request_at_another_fingerprint_doesnt_hold() {
 
 #[test]
 fn cleared_by_an_approval_the_policy_doesnt_count() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     // The branch's author asked for changes; their own later approval doesn't count under
     // `approval = "other"`, yet it clears their request.
     let (f, fp) = held("approval = \"other\"");
@@ -117,11 +124,12 @@ fn cleared_by_an_approval_the_policy_doesnt_count() {
     );
     f.web_ledger(
         "christopher-lunny/web",
-        &[approved(
+        &[clearing(
             "a2",
             "christopher-lunny/web",
             "2026-10-28T11:30:00.000Z",
             &fp,
+            &["r1"],
         )],
     );
     // Bob's approval is the one the policy counts; without it the author's own does not.
@@ -139,7 +147,7 @@ fn cleared_by_an_approval_the_policy_doesnt_count() {
 
 #[test]
 fn comment_on_the_change_as_a_whole() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     let (f, fp) = held("");
     f.web_ledger("carol/web", &[commented("carol/web", &fp, None)]);
     let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
@@ -151,7 +159,7 @@ fn comment_on_the_change_as_a_whole() {
 
 #[test]
 fn cleared_by_a_push() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     let (f, old_fp) = held("");
     let work = f.work();
     f.git(&work, &["checkout", "-q", "spec/x"]);
@@ -170,15 +178,17 @@ fn cleared_by_a_push() {
 
 #[test]
 fn cleared_by_the_requester() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
+    // Named by the approval, it is cleared whatever either time.
     let (f, fp) = held("");
     f.web_ledger(
         "alice/1a2b3c4d",
-        &[approved(
+        &[clearing(
             "a2",
             "alice/1a2b3c4d",
-            "2026-10-28T11:30:00.000Z",
+            "2026-10-28T10:30:00.000Z",
             &fp,
+            &["r1"],
         )],
     );
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
@@ -187,7 +197,7 @@ fn cleared_by_the_requester() {
 
 #[test]
 fn an_earlier_approval_by_the_requester_doesnt_clear_it() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     let (f, fp) = held("");
     // Times compare as strings, as the ledger orders them: an earlier one, an equal one,
     // and one whose instant is later (11:30 UTC) but whose text sorts first don't clear it.
@@ -203,11 +213,24 @@ fn an_earlier_approval_by_the_requester_doesnt_clear_it() {
         let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
         assert!(why.contains("land/changes-requested"), "{why}");
     }
+    // A later approval that names what it clears and names none of them doesn't clear it.
+    f.web_ledger(
+        "alice/1a2b3c4d",
+        &[clearing(
+            "a2",
+            "alice/1a2b3c4d",
+            "2026-10-28T11:30:00.000Z",
+            &fp,
+            &[],
+        )],
+    );
+    let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
+    assert!(why.contains("land/changes-requested"), "{why}");
 }
 
 #[test]
 fn another_persons_approval_doesnt_clear_it() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     let (f, fp) = held("approval = \"any\"");
     f.web_ledger(
         "dana/9f9f9f9f",
@@ -224,7 +247,7 @@ fn another_persons_approval_doesnt_clear_it() {
 
 #[test]
 fn a_request_on_another_branch_doesnt_hold() {
-    // req:land/changes-requested-holds@3c6b79d5
+    // req:land/changes-requested-holds@81003a91
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let fp = f.fingerprint("impl/a");

@@ -24,5 +24,4 @@ tempfile.workspace = true
 [dev-dependencies]
 clm-apply.workspace = true
 clm-check.workspace = true
-toml.workspace = true
 serde_json.workspace = true

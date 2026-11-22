@@ -96,13 +96,10 @@ fn added(repo: &Repo, merge_base: &str, head: &str) -> Result<Vec<Vec<u8>>, Erro
 
 /// `sync.regenerate`'s regenerate, without its merge, from the CLM root in the checkout at
 /// `merged`: `onto`'s `specs/` with that commit's changes and backlog and `ids` re-applied.
-/// A refusal of its own is a stop too, so it names the rule and `clm rebase`.
+/// Neither of its refusals reaches a land: it merges nothing, so it writes no delta, and `ids`
+/// are read from the checkout it is given, so each is a change that checkout holds.
 fn regenerate(onto: &str, ids: &[String], merged: &Path) -> Result<clm_regenerate::Tree, Error> {
-    let regenerated = match clm_regenerate::regenerated(merged, onto, ids, false) {
-        Err(clm_regenerate::Error::Refused(why)) => return Err(refuse(why)),
-        other => other?,
-    };
-    match regenerated {
+    match clm_regenerate::regenerated(merged, onto, ids, false)? {
         clm_regenerate::Regenerated::Tree(tree) => Ok(tree),
         clm_regenerate::Regenerated::Stopped { left, .. } => Err(refuse(format!(
             "the branch's changes don't regenerate from the base:\n  {}\n",

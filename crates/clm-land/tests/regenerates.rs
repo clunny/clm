@@ -5,60 +5,13 @@
 mod common;
 
 use clm_ledger::Body;
-use common::{Fixture, refused, write_exec};
+use common::{Fixture, node, refused, write_exec};
 
-const ROOT: &str = "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nr\n";
+const ROOT: &str = common::SPEC_ROOT;
 
-fn requirement(slug: &str) -> String {
-    format!("\n### Requirement: {slug}\nIt SHALL {slug}.\n\n#### Scenario: s\n- ok\n")
-}
-
-fn node(title: &str, reqs: &[&str]) -> String {
-    let mut s = format!(
-        "---\ntitle: {title}\nstatus: specd\nowners: []\n---\n\n## Contract\nc\n\n\
-         ## Design\nd\n\n## Requirements\n"
-    );
-    for r in reqs {
-        s.push_str(&requirement(r));
-    }
-    s
-}
-
-/// `main` (on `origin` too) with node `a` (requirement `p`), and `spec/x` adding change `x`,
-/// applied, whose delta adds `a/r`, with `specs/` as applying it gives. The work clone is on
-/// `main` after.
+/// `main` with node `a` and `spec/x` adding change `x`, applied, whose delta adds `a/r`.
 fn spec_branch(f: &Fixture) {
-    let work = f.work();
-    f.commit_files(
-        &[
-            ("specs/SPEC.md", ROOT),
-            ("specs/a/SPEC.md", &node("A", &["p"])),
-        ],
-        "nodes",
-    );
-    f.git(&work, &["push", "-q", "origin", "main"]);
-    f.git(&work, &["checkout", "-q", "-b", "spec/x"]);
-    f.commit_files(
-        &[
-            (
-                "changes/x/change.md",
-                "---\nstatus: proposed\n---\n\n## Intent\nAdd r.\n",
-            ),
-            (
-                "changes/x/deltas/a.md",
-                &format!(
-                    "---\ncomponent: a\n---\n## ADDED Requirements\n{}",
-                    requirement("r")
-                ),
-            ),
-        ],
-        "propose x",
-    );
-    clm_apply::apply(&work, "x").unwrap();
-    f.git(&work, &["add", "-A"]);
-    f.git(&work, &["commit", "-q", "-m", "apply x"]);
-    f.git(&work, &["push", "-q", "origin", "spec/x"]);
-    f.git(&work, &["checkout", "-q", "main"]);
+    f.applied_spec_branch("x", "a");
 }
 
 /// The file `path` at `main` on `origin`.
