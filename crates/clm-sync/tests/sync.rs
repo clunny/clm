@@ -1545,11 +1545,13 @@ fn autosync_snapshots_agents_md() {
     // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "AGENTS.md", "# Agents\n");
+    commit(&r.work, "instructions");
+    write(&r.work, "AGENTS.md", "# Agents, edited\n");
 
     autosync(&r.work).unwrap();
     let tip = autosync_tip(&r, "spec/x").expect("pushed");
-    let files = git(&r.origin, &["ls-tree", "-r", "--name-only", &tip]);
-    assert!(files.lines().any(|f| f == "AGENTS.md"), "{files}");
+    let agents = git(&r.origin, &["show", &format!("{tip}:AGENTS.md")]);
+    assert_eq!(agents, "# Agents, edited");
 }
 
 #[test]

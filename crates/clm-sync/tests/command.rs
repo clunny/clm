@@ -442,9 +442,19 @@ fn autosync_lets_ssh_neither_ask_nor_wait() {
         &format!("#!/bin/sh\necho \"$@\" >> '{}'\nexit 1\n", log.display()),
     );
     path_first_without_ssh_command(&bin);
+    // The process's own `GIT_SSH_COMMAND` isn't the environment the call is given.
+    let ran = dir.path().join("process-ssh-ran");
+    let process_ssh = dir.path().join("process-ssh");
+    exec::write_exec(
+        &process_ssh,
+        &format!("#!/bin/sh\ntouch '{}'\nexit 1\n", ran.display()),
+    );
+    // SAFETY: as in `path_first_without_ssh_command`.
+    unsafe { std::env::set_var("GIT_SSH_COMMAND", &process_ssh) };
 
     let out = clm(&work, &["autosync"]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(!ran.exists(), "the process's ssh command ran");
     let args = fs::read_to_string(&log).expect("ssh never ran");
     assert!(args.contains("-o BatchMode=yes"), "{args}");
     assert!(args.contains("-o ConnectTimeout=10"), "{args}");
