@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [land-approval-s-spec-still-offers-the-calls-old-calls-gone-removed]
 ---
 
