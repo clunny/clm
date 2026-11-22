@@ -229,6 +229,32 @@ fn references_across_the_repository() {
 
 #[test]
 // req:rename/references@21fc0d73
+fn a_heading_in_a_fence_before_the_first_entry() {
+    let dir = references_repo();
+    let d = dir.path();
+    write(
+        d,
+        "ARCHITECTURE.md",
+        "# A\n\n```md\n### Example\nsee `a/x`\n```\n\n## Constraints\n\n### Constraint: arch\nA SHALL cite `a/x`.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- a/x\n",
+    );
+    rename(d, "r").unwrap();
+    let architecture = read(d, "ARCHITECTURE.md");
+    assert!(
+        architecture.contains("```md\n### Example\nsee `a/x`\n```\n"),
+        "{architecture}"
+    );
+    assert!(
+        architecture.contains("A SHALL cite `a/y`.\n"),
+        "{architecture}"
+    );
+    assert!(
+        architecture.contains("#### Enforced by\n- a/y\n"),
+        "{architecture}"
+    );
+}
+
+#[test]
+// req:rename/references@21fc0d73
 fn an_ambiguous_slug_stays() {
     let dir = references_repo();
     let d = dir.path();
@@ -647,6 +673,20 @@ fn a_term_in_fenced_code() {
     );
     rename(d, "r").unwrap();
     assert!(read(d, "specs/e/SPEC.md").contains("```sh\nprint the cogs\n```"));
+}
+
+#[test]
+// req:rename/term-swap@f4c62d32
+fn a_term_on_a_fences_opening_line() {
+    let dir = terms_repo("sprocket", "cogs");
+    let d = dir.path();
+    write(
+        d,
+        "specs/e/SPEC.md",
+        &node("", "```sprocket\nprint it\n```\n", &[("q", "Q SHALL.")]),
+    );
+    rename(d, "r").unwrap();
+    assert!(read(d, "specs/e/SPEC.md").contains("```cogs\nprint it\n```"));
 }
 
 #[test]
@@ -1588,6 +1628,25 @@ fn a_reference_in_fenced_code() {
         e.contains("  ````\n  ```\n  see `a/x`\n  ~~~\n  ````\n\nsee `a/y`\n"),
         "{e}"
     );
+}
+
+#[test]
+// req:rename/references@21fc0d73
+fn a_reference_on_a_fences_own_lines() {
+    let dir = references_repo();
+    let d = dir.path();
+    write(
+        d,
+        "specs/e/SPEC.md",
+        &node(
+            "",
+            "~~~ `a/x`\nbody\n~~~\n```w``` `a/x`",
+            &[("q", "Q SHALL.")],
+        ),
+    );
+    rename(d, "r").unwrap();
+    let e = read(d, "specs/e/SPEC.md");
+    assert!(e.contains("~~~ `a/x`\nbody\n~~~\n```w``` `a/y`\n"), "{e}");
 }
 
 #[test]

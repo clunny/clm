@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use clm_apply::{FileOp, Journal};
 use clm_coverage::MarkerSpan;
 use clm_git::Failure;
-use clm_model::outline::{requirement_spans, section_spans};
+use clm_model::outline::{fence_mask, requirement_spans, section_spans};
 use clm_model::{
     CHANGE_STATUS_TERMS, Change, ChangeStatus, Delta, Graph, Layer, Node, ROOT_ID, Rename,
     RenameKind, split_frontmatter,
@@ -733,10 +733,7 @@ fn generate(
             continue;
         };
         let word = graph.heading(layer);
-        let at = text
-            .match_indices("### ")
-            .find(|(i, _)| *i == 0 || text.as_bytes()[i - 1] == b'\n')
-            .map_or(text.len(), |(i, _)| i);
+        let at = first_entry(&text);
         let entries = plan
             .edits
             .body(&text[at..], &headings(&plan, layer.id(), word));
@@ -1004,4 +1001,19 @@ fn leftovers(
     }
     hits.sort_by(|a, b| (&a.file, a.line, &a.old).cmp(&(&b.file, b.line, &b.old)));
     Ok(hits)
+}
+
+/// The byte offset of a human layer's first `### ` line outside fenced code, where its
+/// entries start, or the text's end when it has none.
+fn first_entry(text: &str) -> usize {
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let mask = fence_mask(&lines);
+    let mut at = 0;
+    for (line, fenced) in lines.into_iter().zip(mask) {
+        if !fenced && line.starts_with("### ") {
+            return at;
+        }
+        at += line.len();
+    }
+    text.len()
 }
