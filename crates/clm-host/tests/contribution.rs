@@ -508,6 +508,18 @@ fn scenario_not_a_fork() {
 }
 
 #[test]
+fn an_unreadable_listing_on_the_parent_opens_nothing() {
+    // req:host/contribution-operations@78af32ce
+    let answers = [("repo view", FORK), ("pr list", r#"{"message": "x"}"#)];
+    with_gh(&answers, |root, dir| {
+        let host = clm_host::adapter(Setting::Github);
+        let got = host.open_on_parent(root, "spec/x", "t", Path::new("c.md"));
+        assert!(matches!(got, Err(clm_host::Error::Git(_))), "{got:?}");
+        assert!(!calls(dir).contains("pr create"), "{}", calls(dir));
+    });
+}
+
+#[test]
 fn scenario_an_answer_it_cant_read() {
     // req:host/list-contributions@ca5fd90e
     let issues = r#"[{"number":73,"author":{"login":"clunny"}},{"author":{"login":"eve"}}]"#;

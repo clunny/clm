@@ -57,7 +57,12 @@ fn active(root: &Path, branch: &str) -> Result<Option<Value>, Error> {
             "active",
         ],
     )?;
-    Ok(listed.as_array().and_then(|prs| prs.first()).cloned())
+    match listed {
+        Value::Array(prs) => Ok(prs.into_iter().next()),
+        _ => Err(Error::Git(
+            "az repos pr list: the answer is not a list".into(),
+        )),
+    }
 }
 
 /// A pull request's web page, `<repository web URL>/pullrequest/<id>`: the `url` field of

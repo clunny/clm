@@ -707,3 +707,16 @@ fn the_cut_is_said_on_standard_error_only() {
         assert_eq!((code, err.as_str()), (0, ""));
     });
 }
+
+#[test]
+fn a_listing_that_is_not_a_list_exits_2() {
+    // req:host/host-tool-failure@5ca96db4
+    let answers = [("pr list", r#"{"message": "x"}"#), ("pr create", "{}")];
+    with_fakes(&answers, "spec/x", "b", |root, dir| {
+        let args = ["open", "spec/x", "--title", "x", "--body-file", "body.md"];
+        let (code, out, err) = pr_call(root, &args);
+        assert_eq!((code, out.as_str()), (2, ""), "{err}");
+        assert!(err.contains("not a list"), "{err}");
+        assert!(!calls(dir, "az").contains("pr create"));
+    });
+}

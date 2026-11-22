@@ -92,9 +92,10 @@ fn keeping(root: &Path, branch: &str, text: &str, error: Error) -> Error {
 /// the branch can't be read against it.
 fn describe(root: &Path, branch: &str) -> Result<(String, String), Error> {
     let main = format!("{REMOTE}/main");
-    let base = git(root, &["merge-base", &main, branch])
-        .map_err(|e| Error::Refused(format!("can't read `{branch}` against {main}: {e}")))?;
-    if let Some(path) = added_change(root, &base, branch)?
+    let unread =
+        |e: clm_git::Error| Error::Refused(format!("can't read `{branch}` against {main}: {e}"));
+    let base = git(root, &["merge-base", &main, branch]).map_err(unread)?;
+    if let Some(path) = added_change(root, &base, branch).map_err(unread)?
         && let Ok(change) = git(root, &["show", &format!("{branch}:./{path}")])
         && let Some(intent) = intent(&change)
     {
@@ -115,7 +116,7 @@ fn describe(root: &Path, branch: &str) -> Result<(String, String), Error> {
 /// The one `changes/<id>/change.md` outside `changes/archive/` that `branch` adds against
 /// `base`, relative to the root; `None` when it adds none or several. `--no-renames`, so a
 /// change withdrawn and redrafted under a new ID reads as added.
-fn added_change(root: &Path, base: &str, branch: &str) -> Result<Option<String>, Error> {
+fn added_change(root: &Path, base: &str, branch: &str) -> Result<Option<String>, clm_git::Error> {
     let range = format!("{base}..{branch}");
     let added = git(
         root,

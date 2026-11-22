@@ -313,12 +313,11 @@ impl Host for GitHub {
             "--json",
             "url,headRepositoryOwner",
         ];
-        let open = json("gh pr list", &gh(root, &listed)?)?;
+        let open = list_of("gh pr list", &gh(root, &listed)?)?;
         let fork_owner = owner(&view)?;
-        let mine =
-            open.as_array().into_iter().flatten().find(|pr| {
-                pr["headRepositoryOwner"]["login"].as_str() == Some(fork_owner.as_str())
-            });
+        let mine = open
+            .iter()
+            .find(|pr| pr["headRepositoryOwner"]["login"].as_str() == Some(fork_owner.as_str()));
         if let Some(url) = mine.and_then(|pr| pr["url"].as_str()) {
             return Ok(url.to_string());
         }

@@ -282,6 +282,7 @@ fn scenario_settings_that_dont_load() {
         assert_eq!((code, out.as_str()), (Some(2), ""), "{command}: {err}");
         assert!(err.starts_with(&format!("clm {command}: ")), "{err}");
         assert!(err.contains("clm.toml"), "{command}: {err}");
+        assert!(gh.calls().is_empty(), "{command}: {:?}", gh.calls());
         // A user settings file that sets `host`.
         let (r, gh) = (checkout("github"), fake_gh());
         let tip_before = on_origin(&r, "spec/x");
@@ -664,15 +665,18 @@ fn branch_moved_keeps_its_message() {
     let (r, gh) = (checkout("github"), fake_gh());
     let s = push_impl_a(&r, "a.txt");
     other_clone_push(&r, "impl/a", "b.txt");
-    let (code, _, err) = clm(
-        &r.work,
-        &gh,
-        &["branch", "delete", "impl/a", "--lease", &s],
-        &[],
-    );
-    assert_eq!(code, Some(1), "{err}");
-    let message = format!("`impl/a` on origin is no longer at {s}; left it");
-    assert!(err.contains(&message), "{err}");
+    // A lease given whole, and in turn abbreviated: the message names the full hash.
+    for lease in [s.as_str(), &s[..8]] {
+        let (code, _, err) = clm(
+            &r.work,
+            &gh,
+            &["branch", "delete", "impl/a", "--lease", lease],
+            &[],
+        );
+        assert_eq!(code, Some(1), "{err}");
+        let message = format!("`impl/a` on origin is no longer at {s}; left it");
+        assert!(err.contains(&message), "{err}");
+    }
 }
 
 /// `impl/a` checked out at a new commit and pushed with `clm branch push`: its sha.
@@ -761,10 +765,13 @@ fn scenario_branch_delete_call_the_call_land_makes() {
         }
         assert_eq!(on_origin(&r, "impl/b"), t, "{host}");
         assert!(delete("impl/gone", &s).is_ok(), "{host}");
-        for (branch, lease) in [("main", m.as_str()), ("clm/ledger/p/c", m.as_str())] {
+        for (branch, lease, reason) in [
+            ("main", m.as_str(), "moves only through `clm land`"),
+            ("clm/ledger/p/c", m.as_str(), "is a ledger branch"),
+        ] {
             let got = delete(branch, lease);
             assert!(
-                matches!(got, Err(clm_host::Error::Refused(_))),
+                matches!(&got, Err(clm_host::Error::Refused(why)) if why.contains(reason)),
                 "{host}: {got:?}"
             );
             assert_eq!(on_origin(&r, branch), m, "{host} {branch}");
@@ -1796,6 +1803,41 @@ fn scenario_pr_open_no_origin_main() {
     assert!(err.contains("origin/main"), "{err}");
     assert!(err.contains("fatal"), "{err}");
     assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn pr_open_a_branch_sharing_no_history_with_origin_main() {
+    // req:host/pr-open-defaults@17fa5999
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["checkout", "-q", "--orphan", "fix/o"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", "o"]);
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("origin/main"), "{err}");
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn pr_open_an_archived_change_is_not_the_change_added() {
+    // req:host/pr-open-defaults@17fa5999
+    let r = checkout("github");
+    branch_adding(
+        &r,
+        "fix/a",
+        &["archive/old", "y"],
+        "Live one. Words.",
+        "two",
+    );
+    let gh = fake_gh();
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(creates(&gh)[0].contains("--title Live one. --body-file "));
+    // An archived change alone is no change: the commits describe the branch.
+    branch_adding(&r, "fix/b", &["archive/old"], "Old. Words.", "archived");
+    let gh = fake_gh();
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(creates(&gh)[0].contains("--title archived --body-file "));
 }
 
 const PR_7: &str = r#"{"number":7,"state":"OPEN","headRefName":"spec/x"}"#;
