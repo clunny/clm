@@ -373,7 +373,7 @@ fn on_origin(r: &Repo, branch: &str) -> String {
 
 #[test]
 fn scenario_branch_deleted() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     for host in ["github", "git", "none"] {
         let (r, gh) = (checkout(host), fake_gh());
         let s = push_impl_a(&r, "a.txt");
@@ -443,7 +443,7 @@ fn pushed_record(r: &Repo, branch: &str) -> String {
 
 #[test]
 fn scenario_branch_another_sessions() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let u = other_clone_push(&r, "impl/b", "b.txt");
     let v = other_clone_push(&r, "spec/y", "y.txt");
@@ -465,7 +465,7 @@ fn scenario_branch_another_sessions() {
 
 #[test]
 fn branch_delete_takes_an_abbreviated_lease_of_the_pushed_tip() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let tip = push_impl_a(&r, "a.txt");
     let (code, _, err) = clm(
@@ -480,7 +480,7 @@ fn branch_delete_takes_an_abbreviated_lease_of_the_pushed_tip() {
 
 #[test]
 fn branch_delete_refuses_a_lease_that_names_no_pushed_tip() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let old = push_impl_a(&r, "a.txt");
     let new = push_impl_a(&r, "b.txt");
@@ -499,7 +499,7 @@ fn branch_delete_refuses_a_lease_that_names_no_pushed_tip() {
 
 #[test]
 fn branch_delete_names_a_lease_that_is_not_the_pushed_tip() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let old = push_impl_a(&r, "a.txt");
     let new = push_impl_a(&r, "b.txt");
@@ -516,7 +516,7 @@ fn branch_delete_names_a_lease_that_is_not_the_pushed_tip() {
 
 #[test]
 fn scenario_branch_never_fetched() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let z = other_clone_push(&r, "spec/z", "z.txt");
     let (code, _, err) = clm(&r.work, &gh, &["branch", "delete", "spec/z"], &[]);
@@ -528,7 +528,7 @@ fn scenario_branch_never_fetched() {
 
 #[test]
 fn scenario_branch_main_refused() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let m = on_origin(&r, "main");
     let (code, _, err) = clm(
@@ -544,7 +544,7 @@ fn scenario_branch_main_refused() {
 
 #[test]
 fn branch_delete_refuses_a_ledger_branch() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     git(
         &r.work,
@@ -558,7 +558,7 @@ fn branch_delete_refuses_a_ledger_branch() {
 
 #[test]
 fn scenario_branch_moved() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let s = push_impl_a(&r, "a.txt");
     let t = other_clone_push(&r, "impl/a", "b.txt");
@@ -590,9 +590,135 @@ fn branch_moved_keeps_its_message() {
     assert!(err.contains(&message), "{err}");
 }
 
+/// `impl/a` checked out at a new commit and pushed with `clm branch push`: its sha.
+fn branch_push_impl_a(r: &Repo, gh: &Gh) -> String {
+    git(&r.work, &["checkout", "-q", "-b", "impl/a"]);
+    commit_file(r, "a.txt");
+    let (code, _, err) = clm(&r.work, gh, &["branch", "push"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    let s = tip(&r.work, "HEAD");
+    assert_eq!(pushed_record(r, "impl/a"), s);
+    s
+}
+
+#[test]
+fn scenario_branch_delete_the_remote_refuses_the_delete() {
+    // req:host/branch-delete@f8e36cf0
+    let (r, gh) = (checkout("github"), fake_gh());
+    let s = branch_push_impl_a(&r, &gh);
+    pre_receive(&r, "echo 'remote says no' >&2\nexit 1\n");
+    let (code, _, err) = clm(&r.work, &gh, &["branch", "delete", "impl/a"], &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("remote says no"), "{err}");
+    assert!(!err.contains("offline"), "{err}");
+    assert_eq!(on_origin(&r, "impl/a"), s);
+    assert_eq!(pushed_record(&r, "impl/a"), s);
+}
+
+#[test]
+fn scenario_branch_delete_origin_cant_be_reached() {
+    // req:host/branch-delete@f8e36cf0
+    let (r, gh) = (checkout("github"), fake_gh());
+    let s = branch_push_impl_a(&r, &gh);
+    let gone = r.origin.join("no-such-dir");
+    git(
+        &r.work,
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    );
+    let (code, _, err) = clm(&r.work, &gh, &["branch", "delete", "impl/a"], &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("offline: origin can't be reached; "), "{err}");
+    assert_eq!(pushed_record(&r, "impl/a"), s);
+    assert_eq!(on_origin(&r, "impl/a"), s);
+}
+
+#[test]
+fn scenario_branch_delete_call_the_call_land_makes() {
+    // req:host/branch-delete-call@eb352a4b
+    use clm_config::Host as Setting;
+    for (host, setting) in [
+        ("github", Setting::Github),
+        ("azure", Setting::Azure),
+        ("git", Setting::Git),
+        ("none", Setting::None),
+    ] {
+        let adapter = clm_host::adapter(setting);
+        let r = checkout(host);
+        // `impl/a`, pushed by another clone: no record here, and none is read.
+        let s = other_clone_push(&r, "impl/a", "a.txt");
+        // `impl/b`, moved on origin from `s` to `t`.
+        git(&r.origin, &["update-ref", "refs/heads/impl/b", &s]);
+        let t = other_clone_push(&r, "impl/b", "b.txt");
+        // A ref that merely ends in `refs/heads/impl/gone`.
+        git(
+            &r.origin,
+            &["update-ref", "refs/x/refs/heads/impl/gone", &s],
+        );
+        let m = on_origin(&r, "main");
+        git(&r.origin, &["update-ref", "refs/heads/clm/ledger/p/c", &m]);
+        git(&r.origin, &["update-ref", "refs/heads/impl/c", &m]);
+        pre_receive(
+            &r,
+            "while read -r old new name; do\n\
+             [ \"$name\" = refs/heads/impl/c ] && { echo 'remote says no' >&2; exit 1; }\n\
+             done\nexit 0\n",
+        );
+        let delete = |branch: &str, lease: &str| adapter.branch_delete(&r.work, branch, lease);
+        assert!(delete("impl/a", &s).is_ok(), "{host}");
+        assert_eq!(on_origin(&r, "impl/a"), "", "{host}");
+        match delete("impl/b", &s) {
+            Err(clm_host::Error::Refused(why)) => assert_eq!(
+                why,
+                format!("`impl/b` on origin is no longer at {s}; left it"),
+                "{host}"
+            ),
+            other => panic!("{host}: {other:?}"),
+        }
+        assert_eq!(on_origin(&r, "impl/b"), t, "{host}");
+        assert!(delete("impl/gone", &s).is_ok(), "{host}");
+        for (branch, lease) in [("main", m.as_str()), ("clm/ledger/p/c", m.as_str())] {
+            let got = delete(branch, lease);
+            assert!(
+                matches!(got, Err(clm_host::Error::Refused(_))),
+                "{host}: {got:?}"
+            );
+            assert_eq!(on_origin(&r, branch), m, "{host} {branch}");
+        }
+        match delete("impl/c", &m) {
+            Err(clm_host::Error::Refused(why)) => {
+                assert!(why.contains("remote says no"), "{host}: {why}");
+                assert!(!why.contains("offline"), "{host}: {why}");
+            }
+            other => panic!("{host}: {other:?}"),
+        }
+        assert_eq!(on_origin(&r, "impl/c"), m, "{host}");
+        // A clone with no `origin`.
+        git(&r.work, &["remote", "remove", "origin"]);
+        assert!(delete("impl/a", &s).is_ok(), "{host}");
+        let got = delete("main", &m);
+        assert!(
+            matches!(got, Err(clm_host::Error::Refused(_))),
+            "{host}: {got:?}"
+        );
+        // A clone whose `origin` can't be reached.
+        let gone = r.origin.join("no-such-dir");
+        git(
+            &r.work,
+            &["remote", "add", "origin", gone.to_str().unwrap()],
+        );
+        match delete("impl/a", &s) {
+            Err(clm_host::Error::Refused(why)) => assert!(
+                why.starts_with("offline: origin can't be reached"),
+                "{host}: {why}"
+            ),
+            other => panic!("{host}: {other:?}"),
+        }
+    }
+}
+
 #[test]
 fn branch_delete_without_origin_has_nothing_to_do() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("none"), fake_gh());
     git(&r.work, &["update-ref", "refs/clm/pushed/impl/a", "HEAD"]);
     git(&r.work, &["remote", "remove", "origin"]);
@@ -608,7 +734,7 @@ fn branch_delete_without_origin_has_nothing_to_do() {
 
 #[test]
 fn branch_delete_of_a_branch_already_gone_has_nothing_to_do() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let s = tip(&r.work, "HEAD");
     let (code, _, err) = clm(
@@ -622,7 +748,7 @@ fn branch_delete_of_a_branch_already_gone_has_nothing_to_do() {
 
 #[test]
 fn branch_delete_of_a_branch_found_gone_drops_its_record() {
-    // req:host/branch-delete@d5fd13ae
+    // req:host/branch-delete@f8e36cf0
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &["branch", "push"], &[]);
     assert_eq!(code, Some(0), "{err}");
