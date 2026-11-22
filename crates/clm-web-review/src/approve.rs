@@ -57,11 +57,7 @@ pub async fn branch<P: Platform>(
     let record = ledger::record(
         p,
         login,
-        Body::Approved {
-            fingerprint,
-            branch: branch.into(),
-            change: change_of(&changed, &trees.head),
-        },
+        Body::approved(fingerprint, branch.into(), change_of(&changed, &trees.head)),
     );
     match ledger::append(p, access, &record).await {
         Some(()) => Response::empty(200),
