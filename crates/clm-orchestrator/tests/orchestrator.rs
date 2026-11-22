@@ -112,8 +112,12 @@ fn scenario_capped_by_places() {
 fn scenario_a_component_that_waits_comes_last_at_equal_priority() {
     // req:orchestrator/next@cc111fbd
     let r = repo();
-    // Only the scenario's `a`, `b` and `c`, with no `depends_on` and no change.
-    fs::remove_dir_all(r.work.join("changes")).unwrap();
+    // Only the scenario's `a`, `b` and `c`, with no `depends_on`, every requirement from
+    // change `x`, which sets no priority.
+    fs::remove_dir_all(r.work.join("changes/x/deltas")).unwrap();
+    write(&r.work, "changes/x/deltas/a.md", &delta("a", &["w", "x"]));
+    write(&r.work, "changes/x/deltas/b.md", &delta("b", &["z"]));
+    write(&r.work, "changes/x/deltas/c.md", &delta("c", &["y"]));
     write(
         &r.work,
         "specs/a/SPEC.md",

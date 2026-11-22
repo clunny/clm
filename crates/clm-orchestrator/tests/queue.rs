@@ -687,13 +687,37 @@ fn scenario_need_against_the_node_graph() {
 #[test]
 fn scenario_a_component_that_waits_comes_last_at_equal_priority() {
     // req:orchestrator/next@cc111fbd
+    // Every requirement comes from a change with no priority.
+    let g = with_changes(
+        &[
+            ("specs/a/SPEC.md", &needing("", "c/y", &["w"])),
+            ("specs/b/SPEC.md", &node("", &["z"])),
+            ("specs/c/SPEC.md", &node("", &["y"])),
+        ],
+        vec![
+            adds("20260101-aw", "", "a", "w"),
+            adds("20260101-ax", "", "a", "x"),
+            adds("20260101-b", "", "b", "z"),
+            adds("20260101-c", "", "c", "y"),
+        ],
+    );
+    assert_eq!(queue(&g, &[], &[]).next(), ["b", "c", "a"]);
+}
+
+#[test]
+fn a_requirement_blocked_by_an_item_alone_does_not_wait() {
+    // req:orchestrator/next@cc111fbd
+    // `a/x` is blocked by `backlog/h` and has no `waits_on`, so `a` keeps its place by ID.
     let g = graph(&[
         ROOT,
-        ("specs/a/SPEC.md", &needing("", "c/y", &["w"])),
+        ("specs/a/SPEC.md", &node("", &["w", "x"])),
         ("specs/b/SPEC.md", &node("", &["z"])),
-        ("specs/c/SPEC.md", &node("", &["y"])),
+        (
+            "backlog/h.md",
+            "---\ntitle: H\nkind: human-task\nblocks: [a/x]\n---\n",
+        ),
     ]);
-    assert_eq!(queue(&g, &[], &[]).next(), ["b", "c", "a"]);
+    assert_eq!(queue(&g, &[], &[]).next(), ["a", "b"]);
 }
 
 #[test]

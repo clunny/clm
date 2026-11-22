@@ -176,7 +176,8 @@ pub struct Queue {
 }
 
 impl Queue {
-    /// What `clm next` prints: the `ready` nodes, in [`Queue::in_order`]'s order.
+    /// What `clm next` prints: the `ready` nodes, by effective priority, then each with no
+    /// pending requirement that waits before each that has one, then by ID.
     pub fn next(&self) -> Vec<String> {
         self.in_order()
             .filter(|n| matches!(n.state, State::Ready { .. }))
