@@ -107,11 +107,7 @@ fn a_lands_record() {
 fn signing_without_a_usable_key() {
     // req:land.approval/key-and-signing@3487dc91
     let f = Fixture::new("");
-    let body = Body::Approved {
-        fingerprint: "g".into(),
-        branch: "spec/x".into(),
-        change: None,
-    };
+    let body = Body::approved("g".into(), "spec/x".into(), None);
     let why = refused(f.with_repo(|repo| repo.sign(body, clm_approval::APPROVE)));
     assert!(why.contains("user.signingkey"), "{why}");
 }

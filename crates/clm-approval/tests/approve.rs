@@ -17,11 +17,7 @@ fn approve_a_spec_branch() {
             assert!(r.writer.starts_with("christopher-lunny/"), "{}", r.writer);
             assert_eq!(
                 r.body,
-                Body::Approved {
-                    fingerprint: fp,
-                    branch: "spec/x".into(),
-                    change: Some("x".into()),
-                }
+                Body::approved(fp, "spec/x".into(), Some("x".into()))
             );
         }
         other => panic!("{other:?}"),

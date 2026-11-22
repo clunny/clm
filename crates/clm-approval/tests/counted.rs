@@ -38,11 +38,7 @@ fn signed_base(f: &Fixture) -> (String, PathBuf) {
 }
 
 fn approved(fingerprint: &str) -> Body {
-    Body::Approved {
-        fingerprint: fingerprint.into(),
-        branch: "spec/x".into(),
-        change: Some("x".into()),
-    }
+    Body::approved(fingerprint.into(), "spec/x".into(), Some("x".into()))
 }
 
 /// The approvals of `fingerprint` in `fold` counted in the work clone: `(accepted, refused)`.

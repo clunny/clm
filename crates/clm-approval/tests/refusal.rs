@@ -28,11 +28,7 @@ fn comment(id: &str, target: Option<&str>) -> String {
 }
 
 fn approval(writer: &str) -> String {
-    let body = Body::Approved {
-        fingerprint: "f".into(),
-        branch: "spec/x".into(),
-        change: None,
-    };
+    let body = Body::approved("f".into(), "spec/x".into(), None);
     line("a1", writer, LATER, body, None)
 }
 

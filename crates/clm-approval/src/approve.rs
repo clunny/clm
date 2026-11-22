@@ -40,11 +40,7 @@ pub fn approve(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, E
         )));
     }
     let change = repo.changes(&head)?.into_iter().next();
-    let body = Body::Approved {
-        fingerprint: fingerprint.clone(),
-        branch: branch.clone(),
-        change,
-    };
+    let body = Body::approved(fingerprint.clone(), branch.clone(), change);
     // Signed when the `main` fetched holds `docs/allowed_signers` (`signed-approve`).
     match repo.signed(&base)? {
         true => repo.append(repo.sign(body, sign::APPROVE)?)?,
