@@ -20,8 +20,18 @@ fn graph(architecture: &str) -> Graph {
     graph
 }
 
+/// The bundle of `a` for a checkout holding `architecture` as `ARCHITECTURE.md`, or no such
+/// file when `None`, and the specs `graph` loads.
+fn bundle_of(graph: &Graph, architecture: Option<&str>) -> String {
+    let dir = tempfile::tempdir().unwrap();
+    if let Some(text) = architecture {
+        std::fs::write(dir.path().join("ARCHITECTURE.md"), text).unwrap();
+    }
+    clm_context::bundle(graph, dir.path(), "a").unwrap()
+}
+
 fn bundle(architecture: &str) -> String {
-    clm_context::bundle_from(&graph(architecture), Some(architecture), "a").unwrap()
+    bundle_of(&graph(architecture), Some(architecture))
 }
 
 #[test]
@@ -70,18 +80,8 @@ fn the_source_gets_no_section() {
 #[test]
 fn a_project_without_the_file_gets_the_section_first() {
     // req:context/bundle-carries-constraints@377069d7
-    let out = clm_context::bundle_from(&graph("## Constraints\n"), None, "a").unwrap();
+    let out = bundle_of(&graph("## Constraints\n"), None);
     assert!(out.starts_with("# CLM's constraints"), "{out}");
-}
-
-#[test]
-fn bundle_from_matches_the_checkout() {
-    // req:context/bundle-from-text@418dfef8
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("ARCHITECTURE.md"), PROJECT).unwrap();
-    let g = graph(PROJECT);
-    let on_disk = clm_context::bundle(&g, dir.path(), "a").unwrap();
-    assert_eq!(on_disk, bundle(PROJECT));
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn section_precedes_served_capabilities_in_carried_order() {
     files.insert(PathBuf::from("specs/a/SPEC.md"), a.into());
     let (g, violations) = load_files(&files);
     assert!(violations.is_empty(), "{violations:?}");
-    let out = clm_context::bundle_from(&g, Some(PROJECT), "a").unwrap();
+    let out = bundle_of(&g, Some(PROJECT));
     let section = out.find("# CLM's constraints").unwrap();
     assert!(section < out.find("# Capabilities served").unwrap());
     assert!(out.contains("from the `clm` that runs"));

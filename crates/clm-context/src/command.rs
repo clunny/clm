@@ -1,5 +1,5 @@
 //! `clm context` as a call: its arguments, what it prints and its exit status
-//! (`commands-in-crate`). Native only: the web app calls `bundle_from`.
+//! (`commands-in-crate`).
 
 use std::ffi::OsString;
 use std::io::{self, Write};

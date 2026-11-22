@@ -185,31 +185,7 @@ fn spine_assets_stay_out() {
 }
 
 #[test]
-fn bundle_from_equals_checkout() {
-    // req:context/bundle-from-text@418dfef8
-    let dir = repo();
-    write(dir.path(), "specs/a/assets/m.html", "M\n");
-    let (graph, violations) = clm_model::load(dir.path());
-    assert!(violations.is_empty(), "{violations:?}");
-    let arch = fs::read_to_string(dir.path().join("ARCHITECTURE.md")).unwrap();
-    assert_eq!(
-        clm_context::bundle_from(&graph, Some(&arch), "a").unwrap(),
-        stdout(&clm_context(dir.path(), &["a"])),
-    );
-
-    fs::remove_file(dir.path().join("ARCHITECTURE.md")).unwrap();
-    let without = stdout(&clm_context(dir.path(), &["a"]));
-    assert!(!without.contains("ARCH-TEXT"), "{without}");
-    assert_eq!(
-        clm_context::bundle_from(&graph, None, "a").unwrap(),
-        without
-    );
-    assert_eq!(clm_context::bundle_from(&graph, None, "zz"), None);
-}
-
-#[test]
 fn bundle_from_equals_checkout_with_capabilities() {
-    // req:context/bundle-from-text@418dfef8
     // req:context/bundle-contents@ffb0697c
     let dir = repo();
     write(
@@ -225,20 +201,12 @@ fn bundle_from_equals_checkout_with_capabilities() {
         text.replace("owners: []\n", "owners: []\nserves: [capability/k]\n"),
     )
     .unwrap();
-    let (graph, violations) = clm_model::load(dir.path());
-    assert!(violations.is_empty(), "{violations:?}");
-
     let out = stdout(&clm_context(dir.path(), &["a"]));
     assert!(
         out.contains("# Capabilities served\n\n### Capability: k\nCAP-K"),
         "{out}"
     );
     assert!(!out.contains("CAP-U"), "{out}");
-    let arch = fs::read_to_string(dir.path().join("ARCHITECTURE.md")).unwrap();
-    assert_eq!(
-        clm_context::bundle_from(&graph, Some(&arch), "a").unwrap(),
-        out
-    );
 }
 
 #[test]
@@ -500,13 +468,8 @@ fn bundle_gives_the_text_whatever_the_graph_violates() {
     let (graph, violations) = clm_model::load(dir.path());
     assert!(!violations.is_empty());
     assert_eq!(clm_context(dir.path(), &["a"]).status.code(), Some(1));
-    let arch = fs::read_to_string(dir.path().join("ARCHITECTURE.md")).unwrap();
     let text = clm_context::bundle(&graph, dir.path(), "a").unwrap();
     assert_eq!(text, before);
-    assert_eq!(
-        Some(text),
-        clm_context::bundle_from(&graph, Some(&arch), "a")
-    );
     assert_eq!(clm_context::bundle(&graph, dir.path(), "zz"), None);
     assert_eq!(clm_context::bundle(&clean, dir.path(), "zz"), None);
 }
