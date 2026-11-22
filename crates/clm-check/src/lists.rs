@@ -1,13 +1,13 @@
 //! The lists `clm coverage` prints beside its report (`coverage-lists`): the markers no
 //! test counts, the tests a removal leaves with nothing to cite, and the tests a branch
-//! deleted. The computing is `clm-coverage`'s; this reads a checkout's files and formats.
+//! deleted. The computing and the reading of the working tree's files are `clm-coverage`'s;
+//! this reads the base revision's files and formats.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Violation};
 
-use clm_coverage::{deleted_tests, obsolete_tests, scan, uncounted};
+use clm_coverage::{deleted_tests, obsolete_tests, read_files, scan, uncounted};
 
 const RULE: &str = "check/coverage-lists";
 
@@ -79,8 +79,9 @@ pub(crate) fn deleted_tests_lines(root: &Path, base: &str) -> Result<Vec<String>
     let prefix = clm_git::git(root, &["rev-parse", "--show-prefix"])
         .map_err(|e| fail(format!("can't place the CLM root in its repository: {e}")))?;
     let blobs = clm_git::tree_blobs(root, &commit, &|p| {
+        // Markdown, the extension `md` exactly, holds no test (`markers-in-tests`).
         p.strip_prefix(prefix.as_str())
-            .is_some_and(|p| !p.ends_with(".md"))
+            .is_some_and(|p| Path::new(p).extension().is_none_or(|e| e != "md"))
     })
     .map_err(|e| fail(format!("can't read `{base}`: {e}")))?;
     let before: Vec<(PathBuf, String)> = blobs
@@ -105,55 +106,5 @@ fn load(root: &Path) -> Result<Graph, Vec<Violation>> {
         Ok(graph)
     } else {
         Err(violations)
-    }
-}
-
-/// The text of every file `scan` reads, by path relative to the CLM root.
-fn read_files(root: &Path) -> Vec<(PathBuf, String)> {
-    let mut paths = clm_git::run(
-        root,
-        "git",
-        &[
-            "ls-files",
-            "-z",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-        ],
-        clm_git::Options::default(),
-    )
-    .map(|out| {
-        out.split(|b| *b == 0)
-            .filter(|s| !s.is_empty())
-            .map(|s| PathBuf::from(String::from_utf8_lossy(s).into_owned()))
-            .collect()
-    })
-    .unwrap_or_else(|_| {
-        let mut all = Vec::new();
-        walk(root, root, &mut all);
-        all
-    });
-    paths.sort();
-    paths
-        .into_iter()
-        .filter_map(|p| Some((p.clone(), fs::read_to_string(root.join(&p)).ok()?)))
-        .collect()
-}
-
-fn walk(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if path.is_dir() {
-            if !name.starts_with('.') && name != "target" {
-                walk(root, &path, out);
-            }
-        } else if let Ok(rel) = path.strip_prefix(root) {
-            out.push(rel.to_path_buf());
-        }
     }
 }
