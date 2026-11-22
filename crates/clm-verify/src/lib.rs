@@ -68,7 +68,7 @@ impl Outcome {
 pub enum Error {
     /// Nothing was verified, for the reason given: exit 1.
     Refused(String),
-    /// `git`, the ledger or the settings failed: exit 2.
+    /// git, the ledger or a file failed: exit 2.
     Git(String),
 }
 
@@ -83,15 +83,6 @@ impl fmt::Display for Error {
 impl From<clm_git::Error> for Error {
     fn from(e: clm_git::Error) -> Self {
         Error::Git(e.to_string())
-    }
-}
-
-impl From<clm_git::Failure> for Error {
-    fn from(e: clm_git::Failure) -> Self {
-        match e {
-            clm_git::Failure::Refused(why) => Error::Refused(why),
-            clm_git::Failure::Git(why) => Error::Git(why),
-        }
     }
 }
 
@@ -214,7 +205,7 @@ pub struct Call<'a> {
 
 impl<'a> Call<'a> {
     /// The call `clm` makes: `/proc/meminfo`, a minute of 60 seconds and a grace of 10, with
-    /// `stop` as its stop request (`clm/verify-command`).
+    /// `stop` as its stop request (`mutation-pass`).
     pub fn standard(stop: &'a AtomicBool) -> Self {
         Call {
             memory: Path::new("/proc/meminfo"),

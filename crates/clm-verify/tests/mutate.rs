@@ -110,7 +110,6 @@ fn said(out: &clm_verify::Outcome, start: &str) -> bool {
 #[test]
 fn a_new_test_that_notices() {
     // req:verify/mutation-pass@2212de80
-    // req:verify/mutated-through-constructor@899e8820
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     land_new_test(&p);
