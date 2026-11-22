@@ -44,7 +44,7 @@ fn a_migration_the_crate_does_not_hold_is_judged_like_any_other() {
 }
 
 // req:upgrade/pending-migrations@0b011156
-// req:upgrade/migration-markers-in-tests@25966374
+// req:upgrade/migration-markers-in-tests@c4d9de0e
 #[test]
 fn a_stamp_naming_a_migration_the_crate_does_not_hold_leaves_the_four_notes_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);

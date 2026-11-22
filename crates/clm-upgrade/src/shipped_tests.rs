@@ -992,7 +992,27 @@ const PROOF_ID: &str = "20261114-proof-is-real";
 const PROOF_TITLE: &str =
     "A marker now counts only inside a test: see what stops counting before the next build";
 
-// req:upgrade/migration-markers-in-tests@25966374
+/// Every directory and file under `root` but `clm.toml`, each file with its bytes, sorted by path.
+fn files_but_clm_toml(root: &std::path::Path) -> Vec<(std::path::PathBuf, Option<Vec<u8>>)> {
+    let mut out = Vec::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                out.push((path.clone(), None));
+                dirs.push(path);
+            } else if path != root.join("clm.toml") {
+                let bytes = fs::read(&path).unwrap();
+                out.push((path, Some(bytes)));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+// req:upgrade/migration-markers-in-tests@c4d9de0e
 #[test]
 fn a_project_stamped_before_the_proof_note_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -1002,16 +1022,18 @@ fn a_project_stamped_before_the_proof_note_is_told_and_then_up_to_date() {
         list(dir.path()).unwrap(),
         format!("{PROOF_ID} advised note {PROOF_TITLE}\n")
     );
+    let others = files_but_clm_toml(dir.path());
     let out = apply(dir.path()).unwrap();
     assert_eq!(out, format!("note {PROOF_ID}\n"));
     assert_eq!(
         read_toml(&dir),
         before.replace("20261112-build-loop-in-clm", latest().unwrap())
     );
+    assert_eq!(files_but_clm_toml(dir.path()), others);
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-markers-in-tests@25966374
+// req:upgrade/migration-markers-in-tests@c4d9de0e
 #[test]
 fn the_proof_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -1029,7 +1051,7 @@ fn the_proof_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwi
     assert!(!list(dir.path()).unwrap().contains(PROOF_ID));
 }
 
-// req:upgrade/migration-markers-in-tests@25966374
+// req:upgrade/migration-markers-in-tests@c4d9de0e
 #[test]
 fn the_proof_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -1044,6 +1066,12 @@ fn the_proof_note_names_what_a_project_needs_to_know() {
         "`impl/<component>`",
         "no review lets it through",
         "`tests` glob",
+        "`clm check`",
+        "`tests-cite-their-owner`",
+        "a file the rule doesn't count as its own",
+        "naming `wiring` also has `clm check` report",
+        "in any file a component owns",
+        "cites a requirement of a component other than the file's owner",
         "[verify] mutate",
         "off until the project sets them",
     ] {
