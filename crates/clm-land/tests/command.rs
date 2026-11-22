@@ -435,6 +435,14 @@ fn append_fails_after_the_push() {
         out.stdout.lines().next(),
         Some(&*format!("landed {merge} code"))
     );
+    // req:land/commands-in-crate@9f588532
+    // What the land said before it found the land to finish is still said, once.
+    let effort = out
+        .stderr
+        .lines()
+        .filter(|l| l.starts_with("clm land: warning: effort not recorded: "))
+        .count();
+    assert_eq!(effort, 1, "{}", out.stderr);
     assert_eq!(f.remote("main"), merge);
 }
 

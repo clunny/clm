@@ -155,8 +155,17 @@ fn the_overlap_fails() {
     let f = Fixture::new("");
     moved(&f);
     f.write("affected-fails", "");
-    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
-    assert!(!has_recheck_line(&out.warnings), "{:?}", out.warnings);
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let code = clm_land::land_command(["impl/a"], &f.work(), &f.env(&[]), &mut stdout, &mut stderr);
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(!stderr.contains("re-check:"), "{stderr}");
+    // Said as it happens, with the one prefix (`land/commands-in-crate`).
+    assert!(
+        stderr.lines().any(|l| l
+            == "clm land: warning: clm affected failed: no graph here; the land checks its own selection"),
+        "{stderr}"
+    );
     // The overlap was tried first, then the land's own selection.
     let log = f.lines("affected.log");
     assert!(log[0].starts_with("--overlap "), "{log:?}");

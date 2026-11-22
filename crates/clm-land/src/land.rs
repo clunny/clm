@@ -277,7 +277,14 @@ pub(crate) fn land_into(
                         on_origin,
                         commit: &commit,
                     };
-                    *out = crate::finish::finish(&ctx)?;
+                    // What was said before stands beside what finishing says.
+                    let mut done = crate::finish::finish(&ctx)?;
+                    for warning in done.warnings.drain(..) {
+                        if !out.warnings.contains(&warning) {
+                            out.warnings.push(warning);
+                        }
+                    }
+                    out.lines = done.lines;
                     return Ok(());
                 }
             }

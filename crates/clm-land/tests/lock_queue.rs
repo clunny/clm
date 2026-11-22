@@ -250,6 +250,10 @@ fn a_ticket_it_cant_open() {
     let ticket = queue.join("00000000000000000000-ordinary-p5");
     std::fs::write(&ticket, "").unwrap();
     std::fs::set_permissions(&ticket, std::fs::Permissions::from_mode(0o000)).unwrap();
+    // Root opens it whatever its mode: the scenario can't be made there.
+    if std::fs::File::open(&ticket).is_ok() {
+        return;
+    }
     let releaser = hold_for_a_second(&f, "check.lock");
     let (code, stdout, stderr) = call(&f, &["--check-only"]);
     releaser.join().unwrap();

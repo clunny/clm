@@ -6,7 +6,7 @@ mod common;
 use std::ffi::OsString;
 use std::time::{Duration, Instant};
 
-use clm_land::{CheckEnv, Step, run_check, run_check_as};
+use clm_land::{CheckEnv, Step, run_check_as};
 use common::{Fixture, refused};
 
 fn passes() -> CheckEnv {
@@ -28,7 +28,7 @@ fn a_caller_waits_on_the_check_lock() {
     });
     let log = f.path("runner.log");
     let start = Instant::now();
-    let run = run_check("echo ok", &work, None, &passes(), Some(&log)).unwrap();
+    let run = run_check_as("clm land", "echo ok", &work, None, &passes(), Some(&log)).unwrap();
     assert!(start.elapsed() >= Duration::from_millis(900));
     releaser.join().unwrap();
     assert!(run.passed);
@@ -43,7 +43,7 @@ fn the_open_step_returned() {
     // req:land/shared-check-runner@64d3e878
     let f = Fixture::new("");
     let script = "echo '::group::a'; echo x; echo '::group::b'; echo y; echo z; exit 1";
-    let run = run_check(script, &f.work(), None, &passes(), None).unwrap();
+    let run = run_check_as("clm land", script, &f.work(), None, &passes(), None).unwrap();
     assert!(!run.passed);
     assert!(!run.logged);
     assert_eq!(
@@ -72,7 +72,7 @@ fn the_selection_and_the_environment_reach_the_command() {
         set: vec![("X".into(), OsString::from("1"))],
         unset: vec!["CI".into(), "Y".into()],
     };
-    let run = run_check(&script, &f.work(), Some(&selection), &env, None).unwrap();
+    let run = run_check_as("clm land", &script, &f.work(), Some(&selection), &env, None).unwrap();
     assert!(run.passed);
     assert_eq!(
         std::fs::read_to_string(&out).unwrap(),
@@ -80,7 +80,7 @@ fn the_selection_and_the_environment_reach_the_command() {
     );
     // Without a selection the command sees none, whatever the caller's environment holds.
     let script = format!("echo \"${{CLM_SELECTION-unset}}\" > '{}'", out.display());
-    run_check(&script, &f.work(), None, &passes(), None).unwrap();
+    run_check_as("clm land", &script, &f.work(), None, &passes(), None).unwrap();
     assert_eq!(std::fs::read_to_string(&out).unwrap(), "unset\n");
 }
 
@@ -111,13 +111,13 @@ fn land_unchanged() {
 fn the_exit_code_returned() {
     // req:land/shared-check-runner@64d3e878
     let f = Fixture::new("");
-    let run = run_check("exit 127", &f.work(), None, &passes(), None).unwrap();
+    let run = run_check_as("clm land", "exit 127", &f.work(), None, &passes(), None).unwrap();
     assert!(!run.passed);
     assert_eq!(run.code, Some(127));
-    let run = run_check("true", &f.work(), None, &passes(), None).unwrap();
+    let run = run_check_as("clm land", "true", &f.work(), None, &passes(), None).unwrap();
     assert_eq!(run.code, Some(0));
     // A signal ends the command with no exit code.
-    let run = run_check("kill -9 $$", &f.work(), None, &passes(), None).unwrap();
+    let run = run_check_as("clm land", "kill -9 $$", &f.work(), None, &passes(), None).unwrap();
     assert!(!run.passed);
     assert_eq!(run.code, None);
 }
@@ -204,7 +204,8 @@ fn a_failing_stderr_ends_nothing() {
     let blocker = f.path("blocker");
     std::fs::write(&blocker, "").unwrap();
     let log = blocker.join("run.log");
-    let run = run_check(
+    let run = run_check_as(
+        "clm land",
         "for i in $(seq 1000); do echo $i; done; exit 1",
         &work,
         None,
