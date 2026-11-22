@@ -289,6 +289,13 @@ fn ran_in_a_listed_tree(f: &Fixture, out: &clm_verify::Outcome) {
         listed.lines().any(|l| l == format!("worktree {tree}")),
         "{listed}"
     );
+    // The tree is whole again: git run there finds its top there, at the head; and the main
+    // worktree around it was left alone.
+    let top = f.verify_tree();
+    assert!(top.join(".git").is_file());
+    assert_eq!(f.git(&top, &["rev-parse", "--show-toplevel"]), tree);
+    assert_eq!(f.git(&top, &["rev-parse", "HEAD"]), head);
+    assert_eq!(f.git(&f.work(), &["branch", "--show-current"]), "main");
 }
 
 #[test]

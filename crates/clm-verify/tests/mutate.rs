@@ -1057,6 +1057,26 @@ fn lines_that_arent_verdicts() {
 #[test]
 fn no_selection_for_the_pass() {
     // req:verify/mutation-pass@66d709f6
+    // The scenario runs in a child whose own standard input holds text, so a command that
+    // inherited it would read it.
+    const FED: &str = "CLM_TEST_VERIFY_FED";
+    if std::env::var_os(FED).is_none() {
+        let fed = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(fed.path(), "fed\n").unwrap();
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "no_selection_for_the_pass", "--nocapture"])
+            .env(FED, "1")
+            .stdin(std::fs::File::open(fed.path()).unwrap())
+            .output()
+            .unwrap();
+        let said = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success() && said.contains("1 passed"),
+            "{said}{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        return;
+    }
     let p = pass(true, false);
     let script = p.f.path("bin/mutate-env");
     write_exec(
