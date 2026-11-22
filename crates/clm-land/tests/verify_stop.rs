@@ -55,7 +55,7 @@ fn verified(f: &Fixture, commit: &str, mode: VerifyMode) {
 
 #[test]
 fn a_held_component_is_refused() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
     let old = f.remote("main");
@@ -69,8 +69,37 @@ fn a_held_component_is_refused() {
 }
 
 #[test]
+fn a_test_another_components_tests_glob_owns() {
+    // req:land/verify-stop@8754396f
+    // `x`'s `tests` glob owns a test file under `b`'s `paths`.
+    let x = "---\ntitle: X\nstatus: specd\nowners: []\npaths: [\"crates/x/**\"]\n\
+             tests: [\"crates/b/tests/x.rs\"]\n---\n\n## Contract\nc\n\n## Design\nd\n\n\
+             ## Requirements\n";
+    let fails = format!("\"{COMMIT}\"");
+    // `b` held: the test is `x`'s, so the branch lands.
+    let f = repo(&[
+        ("specs/x/SPEC.md", x),
+        ("backlog/b-broke.md", &item("b", &fails)),
+    ]);
+    f.branch("fix-t", &[("crates/b/tests/x.rs", "t\n")]);
+    let out = clm_land::land(&f.work(), Some("fix-t"), &f.env(&[])).unwrap();
+    assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+    // `x` held instead: refused, naming `x`.
+    let f = repo(&[
+        ("specs/x/SPEC.md", x),
+        ("backlog/x-broke.md", &item("x", &fails)),
+    ]);
+    f.branch("fix-t", &[("crates/b/tests/x.rs", "t\n")]);
+    let old = f.remote("main");
+    let why = refused(clm_land::land(&f.work(), Some("fix-t"), &f.env(&[])));
+    assert!(why.contains("land/verify-stop"), "{why}");
+    assert!(why.contains("`x`"), "{why}");
+    assert_eq!(f.remote("main"), old);
+}
+
+#[test]
 fn other_components_land() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     f.branch("impl/a", &[("crates/a/src/lib.rs", "a\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
@@ -80,7 +109,7 @@ fn other_components_land() {
 
 #[test]
 fn only_a_bug_holds_a_component() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let text = item("b", &format!("\"{COMMIT}\"")).replace("kind: bug", "kind: deferred");
     let f = repo(&[("backlog/b-broke.md", &text)]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
@@ -90,7 +119,7 @@ fn only_a_bug_holds_a_component() {
 
 #[test]
 fn an_item_without_failures_holds_nothing() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[("backlog/b-broke.md", &item("b", ""))]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
     let out = clm_land::land(&f.work(), Some("impl/b"), &f.env(&[])).unwrap();
@@ -99,7 +128,7 @@ fn an_item_without_failures_holds_nothing() {
 
 #[test]
 fn the_fix_lands() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     let work = f.work();
     f.git(&work, &["checkout", "-q", "-b", "impl/b", "main"]);
@@ -119,7 +148,7 @@ fn the_fix_lands() {
 
 #[test]
 fn deleting_the_item_without_its_trailer_is_not_the_fix() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     let work = f.work();
     f.git(&work, &["checkout", "-q", "-b", "impl/b", "main"]);
@@ -136,7 +165,7 @@ fn deleting_the_item_without_its_trailer_is_not_the_fix() {
 
 #[test]
 fn another_items_trailer_is_not_the_fix() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     let work = f.work();
     f.git(&work, &["checkout", "-q", "-b", "impl/b", "main"]);
@@ -152,7 +181,7 @@ fn another_items_trailer_is_not_the_fix() {
 
 #[test]
 fn an_untriaged_red_warns() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[]);
     let red = f.rev("origin/main");
     verified(&f, &red, VerifyMode::Local);
@@ -178,7 +207,7 @@ fn an_untriaged_red_warns() {
 
 #[test]
 fn a_red_for_other_components_does_not_warn() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[]);
     verified(&f, &f.rev("origin/main"), VerifyMode::Local);
     f.branch("impl/a", &[("crates/a/src/lib.rs", "a\n")]);
@@ -188,7 +217,7 @@ fn a_red_for_other_components_does_not_warn() {
 
 #[test]
 fn a_red_record_alone_holds_nothing() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[]);
     verified(&f, &f.rev("origin/main"), VerifyMode::Pipeline);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
@@ -198,7 +227,7 @@ fn a_red_record_alone_holds_nothing() {
 
 #[test]
 fn a_red_an_item_took_in_does_not_warn_twice() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let f = repo(&[]);
     let red = f.rev("origin/main");
     verified(&f, &red, VerifyMode::Local);
@@ -215,7 +244,7 @@ fn a_red_an_item_took_in_does_not_warn_twice() {
 
 #[test]
 fn two_items_hold_one_component() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let fails = format!("\"{COMMIT}\"");
     let f = repo(&[
         ("backlog/b-broke.md", &item("b", &fails)),
@@ -230,7 +259,7 @@ fn two_items_hold_one_component() {
 
 #[test]
 fn each_fix_of_two_lands() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let fails = format!("\"{COMMIT}\"");
     let f = repo(&[
         ("backlog/b-broke.md", &item("b", &fails)),
@@ -273,7 +302,7 @@ fn each_fix_of_two_lands() {
 
 #[test]
 fn each_held_component_needs_its_own_fix() {
-    // req:land/verify-stop@72bed87d
+    // req:land/verify-stop@8754396f
     let fails = format!("\"{COMMIT}\"");
     let f = repo(&[
         ("backlog/b-broke.md", &item("b", &fails)),

@@ -3,7 +3,7 @@
 //! has taken in yet is warned (`capability/slow-tests-after-land`).
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clm_ledger::{Body, Fold};
 use clm_model::{BacklogKind, load_files};
@@ -16,7 +16,7 @@ struct Held {
     components: Vec<String>,
 }
 
-/// Refuses `head` when its code changes a file under the `paths` of a component a `kind: bug`
+/// Refuses `head` when its code changes a file owned by a component a `kind: bug`
 /// item on `base`'s backlog holds with `verify_failures`, unless a commit it adds carries
 /// `Resolves: backlog/<slug>` for one item holding that component. Otherwise gives the warnings for the red
 /// `verified` results on `base`'s first-parent chain that no item names and whose components
@@ -68,14 +68,15 @@ pub(crate) fn check(
     if files.is_empty() {
         return Ok(Vec::new());
     }
-    let paths = component_paths(repo, base, &prefix)?;
-    let touches = |component: &str| {
-        paths.get(component).is_some_and(|globs| {
-            files
-                .iter()
-                .any(|f| globs.iter().any(|g| clm_coverage::matches(g, f)))
-        })
-    };
+    // The components that own a code file the branch changes, as `check.coverage` gives each
+    // file's owner over the base's specs: a test another component's `tests` glob owns is
+    // that component's.
+    let graph = graph_at(repo, base, &prefix)?;
+    let owners: BTreeSet<&str> = files
+        .iter()
+        .filter_map(|f| clm_coverage::owner(&graph, Path::new(f)))
+        .collect();
+    let touches = |component: &str| owners.contains(component);
 
     let resolves = resolved(repo, base, head)?;
     // A held component the branch touches is fixed by a resolved item holding it; the items
@@ -162,12 +163,8 @@ fn code_files(repo: &Repo, base: &str, head: &str, prefix: &str) -> Result<Vec<S
         .collect())
 }
 
-/// Each component's `paths` at `base`.
-fn component_paths(
-    repo: &Repo,
-    base: &str,
-    prefix: &str,
-) -> Result<BTreeMap<String, Vec<String>>, Error> {
+/// The spec graph `base`'s `specs/` give, as far as it loads.
+fn graph_at(repo: &Repo, base: &str, prefix: &str) -> Result<clm_model::Graph, Error> {
     let dir = format!("{prefix}specs/");
     let blobs = clm_git::tree_blobs(&repo.root, base, &|p: &str| p.starts_with(&dir))?;
     let files: clm_model::Files = blobs
@@ -175,11 +172,7 @@ fn component_paths(
         .filter_map(|(path, bytes)| Some((PathBuf::from(path.strip_prefix(prefix)?), bytes)))
         .collect();
     let (graph, _) = load_files(&files);
-    Ok(graph
-        .nodes
-        .into_iter()
-        .map(|(id, node)| (id, node.frontmatter.paths))
-        .collect())
+    Ok(graph)
 }
 
 /// The slugs the commits `head` adds to `base` resolve with a `Resolves: backlog/<slug>`
