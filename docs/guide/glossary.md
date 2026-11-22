@@ -69,7 +69,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 
 ## How work reaches `main`
 
-- **Gate:** `clm gate`'s judgement of a branch before it lands: whether it is code, spec or `mixed` (both, which it blocks: split the branch), and whether a spec branch needs a human's review (`spec review`) or lands on checks (`spec`). *Usually:* a merge check or quality gate.
+- **Gate:** `clm gate`'s judgement of a branch before it lands: whether it is code, spec, `light` (scenarios added to one component's requirements together with the code that proves them, which lands on checks) or `mixed` (any other mix of the two, which it blocks: split the branch), whether a code branch keeps to one component's files, and whether a spec branch needs a human's review (`spec review`) or lands on checks (`spec`). *Usually:* a merge check or quality gate.
 - **Pull request:** a branch's request on the host to merge into `main` (GitLab: merge request), where a human reads the diff; nothing waits on it, and without a host there is none (`clm pr`).
 - **Approved list:** a change's `deleted-tests.txt` once it is on `main`; a build may delete only the tests such a list names.
 - **Approve:** a human's recorded yes to a branch that needs review (`clm approve`). *Usually:* an approving review.
