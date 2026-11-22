@@ -4,6 +4,8 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
+use clm_model::outline;
+
 /// What a rename changes, as the edits below read it.
 pub(crate) struct Edits {
     /// Every renamed ID, component or requirement, to its new one.
@@ -151,20 +153,22 @@ impl Edits {
 
     /// Spec text with references and terms rewritten (`references`, `term-swap`). Headings,
     /// except those in `headings`, which are replaced whole, are left alone, as are the
-    /// lines of fenced code for references; the ID lines of `Needs`, `Serves` and
-    /// `Enforced by` blocks are references, never swapped. A line of fenced code is never a
-    /// heading, so its terms are swapped and it starts or ends no block.
+    /// lines of fenced code, read as `model/code-fences` reads fences, for references; the
+    /// ID lines of `Needs`, `Serves` and `Enforced by` blocks are references, never swapped.
+    /// A line of fenced code is never a heading, so its terms are swapped and it starts or
+    /// ends no block.
     pub(crate) fn body(&self, text: &str, headings: &BTreeMap<String, String>) -> String {
         let mut out = String::new();
-        let (mut fenced, mut ids) = (false, false);
-        for line in text.split_inclusive('\n') {
-            let content = line.trim_end_matches(['\n', '\r']);
+        let lines: Vec<&str> = text.split_inclusive('\n').collect();
+        let contents: Vec<&str> = lines
+            .iter()
+            .map(|line| line.trim_end_matches(['\n', '\r']))
+            .collect();
+        let mask = outline::fence_mask(&contents);
+        let mut ids = false;
+        for ((line, content), fenced) in lines.into_iter().zip(contents).zip(mask) {
             let eol = &line[content.len()..];
-            let marker = content.trim_start();
-            if marker.starts_with("```") || marker.starts_with("~~~") {
-                fenced = !fenced;
-                out.push_str(line);
-            } else if content.starts_with('#') && !fenced {
+            if content.starts_with('#') && !fenced {
                 ids = matches!(
                     content.trim_end(),
                     "#### Needs" | "#### Serves" | "#### Enforced by"

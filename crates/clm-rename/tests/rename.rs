@@ -213,7 +213,7 @@ fn references_repo() -> TempDir {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn references_across_the_repository() {
     let dir = references_repo();
     let d = dir.path();
@@ -228,7 +228,33 @@ fn references_across_the_repository() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
+fn a_heading_in_a_fence_before_the_first_entry() {
+    let dir = references_repo();
+    let d = dir.path();
+    write(
+        d,
+        "ARCHITECTURE.md",
+        "# A\n\n```md\n### Example\nsee `a/x`\n```\n\n## Constraints\n\n### Constraint: arch\nA SHALL cite `a/x`.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- a/x\n",
+    );
+    rename(d, "r").unwrap();
+    let architecture = read(d, "ARCHITECTURE.md");
+    assert!(
+        architecture.contains("```md\n### Example\nsee `a/x`\n```\n"),
+        "{architecture}"
+    );
+    assert!(
+        architecture.contains("A SHALL cite `a/y`.\n"),
+        "{architecture}"
+    );
+    assert!(
+        architecture.contains("#### Enforced by\n- a/y\n"),
+        "{architecture}"
+    );
+}
+
+#[test]
+// req:rename/references@21fc0d73
 fn an_ambiguous_slug_stays() {
     let dir = references_repo();
     let d = dir.path();
@@ -243,7 +269,7 @@ fn an_ambiguous_slug_stays() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn a_decision_with_the_slug_makes_it_ambiguous() {
     let dir = references_repo();
     let d = dir.path();
@@ -414,7 +440,7 @@ fn a_capability_entry() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn a_components_bare_name_is_a_word() {
     let dir = repo();
     let d = dir.path();
@@ -444,7 +470,7 @@ fn a_components_bare_name_is_a_word() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn archived_changes_and_decisions_keep_their_names() {
     let dir = references_repo();
     let d = dir.path();
@@ -542,7 +568,7 @@ fn a_term_before_punctuation_and_a_following_dot_path() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn several_renames_apply_together() {
     let dir = repo();
     let d = dir.path();
@@ -647,6 +673,20 @@ fn a_term_in_fenced_code() {
     );
     rename(d, "r").unwrap();
     assert!(read(d, "specs/e/SPEC.md").contains("```sh\nprint the cogs\n```"));
+}
+
+#[test]
+// req:rename/term-swap@f4c62d32
+fn a_term_on_a_fences_opening_line() {
+    let dir = terms_repo("sprocket", "cogs");
+    let d = dir.path();
+    write(
+        d,
+        "specs/e/SPEC.md",
+        &node("", "```sprocket\nprint it\n```\n", &[("q", "Q SHALL.")]),
+    );
+    rename(d, "r").unwrap();
+    assert!(read(d, "specs/e/SPEC.md").contains("```cogs\nprint it\n```"));
 }
 
 #[test]
@@ -1501,7 +1541,7 @@ fn deltas_name_their_component() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn items_by_the_components_key() {
     let dir = component_repo(&[("x", "components: [a.b]")]);
     let d = dir.path();
@@ -1569,7 +1609,7 @@ fn a_write_after_the_apply_fails() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn a_reference_in_fenced_code() {
     let dir = references_repo();
     let d = dir.path();
@@ -1578,20 +1618,39 @@ fn a_reference_in_fenced_code() {
         "specs/e/SPEC.md",
         &node(
             "",
-            "Example:\n\n  ~~~\n  see `a/x`\n  ~~~\n\nsee `a/x`",
+            "Example:\n\n  ````\n  ```\n  see `a/x`\n  ~~~\n  ````\n\nsee `a/x`",
             &[("q", "Q SHALL.")],
         ),
     );
     rename(d, "r").unwrap();
     let e = read(d, "specs/e/SPEC.md");
     assert!(
-        e.contains("  ~~~\n  see `a/x`\n  ~~~\n\nsee `a/y`\n"),
+        e.contains("  ````\n  ```\n  see `a/x`\n  ~~~\n  ````\n\nsee `a/y`\n"),
         "{e}"
     );
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
+fn a_reference_on_a_fences_own_lines() {
+    let dir = references_repo();
+    let d = dir.path();
+    write(
+        d,
+        "specs/e/SPEC.md",
+        &node(
+            "",
+            "~~~ `a/x`\nbody\n~~~\n```w``` `a/x`",
+            &[("q", "Q SHALL.")],
+        ),
+    );
+    rename(d, "r").unwrap();
+    let e = read(d, "specs/e/SPEC.md");
+    assert!(e.contains("~~~ `a/x`\nbody\n~~~\n```w``` `a/y`\n"), "{e}");
+}
+
+#[test]
+// req:rename/references@21fc0d73
 fn a_list_in_block_style() {
     let dir = repo();
     let d = dir.path();
@@ -1614,7 +1673,7 @@ fn a_list_in_block_style() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn a_key_that_holds_no_reference() {
     let dir = repo();
     let d = dir.path();
@@ -1639,7 +1698,7 @@ fn a_key_that_holds_no_reference() {
 }
 
 #[test]
-// req:rename/references@dd6cdde7
+// req:rename/references@21fc0d73
 fn a_marker_in_the_archive() {
     let dir = repo();
     let d = dir.path();

@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-model-s-fence-reading-and-the-code-span-reader-s-disagree]
 ---
 
