@@ -1588,12 +1588,7 @@ fn scenario_a_running_builds_worktree_kept() {
     // req:orchestrator.run/run-finish@d5712fa9
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
-    let path = wt.to_str().unwrap();
-    git(&r.work, &["worktree", "unlock", path]);
-    // This test's own process is one that runs. Where CLM can't tell whether a process
-    // runs (not Unix), a lock naming one counts as held whatever its pid.
-    let reason = format!("claude agent agent-1 (pid {} start 1)", std::process::id());
-    git(&r.work, &["worktree", "lock", "--reason", &reason, path]);
+    let reason = hold_lock(&r, &wt);
     let ran = clm_finish(&r, "b");
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     let out = ran.stdout;
@@ -1607,15 +1602,35 @@ fn scenario_a_running_builds_worktree_kept() {
     assert!(entry.contains("branch refs/heads/impl/b"), "{entry}");
     assert!(entry.contains(&format!("locked {reason}")), "{entry}");
     assert!(out.contains("freed b"), "{out}");
-    assert!(out.contains("landed impl/b"), "{out}");
-    assert!(
-        out.contains(&format!(
-            "kept {}: a running process holds its lock",
-            wt.display()
-        )),
-        "{out}"
-    );
+    let landed = out.find("landed impl/b").expect(&out);
+    let kept = format!("kept {}: a running process holds its lock", wt.display());
+    assert!(landed < out.find(&kept).expect(&out), "{out}");
     assert!(!out.contains("removed"), "{out}");
+}
+
+/// Locks `wt` again, with a reason naming this test's own process, one that runs, so its
+/// lock is held (`vcs/held-lock`). Where CLM can't tell whether a process runs (not Unix),
+/// a lock naming one counts as held whatever its pid. Returns the reason.
+fn hold_lock(r: &Repo, wt: &Path) -> String {
+    let path = wt.to_str().unwrap();
+    git(&r.work, &["worktree", "unlock", path]);
+    let reason = format!("claude agent agent-1 (pid {} start 1)", std::process::id());
+    git(&r.work, &["worktree", "lock", "--reason", &reason, path]);
+    reason
+}
+
+#[test]
+fn finish_says_uncommitted_changes_for_a_dirty_worktree_whose_lock_is_held() {
+    // req:orchestrator.run/run-finish@d5712fa9
+    let (r, f) = (repo(), fake());
+    let wt = landed_build(&r, &f);
+    hold_lock(&r, &wt);
+    fs::write(wt.join("notes.txt"), "mine\n").unwrap();
+    let out = finished(&r, "b");
+    assert!(wt.join("notes.txt").exists());
+    let kept = format!("kept {}: uncommitted changes", wt.display());
+    assert!(out.contains(&kept), "{out}");
+    assert!(!out.contains("holds its lock"), "{out}");
 }
 
 #[test]
