@@ -299,8 +299,8 @@ impl Tree {
 
 #[test]
 fn every_check() {
-    // req:ci/web-checks@72a04372
-    // req:ci/detector-tools@86210325
+    // req:ci/web-checks@53cd2ed8
+    // req:ci/detector-tools@1984d752
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     // The real `detector-tools.sh` runs first: its install is the first `cargo` call.
@@ -361,7 +361,7 @@ fn every_check() {
     );
     // `clm land` runs `clm check` itself, after the command.
     assert!(!log.iter().any(|l| l.contains(" check")), "{log:?}");
-    // req:ci/no-model-steps@00759a81
+    // req:ci/no-model-steps@2b603986
     // Nor runs `clm` or a model session: `claude` only validates.
     assert!(!ran(&log, "clm "), "{log:?}");
     let claude = log.iter().filter(|l| l.starts_with("claude "));
@@ -389,7 +389,7 @@ fn broken_wasm_build_fails() {
 
 #[test]
 fn failing_panel_test_fails() {
-    // req:ci/web-checks@72a04372
+    // req:ci/web-checks@53cd2ed8
     for step in [
         "plugin-panel$ npm ci --ignore-scripts",
         "plugin-panel$ npm test",
@@ -404,7 +404,7 @@ fn failing_panel_test_fails() {
 
 #[test]
 fn a_web_change_leaves_the_site_out_and_a_site_change_runs_it() {
-    // req:ci/web-checks@72a04372
+    // req:ci/web-checks@53cd2ed8
     let (ok, log) = Tree::new().run_selecting("file web/src/app.ts\n");
     assert!(ok, "{log:?}");
     let web: Vec<_> = WEB_SUITE.iter().chain(&CAP_WEB_SUITE).copied().collect();
@@ -423,7 +423,7 @@ fn a_web_change_leaves_the_site_out_and_a_site_change_runs_it() {
 
 #[test]
 fn packages_not_built_yet_run_nothing() {
-    // req:ci/web-checks@72a04372
+    // req:ci/web-checks@53cd2ed8
     let (ok, log) = Tree::new().without_packages().run(None, "");
     assert!(ok, "{log:?}");
     let both: Vec<_> = PANEL_SUITE.iter().chain(&WEB_SUITE).copied().collect();
@@ -465,7 +465,7 @@ fn failing_on_both_attempts_fails() {
 
 #[test]
 fn failing_capability_package_fails() {
-    // req:ci/web-checks@72a04372
+    // req:ci/web-checks@53cd2ed8
     for step in CAP_PANEL_SUITE
         .iter()
         .chain(&CAP_WEB_SUITE)
@@ -486,7 +486,7 @@ fn runs_before(log: &[String], first: &str, then: &str) -> bool {
 
 #[test]
 fn in_ci_installs_the_browser_with_deps() {
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/browser-install@7732c646
     let (ok, log) = Tree::new().run(Some("true"), "");
     assert!(ok, "{log:?}");
     assert!(runs_before(&log, BROWSER_INSTALL_CI, WEB_TEST), "{log:?}");
@@ -495,7 +495,7 @@ fn in_ci_installs_the_browser_with_deps() {
 
 #[test]
 fn outside_ci_installs_the_browser_without_deps() {
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/browser-install@7732c646
     // Unset, and any value but `true`.
     for ci in [None, Some("false"), Some("1"), Some("")] {
         let (ok, log) = Tree::new().run(ci, "");
@@ -513,7 +513,7 @@ fn outside_ci_installs_the_browser_without_deps() {
 
 #[test]
 fn failing_browser_install_fails() {
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/browser-install@7732c646
     let (ok, log) = Tree::new().run(None, BROWSER_INSTALL);
     assert!(!ok, "{log:?}");
     assert_eq!(log.last().map(String::as_str), Some(BROWSER_INSTALL));
@@ -522,7 +522,7 @@ fn failing_browser_install_fails() {
 
 #[test]
 fn capability_package_installs_the_browser() {
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/browser-install@7732c646
     const CAP_INSTALL: &str = "capabilities/web$ npx playwright install chromium";
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
@@ -551,7 +551,7 @@ fn capability_package_installs_the_browser() {
 
 #[test]
 fn detector_tools_installs_cargo_machete_pinned() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     let lines = script_lines("detector-tools.sh");
     let install = lines
         .iter()
@@ -689,7 +689,7 @@ fn every_detector_has_its_tool_installed() {
 
 #[test]
 fn clm_detector_needs_no_install_line() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     let machete = "cargo install --locked --version 0.9.2 cargo-machete";
     let config = |clm_hint: &str| -> toml::Table {
         format!(
@@ -731,7 +731,7 @@ fn clm_detector_needs_no_install_line() {
 
 #[test]
 fn sh_detector_on_a_repository_file_needs_no_install_line() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     let machete = "cargo install --locked --version 0.9.2 cargo-machete";
     let config = |script: &str| -> toml::Table {
         format!(
@@ -766,7 +766,7 @@ fn sh_detector_on_a_repository_file_needs_no_install_line() {
 
 #[test]
 fn only_detector_tools_installs_tools() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     // Other tools, such as the release's `cargo-zigbuild`, may be installed elsewhere.
     let config: toml::Table = fs::read_to_string(repo().join("clm.toml"))
         .unwrap()
@@ -885,7 +885,7 @@ fn assert_whole_tree_checks(log: &[String]) {
 
 #[test]
 fn one_integration_test() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) =
         Tree::new().run_selecting("node orchestrator.run\nfile crates/clm/tests/run.rs\n");
     assert!(ok, "{log:?}");
@@ -899,7 +899,7 @@ fn one_integration_test() {
 
 #[test]
 fn helper_and_source_files() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting(
         "file crates/clm-land/tests/common/mod.rs\nfile crates/clm-check/src/lib.rs\n",
     );
@@ -915,14 +915,14 @@ fn helper_and_source_files() {
 
 #[test]
 fn web_file() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting("file web/src/app.ts\n");
     assert!(ok, "{log:?}");
     assert_whole_tree_checks(&log);
     assert_eq!(tests_run(&log), Vec::<&str>::new());
     let web: Vec<_> = WEB_SUITE.iter().chain(&CAP_WEB_SUITE).copied().collect();
     assert_eq!(npm_run(&log), web);
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     assert!(!log.iter().any(|l| l.starts_with("claude")), "{log:?}");
     let (ok, log) = Tree::new().run_selecting("file plugin-panel/src/panel.ts\n");
     assert!(ok, "{log:?}");
@@ -932,13 +932,13 @@ fn web_file() {
         .copied()
         .collect();
     assert_eq!(npm_run(&log), panel);
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     assert!(log.contains(&PANEL_VALIDATE.to_owned()), "{log:?}");
 }
 
 #[test]
 fn capability_package_file() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting(
         "file capabilities/panel/watch-beside-chat.test.ts\n\
          file capabilities/web/follow-from-browser.spec.ts\n\
@@ -984,7 +984,7 @@ const NO_CLAUDE: &str = "skipped claude plugin validate: claude is not on PATH";
 
 #[test]
 fn a_refused_module_fails_the_check() {
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     let (ok, log) = Tree::new().run(None, PANEL_VALIDATE);
     assert!(!ok, "{log:?}");
     // It runs after the panel's tests, and nothing runs after it fails.
@@ -999,7 +999,7 @@ fn a_refused_module_fails_the_check() {
 
 #[test]
 fn a_valid_module_passes() {
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     // Exactly once, with neither `--strict` nor `--profile`, beside the plugin's own
@@ -1010,7 +1010,7 @@ fn a_valid_module_passes() {
 
 #[test]
 fn no_claude_on_path_skips() {
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     let (ok, log, stderr) = Tree::new().run_without_claude(None);
     assert!(ok, "{log:?} {stderr}");
     assert!(stderr.lines().any(|l| l == NO_CLAUDE), "{stderr}");
@@ -1061,7 +1061,7 @@ fn no_validation_waits_on_a_prompt() {
 
 #[test]
 fn panel_not_selected_runs_no_claude() {
-    // req:ci/panel-validate@82219e3e
+    // req:ci/panel-validate@b6720879
     let (ok, log) = Tree::new().run_selecting("file crates/clm/src/main.rs\n");
     assert!(ok, "{log:?}");
     assert!(!log.iter().any(|l| l.starts_with("claude")), "{log:?}");
@@ -1118,7 +1118,7 @@ fn plugin_not_selected_runs_no_plugin_validation() {
 
 #[test]
 fn everything() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let tree = Tree::new();
     let all_line = tree.run_selecting("all Cargo.lock\nfile crates/clm/tests/run.rs\n");
     let unset = tree.run(None, "");
@@ -1140,7 +1140,7 @@ fn everything() {
         assert!(ok, "{what}: {log:?}");
         assert_whole_tree_checks(&log);
         assert_eq!(tests_run(&log), [NEXTEST_ALL, DOC_TESTS], "{what}");
-        // req:ci/panel-validate@82219e3e
+        // req:ci/panel-validate@b6720879
         assert!(log.contains(&PANEL_VALIDATE.to_owned()), "{what}: {log:?}");
         let all: Vec<_> = PANEL_SUITE
             .iter()
@@ -1156,7 +1156,7 @@ fn everything() {
 
 #[test]
 fn empty_selection() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting("");
     assert!(ok, "{log:?}");
     assert_whole_tree_checks(&log);
@@ -1166,7 +1166,7 @@ fn empty_selection() {
 
 #[test]
 fn one_cargo_test_per_package_in_package_order() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let (ok, log) = Tree::new().run_selecting(
         "file crates/git/tests/b.rs\n\
          node clm\n\
@@ -1217,7 +1217,7 @@ fn a_deleted_crate_selects_nothing() {
 
 #[test]
 fn only_file_lines_select() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     // Lines that would select something if their path were read without the `file ` word.
     let (ok, log) = Tree::new().run_selecting(
         "node crates/clm/tests/run.rs\n\
@@ -1236,8 +1236,8 @@ fn only_file_lines_select() {
 
 #[test]
 fn web_not_selected_installs_no_browser() {
-    // req:ci/selected-tests@bf58d446
-    // req:ci/browser-install@6f2b09cf
+    // req:ci/selected-tests@a8fbc68d
+    // req:ci/browser-install@7732c646
     let (ok, log) = Tree::new().run_selecting("file web/index.html\n");
     assert!(ok, "{log:?}");
     assert!(runs_before(&log, BROWSER_INSTALL, WEB_TEST), "{log:?}");
@@ -1251,7 +1251,7 @@ fn web_not_selected_installs_no_browser() {
 
 #[test]
 fn a_failing_selected_test_fails() {
-    // req:ci/selected-tests@bf58d446
+    // req:ci/selected-tests@a8fbc68d
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(
@@ -1272,7 +1272,7 @@ fn ran(log: &[String], prefix: &str) -> bool {
 
 #[test]
 fn the_pin_changing_runs_its_crate_s_tests() {
-    // req:ci/no-model-steps@00759a81
+    // req:ci/no-model-steps@2b603986
     let (ok, log) = Tree::new().run_selecting("file crates/clm-run/superpowers.pin\n");
     assert!(ok, "{log:?}");
     assert_eq!(
@@ -1286,7 +1286,7 @@ fn the_pin_changing_runs_its_crate_s_tests() {
 
 #[test]
 fn a_deleted_eval_file_only_validates_the_plugin() {
-    // req:ci/no-model-steps@00759a81
+    // req:ci/no-model-steps@2b603986
     let (ok, log) = Tree::new().run_selecting("file plugin/evals/superpowers-unattended/run.sh\n");
     assert!(ok, "{log:?}");
     let claude: Vec<_> = log.iter().filter(|l| l.starts_with("claude ")).collect();
@@ -1361,7 +1361,7 @@ fn tracefile_sources(tree: &Tree) -> Vec<String> {
 
 #[test]
 fn coverage_writes_one_tracefile_from_three_suites() {
-    // req:ci/coverage-script@7b99367f
+    // req:ci/coverage-script@ae8713bc
     let tree = coverage_tree();
     let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
     assert!(ok, "{log:?} {stderr}");
@@ -1438,7 +1438,7 @@ fn coverage_writes_one_tracefile_from_three_suites() {
 
 #[test]
 fn coverage_reads_the_same_from_a_checkout_reached_through_a_link() {
-    // req:ci/coverage-script@7b99367f
+    // req:ci/coverage-script@ae8713bc
     let tree = coverage_tree();
     // The tool writes real paths, `pwd -P`'s; the shell's `$PWD` names the checkout by its link.
     let physical = CARGO_COVERAGE.replace("\"$PWD/crates", "\"$(pwd -P)/crates");
@@ -1472,7 +1472,7 @@ fn coverage_reads_the_same_from_a_checkout_reached_through_a_link() {
 
 #[test]
 fn a_failing_coverage_suite_fails_the_script() {
-    // req:ci/coverage-script@7b99367f
+    // req:ci/coverage-script@ae8713bc
     let tree = coverage_tree();
     // A tracefile from an earlier run stays as it was.
     fs::create_dir_all(tree.work().join("target")).unwrap();
@@ -1607,7 +1607,7 @@ fn coverage_tools_are_pinned() {
 
 #[test]
 fn nextest_replaces_cargo_test_but_for_doctests() {
-    // req:ci/nextest-runner@26bed54d
+    // req:ci/nextest-runner@b769cc74
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     assert_eq!(tests_run(&log), [NEXTEST_ALL, DOC_TESTS]);
@@ -1655,7 +1655,7 @@ fn test_tools_run_between_the_detector_tools_and_cargo() {
 
 #[test]
 fn a_full_run_times_every_phase_it_runs() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     let out = tree.output(None, "", None, &tree.path());
     assert!(out.status.success());
@@ -1695,7 +1695,7 @@ fn phase_lines(text: &str) -> Vec<&str> {
 
 #[test]
 fn a_passing_run_prints_its_phase_times() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
@@ -1737,7 +1737,7 @@ fn a_passing_run_prints_its_phase_times() {
 
 #[test]
 fn a_failing_phase_prints_only_where_it_failed() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     tree.fake(
         "cargo",
@@ -1773,7 +1773,7 @@ fn a_failing_phase_prints_only_where_it_failed() {
 
 #[test]
 fn a_clock_that_steps_back_prints_no_negative_time() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
@@ -1820,7 +1820,7 @@ fn a_clock_that_steps_back_prints_no_negative_time() {
 
 #[test]
 fn a_failure_after_the_clock_steps_back_prints_no_negative_time() {
-    // req:ci/phase-times@45a0a289
+    // req:ci/phase-times@10cc2378
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
@@ -2054,14 +2054,14 @@ fn cargo_variables(land_dir: Option<&str>, target: Option<&str>) -> Vec<String> 
 
 #[test]
 fn a_lands_place_holds_its_cargo_output() {
-    // req:ci/land-dir@23d7af00
+    // req:ci/land-dir@ad032ef2
     let calls = cargo_variables(Some("/tmp/x/land"), None);
     assert!(calls.iter().all(|c| c == "/tmp/x/land 0"), "{calls:?}");
 }
 
 #[test]
 fn without_a_land_place_the_cargo_variables_stay() {
-    // req:ci/land-dir@23d7af00
+    // req:ci/land-dir@ad032ef2
     for land_dir in [None, Some("")] {
         let calls = cargo_variables(land_dir, Some("/tmp/y"));
         assert!(calls.iter().all(|c| c == "/tmp/y unset"), "{calls:?}");

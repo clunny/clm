@@ -53,7 +53,7 @@ fn needs(wf: &Value, job: &str) -> Vec<String> {
 
 #[test]
 fn triggers_only_on_dispatch_with_a_required_version() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let wf = workflow();
     let on = wf["on"].as_mapping().unwrap();
     let triggers: Vec<_> = on.keys().map(|k| k.as_str().unwrap()).collect();
@@ -64,7 +64,7 @@ fn triggers_only_on_dispatch_with_a_required_version() {
 
 #[test]
 fn may_write_contents_and_never_runs_twice_at_once() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let wf = workflow();
     assert_eq!(wf["permissions"]["contents"].as_str(), Some("write"));
     assert_eq!(wf["concurrency"]["group"].as_str(), Some("release"));
@@ -76,7 +76,7 @@ fn may_write_contents_and_never_runs_twice_at_once() {
 
 #[test]
 fn prepare_runs_the_script_that_bumps_both_versions() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let wf = workflow();
     step_running(&wf, "prepare", ".github/scripts/release-prepare.sh");
     let outputs = wf["jobs"]["prepare"]["outputs"].as_mapping().unwrap();
@@ -89,7 +89,7 @@ fn prepare_runs_the_script_that_bumps_both_versions() {
 
 #[test]
 fn prepare_installs_detector_tools_before_the_tests() {
-    // req:ci/detector-tools@86210325
+    // req:ci/detector-tools@1984d752
     let wf = workflow();
     let toolchain = step_running(&wf, "prepare", "rustup show");
     let tools = step_running(&wf, "prepare", ".github/scripts/detector-tools.sh");
@@ -128,7 +128,7 @@ fn exact(version: &str) -> bool {
 
 #[test]
 fn builds_the_four_targets_from_the_prepared_commit() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let wf = workflow();
     assert_eq!(needs(&wf, "build"), ["prepare"]);
     let build = &wf["jobs"]["build"];
@@ -262,7 +262,7 @@ fn static_build(report: &str) -> std::process::Output {
 
 #[test]
 fn linux_binaries_must_be_statically_linked() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     for report in ["static-pie linked", "statically linked"] {
         let out = static_build(report);
         assert!(out.status.success(), "{report}: {out:?}");
@@ -275,7 +275,7 @@ fn linux_binaries_must_be_statically_linked() {
 
 #[test]
 fn packs_and_passes_on_both_assets_per_target() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let wf = workflow();
     let i = step_running(&wf, "build", "tar czf");
     let pack = &steps(&wf, "build")[i];
@@ -341,7 +341,7 @@ fn packs_and_passes_on_both_assets_per_target() {
 
 #[test]
 fn publishes_the_release_before_pushing_main() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let wf = workflow();
     let n = needs(&wf, "publish");
     assert!(n.iter().any(|j| j == "build") && n.iter().any(|j| j == "prepare"));
@@ -359,8 +359,14 @@ fn publishes_the_release_before_pushing_main() {
         release["env"]["SHA"].as_str(),
         Some("${{ needs.prepare.outputs.sha }}")
     );
-    // A failed upload leaves a draft, which would block dispatching the version again.
-    assert!(run.contains(r#"gh release delete "v$VERSION""#), "{run}");
+    // A failed upload leaves a draft, which would block dispatching the version again: the
+    // create's failure deletes it and fails the step.
+    let failed = run
+        .split_once("assets/* || {")
+        .map(|(_, rest)| rest.split_once('}').map_or(rest, |(branch, _)| branch))
+        .unwrap_or_else(|| panic!("no branch for a failed create: {run}"));
+    assert!(failed.contains(r#"gh release delete "v$VERSION""#), "{run}");
+    assert!(failed.trim_end().ends_with("exit 1"), "{run}");
 
     let merge = &steps(&wf, "publish")[push];
     assert_eq!(
@@ -378,7 +384,7 @@ fn publishes_the_release_before_pushing_main() {
 
 #[test]
 fn merge_retries_then_prints_the_commands_for_a_human() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let wf = workflow();
     let i = step_running(&wf, "publish", "git push origin main");
     let run = steps(&wf, "publish")[i]["run"].as_str().unwrap();
@@ -474,7 +480,7 @@ fn site_workflow() -> Value {
 
 #[test]
 fn site_workflow_is_dispatched_only_and_deploys_with_wrangler() {
-    // req:ci/site-deploy@127dedfd
+    // req:ci/site-deploy@ecb85528
     let wf = site_workflow();
     // YAML 1.1 reads a bare `on` as true; serde_yaml keeps it a string.
     let on = wf["on"].as_mapping().expect("on is a mapping");
@@ -518,7 +524,7 @@ fn site_workflow_is_dispatched_only_and_deploys_with_wrangler() {
 
 #[test]
 fn site_workflow_builds_with_the_website_id_and_token_and_reads_only() {
-    // req:ci/site-deploy@127dedfd
+    // req:ci/site-deploy@ecb85528
     let wf = site_workflow();
     let steps = wf["jobs"]["deploy"]["steps"].as_sequence().unwrap();
     let build = steps
@@ -596,7 +602,7 @@ fn web_deploy_reads_only_the_cloudflare_secrets() {
 
 #[test]
 fn no_run_step_interpolates_the_version_input() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let wf = workflow();
     for (job, def) in wf["jobs"].as_mapping().unwrap() {
         for s in def["steps"].as_sequence().into_iter().flatten() {
@@ -643,7 +649,7 @@ fn node20_actions(text: &str) -> Vec<String> {
 
 #[test]
 fn uses_only_node24_actions() {
-    // req:ci/node24-actions@8798286f
+    // req:ci/node24-actions@71427720
     for entry in fs::read_dir(repo().join(".github/workflows")).unwrap() {
         let path = entry.unwrap().path();
         let text = fs::read_to_string(&path).unwrap();
@@ -659,7 +665,7 @@ fn uses_only_node24_actions() {
 
 #[test]
 fn node20_action_fails_naming_it() {
-    // req:ci/node24-actions@8798286f
+    // req:ci/node24-actions@71427720
     let text = fs::read_to_string(repo().join(".github/workflows/release.yml")).unwrap();
     let checkout = text
         .lines()
@@ -975,7 +981,7 @@ fn assert_refused(r: &Run) {
 
 #[test]
 fn lower_version_fails_and_pushes_nothing() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.2.0");
     assert_refused(&f.run("0.1.0"));
     let f = Fixture::new("0.10.0");
@@ -984,7 +990,7 @@ fn lower_version_fails_and_pushes_nothing() {
 
 #[test]
 fn existing_release_fails_and_pushes_nothing() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     f.releases(&["v0.1.0", "v0.2.0"]);
     let r = f.run("0.2.0");
@@ -994,7 +1000,7 @@ fn existing_release_fails_and_pushes_nothing() {
 
 #[test]
 fn failing_gh_fails_closed() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     fs::write(f.bin().join("gh-fails"), "").unwrap();
     assert_refused(&f.run("0.1.0"));
@@ -1015,7 +1021,7 @@ fn failing_gh_fails_closed() {
 
 #[test]
 fn existing_tag_fails_and_pushes_nothing() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     let bare = f.bare();
     f.git(&bare, &["tag", "v0.2.0", "main"]);
@@ -1028,7 +1034,7 @@ fn existing_tag_fails_and_pushes_nothing() {
 
 #[test]
 fn only_main_can_release() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     assert_refused(&f.run_on("refs/heads/feature", "0.1.0"));
     assert_refused(&f.run_on("refs/tags/v0.1.0", "0.1.0"));
@@ -1036,7 +1042,7 @@ fn only_main_can_release() {
 
 #[test]
 fn version_must_be_major_minor_patch() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     for bad in [
         "1.2",
         "v1.2.3",
@@ -1060,7 +1066,7 @@ fn version_must_be_major_minor_patch() {
 
 #[test]
 fn same_version_releases_the_dispatched_commit() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     f.releases(&["v0.0.9", "v0.1.0-rc1"]);
     let r = f.run("0.1.0");
@@ -1072,7 +1078,7 @@ fn same_version_releases_the_dispatched_commit() {
 
 #[test]
 fn same_version_without_a_corpus_entry_fails_naming_it() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     f.git(
         &f.work(),
@@ -1087,7 +1093,7 @@ fn same_version_without_a_corpus_entry_fails_naming_it() {
 
 #[test]
 fn shim_naming_an_unbuilt_asset_fails_naming_it() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     let mut targets = TARGETS.to_vec();
     targets[0] = "x86_64-unknown-linux-gnu";
@@ -1108,7 +1114,7 @@ fn shim_naming_an_unbuilt_asset_fails_naming_it() {
 
 #[test]
 fn shim_with_no_targets_fails() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     f.shim(&[]);
     f.commit("shim maps nothing");
@@ -1119,7 +1125,7 @@ fn shim_with_no_targets_fails() {
 
 #[test]
 fn shim_matching_the_matrix_passes_whatever_its_order() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     // Two platforms may share a target.
     let mut targets = TARGETS.to_vec();
@@ -1145,7 +1151,7 @@ fn cargo_versions(toml: &str) -> Vec<&str> {
 
 #[test]
 fn higher_version_pushes_one_bump_commit_to_a_release_branch() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     f.releases(&["v0.1.0", "v0.2.0-rc1"]);
     let main_before = f.head();
@@ -1209,7 +1215,7 @@ fn higher_version_pushes_one_bump_commit_to_a_release_branch() {
 
 #[test]
 fn a_release_with_a_new_migration_commits_its_corpus_entry_and_lock_line() {
-    // req:ci/release-records-upgrade-corpus@6f6d255e
+    // req:ci/release-records-upgrade-corpus@9c29e940
     let f = Fixture::new("0.2.0");
     let r = f.run("0.3.0");
     assert!(r.ok, "{}", r.stderr);
@@ -1227,7 +1233,7 @@ fn a_release_with_a_new_migration_commits_its_corpus_entry_and_lock_line() {
 
 #[test]
 fn a_release_with_a_migration_of_inits_commits_its_lock() {
-    // req:ci/release-records-upgrade-corpus@6f6d255e
+    // req:ci/release-records-upgrade-corpus@9c29e940
     let f = Fixture::new("0.2.0");
     fs::create_dir_all(f.work().join("crates/clm-init")).unwrap();
     fs::write(f.work().join("crates/clm-init/.keep"), "").unwrap();
@@ -1240,7 +1246,7 @@ fn a_release_with_a_migration_of_inits_commits_its_lock() {
 
 #[test]
 fn a_failing_corpus_entry_fails_prepare_and_pushes_nothing() {
-    // req:ci/release-records-upgrade-corpus@6f6d255e
+    // req:ci/release-records-upgrade-corpus@9c29e940
     let f = Fixture::new("0.2.0");
     executable(
         &f.work().join("crates/clm-upgrade/corpus/make.sh"),
@@ -1258,7 +1264,7 @@ fn a_failing_corpus_entry_fails_prepare_and_pushes_nothing() {
 
 #[test]
 fn a_failing_lock_fails_prepare_and_pushes_nothing() {
-    // req:ci/release-records-upgrade-corpus@6f6d255e
+    // req:ci/release-records-upgrade-corpus@9c29e940
     let f = Fixture::new("0.2.0");
     let lock = f.work().join("crates/clm-upgrade/migrations.lock");
     fs::remove_file(&lock).unwrap();
@@ -1355,7 +1361,7 @@ fn assert_failed_before_pushing(r: &Run) {
 
 #[test]
 fn failing_tests_push_no_bump() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     fs::write(
         f.work().join("m/src/lib.rs"),
@@ -1372,7 +1378,7 @@ fn failing_tests_push_no_bump() {
 
 #[test]
 fn bump_replaces_an_earlier_failed_runs_branch() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     fs::write(f.work().join("stray"), "left by an earlier run\n").unwrap();
     f.git(&f.work(), &["add", "stray"]);
@@ -1394,7 +1400,7 @@ fn bump_replaces_an_earlier_failed_runs_branch() {
 
 #[test]
 fn a_version_edit_that_changes_nothing_fails() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.1.0");
     fs::write(
         f.work().join("plugin/.claude-plugin/plugin.json"),
@@ -1421,7 +1427,7 @@ fn a_version_edit_that_changes_nothing_fails() {
 
 #[test]
 fn versions_compare_as_numbers() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let f = Fixture::new("0.9.0");
     let r = f.run("0.10.0");
     assert!(r.ok, "{}", r.stderr);
@@ -1430,7 +1436,7 @@ fn versions_compare_as_numbers() {
 
 #[test]
 fn release_and_site_are_the_only_workflows() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let mut names: Vec<_> = fs::read_dir(repo().join(".github/workflows"))
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -1493,7 +1499,7 @@ fn merge_release_branch(moved: bool) -> (String, Vec<String>) {
 
 #[test]
 fn merge_into_main_is_titled_release_when_main_moved() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let (subject, parents) = merge_release_branch(true);
     assert!(subject.starts_with("Release v"), "{subject}");
     assert_eq!(parents.len(), 2, "not a merge: {parents:?}");
@@ -1501,7 +1507,7 @@ fn merge_into_main_is_titled_release_when_main_moved() {
 
 #[test]
 fn merge_into_main_fast_forwards_to_the_bump() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     let (subject, parents) = merge_release_branch(false);
     assert_eq!(subject, "Release v0.2.0");
     assert_eq!(parents.len(), 1, "{parents:?}");
@@ -1509,7 +1515,7 @@ fn merge_into_main_fast_forwards_to_the_bump() {
 
 #[test]
 fn every_cargo_job_installs_the_pinned_toolchain() {
-    // req:ci/release@3cd997f5
+    // req:ci/release@a47e582f
     // Jobs install what `rust-toolchain.toml` names (`pinned-rust-toolchain`) with `rustup
     // show`, always, before any step that runs cargo itself or through one of the scripts.
     let wf = workflow();
@@ -1642,7 +1648,7 @@ fn pushes_main(line: &str) -> bool {
 
 #[test]
 fn workflow_pushing_main_fails_naming_file_and_line() {
-    // req:ci/no-workflow-pushes-main@da2686d6
+    // req:ci/no-workflow-pushes-main@371c5ab3
     let wf = "name: X\non: workflow_dispatch\njobs:\n  x:\n    steps:\n      - run: git push origin HEAD:main\n";
     assert_eq!(pushes_to_main("x.yml", wf), ["x.yml:6"]);
     for push in [
@@ -1689,7 +1695,7 @@ fn workflow_pushing_main_fails_naming_file_and_line() {
 
 #[test]
 fn only_the_merge_into_main_step_of_release_yml_is_exempt() {
-    // req:ci/no-workflow-pushes-main@da2686d6
+    // req:ci/no-workflow-pushes-main@371c5ab3
     let wf = "\
 jobs:
   publish:
@@ -1725,7 +1731,7 @@ steps:
 
 #[test]
 fn only_the_release_merge_pushes_main() {
-    // req:ci/no-workflow-pushes-main@da2686d6
+    // req:ci/no-workflow-pushes-main@371c5ab3
     for entry in fs::read_dir(repo().join(".github/workflows")).unwrap() {
         let path = entry.unwrap().path();
         if !path.is_file() {
