@@ -18,7 +18,7 @@ fn scenario_cited_and_uncited() {
     write(
         d,
         "ARCHITECTURE.md",
-        "See `docs/decisions/lone.md` and `lone-ish`.\n",
+        "See `docs/decisions/lone.md`, `lone-ish` and `Lone`.\n",
     );
     // `lone` as a whole span, in a file that isn't UTF-8 text.
     std::fs::write(d.join("CLAUDE.md"), b"Rule `lone`, \xff.\n").unwrap();

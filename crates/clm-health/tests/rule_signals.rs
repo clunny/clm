@@ -203,6 +203,13 @@ SHALL pass.",
                     "w",
                     "It SHALL print.\nIts tests SHALL sit\nin a's own files.",
                 ),
+                (
+                    // A fenced placement, and one below the first `####` line, are outside
+                    // the statement `test-placement` reads.
+                    "v",
+                    "It SHALL print.\n\n```\nIts tests SHALL sit in a's own files.\n```\n\n\
+#### Scenario: t\n- Its tests SHALL sit in a's own files.",
+                ),
             ],
         ),
     );
