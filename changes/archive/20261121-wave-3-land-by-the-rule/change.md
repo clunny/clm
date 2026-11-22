@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-worker-says-no-review-for-an-exemption-the-gate-sends-to-review, the-land-reads-every-blob-to-find-deleted-tests, a-request-for-changes-made-after-an-approval-is-read-as-cleared-when-the-approver-s-clock-runs-ahead, reconsider-host-branch-push, workaround-host-branch-push-1]
 ---
 

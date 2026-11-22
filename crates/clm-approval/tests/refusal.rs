@@ -52,6 +52,11 @@ fn held_fold(more: &[String]) -> clm_ledger::Fold {
     fold(&lines)
 }
 
+/// `Repo::held`'s refusal for `branch` at `fingerprint`, in a repository unsigned at its base.
+fn hold(fold: &clm_ledger::Fold, branch: &str, fingerprint: &str) -> Option<String> {
+    Fixture::new("").with_repo(|repo| repo.held(fold, branch, fingerprint, None).unwrap())
+}
+
 #[test]
 fn held() {
     // req:land.approval/request-refusal@8d639b0f
@@ -63,7 +68,7 @@ fn held() {
         text: "Stale".into(),
     };
     let fold = held_fold(&[comment("c2", None), line("c3", "bob/web", AT, stale, None)]);
-    let why = clm_approval::held(&fold, "spec/x", "f").expect("held");
+    let why = hold(&fold, "spec/x", "f").expect("held");
     let lines: Vec<&str> = why.lines().collect();
     assert_eq!(lines.len(), 5, "{why}");
     assert!(!lines[0].contains("spec/x:"), "a heading first: {why}");
@@ -87,23 +92,23 @@ fn held() {
 fn another_fingerprint() {
     // req:land.approval/request-refusal@8d639b0f
     let fold = held_fold(&[]);
-    assert_eq!(clm_approval::held(&fold, "spec/x", "g"), None);
+    assert_eq!(hold(&fold, "spec/x", "g"), None);
     // Nor on another branch.
-    assert_eq!(clm_approval::held(&fold, "spec/y", "f"), None);
+    assert_eq!(hold(&fold, "spec/y", "f"), None);
 }
 
 #[test]
 fn cleared_by_the_requester() {
     // req:land.approval/request-refusal@8d639b0f
     let fold = held_fold(&[approval("alice/1a2b3c4d")]);
-    assert_eq!(clm_approval::held(&fold, "spec/x", "f"), None);
+    assert_eq!(hold(&fold, "spec/x", "f"), None);
 }
 
 #[test]
 fn another_persons_approval_doesnt_clear_it() {
     // req:land.approval/request-refusal@8d639b0f
     let fold = held_fold(&[approval("dana/9f9f9f9f")]);
-    let why = clm_approval::held(&fold, "spec/x", "f").expect("held");
+    let why = hold(&fold, "spec/x", "f").expect("held");
     assert!(
         why.contains("spec/x: land/changes-requested: alice/web at"),
         "{why}"
@@ -126,7 +131,7 @@ fn a_text_over_several_lines() {
         None,
     );
     let fold = fold(&[request("a\n  b"), comment]);
-    let why = clm_approval::held(&fold, "spec/x", "f").expect("held");
+    let why = hold(&fold, "spec/x", "f").expect("held");
     let find = |kind: &str| why.lines().find(|l| l.contains(kind)).unwrap().to_string();
     let request = find("land/changes-requested");
     assert!(request.ends_with(": a b"), "{request}");
