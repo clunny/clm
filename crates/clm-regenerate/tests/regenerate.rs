@@ -2159,3 +2159,26 @@ fn helpers() {
         other => panic!("{other:?}"),
     }
 }
+
+#[test]
+fn a_crlf_delta_is_not_taken_back() {
+    // req:sync.regenerate/stale-delta-merge@88ac4186
+    let (r, b) = merged_into_o(false, "Merge x into o");
+    let crlf = read(&r.work, "changes/o/deltas/a.md").replace('\n', "\r\n");
+    write(&r.work, "changes/o/deltas/a.md", &crlf);
+    commit(&r.work, "o with CRLF endings");
+    x_becomes(&r, &adds_x());
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let (merged, left) = with_other_deltas(&r, &["x"]);
+    assert!(merged.is_empty(), "{merged:?}");
+    assert!(
+        left.iter()
+            .any(|l| l.starts_with(&format!("no text for design of a at {}", b.hx))),
+        "{left:?}"
+    );
+    assert_eq!(
+        fs::read(r.work.join("changes/o/deltas/a.md")).unwrap(),
+        crlf.as_bytes()
+    );
+}
