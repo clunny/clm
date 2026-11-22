@@ -198,9 +198,10 @@ fn a_land_between_probes() {
         &format!(
             "#!/bin/sh\nif [ -e crates/a/z.rs ]; then\n  touch '{started}'\n  i=0\n  \
              while [ $i -lt 600 ]; do\n    \
-             if ls '{queue}' 2>/dev/null | grep -q '^[0-9]\\{{20\\}}-'; then break; fi\n    \
+             if ls '{queue}' 2>/dev/null | grep -q '^[0-9]\\{{20\\}}-'; then touch '{seen}'; break; fi\n    \
              sleep 0.05; i=$((i+1))\n  done\n  echo check >> '{log}'\n  exit 1\nfi\n\
              echo check >> '{log}'\n",
+            seen = f.path("seen").display(),
             started = f.path("started").display(),
             queue = queue.display(),
             log = log.display(),
@@ -224,6 +225,8 @@ fn a_land_between_probes() {
         assert!(landed.is_ok(), "{landed:?}");
         verifying.join().unwrap()
     });
+    // The land waited for the head's check, which saw its ticket rather than timing out.
+    assert!(f.path("seen").exists(), "no land waited for the check lock");
     // The head's run, the land's check, then the one probe's (of `l2`, which passes).
     assert_eq!(f.lines("order.log"), ["check", "land", "check"]);
     assert_eq!(out.code, 1, "{}", out.line);

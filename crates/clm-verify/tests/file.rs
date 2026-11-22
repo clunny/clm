@@ -267,9 +267,48 @@ fn a_dry_run_files_nothing() {
     )
     .unwrap_err();
     assert!(matches!(err, clm_verify::Error::Refused(_)), "{err}");
-    assert!(err.to_string().contains("env"), "{err}");
+    let why = err.to_string();
+    assert!(why.contains("env") && why.contains("CLM_X"), "{why}");
     assert_eq!(p.head(), refused);
     assert_eq!(p.on_origin(&p.item()), None);
     let backlog = p.origin(&["ls-tree", "--name-only", "main", "backlog/"]);
     assert_eq!(backlog, "", "{backlog}");
+}
+
+#[test]
+fn a_verification_that_ends_in_an_error_files_nothing() {
+    // req:verify/files-unproven@1dbfc127
+    let p = filing("local", None);
+    // A trigger holds, and the run's record can't be appended: the clone's own ledger branch
+    // is held by a `<ref>.lock`, so the verification ends in a git failure.
+    let toml = format!(
+        "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nevery = {{ lands = 1 }}\n\
+         mutate = \"true\"\n",
+        p.f.path("bin/check").display()
+    );
+    let head = p.f.land(&[("clm.toml", &toml)], "a trigger");
+    let work = p.f.work();
+    let own = p.f.git(
+        &work,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads/clm/ledger/",
+        ],
+    );
+    let lock = work.join(".git").join(format!("{own}.lock"));
+    fs::write(&lock, "").unwrap();
+    let err = common::verify(
+        &work,
+        &clm_verify::Request::Due {
+            work_done: false,
+            dry_run: false,
+        },
+        &p.f.env(),
+    )
+    .unwrap_err();
+    fs::remove_file(&lock).unwrap();
+    assert!(matches!(err, clm_verify::Error::Git(_)), "{err}");
+    assert_eq!(p.head(), head);
+    assert_eq!(p.on_origin(&p.item()), None);
 }

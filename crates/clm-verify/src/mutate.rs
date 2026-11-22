@@ -107,17 +107,18 @@ fn run_pass(
         )?;
         fs::write(&result, "")?;
         match launch(ctx, call, &tree.dir, &commit, command, &plan, &result)? {
-            Ended::Exited(status) => match (status.code(), status.signal()) {
-                (Some(0), _) => {}
-                (Some(code), _) => {
-                    notes.push(format!("mutation: {command} failed with status {code}"))
-                }
-                (None, Some(n)) => {
+            Ended::Exited(status) if status.success() => {}
+            Ended::Exited(status) => match status.signal() {
+                Some(n) => {
                     let name = signal_name(n).map_or(String::new(), |s| format!(" ({s})"));
                     notes.push(format!("mutation: {command} was ended by signal {n}{name}"));
                 }
-                // An exit status holds a code or a signal.
-                (None, None) => {}
+                None => {
+                    let code = status
+                        .code()
+                        .map_or_else(|| status.to_string(), |c| c.to_string());
+                    notes.push(format!("mutation: {command} failed with status {code}"));
+                }
             },
             Ended::Limit(minutes) => notes.push(format!(
                 "mutation: stopped at its limit of {minutes} minutes"
