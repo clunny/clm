@@ -205,7 +205,7 @@ fn a_command_called_in_a_test_writes_its_streams_and_returns_its_status() {
 
 #[test]
 fn the_temporary_worktree_goes_under_the_tmpdir_the_environment_names() {
-    // req:sync/commands-in-crate@8e0be5d8 req:sync/judged-by-check@bfefb55e
+    // req:sync/commands-in-crate@8e0be5d8 req:sync/judged-by-check@04b187e7
     let (dir, work) = node_a("");
     // A `TMPDIR` that is a file: no worktree can be made under it, so the run fails as git
     // does, whatever the process's own `TMPDIR` is.
@@ -310,7 +310,7 @@ fn help_and_usage_errors_print_no_outcome_line() {
 
 #[test]
 fn sync_prints_what_is_left_and_exits_1_then_0() {
-    // req:sync/rebase@3ba762e9 req:sync/outcome-line@cac8dfb4
+    // req:sync/rebase@789d48ec req:sync/outcome-line@cac8dfb4
     let (_dir, work) = conflicting();
     write(&work, "src/lib.rs", "edited\n");
     let out = clm(&work, &["rebase"]);
@@ -341,7 +341,7 @@ fn sync_prints_what_is_left_and_exits_1_then_0() {
 
 #[test]
 fn sync_refusing_exits_1_and_git_failing_exits_2() {
-    // req:sync/rebase@3ba762e9 req:sync/outcome-line@cac8dfb4
+    // req:sync/rebase@789d48ec req:sync/outcome-line@cac8dfb4
     let (dir, work) = conflicting();
     git(&work, &["checkout", "-q", "main"]);
     let out = clm(&work, &["rebase"]);
@@ -378,16 +378,174 @@ fn sync_refusing_exits_1_and_git_failing_exits_2() {
 
 #[test]
 fn a_refused_sync_keeps_its_output() {
-    // req:sync/shared-plumbing@0453c1dd
+    // req:sync/rebase@789d48ec
     let (_dir, work) = conflicting();
     git(&work, &["checkout", "-q", "main"]);
     let out = clm(&work, &["rebase"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.starts_with("clm rebase: "), "{out:?}");
-    assert!(stderr.len() > "clm rebase: \n".len(), "no reason: {out:?}");
+    assert!(stderr.contains("`main`"), "the reason names main: {out:?}");
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(stdout.lines().last(), Some("rebase incomplete"), "{out:?}");
+
+    git(&work, &["checkout", "-q", "--detach", "HEAD"]);
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.starts_with("clm rebase: "), "{out:?}");
+    assert!(stderr.contains("detached"), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase incomplete\n");
+}
+
+/// `git <args>` in `dir`, whatever its status: its stdout.
+fn git_out(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_EDITOR", "true")
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// What a refusal must leave as it was: the refs, the status, both diffs and git's own
+/// rebase state.
+fn untouched(work: &Path) -> [String; 5] {
+    let state = |dir: &str| {
+        let path = work.join(git_out(work, &["rev-parse", "--git-path", dir]).trim());
+        path.exists()
+    };
+    [
+        git_out(work, &["for-each-ref"]),
+        git_out(work, &["status", "--porcelain"]),
+        git_out(work, &["diff"]),
+        git_out(work, &["diff", "--cached"]),
+        format!("{} {}", state("rebase-merge"), state("rebase-apply")),
+    ]
+}
+
+/// Runs `clm rebase` in `work`, asserting it refused naming `continue` and `abort` and left
+/// everything as it was.
+fn refused_naming(work: &Path, continue_: &str, abort: &str) {
+    let before = untouched(work);
+    let out = clm(work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.starts_with("clm rebase: "), "{out:?}");
+    assert!(stderr.contains("in progress"), "{out:?}");
+    assert!(
+        stderr.contains(continue_) && stderr.contains(abort),
+        "{out:?}"
+    );
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase incomplete\n");
+    assert_eq!(untouched(work), before);
+}
+
+#[test]
+fn a_rebase_started_by_hand_is_refused() {
+    // req:sync/rebase@789d48ec
+    let (_dir, work) = conflicting();
+    git(&work, &["fetch", "-q", "origin"]);
+    git_out(&work, &["rebase", "origin/main"]);
+    assert!(git_out(&work, &["status"]).contains("rebase in progress"));
+    refused_naming(&work, "git rebase --continue", "git rebase --abort");
+}
+
+#[test]
+fn a_hand_rebase_after_its_own_finished_with_git_is_refused() {
+    // req:sync/rebase@789d48ec
+    let (dir, work) = conflicting();
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "conflict src/lib.rs\nrebase incomplete\n"
+    );
+    write(&work, "src/lib.rs", "both\n");
+    git(&work, &["add", "src/lib.rs"]);
+    git_out(&work, &["rebase", "--continue"]);
+    assert!(!git_out(&work, &["status"]).contains("rebase in progress"));
+
+    // `main` moves again, and a rebase by hand onto it stops.
+    let other = dir.path().join("other");
+    git(
+        dir.path(),
+        &[
+            "clone",
+            "-q",
+            dir.path().join("origin").to_str().unwrap(),
+            "other",
+        ],
+    );
+    write(&other, "src/lib.rs", "theirs again\n");
+    git(
+        &other,
+        &[
+            "-c",
+            "user.name=o",
+            "-c",
+            "user.email=o@o",
+            "commit",
+            "-qam",
+            "again",
+        ],
+    );
+    git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    write(&work, "src/lib.rs", "mine again\n");
+    commit(&work, "again");
+    git(&work, &["fetch", "-q", "origin"]);
+    git_out(&work, &["rebase", "origin/main"]);
+    assert!(git_out(&work, &["status"]).contains("rebase in progress"));
+    refused_naming(&work, "git rebase --continue", "git rebase --abort");
+}
+
+#[test]
+fn a_git_am_in_progress_is_refused() {
+    // req:sync/rebase@789d48ec
+    let (dir, work) = conflicting();
+    // `main`'s commit, which doesn't apply on `pr`'s `src/lib.rs`.
+    let patch = dir.path().join("p.patch");
+    fs::write(
+        &patch,
+        git_out(&work, &["format-patch", "-1", "--stdout", "main"]),
+    )
+    .unwrap();
+    git_out(&work, &["am", patch.to_str().unwrap()]);
+    refused_naming(&work, "git am --continue", "git am --abort");
+}
+
+/// `conflicting()` after a `clm rebase` stopped on its conflict, which is then resolved and
+/// staged, with the file it writes into git's `rebase-merge` gone, as when the run is killed
+/// before it can write it.
+fn stopped_without_its_file() -> (TempDir, PathBuf) {
+    let (dir, work) = conflicting();
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let merging = work.join(git_out(&work, &["rev-parse", "--git-path", "rebase-merge"]).trim());
+    fs::remove_file(merging.join("clm-rebase")).unwrap();
+    write(&work, "src/lib.rs", "both\n");
+    git(&work, &["add", "src/lib.rs"]);
+    (dir, work)
+}
+
+#[test]
+fn a_rebase_it_began_is_its_own_without_its_file() {
+    // req:sync/rebase@789d48ec
+    let (_dir, work) = stopped_without_its_file();
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase ok\n");
+
+    // A marker an older `clm` wrote, `onto` and the added changes alone, likewise.
+    let (_dir, work) = stopped_without_its_file();
+    let marker = work.join(git_out(&work, &["rev-parse", "--git-path", "clm/sync-rebase"]).trim());
+    let text = fs::read_to_string(&marker).unwrap();
+    let old: Vec<&str> = text.lines().filter(|l| !l.starts_with('=')).collect();
+    fs::write(&marker, old.join("\n")).unwrap();
+    let out = clm(&work, &["rebase"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase ok\n");
 }
 
 /// `conflicting()`'s work clone on a new branch `spec/x` with an uncommitted edit to
@@ -587,9 +745,82 @@ fn a_skipped_proposals_warning_is_written_as_clm_rebase() {
     );
 }
 
+/// `clm rebase` on `spec/x` of [`node_a`], `violation` committed on `main` when given, where
+/// a `post-checkout` hook leaves, in the temporary worktree, a directory its owner can't
+/// write, holding a file: its status, stdout, stderr, and the `sync-*` directory it made.
+fn rebase_leaving_a_worktree(violation: bool) -> (Option<i32>, String, String, PathBuf) {
+    let (dir, work) = node_a("");
+    if violation {
+        write(
+            &work,
+            "src/a/t.rs",
+            concat!("// req", ":a/missing\n#[test]\nfn t() {}\n"),
+        );
+        commit(&work, "a violation");
+        git(&work, &["push", "-q", "origin", "HEAD:main"]);
+    }
+    git(&work, &["checkout", "-q", "-b", "spec/x"]);
+    let hooks = work.join(".git/hooks");
+    fs::create_dir_all(&hooks).unwrap();
+    exec::write_exec(
+        &hooks.join("post-checkout"),
+        "#!/bin/sh\ncase \"$PWD\" in */sync-*) mkdir -p stuck && : > stuck/f && chmod a-w stuck \
+         ;; esac\n",
+    );
+    let tmp = dir.path().join("tmp");
+    fs::create_dir_all(&tmp).unwrap();
+    let env = |key: &str| (key == "TMPDIR").then(|| tmp.to_string_lossy().into_owned());
+    let out = clm_with(&work, &["rebase"], &env);
+    let made: Vec<PathBuf> = fs::read_dir(&tmp)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    let [made] = &made[..] else {
+        panic!("{made:?}: {out:?}");
+    };
+    let name = made.file_name().unwrap().to_string_lossy();
+    assert!(name.starts_with("sync-"), "{name}");
+    // Writable again, so the test's directory can go.
+    Command::new("chmod")
+        .args(["-R", "u+w"])
+        .arg(made)
+        .status()
+        .unwrap();
+    (
+        out.status.code(),
+        String::from_utf8(out.stdout).unwrap(),
+        String::from_utf8(out.stderr).unwrap(),
+        made.clone(),
+    )
+}
+
+#[test]
+fn a_worktree_left_behind_keeps_the_outcome() {
+    // req:sync/judged-by-check@04b187e7
+    let (code, stdout, stderr, made) = rebase_leaving_a_worktree(false);
+    assert_eq!(code, Some(0), "{stdout}{stderr}");
+    assert_eq!(stdout.lines().last(), Some("rebase ok"), "{stdout}");
+    assert!(
+        stderr.contains(&format!(
+            "clm rebase: couldn't remove the temporary worktree {}: ",
+            made.display()
+        )),
+        "{stderr}"
+    );
+
+    let (code, stdout, stderr, _) = rebase_leaving_a_worktree(true);
+    assert_eq!(code, Some(1), "{stdout}{stderr}");
+    assert!(stdout.contains("check/dangling-markers"), "{stdout}");
+    assert_eq!(stdout.lines().last(), Some("rebase incomplete"), "{stdout}");
+    assert!(
+        stderr.contains("couldn't remove the temporary worktree"),
+        "{stderr}"
+    );
+}
+
 #[test]
 fn sync_leaves_no_temporary_worktree() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     write(
@@ -612,7 +843,7 @@ fn sync_leaves_no_temporary_worktree() {
 
 #[test]
 fn sync_ignores_an_uncommitted_settings_edit() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     git(&work, &["checkout", "-q", "main"]);
@@ -632,7 +863,7 @@ fn sync_ignores_an_uncommitted_settings_edit() {
 
 #[test]
 fn sync_with_settings_that_cant_be_loaded() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let (_dir, work) = node_a("[component_size]\nspec_tokens = 0\n");
     let (code, stdout) = rebase_without_user_settings(&work);
     assert_eq!(code, Some(1), "{stdout}");
@@ -646,7 +877,7 @@ fn sync_with_settings_that_cant_be_loaded() {
 
 #[test]
 fn sync_fails_on_settings_main_brought_in_that_cant_be_loaded() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     write(&work, "notes.md", "mine\n");
@@ -677,7 +908,7 @@ fn sync_fails_on_settings_main_brought_in_that_cant_be_loaded() {
 
 #[test]
 fn sync_files_a_reconsider_item_at_the_repository_threshold() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let (_dir, work) = node_a("[health]\nreconsider = 2\n");
     write(
         &work,

@@ -216,7 +216,7 @@ fn adds_x() -> String {
 
 #[test]
 fn behind_main() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -232,7 +232,7 @@ fn behind_main() {
 
 #[test]
 fn real_conflict_then_resume() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     commit(&r.work, "work");
@@ -252,7 +252,7 @@ fn real_conflict_then_resume() {
 
 #[test]
 fn refuses_a_dirty_tree_main_and_a_detached_head() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("impl/a");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "src/lib.rs", "edited\n");
@@ -292,7 +292,7 @@ fn assert_refused(r: &Repo, lines: &[&str]) {
 
 #[test]
 fn an_edit_to_a_file_main_changed_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     main_moves(&r, &[("src/lib.rs", "one\n2\nthree\n")]);
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
@@ -301,16 +301,18 @@ fn an_edit_to_a_file_main_changed_stops_it() {
 
 #[test]
 fn an_unrelated_edit_is_carried_through() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
+    // On `main`, so the branch holds no code of its own and isn't a build's.
     write(&r.work, ".claude/settings.json", "{}\n");
     commit(&r.work, "settings");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, ".claude/settings.json", "{\"mine\": 1}\n");
     let stashes = git(&r.work, &["stash", "list"]);
 
     assert_eq!(synced(&r), Vec::<String>::new());
-    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), origin_main(&r));
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), origin_main(&r));
     assert_eq!(read(&r.work, ".claude/settings.json"), "{\"mine\": 1}\n");
     assert_eq!(
         git(&r.work, &["status", "--porcelain"]),
@@ -326,8 +328,58 @@ fn an_unrelated_edit_is_carried_through() {
 }
 
 #[test]
+fn a_set_aside_edit_that_cant_be_put_back_is_kept_in_the_stash() {
+    // req:sync/rebase@789d48ec
+    let r = repo("spec/x");
+    write(&r.work, ".claude/settings.json", "{}\n");
+    commit(&r.work, "settings");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    write(&r.work, "docs/guide.md", "guide\n");
+    commit(&r.work, "guide");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    write(&r.work, ".claude/settings.json", "{\"mine\": 1}\n");
+    // Once the rebase has rewritten the branch, and before git puts the edit back, the file
+    // changes under it.
+    let hooks = r
+        .work
+        .join(git(&r.work, &["rev-parse", "--git-path", "hooks"]));
+    fs::create_dir_all(&hooks).unwrap();
+    write_exec(
+        &hooks.join("post-rewrite"),
+        "#!/bin/sh\necho '{\"hook\": 1}' > .claude/settings.json\n",
+    );
+
+    let Err(Error::Git(why)) = sync(&r.work) else {
+        panic!("not a git failure");
+    };
+    let entry = git(&r.work, &["rev-parse", "refs/stash"]);
+    assert!(why.contains(&entry), "{why}");
+    assert!(why.contains(&format!("git stash apply {entry}")), "{why}");
+    let kept = git(&r.work, &["stash", "show", "-p", &entry]);
+    assert!(kept.contains("\"mine\": 1"), "{kept}");
+
+    // Through the command: its outcome line and status.
+    git(&r.work, &["reset", "-q", "--hard", "HEAD"]);
+    main_moves(&r, &[("src/more.rs", "more\n")]);
+    write(&r.work, ".claude/settings.json", "{\"mine\": 2}\n");
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_sync::rebase_command(
+        Vec::<String>::new(),
+        &r.work,
+        &|_| None,
+        &mut out,
+        &mut err,
+        |_: &Path| Ok(health()),
+    );
+    let err = String::from_utf8(err).unwrap();
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("git stash apply "), "{err}");
+    assert_eq!(String::from_utf8(out).unwrap(), "rebase failed\n");
+}
+
+#[test]
 fn an_uncommitted_spec_edit_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     write(&r.work, "backlog/q.md", "---\ntitle: Q\nkind: idea\n---\n");
     commit(&r.work, "q");
@@ -338,7 +390,7 @@ fn an_uncommitted_spec_edit_stops_it() {
 
 #[test]
 fn an_uncommitted_change_edit_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     write(&r.work, "changes/x/change.md", "draft\n");
     commit(&r.work, "x");
@@ -349,7 +401,7 @@ fn an_uncommitted_change_edit_stops_it() {
 
 #[test]
 fn a_staged_change_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     write(&r.work, ".claude/settings.json", "{}\n");
     commit(&r.work, "settings");
@@ -361,7 +413,7 @@ fn a_staged_change_stops_it() {
 
 #[test]
 fn without_a_merge_base_every_edit_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     git(&r.work, &["checkout", "-q", "--orphan", "spec/y"]);
     commit(&r.work, "unrelated history");
@@ -371,17 +423,21 @@ fn without_a_merge_base_every_edit_stops_it() {
 
 #[test]
 fn an_edit_is_set_aside_during_a_conflict() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
+    // The settings on `main` and the conflict in a doc, so the branch isn't a build's.
     write(&r.work, ".claude/settings.json", "{}\n");
-    write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
+    write(&r.work, "docs/guide.md", "one\ntwo\nthree\n");
+    commit(&r.work, "settings");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    write(&r.work, "docs/guide.md", "one\nTWO\nthree\n");
     commit(&r.work, "work");
-    main_moves(&r, &[("src/lib.rs", "one\n2\nthree\n")]);
+    main_moves(&r, &[("docs/guide.md", "one\n2\nthree\n")]);
     write(&r.work, ".claude/settings.json", "{\"mine\": 1}\n");
 
-    assert_eq!(unfinished(&r), ["conflict src/lib.rs"]);
-    write(&r.work, "src/lib.rs", "one\nTWO and 2\nthree\n");
-    git(&r.work, &["add", "src/lib.rs"]);
+    assert_eq!(unfinished(&r), ["conflict docs/guide.md"]);
+    write(&r.work, "docs/guide.md", "one\nTWO and 2\nthree\n");
+    git(&r.work, &["add", "docs/guide.md"]);
     assert_eq!(synced(&r), Vec::<String>::new());
     assert_eq!(read(&r.work, ".claude/settings.json"), "{\"mine\": 1}\n");
     assert_eq!(
@@ -392,7 +448,7 @@ fn an_edit_is_set_aside_during_a_conflict() {
 
 #[test]
 fn untracked_output_and_worktrees_dont_stop_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -415,7 +471,7 @@ fn untracked_output_and_worktrees_dont_stop_it() {
 
 #[test]
 fn an_untracked_delta_stops_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "changes/x/deltas/a.md", "delta\n");
@@ -429,7 +485,7 @@ fn an_untracked_delta_stops_it() {
 
 #[test]
 fn uncommitted_work_is_named_path_by_path() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     // An ignored file under `specs/` isn't work in progress.
     write(&r.work, ".git/info/exclude", "*.tmp\n");
@@ -454,7 +510,7 @@ fn uncommitted_work_is_named_path_by_path() {
 
 #[test]
 fn an_untracked_file_main_adds_fails_naming_it() {
-    // req:sync/rebase@3ba762e9
+    // req:sync/rebase@789d48ec
     let r = repo("topic");
     main_moves(&r, &[("test-results/report.txt", "theirs\n")]);
     write(&r.work, "test-results/report.txt", "mine\n");
@@ -465,7 +521,7 @@ fn an_untracked_file_main_adds_fails_naming_it() {
 
 #[test]
 fn applied_specs_are_regenerated_on_the_new_main() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     // `main` adds `a/y` to the same file, so a text merge of `specs/` would conflict.
@@ -503,7 +559,7 @@ fn design_hash(r: &Repo) -> String {
 
 #[test]
 fn a_change_built_on_another_sorts_first() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     let three = node_a("specd", "c", &["p"]).replace("## Design\nd", "## Design\none\ntwo\nthree");
     main_moves(&r, &[("specs/a/SPEC.md", &three)]);
@@ -541,7 +597,7 @@ fn a_change_built_on_another_sorts_first() {
 
 #[test]
 fn applied_assets_survive_regeneration() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     main_moves(&r, &[("specs/a/assets/old.png", "png")]);
     git(&r.work, &["pull", "-q", "--rebase", "origin", "main"]);
@@ -565,7 +621,7 @@ fn applied_assets_survive_regeneration() {
 
 #[test]
 fn a_stale_delta_stops_before_writing_specs() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     let graph = clm_model::load(&r.work).0;
     let base = graph.nodes["a"].hashes.contract.clone();
@@ -591,7 +647,7 @@ fn a_stale_delta_stops_before_writing_specs() {
 
 #[test]
 fn a_finish_branch_keeps_its_status_edit() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("impl/y/finish");
     write(&r.work, "specs/a/SPEC.md", &node_a("active", "c", &["p"]));
     commit(&r.work, "finish");
@@ -609,7 +665,7 @@ fn a_finish_branch_keeps_its_status_edit() {
 
 #[test]
 fn an_applied_change_already_on_main_is_not_regenerated() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -627,7 +683,7 @@ fn an_applied_change_already_on_main_is_not_regenerated() {
 
 #[test]
 fn a_change_main_archived_is_not_reapplied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -655,7 +711,7 @@ fn a_change_main_archived_is_not_reapplied() {
 
 #[test]
 fn a_change_main_removed_is_not_reapplied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -676,7 +732,7 @@ fn a_change_main_removed_is_not_reapplied() {
 
 #[test]
 fn a_branch_without_an_applied_change_never_regenerates() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     // A proposed change and a hand edit to `specs/`: neither may be regenerated away.
     write(
@@ -697,7 +753,7 @@ fn a_branch_without_an_applied_change_never_regenerates() {
 
 #[test]
 fn the_result_is_judged_by_check() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("topic");
     // The marker is built so this file never cites `a/p` itself.
     write(
@@ -750,7 +806,7 @@ fn names_pending(line: &str) {
 
 #[test]
 fn spec_changed_when_a_requirement_changed_on_main() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -775,7 +831,7 @@ fn spec_changed_when_a_requirement_changed_on_main() {
 
 #[test]
 fn spec_changed_is_reported_with_the_check_result() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     // A marker nothing defines: `clm check` must still run and report it (step 7).
     write(
@@ -796,7 +852,7 @@ fn spec_changed_is_reported_with_the_check_result() {
 
 #[test]
 fn quiet_on_the_next_run() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_modified(&r))]);
     assert!(!sync(&r.work).unwrap().ok);
@@ -806,13 +862,12 @@ fn quiet_on_the_next_run() {
 
 #[test]
 fn a_run_stopped_by_a_stale_delta_still_owes_the_report() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
+    let old = version(&r, "a/p");
     apply_change(&r, "y", "", &modifies_contract(&r, "mine"));
-    main_moves(
-        &r,
-        &[("specs/a/SPEC.md", &node_a("specd", "theirs", &["p"]))],
-    );
+    let theirs = node_a("specd", "theirs", &["p"]).replace("It SHALL p.", "It SHALL p, and more.");
+    main_moves(&r, &[("specs/a/SPEC.md", &theirs)]);
     let left = unfinished(&r);
     assert!(
         left.iter().any(|l| l.contains("apply/stale-base")),
@@ -829,11 +884,47 @@ fn a_run_stopped_by_a_stale_delta_still_owes_the_report() {
     commit(&r.work, "drop y");
     let left = unfinished(&r);
     assert_eq!(left[..2], ["spec changed a", "changed specs/a/SPEC.md"]);
+    let new = version(&r, "a/p");
+    assert!(
+        has(&left, &format!("requirement a/p {old} -> {new}")),
+        "{left:?}"
+    );
+}
+
+#[test]
+fn a_rebase_finished_with_plain_git_still_owes_the_report() {
+    // req:sync/spec-changed@0e05c40a
+    let r = repo("impl/a");
+    let old = version(&r, "a/p");
+    write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
+    commit(&r.work, "work");
+    main_moves(
+        &r,
+        &[
+            ("specs/a/SPEC.md", &a_with_p_modified(&r)),
+            ("src/lib.rs", "one\n2\nthree\n"),
+        ],
+    );
+    assert_eq!(unfinished(&r), ["conflict src/lib.rs"]);
+
+    // The caller resolves it and finishes the rebase with plain git.
+    write(&r.work, "src/lib.rs", "one\nTWO and 2\nthree\n");
+    git(&r.work, &["add", "src/lib.rs"]);
+    git(&r.work, &["-c", "core.editor=true", "rebase", "--continue"]);
+    assert!(!rebasing(&r));
+
+    let left = unfinished(&r);
+    let new = version(&r, "a/p");
+    assert_eq!(left[0], "spec changed a", "{left:?}");
+    assert!(
+        has(&left, &format!("requirement a/p {old} -> {new}")),
+        "{left:?}"
+    );
 }
 
 #[test]
 fn requirements_that_appeared_or_went() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     let old = version(&r, "a/p");
     main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", "c", &["y"]))]);
@@ -862,7 +953,7 @@ fn a_depends_on_b(r: &Repo) {
 
 #[test]
 fn dependency_contract_changed() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     a_depends_on_b(&r);
     main_moves(&r, &[("specs/b/SPEC.md", &B.replace("\nb\n", "\nb2\n"))]);
@@ -875,7 +966,7 @@ fn dependency_contract_changed() {
 
 #[test]
 fn asset_changed() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     main_moves(&r, &[("specs/a/assets/m.html", "<p>m</p>\n")]);
     pull(&r);
@@ -891,7 +982,7 @@ fn asset_changed() {
 
 #[test]
 fn unrelated_change_on_main() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     main_moves(&r, &[("specs/b/SPEC.md", B)]);
     assert_eq!(synced(&r), Vec::<String>::new());
@@ -925,7 +1016,7 @@ fn a_serves_c(r: &Repo) {
 
 #[test]
 fn spec_changed_reports_capabilities() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     a_serves_c(&r);
     main_moves(
@@ -962,7 +1053,7 @@ fn capability_tests_node_sees_any_capability(r: &Repo, node: &str) {
 
 #[test]
 fn spec_changed_on_the_capability_node() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/capability");
     let node = "---\ntitle: Capabilities\nstatus: specd\nowners: []\n---\n\n## Contract\nk\n\n\
                 ## Design\nd\n\n## Requirements\n";
@@ -972,7 +1063,7 @@ fn spec_changed_on_the_capability_node() {
 
 #[test]
 fn spec_changed_on_the_root_without_a_capability_node() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     // With no capability node, the root builds the capability tests.
     let r = repo("impl/clm");
     capability_tests_node_sees_any_capability(&r, "clm");
@@ -980,7 +1071,7 @@ fn spec_changed_on_the_root_without_a_capability_node() {
 
 #[test]
 fn unserved_capability_changed() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     // `a` serves an architecture requirement, so it serves no capability and is traced.
     let a = node_a("specd", "c", &["p"])
@@ -1000,7 +1091,7 @@ fn unserved_capability_changed() {
 
 #[test]
 fn unserved_capability_changed_with_the_node() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     let r = repo("impl/a");
     a_serves_c(&r);
     let a = read(&r.work, "specs/a/SPEC.md").replace("## Contract\nc\n", "## Contract\nc2\n");
@@ -1020,7 +1111,7 @@ fn unserved_capability_changed_with_the_node() {
 
 #[test]
 fn no_spec_changed_report_off_node_branches() {
-    // req:sync/spec-changed@14245755
+    // req:sync/spec-changed@0e05c40a
     for branch in ["spec/x", "topic", "impl/x/a"] {
         let r = repo(branch);
         main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_modified(&r))]);
@@ -1044,7 +1135,7 @@ fn with_applied_x(branch: &str, extra: &str) -> Repo {
 
 #[test]
 fn branch_completes_a_change() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/a", "");
     write(&r.work, "src/test.rs", &citing("a/x", &version(&r, "a/x")));
     commit(&r.work, "test a/x");
@@ -1061,7 +1152,7 @@ fn branch_completes_a_change() {
 
 #[test]
 fn a_repo_without_a_backlog_archives_too() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     apply_change(&r, "x", "", &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -1076,7 +1167,7 @@ fn a_repo_without_a_backlog_archives_too() {
 
 #[test]
 fn an_uncited_requirement_holds_it() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/a", "");
     write(&r.work, "src/test.rs", &citing("a/p", &version(&r, "a/p")));
     commit(&r.work, "test a/p only");
@@ -1092,7 +1183,7 @@ fn an_uncited_requirement_holds_it() {
 
 #[test]
 fn obsolete_marker_holds_it() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     let p = clm_model::load(&r.work)
         .0
@@ -1132,7 +1223,7 @@ fn obsolete_marker_holds_it() {
 
 #[test]
 fn completed_by_another_branch_s_merge() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/b", "");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -1145,7 +1236,7 @@ fn completed_by_another_branch_s_merge() {
 
 #[test]
 fn unapplied_change_left_alone() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     let p = clm_model::load(&r.work)
         .0
@@ -1178,7 +1269,7 @@ fn unapplied_change_left_alone() {
 
 #[test]
 fn node_activated() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     write(&r.work, "src/test.rs", &citing("a/p", &version(&r, "a/p")));
     commit(&r.work, "test a/p");
@@ -1193,7 +1284,7 @@ fn node_activated() {
 
 #[test]
 fn activation_rides_the_archive_commit() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/a", "");
     let (p, x) = (version(&r, "a/p"), version(&r, "a/x"));
     write(
@@ -1215,7 +1306,7 @@ fn activation_rides_the_archive_commit() {
 
 #[test]
 fn an_untracked_test_neither_archives_nor_activates() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = with_applied_x("impl/a", "");
     let (p, x) = (version(&r, "a/p"), version(&r, "a/x"));
     // Markers count only at `HEAD`: an untracked test isn't on the branch.
@@ -1238,7 +1329,7 @@ fn an_untracked_test_neither_archives_nor_activates() {
 
 #[test]
 fn an_untracked_backlog_item_is_left_alone() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     let r = repo("impl/a");
     write(&r.work, "backlog/q.md", "---\ntitle: Q\nkind: idea\n---\n");
     write(&r.work, "backlog/u.md", "---\ntitle: U\nkind: idea\n---\n");
@@ -1264,7 +1355,7 @@ fn an_untracked_backlog_item_is_left_alone() {
 
 #[test]
 fn regeneration_reads_the_branch_not_untracked_files() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     main_moves(
@@ -1285,16 +1376,20 @@ fn regeneration_reads_the_branch_not_untracked_files() {
 
 #[test]
 fn nothing_archived_or_activated_off_impl_branches() {
-    // req:sync/archive-complete@aaaf914b
+    // req:sync/archive-complete@26a8a9ff
     for branch in ["spec/y", "topic"] {
         let r = with_applied_x(branch, "");
         let (p, x) = (version(&r, "a/p"), version(&r, "a/x"));
-        write(
-            &r.work,
-            "src/test.rs",
-            &format!("{}{}", citing("a/p", &p), citing("a/x", &x)),
+        // The tests on `main` and only a doc on the branch, which isn't then a build's.
+        main_moves(
+            &r,
+            &[(
+                "src/test.rs",
+                &format!("{}{}", citing("a/p", &p), citing("a/x", &x)),
+            )],
         );
-        commit(&r.work, "tests");
+        write(&r.work, "docs/guide.md", "guide\n");
+        commit(&r.work, "guide");
 
         assert_eq!(synced(&r), Vec::<String>::new(), "{branch}");
         assert!(r.work.join("changes/x/change.md").exists(), "{branch}");
@@ -1312,7 +1407,7 @@ fn filed(lines: &[String]) -> bool {
 
 #[test]
 fn settings_are_loaded_on_every_branch() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     let mut calls = 0;
@@ -1329,7 +1424,7 @@ fn settings_are_loaded_on_every_branch() {
 
 #[test]
 fn settings_cant_be_loaded() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("impl/a");
     let head = git(&r.work, &["rev-parse", "HEAD"]);
 
@@ -1342,15 +1437,12 @@ fn settings_cant_be_loaded() {
 
 #[test]
 fn the_settings_error_comes_before_the_check() {
-    // req:sync/judged-by-check@bfefb55e
-    let r = repo("topic");
-    write(
-        &r.work,
-        "src/test.rs",
-        &format!("// {}\n#[test]\nfn t() {{}}\n", concat!("req", ":a/p")),
-    );
-    commit(&r.work, "test a/p");
-    main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", "c", &[]))]);
+    // req:sync/judged-by-check@04b187e7
+    let r = repo("spec/x");
+    // On `main`, so the branch holds no code of its own.
+    write(&r.work, "src/test.rs", &cites_missing());
+    commit(&r.work, "cite a/missing");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
 
     let report =
         clm_sync::sync(&r.work, &|_| None, |_: &Path| Err("settings: bad".into())).unwrap();
@@ -1366,7 +1458,7 @@ fn the_settings_error_comes_before_the_check() {
 
 #[test]
 fn the_settings_are_loaded_from_head_in_a_temporary_worktree() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "notes.txt", "untracked\n");
@@ -1407,7 +1499,7 @@ fn cites_missing() -> String {
 
 #[test]
 fn an_uncommitted_marker_is_not_judged() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "src/lib.rs", &cites_missing());
@@ -1418,10 +1510,12 @@ fn an_uncommitted_marker_is_not_judged() {
 
 #[test]
 fn a_committed_fault_is_judged_despite_an_uncommitted_fix() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
+    // The fault on `main`, as the merge base and `origin/main` both hold it.
     write(&r.work, "src/lib.rs", &cites_missing());
     commit(&r.work, "cite a/missing");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "src/lib.rs", "fixed\n");
 
@@ -1437,7 +1531,7 @@ fn a_committed_fault_is_judged_despite_an_uncommitted_fix() {
 
 #[test]
 fn an_untracked_test_file_is_not_judged() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "tests/new.rs", &cites_missing());
@@ -1449,7 +1543,7 @@ fn an_untracked_test_file_is_not_judged() {
 
 #[test]
 fn a_clone_the_environment_names_is_judged_at_head() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     // The child half: the test binary runs itself with the variables set, so no other
     // test in this process sees them.
     if let Ok(work) = std::env::var("CLM_SYNC_TEST_JUDGED_WORK") {
@@ -1622,7 +1716,7 @@ fn autosync_skips_a_tree_already_on_the_branch() {
 
 #[test]
 fn a_change_with_links_is_regenerated() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(
         &r.work,
@@ -1645,7 +1739,7 @@ fn a_change_with_links_is_regenerated() {
 
 #[test]
 fn an_item_blocking_a_requirement_the_change_adds_is_regenerated() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     // `a/x` is in the branch's `specs/` but not `main`'s, which the regenerate step
@@ -1671,7 +1765,7 @@ fn an_item_blocking_a_requirement_the_change_adds_is_regenerated() {
 
 #[test]
 fn an_item_the_change_doesnt_fix_is_judged_by_check() {
-    // req:sync/reapply@85e68c87 req:sync/judged-by-check@bfefb55e
+    // req:sync/reapply@5dc2a995 req:sync/judged-by-check@04b187e7
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     write(
@@ -1694,7 +1788,7 @@ fn an_item_the_change_doesnt_fix_is_judged_by_check() {
 
 #[test]
 fn a_broken_delta_of_the_change_still_stops_it() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     write(&r.work, "changes/y/deltas/b.md", "no frontmatter\n");
@@ -1716,7 +1810,7 @@ fn a_broken_delta_of_the_change_still_stops_it() {
 
 #[test]
 fn a_stale_second_change_writes_nothing() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     apply_change(&r, "y1", "", &adds_x());
     let delta = modifies_contract(&r, "mine");
@@ -1738,7 +1832,7 @@ fn a_stale_second_change_writes_nothing() {
 
 #[test]
 fn a_spec_file_main_deleted_is_regenerated_not_reported() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     main_moves(&r, &[("src/other.rs", "other\n")]);
@@ -1758,7 +1852,7 @@ fn a_spec_file_main_deleted_is_regenerated_not_reported() {
 
 #[test]
 fn a_resume_regenerates_against_the_main_it_rebased_onto() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     commit(&r.work, "work");
@@ -1792,7 +1886,7 @@ fn a_resume_regenerates_against_the_main_it_rebased_onto() {
 
 #[test]
 fn a_change_set_back_to_proposed_keeps_mains_specs() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     let before = read(&r.work, "specs/a/SPEC.md");
     applied_spec_branch(&r, &adds_x());
@@ -1819,7 +1913,7 @@ fn a_change_set_back_to_proposed_keeps_mains_specs() {
 
 #[test]
 fn a_specs_conflict_beside_a_real_one_is_resolved() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -1853,7 +1947,7 @@ fn a_specs_conflict_beside_a_real_one_is_resolved() {
 
 #[test]
 fn a_specs_modify_delete_beside_a_real_conflict_is_settled_first() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -1879,7 +1973,7 @@ fn a_specs_modify_delete_beside_a_real_conflict_is_settled_first() {
 
 #[test]
 fn a_branch_adding_no_change_reports_its_specs_conflict() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     write(&r.work, "specs/a/SPEC.md", &node_a("specd", "mine", &["p"]));
     commit(&r.work, "edit a's Contract");
@@ -1894,7 +1988,7 @@ fn a_branch_adding_no_change_reports_its_specs_conflict() {
 
 #[test]
 fn a_change_whose_frontmatter_doesnt_parse_still_counts_as_added() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     write(
         &r.work,
@@ -1929,7 +2023,7 @@ fn subjects_since_main(r: &Repo) -> Vec<String> {
 
 #[test]
 fn a_resume_keeps_mains_specs_for_a_change_that_isnt_applied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -1980,7 +2074,7 @@ fn archive_in(dir: &Path, id: &str, status: &str) {
 
 #[test]
 fn a_change_archived_on_its_spec_branch_is_reapplied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     archive_in(&r.work, "x", "done");
@@ -2003,7 +2097,7 @@ fn a_change_archived_on_its_spec_branch_is_reapplied() {
 
 #[test]
 fn a_resume_regenerates_a_change_archived_on_the_branch() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     commit(&r.work, "work");
@@ -2031,7 +2125,7 @@ fn a_resume_regenerates_a_change_archived_on_the_branch() {
 
 #[test]
 fn an_archived_change_is_merged() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -2066,7 +2160,7 @@ fn an_archived_change_is_merged() {
 
 #[test]
 fn an_archived_change_that_isnt_done_keeps_mains_specs() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     archive_in(&r.work, "x", "abandoned");
@@ -2089,7 +2183,7 @@ fn an_archived_change_that_isnt_done_keeps_mains_specs() {
 
 #[test]
 fn live_and_archived_changes_are_reapplied_in_id_order() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     // The archived change sorts first, the live one after it.
     apply_change(&r, "a1", "", &adds_x());
@@ -2117,7 +2211,7 @@ fn live_and_archived_changes_are_reapplied_in_id_order() {
 
 #[test]
 fn a_branch_archiving_a_change_main_applied_doesnt_reapply_it() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("impl/b");
     let delta = modifies_contract(&r, "mine");
     apply_change(&r, "y", "", &delta);
@@ -2277,7 +2371,7 @@ fn export_csv(body: &str) -> String {
 
 #[test]
 fn a_proposal_is_filed() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     ledger(&r, "alice/web", &[export_csv("Let me export.\n\n")]);
 
@@ -2298,7 +2392,7 @@ fn a_proposal_is_filed() {
 
 #[test]
 fn a_proposal_files_the_same_bytes_on_two_branches() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let mut files = Vec::new();
     for branch in ["impl/a", "impl/b"] {
         let r = repo(branch);
@@ -2312,7 +2406,7 @@ fn a_proposal_files_the_same_bytes_on_two_branches() {
 
 #[test]
 fn withdrawn_filed_or_resolved_proposals_are_not_filed() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     write(
         &r.work,
@@ -2348,7 +2442,7 @@ fn withdrawn_filed_or_resolved_proposals_are_not_filed() {
 
 #[test]
 fn an_untracked_item_keeps_its_proposal_unfiled() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     ledger(
         &r,
@@ -2364,7 +2458,7 @@ fn an_untracked_item_keeps_its_proposal_unfiled() {
 
 #[test]
 fn a_slug_that_isnt_kebab_case_is_skipped_with_a_warning() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     ledger(
         &r,
@@ -2380,11 +2474,111 @@ fn a_slug_that_isnt_kebab_case_is_skipped_with_a_warning() {
         "{report:?}"
     );
     assert!(!r.work.join("escape.md").exists());
+
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p8", "alice/web", "Not Kebab", "Bad", &["a"], "x")],
+    );
+    let report = sync(&r.work).unwrap();
+    assert!(report.ok, "{report:?}");
+    assert!(!filed(&report.lines), "{report:?}");
+    assert_eq!(
+        report.warnings,
+        [r#"skipped proposal p8 by alice/web: its slug "Not Kebab" isn't lowercase kebab case"#]
+    );
+}
+
+/// A `proposed` record's line at time `at`.
+fn proposed_at(id: &str, at: &str, slug: &str, title: &str) -> String {
+    let mut line: serde_json::Value =
+        serde_json::from_str(&proposed(id, "alice/web", slug, title, &["a"], title)).unwrap();
+    line["at"] = at.into();
+    line.to_string()
+}
+
+#[test]
+fn an_empty_body_files_only_the_proposed_line() {
+    // req:sync/file-proposal-items@d530f460
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "")],
+    );
+
+    assert_eq!(synced(&r), ["filed backlog/s.md"]);
+    assert_eq!(
+        read(&r.work, "backlog/s.md"),
+        "---\ntitle: \"S\"\nkind: idea\ncomponents: [a]\n---\n\nProposed in the web app by \
+         alice/web at 2026-10-28T10:00:00.000Z (record p1).\n"
+    );
+}
+
+#[test]
+fn of_proposals_sharing_a_slug_the_earliest_is_filed() {
+    // req:sync/file-proposal-items@d530f460
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[
+            proposed_at("p1", "2026-10-28T12:00:00.000Z", "s", "Later"),
+            proposed_at("p3", "2026-10-28T09:00:00.000Z", "s", "Earlier, higher ID"),
+            proposed_at("p2", "2026-10-28T09:00:00.000Z", "s", "Earlier, lower ID"),
+        ],
+    );
+
+    assert_eq!(synced(&r), ["filed backlog/s.md"]);
+    let item = read(&r.work, "backlog/s.md");
+    assert!(item.contains("title: \"Earlier, lower ID\""), "{item}");
+    assert!(item.contains("(record p2)"), "{item}");
+}
+
+#[test]
+fn a_fold_warning_is_passed_on() {
+    // req:sync/file-proposal-items@d530f460
+    let r = repo("impl/a");
+    ledger(&r, "bob/web", &["not a record".to_string()]);
+
+    let report = sync(&r.work).unwrap();
+    assert!(report.ok, "{report:?}");
+    assert!(
+        report.warnings.iter().any(|w| w.starts_with("ledger: ")),
+        "{report:?}"
+    );
+}
+
+#[test]
+fn a_ledger_that_cant_be_read_files_nothing() {
+    // req:sync/file-proposal-items@d530f460
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "Body.")],
+    );
+    stand_in(
+        &r,
+        "case \"$*\" in *for-each-ref*clm/ledger/*) echo 'fatal: no ledger' >&2; exit 1;; esac\n",
+    );
+
+    let report = sync(&r.work).unwrap();
+    assert!(report.ok, "{report:?}");
+    assert!(!filed(&report.lines), "{report:?}");
+    assert!(
+        report.warnings.iter().any(|w| w
+            .starts_with("no proposals filed: the ledger can't be read: ")
+            && w.contains("no ledger")),
+        "{report:?}"
+    );
+    assert!(!r.work.join("backlog/s.md").exists());
 }
 
 #[test]
 fn no_proposal_items_off_impl_branches() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("spec/y");
     ledger(
         &r,
@@ -2432,7 +2626,7 @@ fn flagged(branch: &str, id: &str, flags: usize) -> Repo {
 
 #[test]
 fn a_clone_the_environment_names_keeps_its_head_when_an_item_is_filed() {
-    // req:sync/judged-by-check@bfefb55e
+    // req:sync/judged-by-check@04b187e7
     // Filing an item moves the temporary worktree with `git checkout`, the one git command
     // that writes there: it must not follow the variables to the clone.
     if let Ok(work) = std::env::var("CLM_SYNC_TEST_FILED_WORK") {
@@ -2471,7 +2665,7 @@ fn a_clone_the_environment_names_keeps_its_head_when_an_item_is_filed() {
 
 #[test]
 fn a_requirement_at_the_threshold_gets_a_reconsider_item() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
 
     assert_eq!(synced(&r), ["filed backlog/reconsider-a-x.md"]);
@@ -2498,7 +2692,7 @@ fn a_requirement_at_the_threshold_gets_a_reconsider_item() {
 
 #[test]
 fn a_reconsider_item_is_filed_after_archiving_and_proposals() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     let adds_z = format!(
         "---\ncomponent: a\n---\n## ADDED Requirements\n{}",
@@ -2525,7 +2719,7 @@ fn a_reconsider_item_is_filed_after_archiving_and_proposals() {
 
 #[test]
 fn a_reconsider_item_is_filed_after_a_spec_change() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_modified(&r))]);
 
@@ -2537,7 +2731,7 @@ fn a_reconsider_item_is_filed_after_a_spec_change() {
 
 #[test]
 fn a_failed_commit_leaves_no_reconsider_item() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     let hook = r.work.join(git(
         &r.work,
@@ -2549,11 +2743,29 @@ fn a_failed_commit_leaves_no_reconsider_item() {
     assert!(matches!(sync(&r.work), Err(Error::Git(_))));
     assert!(!r.work.join("backlog/reconsider-a-x.md").exists());
     assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
+
+    // A proposal's item likewise.
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "Body.")],
+    );
+    let hook = r.work.join(git(
+        &r.work,
+        &["rev-parse", "--git-path", "hooks/pre-commit"],
+    ));
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    write_exec(&hook, "#!/bin/sh\nexit 1\n");
+
+    assert!(matches!(sync(&r.work), Err(Error::Git(_))));
+    assert!(!r.work.join("backlog/s.md").exists());
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
 }
 
 #[test]
 fn a_reconsider_item_already_filed_is_left_alone() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     write(
         &r.work,
@@ -2572,7 +2784,7 @@ fn a_reconsider_item_already_filed_is_left_alone() {
 
 #[test]
 fn a_requirement_below_the_threshold_gets_none() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 2);
 
     let lines = synced(&r);
@@ -2581,7 +2793,7 @@ fn a_requirement_below_the_threshold_gets_none() {
 
 #[test]
 fn another_nodes_requirement_gets_none() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "b/y", 3);
 
     let lines = synced(&r);
@@ -2591,7 +2803,7 @@ fn another_nodes_requirement_gets_none() {
 
 #[test]
 fn no_reconsider_item_off_node_branches() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("spec/y", "a/x", 3);
 
     let lines = synced(&r);
@@ -2600,7 +2812,7 @@ fn no_reconsider_item_off_node_branches() {
 
 #[test]
 fn no_reconsider_item_when_the_settings_cant_be_loaded() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
 
     let report =
@@ -2611,7 +2823,7 @@ fn no_reconsider_item_when_the_settings_cant_be_loaded() {
 
 #[test]
 fn an_untracked_reconsider_item_counts_as_filed() {
-    // req:sync/file-reconsider-item@1f67b16b
+    // req:sync/file-reconsider-item@ea601011
     let r = flagged("impl/a", "a/x", 3);
     write(&r.work, "backlog/reconsider-a-x.md", "mine\n");
 
@@ -2622,7 +2834,7 @@ fn an_untracked_reconsider_item_counts_as_filed() {
 
 #[test]
 fn a_proposal_title_is_written_as_a_json_string() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     let title = "Say \"hi\": now";
     ledger(
@@ -2643,7 +2855,7 @@ fn a_proposal_title_is_written_as_a_json_string() {
 
 #[test]
 fn a_graph_with_violations_files_no_proposal() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     write(&r.work, "backlog/broken.md", "---\nkind: idea\n---\n");
     commit(&r.work, "an item without a title");
@@ -2675,7 +2887,7 @@ fn main_holds_proposed_y() -> Repo {
 
 #[test]
 fn a_branch_applies_a_change_main_holds() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = main_holds_proposed_y();
     clm_apply::apply(&r.work, "y").unwrap();
     write(
@@ -2701,7 +2913,7 @@ fn a_branch_applies_a_change_main_holds() {
 
 #[test]
 fn a_branch_applies_and_archives_a_change_main_holds() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = main_holds_proposed_y();
     clm_apply::apply(&r.work, "y").unwrap();
     commit(&r.work, "Apply y");
@@ -2723,7 +2935,7 @@ fn a_branch_applies_and_archives_a_change_main_holds() {
 
 #[test]
 fn a_change_main_holds_applied_is_not_applied_again() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -2737,7 +2949,7 @@ fn a_change_main_holds_applied_is_not_applied_again() {
 
 #[test]
 fn a_change_main_holds_proposed_stays_unregenerated_while_proposed() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = main_holds_proposed_y();
     write(&r.work, "specs/a/SPEC.md", &node_a("specd", "c2", &["p"]));
     commit(&r.work, "hand edit");
@@ -2750,7 +2962,7 @@ fn a_change_main_holds_proposed_stays_unregenerated_while_proposed() {
 
 #[test]
 fn a_branch_applies_a_change_main_holds_approved() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/z");
     write(
         &r.work,
@@ -2777,7 +2989,7 @@ fn a_branch_applies_a_change_main_holds_approved() {
 
 #[test]
 fn a_change_archived_abandoned_is_not_applied() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = main_holds_proposed_y();
     let md = read(&r.work, "changes/y/change.md").replace("proposed", "applied");
     write(&r.work, "changes/y/change.md", &md);
@@ -2831,7 +3043,7 @@ fn other_change_on_main(o_text: &str) -> Repo {
 
 #[test]
 fn another_changes_delta_is_merged() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = other_change_on_main("one\ntwo\nTHREE");
     assert_eq!(
         synced(&r),
@@ -2851,7 +3063,7 @@ fn another_changes_delta_is_merged() {
 
 #[test]
 fn another_changes_delta_is_left_stale() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = other_change_on_main("ONE!\ntwo\nthree");
     let before = read(&r.work, "changes/o/deltas/a.md");
     let lines = unfinished(&r);
@@ -2873,7 +3085,7 @@ fn another_changes_delta_is_left_stale() {
 
 #[test]
 fn a_branch_that_regenerates_nothing_merges_no_other_delta() {
-    // req:sync/reapply@85e68c87
+    // req:sync/reapply@5dc2a995
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -2914,6 +3126,165 @@ fn a_branch_that_regenerates_nothing_merges_no_other_delta() {
     assert_eq!(read(&r.work, "changes/o/deltas/a.md"), stale);
 }
 
+/// *An edit taken back*: `origin/main` with `a`'s Design `one\ntwo\nthree` and a `proposed`
+/// change `o` whose delta rewrites its last line with `origin/main`'s hash as its base, and
+/// branch `spec/x` applying `x`, whose delta rewrites the first line, on which a `clm rebase`
+/// committed `Merge x into o`. With `origin/main`'s Design hash.
+fn merged_into_o() -> (Repo, String) {
+    let (r, main_hash) = x_over_o();
+    assert_eq!(
+        synced(&r),
+        ["merged design of a into changes/o/deltas/a.md"]
+    );
+    assert_eq!(subject(&r), "Merge x into o");
+    (r, main_hash)
+}
+
+/// [`merged_into_o`] before its `clm rebase`.
+fn x_over_o() -> (Repo, String) {
+    let r = repo("spec/x");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_design("one\ntwo\nthree", &["p"]))],
+    );
+    pull(&r);
+    let main_hash = design_hash(&r);
+    let o_delta = modifies_design(&r, "one\ntwo\nTHREE");
+    main_moves(
+        &r,
+        &[
+            ("changes/o/change.md", "---\nstatus: proposed\n---\n\n# o\n"),
+            ("changes/o/deltas/a.md", &o_delta),
+        ],
+    );
+    pull(&r);
+    apply_change(&r, "x", "", &modifies_design(&r, "ONE\ntwo\nthree"));
+    (r, main_hash)
+}
+
+/// Sets the branch's `specs/` back to `origin/main`'s.
+fn specs_as_main(r: &Repo) {
+    git(&r.work, &["rm", "-rq", "--", "specs"]);
+    git(&r.work, &["checkout", "origin/main", "--", "specs"]);
+}
+
+/// Runs `clm rebase` and asserts it took `o`'s edit back to `main_hash`.
+fn took_back_o(r: &Repo, main_hash: &str) {
+    let lines = synced(r);
+    assert!(
+        has(
+            &lines,
+            &format!("took back design of a in changes/o/deltas/a.md to base {main_hash}")
+        ),
+        "{lines:?}"
+    );
+    assert!(!lines.iter().any(|l| l.contains("stale-base")), "{lines:?}");
+    assert_eq!(subject(r), "Take back what this branch merged into o");
+    assert_eq!(
+        read(&r.work, "changes/o/deltas/a.md"),
+        git(&r.work, &["show", "origin/main:changes/o/deltas/a.md"]) + "\n"
+    );
+}
+
+#[test]
+fn an_edit_is_taken_back_when_the_change_no_longer_makes_it() {
+    // req:sync/reapply@5dc2a995
+    let (r, main_hash) = merged_into_o();
+    specs_as_main(&r);
+    write(
+        &r.work,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n# x\n",
+    );
+    write(&r.work, "changes/x/deltas/a.md", &adds_x());
+    clm_apply::apply(&r.work, "x").unwrap();
+    commit(&r.work, "x adds a requirement instead");
+
+    took_back_o(&r, &main_hash);
+}
+
+#[test]
+fn an_edit_is_taken_back_on_a_branch_that_regenerates_nothing() {
+    // req:sync/reapply@5dc2a995
+    let (r, main_hash) = merged_into_o();
+    specs_as_main(&r);
+    git(&r.work, &["rm", "-rq", "--", "changes/x"]);
+    commit(&r.work, "drop x");
+
+    took_back_o(&r, &main_hash);
+}
+
+#[test]
+fn a_hand_resolution_is_taken_back_too() {
+    // req:sync/reapply@5dc2a995
+    let (r, main_hash) = merged_into_o();
+    // The same edit, made by hand under another message.
+    git(&r.work, &["reset", "-q", "--soft", "HEAD~1"]);
+    git(&r.work, &["commit", "-qm", "fix o"]);
+    specs_as_main(&r);
+    git(&r.work, &["rm", "-rq", "--", "changes/x"]);
+    commit(&r.work, "drop x");
+
+    took_back_o(&r, &main_hash);
+}
+
+#[test]
+fn the_branchs_own_change_is_taken_back() {
+    // req:sync/reapply@5dc2a995
+    let r = repo("spec/x");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_design("one\ntwo\nthree", &["p"]))],
+    );
+    pull(&r);
+    let main_hash = design_hash(&r);
+    let p_delta = modifies_design(&r, "one\ntwo\nTHREE");
+    write(
+        &r.work,
+        "changes/p/change.md",
+        "---\nstatus: proposed\n---\n\n# p\n",
+    );
+    write(&r.work, "changes/p/deltas/a.md", &p_delta);
+    commit(&r.work, "Propose p");
+    apply_change(&r, "x", "", &modifies_design(&r, "ONE\ntwo\nthree"));
+    assert_eq!(
+        synced(&r),
+        ["merged design of a into changes/p/deltas/a.md"]
+    );
+    assert_eq!(subject(&r), "Merge x into p");
+    specs_as_main(&r);
+    write(
+        &r.work,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n# x\n",
+    );
+    commit(&r.work, "x back to proposed");
+
+    let lines = synced(&r);
+    assert!(
+        has(
+            &lines,
+            &format!("took back design of a in changes/p/deltas/a.md to base {main_hash}")
+        ),
+        "{lines:?}"
+    );
+    assert_eq!(read(&r.work, "changes/p/deltas/a.md"), p_delta);
+}
+
+#[test]
+fn nothing_is_taken_back_with_nothing_changed() {
+    // req:sync/reapply@5dc2a995
+    let (r, _) = merged_into_o();
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    let lines = synced(&r);
+    assert!(
+        !starts(&lines, "merged") && !starts(&lines, "took back"),
+        "{lines:?}"
+    );
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
 const RENAME_P: &str =
     "---\nstatus: proposed\nrenames:\n  - requirement: a/p\n    to: q\n---\n\n## Intent\nRename.\n";
 
@@ -2929,7 +3300,7 @@ fn rename_branch() -> Repo {
 
 #[test]
 fn main_moved_under_a_rename() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
     // `main` adds a requirement `w` to the node and a backlog item blocking `a/p`.
     main_moves(
@@ -2973,7 +3344,7 @@ fn git_env(w: &Path, g: &Path, args: &[&str]) -> String {
 
 #[test]
 fn a_clone_the_environment_names() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     // The child half: the test binary runs itself with the variables set, so no other
     // test in this process sees them.
     if let Ok(work) = std::env::var("CLM_SYNC_TEST_WORK") {
@@ -3006,7 +3377,7 @@ fn a_clone_the_environment_names() {
 
 #[test]
 fn a_defect_report_survives_and_a_second_run_changes_nothing() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
     write(
         &r.work,
@@ -3032,7 +3403,7 @@ fn a_defect_report_survives_and_a_second_run_changes_nothing() {
 
 #[test]
 fn a_hand_edit_on_a_rename_branch() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
     write(&r.work, "src/lib.rs", "one\ntwo\nthree\nfour\n");
     commit(&r.work, "hand edit");
@@ -3047,7 +3418,7 @@ fn a_hand_edit_on_a_rename_branch() {
 
 #[test]
 fn a_rename_main_refuses_leaves_the_branch() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch();
     // `main` gains a `q` of its own, so `a/p` to `a/q` can no longer be carried out.
     main_moves(
@@ -3064,7 +3435,7 @@ fn a_rename_main_refuses_leaves_the_branch() {
 
 #[test]
 fn proposals_are_filed_in_slug_order() {
-    // req:sync/file-proposal-items@e75d388f
+    // req:sync/file-proposal-items@d530f460
     let r = repo("impl/a");
     ledger(
         &r,
@@ -3083,7 +3454,7 @@ fn proposals_are_filed_in_slug_order() {
 
 #[test]
 fn a_lock_met_at_the_reapply_commit_is_waited_out() {
-    // req:sync/git-through-layer@808d5bc4
+    // req:sync/rebase@789d48ec
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     main_moves(
@@ -3164,8 +3535,10 @@ fn uncommitted_spec_edit_in_a_subdirectory_root() {
 fn a_top_level_specs_directory_is_outside_the_root() {
     // req:sync/paths-under-the-root@6e985447
     let r = repo_at("spec/x", TOOL);
+    // On `main`: a file outside the root is code, which would make the branch a build's.
     write(&r.work, "specs/notes.md", "notes\n");
     commit(&r.work, "notes");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "specs/notes.md", "notes, edited\n");
 
@@ -3176,7 +3549,7 @@ fn a_top_level_specs_directory_is_outside_the_root() {
         "{:?}",
         report.lines
     );
-    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), origin_main(&r));
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), origin_main(&r));
     assert_eq!(read(&r.work, "specs/notes.md"), "notes, edited\n");
     assert_eq!(
         git(&r.work, &["status", "--porcelain"]),
@@ -3362,7 +3735,7 @@ fn rename_branch_in_tool() -> Repo {
 
 #[test]
 fn a_rename_in_a_subdirectory_root() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch_in_tool();
     let version = {
         let (graph, violations) = clm_model::load(&tool(&r));
@@ -3401,7 +3774,7 @@ fn a_rename_in_a_subdirectory_root() {
 
 #[test]
 fn a_file_outside_a_subdirectory_root() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch_in_tool();
     write(&r.work, "README.md", "one\nTWO\nthree\n");
     commit(&r.work, "hand edit");
@@ -3414,7 +3787,7 @@ fn a_file_outside_a_subdirectory_root() {
 
 #[test]
 fn a_rename_in_a_subdirectory_root_keeps_its_items_and_follows_main_outside() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch_in_tool();
     write(
         &tool(&r),
@@ -3445,8 +3818,62 @@ fn a_rename_in_a_subdirectory_root_keeps_its_items_and_follows_main_outside() {
 }
 
 #[test]
+fn a_rename_keeps_the_deltas_it_rebased() {
+    // req:sync/regenerate-renames@bab1ba9e req:sync/reapply@5dc2a995
+    let r = repo("spec/r");
+    main_moves(
+        &r,
+        &[(
+            "specs/a/SPEC.md",
+            &node_a("specd", "Print the sprocket.", &["p"]),
+        )],
+    );
+    pull(&r);
+    main_moves(
+        &r,
+        &[
+            ("changes/o/change.md", "---\nstatus: proposed\n---\n\n# o\n"),
+            (
+                "changes/o/deltas/a.md",
+                &modifies_contract(&r, "Print the sprocket.\n\nExit 0."),
+            ),
+        ],
+    );
+    pull(&r);
+    write(
+        &r.work,
+        "changes/r/change.md",
+        "---\nstatus: proposed\nrenames:\n  - term: sprocket\n    to: cogs\n---\n\n## Intent\nRename.\n",
+    );
+    git(&r.work, &["add", "-A"]);
+    clm_rename::rename(&r.work, "r").unwrap();
+    commit(&r.work, "Rename r");
+    let rebased = read(&r.work, "changes/o/deltas/a.md");
+    assert!(rebased.contains("Print the cogs."), "{rebased}");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let lines = synced(&r);
+    assert!(!starts(&lines, "took back"), "{lines:?}");
+    assert_eq!(subject(&r), "Rename r");
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), rebased);
+}
+
+#[test]
+fn an_untracked_file_main_adds_stops_a_rename() {
+    // req:sync/regenerate-renames@bab1ba9e
+    let r = rename_branch();
+    main_moves(&r, &[("src/t.rs", "#[test]\nfn t() {}\n")]);
+    write(&r.work, "src/t.rs", "mine\n");
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    assert_eq!(unfinished(&r), ["uncommitted src/t.rs"]);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+    assert_eq!(read(&r.work, "src/t.rs"), "mine\n");
+}
+
+#[test]
 fn an_untracked_file_main_adds_outside_the_root_stops_a_rename() {
-    // req:sync/regenerate-renames@e831ba37
+    // req:sync/regenerate-renames@bab1ba9e
     let r = rename_branch_in_tool();
     main_moves(&r, &[("notes.md", "main's\n")]);
     write(&r.work, "notes.md", "mine\n");
@@ -3458,4 +3885,442 @@ fn an_untracked_file_main_adds_outside_the_root_stops_a_rename() {
     assert_eq!(report.lines, ["uncommitted ../notes.md"]);
     assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
     assert_eq!(read(&r.work, "notes.md"), "mine\n");
+}
+
+/// The root's `SPEC.md`, setting `wiring` when given.
+fn root_with(wiring: Option<&str>) -> String {
+    let wiring = wiring.map_or(String::new(), |w| format!("wiring: {w}\n"));
+    format!("---\ntitle: Root\nstatus: active\nowners: []\n{wiring}---\n\n## Contract\nr\n")
+}
+
+/// Component `id`, `active`, owning `crates/<id>/**`, with requirement `slug` stating `text`.
+fn owning(id: &str, slug: &str, text: &str) -> String {
+    format!(
+        "---\ntitle: {}\nstatus: active\nowners: []\npaths: [\"crates/{id}/**\"]\n---\n\n\
+         ## Contract\nc\n\n## Design\nd\n\n## Requirements\n\n### Requirement: {slug}\n\
+         {text}\n\n#### Scenario: s\n- ok\n",
+        id.to_uppercase()
+    )
+}
+
+/// *A build's branch of another name*: on `main`, a root setting `wiring` as given, component
+/// `a` owning `crates/a/**` with requirement `r`, component `b` owning `crates/b/**`, a
+/// tracked `README.md` and `ARCHITECTURE.md`, and a complete `applied` change `x` adding
+/// `a/x`, cited in `crates/a/tests/t.rs`; `broken`, when given, is then written over with a
+/// `SPEC.md` that doesn't parse and committed on `main` too. `HEAD` on `branch`, cut there.
+/// Then `origin/main` modifies `a/r` and puts back `broken`'s text, and its ledger holds an
+/// open proposal with slug `s`.
+fn another_name(branch: &str, wiring: Option<&str>, broken: Option<&str>) -> Repo {
+    let r = repo(branch);
+    write(&r.work, "specs/SPEC.md", &root_with(wiring));
+    write(&r.work, "specs/a/SPEC.md", &owning("a", "r", "It SHALL r."));
+    write(&r.work, "specs/b/SPEC.md", &owning("b", "y", "It SHALL y."));
+    write(&r.work, "crates/a/src/lib.rs", "pub fn a() {}\n");
+    write(&r.work, "crates/b/src/lib.rs", "pub fn b() {}\n");
+    write(&r.work, "README.md", "readme\n");
+    write(&r.work, "ARCHITECTURE.md", "invariants\n");
+    commit(&r.work, "components");
+    apply_change(&r, "x", "", &adds_x());
+    write(
+        &r.work,
+        "crates/a/tests/t.rs",
+        &citing("a/x", &version(&r, "a/x")),
+    );
+    commit(&r.work, "test a/x");
+    let mut fixed = vec![(
+        "specs/a/SPEC.md".to_string(),
+        read(&r.work, "specs/a/SPEC.md").replace("It SHALL r.", "It SHALL r, and more."),
+    )];
+    if let Some(path) = broken {
+        fixed.push((path.to_string(), read(&r.work, path)));
+        write(&r.work, path, "---\ntitle: Broken\n---\n");
+        commit(&r.work, "break");
+    }
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    let fixed: Vec<(&str, &str)> = fixed
+        .iter()
+        .map(|(p, t)| (p.as_str(), t.as_str()))
+        .collect();
+    main_moves(&r, &fixed);
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "Body.")],
+    );
+    r
+}
+
+/// Commits an edit to `crates/a/src/lib.rs` on the branch.
+fn edits_a(r: &Repo) {
+    write(&r.work, "crates/a/src/lib.rs", "pub fn a2() {}\n");
+    commit(&r.work, "edit a");
+}
+
+fn has(lines: &[String], line: &str) -> bool {
+    lines.iter().any(|l| l == line)
+}
+
+fn starts(lines: &[String], prefix: &str) -> bool {
+    lines.iter().any(|l| l.starts_with(prefix))
+}
+
+#[test]
+fn a_code_branch_of_another_name_is_a_builds() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("fix/y", Some("[]"), None);
+    edits_a(&r);
+
+    let lines = unfinished(&r);
+    assert_eq!(lines[0], "spec changed a", "{lines:?}");
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(has(&lines, "filed backlog/s.md"), "{lines:?}");
+}
+
+#[test]
+fn a_build_branch_of_another_name_stops_on_any_tracked_edit() {
+    // req:sync/build-branches@581c82df req:sync/rebase@789d48ec
+    let r = another_name("fix/y", Some("[]"), None);
+    edits_a(&r);
+    write(&r.work, "README.md", "readme, edited\n");
+
+    assert_refused(&r, &["uncommitted README.md"]);
+}
+
+#[test]
+fn a_doc_branch_is_no_builds() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("docs/z", Some("[]"), None);
+    write(&r.work, "docs/guide/x.md", "guide\n");
+    commit(&r.work, "guide");
+
+    let lines = synced(&r);
+    assert!(
+        !starts(&lines, "spec changed") && !starts(&lines, "archived") && !starts(&lines, "filed"),
+        "{lines:?}"
+    );
+}
+
+#[test]
+fn an_archive_branch_is_a_builds_without_a_component() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("impl/archive/x", Some("[]"), None);
+
+    let lines = synced(&r);
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(!starts(&lines, "spec changed"), "{lines:?}");
+}
+
+#[test]
+fn a_branch_that_needs_review_is_no_builds_whatever_its_name() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("impl/a", Some("[]"), None);
+    write(&r.work, "ARCHITECTURE.md", "invariants, more\n");
+    commit(&r.work, "architecture");
+
+    let report = sync(&r.work).unwrap();
+    assert!(
+        !starts(&report.lines, "archived") && !starts(&report.lines, "filed"),
+        "{:?}",
+        report.lines
+    );
+    assert_eq!(subject(&r), "architecture");
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), origin_main(&r));
+}
+
+#[test]
+fn a_code_branch_without_wiring_has_no_component() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("fix/y", None, None);
+    edits_a(&r);
+
+    let lines = synced(&r);
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(has(&lines, "filed backlog/s.md"), "{lines:?}");
+    assert!(!starts(&lines, "spec changed"), "{lines:?}");
+}
+
+#[test]
+fn specs_that_dont_load_at_the_merge_base_dont_fail_the_run() {
+    // req:sync/build-branches@581c82df
+    let r = another_name("fix/y", Some("[]"), Some("specs/b/SPEC.md"));
+    edits_a(&r);
+    let lines = unfinished(&r);
+    assert_eq!(lines[0], "spec changed a", "{lines:?}");
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(has(&lines, "filed backlog/s.md"), "{lines:?}");
+
+    // A root that doesn't parse there names no `wiring`: no component.
+    let r = another_name("fix/y", Some("[]"), Some("specs/SPEC.md"));
+    edits_a(&r);
+    let lines = synced(&r);
+    assert!(has(&lines, "archived x"), "{lines:?}");
+    assert!(has(&lines, "filed backlog/s.md"), "{lines:?}");
+    assert!(!starts(&lines, "spec changed"), "{lines:?}");
+}
+
+#[test]
+fn a_branch_adding_scenarios_with_their_code_archives_its_change() {
+    // req:sync/build-branches@581c82df
+    let r = repo("light/y");
+    write(&r.work, "specs/SPEC.md", &root_with(Some("[]")));
+    write(&r.work, "specs/a/SPEC.md", &owning("a", "q", "It SHALL q."));
+    write(&r.work, "crates/a/src/lib.rs", "pub fn a() {}\n");
+    write(
+        &r.work,
+        "crates/a/tests/t.rs",
+        &citing("a/q", &version(&r, "a/q")),
+    );
+    commit(&r.work, "a");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    let base = clm_model::load(&r.work)
+        .0
+        .requirement("a/q")
+        .unwrap()
+        .hash
+        .clone();
+    let scenario = "#### Scenario: y's\n- GIVEN y\n- WHEN it runs\n- THEN it holds\n";
+    apply_change(
+        &r,
+        "y",
+        "",
+        &format!(
+            "---\ncomponent: a\n---\n## MODIFIED Requirements\n\n### Requirement: q <!-- base: \
+             {base} -->\nIt SHALL q.\n\n#### Scenario: s\n- ok\n\n{scenario}"
+        ),
+    );
+    write(&r.work, "crates/a/src/lib.rs", "pub fn a2() {}\n");
+    write(
+        &r.work,
+        "crates/a/tests/t.rs",
+        &citing("a/q", &version(&r, "a/q")),
+    );
+    commit(&r.work, "prove y");
+
+    assert_eq!(synced(&r), ["archived y"]);
+    let md = git(&r.work, &["show", "HEAD:changes/archive/y/change.md"]);
+    assert!(md.contains("status: done"), "{md}");
+    let spec = read(&r.work, "specs/a/SPEC.md");
+    assert!(spec.contains(scenario), "{spec}");
+
+    // Light once archived, and still a build's: nothing more to do.
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+    assert!(!starts(&synced(&r), "archived"));
+    assert_eq!(read(&r.work, "specs/a/SPEC.md"), spec);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
+/// Puts first on this process's `PATH` a stand-in `git` that fails the first `commit` it is
+/// given (its first argument after any `-c <key>=<value>` pairs) as a held `index.lock`
+/// fails one, exit 128, and hands every other call, and every later `commit`, to the real
+/// `git`. Returns the file where it writes the arguments of each `commit` it is given. Each
+/// test that calls it runs in a process of its own.
+fn stand_in_git(r: &Repo) -> PathBuf {
+    let (log, failed) = (
+        r.work.with_file_name("commits"),
+        r.work.with_file_name("failed-once"),
+    );
+    stand_in(
+        r,
+        &format!(
+            "cmd=\nskip=\nfor a in \"$@\"; do\n  if [ -n \"$skip\" ]; then skip=; continue; fi\n  \
+             if [ \"$a\" = -c ]; then skip=1; continue; fi\n  cmd=$a\n  break\ndone\n\
+             if [ \"$cmd\" = commit ]; then\n  printf '%s\\n' \"$*\" >> '{log}'\n  \
+             if [ ! -e '{failed}' ]; then\n    : > '{failed}'\n    echo \"fatal: Unable to \
+             create '$(\"$real\" rev-parse --absolute-git-dir)/index.lock': File exists.\" >&2\n    \
+             exit 128\n  fi\nfi\n",
+            log = log.display(),
+            failed = failed.display(),
+        ),
+    );
+    log
+}
+
+/// Puts first on this process's `PATH` a stand-in `git` that runs `script`, with `$real`
+/// the real `git`, and then hands the call to the real `git`. Each test that calls it runs
+/// in a process of its own.
+fn stand_in(r: &Repo, script: &str) {
+    let real = Command::new("sh")
+        .args(["-c", "command -v git"])
+        .output()
+        .unwrap();
+    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
+    let bin = r.work.with_file_name("bin");
+    fs::create_dir_all(&bin).unwrap();
+    write_exec(
+        &bin.join("git"),
+        &format!("#!/bin/sh\nreal='{real}'\n{script}exec \"$real\" \"$@\"\n"),
+    );
+    let path = std::env::var("PATH").unwrap_or_default();
+    // SAFETY: nextest runs each test in a process of its own, and no other thread reads the
+    // environment meanwhile.
+    unsafe { std::env::set_var("PATH", format!("{}:{path}", bin.display())) };
+}
+
+/// Asserts `HEAD` is the commit `subject`, which the stand-in was given twice, with nothing
+/// left staged.
+fn waited_out(r: &Repo, log: &Path, subject_: &str) {
+    assert_eq!(subject(r), subject_);
+    let calls = fs::read_to_string(log).unwrap();
+    let given = calls
+        .lines()
+        .filter(|l| l.contains(&format!("-m {subject_}")))
+        .count();
+    assert_eq!(given, 2, "{calls}");
+    assert_eq!(git(&r.work, &["diff", "--cached", "--name-only"]), "");
+}
+
+#[test]
+fn a_lock_met_at_the_archive_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = with_applied_x("impl/a", "");
+    write(&r.work, "src/test.rs", &citing("a/x", &version(&r, "a/x")));
+    commit(&r.work, "test a/x");
+    let log = stand_in_git(&r);
+    assert_eq!(synced(&r), ["archived x"]);
+    waited_out(&r, &log, "Archive x");
+}
+
+#[test]
+fn a_lock_met_at_the_activate_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = repo("impl/a");
+    write(&r.work, "src/test.rs", &citing("a/p", &version(&r, "a/p")));
+    commit(&r.work, "test a/p");
+    let log = stand_in_git(&r);
+    assert_eq!(synced(&r), ["activated a"]);
+    waited_out(&r, &log, "Activate a");
+}
+
+#[test]
+fn a_lock_met_at_a_file_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = repo("impl/a");
+    ledger(
+        &r,
+        "alice/web",
+        &[proposed("p1", "alice/web", "s", "S", &["a"], "Body.")],
+    );
+    let log = stand_in_git(&r);
+    assert_eq!(synced(&r), ["filed backlog/s.md"]);
+    waited_out(&r, &log, "File s");
+}
+
+#[test]
+fn a_lock_met_at_a_reapply_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = repo("spec/x");
+    apply_change(&r, "x", "", &adds_x());
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_a("specd", "c", &["p", "y"]))],
+    );
+    let log = stand_in_git(&r);
+    assert_eq!(synced(&r), Vec::<String>::new());
+    waited_out(&r, &log, "Re-apply x");
+}
+
+#[test]
+fn a_lock_met_at_a_merge_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let (r, _) = x_over_o();
+    let log = stand_in_git(&r);
+    assert_eq!(
+        synced(&r),
+        ["merged design of a into changes/o/deltas/a.md"]
+    );
+    waited_out(&r, &log, "Merge x into o");
+}
+
+#[test]
+fn a_lock_met_at_a_take_back_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let (r, main_hash) = merged_into_o();
+    specs_as_main(&r);
+    git(&r.work, &["rm", "-rq", "--", "changes/x"]);
+    commit(&r.work, "drop x");
+    let log = stand_in_git(&r);
+    took_back_o(&r, &main_hash);
+    waited_out(&r, &log, "Take back what this branch merged into o");
+}
+
+#[test]
+fn a_lock_met_at_a_rename_commit_is_waited_out() {
+    // req:sync/rebase@789d48ec
+    let r = rename_branch();
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_a("specd", "c", &["p", "w"]))],
+    );
+    let log = stand_in_git(&r);
+    synced(&r);
+    waited_out(&r, &log, "Rename r");
+}
+
+/// `main` applying `w` and `x`, each adding a requirement of that name to `a`, and branch
+/// `impl/a` with a test citing every requirement of `a`, which is `unbuilt`, at its version.
+fn w_and_x_complete() -> Repo {
+    let r = repo("impl/a");
+    apply_change(&r, "x", "", &adds_x());
+    apply_change(
+        &r,
+        "w",
+        "",
+        &format!(
+            "---\ncomponent: a\n---\n## ADDED Requirements\n{}",
+            requirement("w")
+        ),
+    );
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    let tests: String = ["a/p", "a/w", "a/x"]
+        .iter()
+        .map(|id| citing(id, &version(&r, id)))
+        .collect();
+    write(&r.work, "src/test.rs", &tests);
+    commit(&r.work, "tests");
+    r
+}
+
+#[test]
+fn an_archive_place_taken_leaves_that_change_alone() {
+    // req:sync/archive-complete@26a8a9ff
+    let r = w_and_x_complete();
+    write(&r.work, ".git/info/exclude", "changes/archive/x\n");
+    write(&r.work, "changes/archive/x", "in the way\n");
+
+    let lines = unfinished(&r);
+    assert!(has(&lines, "archived w"), "{lines:?}");
+    assert!(has(&lines, "activated a"), "{lines:?}");
+    assert!(
+        has(
+            &lines,
+            "changes/archive/x: sync/archive-complete: `changes/archive/x` already exists"
+        ),
+        "{lines:?}"
+    );
+    assert!(r.work.join("changes/x/change.md").exists());
+    assert!(r.work.join("changes/archive/w/change.md").exists());
+    assert!(read(&r.work, "specs/a/SPEC.md").contains("status: active"));
+}
+
+#[test]
+fn a_graph_that_doesnt_load_archives_and_activates_nothing() {
+    // req:sync/archive-complete@26a8a9ff
+    let r = w_and_x_complete();
+    main_moves(
+        &r,
+        &[(
+            "specs/b/SPEC.md",
+            "---\ntitle: B\nstatus: active\nowners: []\ndepends_on: [nowhere]\n---\n\n## Contract\nc\n",
+        )],
+    );
+
+    let lines = unfinished(&r);
+    assert!(
+        !starts(&lines, "archived") && !starts(&lines, "activated"),
+        "{lines:?}"
+    );
+    assert!(lines.iter().any(|l| l.contains("nowhere")), "{lines:?}");
+    assert_eq!(subject(&r), "tests");
+    assert!(r.work.join("changes/x/change.md").exists());
+    assert!(read(&r.work, "specs/a/SPEC.md").contains("status: specd"));
 }

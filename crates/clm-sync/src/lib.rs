@@ -84,31 +84,72 @@ pub fn sync(
 ) -> Result<Report, Error> {
     let place = Root::of(root)?;
     let marker = git_path(root, "clm/sync-rebase")?;
-    let rebasing =
-        git_path(root, "rebase-merge")?.exists() || git_path(root, "rebase-apply")?.exists();
-    let ours = rebasing && marker.exists();
-    if !rebasing && marker.exists() {
-        // A rebase it started has since finished or been aborted.
-        fs::remove_file(&marker).map_err(|e| io(&marker, e))?;
+    let merging = git_path(root, "rebase-merge")?;
+    let applying = git_path(root, "rebase-apply")?;
+    // `rebase`: a rebase it started is one whose `rebase-merge` directory holds the file it
+    // writes there when its rebase stops; git removes the directory, and the file with it,
+    // however that rebase is finished or given up, so a later rebase by hand never holds it.
+    // A run killed before it could write the file, or a marker an older `clm` wrote, is
+    // read from the marker (`claims`).
+    let kept = fs::read_to_string(&marker).ok();
+    let ours = merging.join(OURS).exists()
+        || merging.is_dir() && kept.as_deref().is_some_and(|t| claims(t, &merging));
+    if !ours {
+        if applying.join("applying").exists() {
+            return Err(Error::Refused(
+                "a `git am` is in progress; finish it with `git am --continue` or give it up \
+                 with `git am --abort`"
+                    .into(),
+            ));
+        }
+        if merging.exists() || applying.exists() {
+            return Err(Error::Refused(
+                "a rebase `clm rebase` didn't start is in progress; finish it with `git rebase \
+                 --continue` or give it up with `git rebase --abort`"
+                    .into(),
+            ));
+        }
     }
-    // The commit it rebases onto and the changes this branch adds (live, or archived on the
-    // branch), with which of them step 4 regenerates, decided before the rebase starts and
-    // kept in the marker: mid-rebase `HEAD` is a partial branch, and a resume must use the
-    // same driver and regenerate against the same `main` the rebase used, not a newer one. A change counts as added only if it is
-    // also absent at the fresh merge base, so one that `main` archived or removed since the
-    // branch was cut isn't re-applied. The marker holds `onto`, then a line per added change:
-    // its ID when it is regenerated, `added <id>` when it isn't.
-    let (onto, added, fresh) = if ours {
-        let text = fs::read_to_string(&marker).map_err(|e| io(&marker, e))?;
+    // The commit it rebases onto, whether the branch is a build's and whose
+    // (`build-branches`), and the changes this branch adds (live, or archived on the branch),
+    // with which of them step 4 regenerates, decided before the rebase starts and kept in the
+    // marker: mid-rebase `HEAD` is a partial branch, and a resume must use the same driver,
+    // regenerate against the same `main` the rebase used, not a newer one, and read the branch
+    // as it was. A change counts as added only if it is also absent at the fresh merge base,
+    // so one that `main` archived or removed since the branch was cut isn't re-applied. The
+    // marker holds `onto`, the `HEAD` it rebases (`=head <commit>`), the build line, then a
+    // line per added change: its ID when it is regenerated, `added <id>` when it isn't.
+    let (onto, build, added, fresh) = if ours {
+        let text = kept.unwrap_or_default();
         let mut lines = text.lines();
         let onto = lines.next().unwrap_or_default().to_string();
-        let added = lines
-            .map(|l| match l.strip_prefix("added ") {
-                Some(id) => (id.to_string(), false),
-                None => (l.to_string(), true),
-            })
-            .collect();
-        (onto, added, None)
+        let mut build = None;
+        let mut added = Vec::new();
+        for line in lines {
+            if line.starts_with('=') {
+                build = build.or_else(|| Build::parse(line));
+            } else {
+                added.push(match line.strip_prefix("added ") {
+                    Some(id) => (id.to_string(), false),
+                    None => (line.to_string(), true),
+                });
+            }
+        }
+        let build = match build {
+            Some(build) => build,
+            // A marker an older `clm` wrote: asked again, of the branch the rebase replays.
+            None => {
+                let read = |f: &str| fs::read_to_string(merging.join(f)).unwrap_or_default();
+                let name = read("head-name");
+                let name = name.trim();
+                let name = name.strip_prefix("refs/heads/").unwrap_or(name);
+                let tip = read("orig-head");
+                let tip = tip.trim();
+                let merged = !tip.is_empty() && merge_base(root, tip, &onto)?.is_some();
+                Build::of(root, name, &onto, tip, merged)?
+            }
+        };
+        (onto, build, added, None)
     } else {
         let Some(branch) = clm_git::current_branch(root)? else {
             return Err(Error::Refused(
@@ -121,14 +162,19 @@ pub fn sync(
         clm_git::fetch(root)?;
         let onto = git(root, &["rev-parse", &main_ref()])?;
         let fresh = merge_base(root, "HEAD", &onto)?;
-        let work = uncommitted(root, &place, &branch, &onto, fresh.as_deref())?;
+        let build = Build::of(root, &branch, &onto, "HEAD", fresh.is_some())?;
+        let work = uncommitted(root, &place, build.yes, &onto, fresh.as_deref())?;
         if !work.is_empty() {
             return Ok(Report::left(
                 work.iter().map(|p| format!("uncommitted {p}")).collect(),
             ));
         }
+        if marker.exists() {
+            // Left by a rebase it started that has since finished or been given up.
+            fs::remove_file(&marker).map_err(|e| io(&marker, e))?;
+        }
         let added = added_changes(root, &onto, fresh.as_deref())?;
-        (onto, added, fresh)
+        (onto, build, added, fresh)
     };
     let applied: Vec<String> = added
         .iter()
@@ -175,9 +221,11 @@ pub fn sync(
                     env,
                     settings,
                     &onto,
+                    &build,
                     base.as_deref(),
                     &base_file,
                     &[],
+                    true,
                 );
             }
         }
@@ -207,7 +255,8 @@ pub fn sync(
     ];
     let mut continuing = ours;
     if !ours {
-        let mut text = onto.clone();
+        let head = git(root, &["rev-parse", "HEAD"])?;
+        let mut text = format!("{onto}\n=head {head}\n{}", build.line());
         for (id, applied) in &added {
             text.push('\n');
             if !applied {
@@ -237,6 +286,10 @@ pub fn sync(
             Err(clm_git::Error::Failed { stderr, .. }) => stderr,
             Err(e) => return Err(e.into()),
         };
+        // Stopped: the rebase in progress is this one's until git ends it.
+        if merging.is_dir() {
+            write(&merging.join(OURS), "")?;
+        }
         // Named from the root, so a conflict outside it reads `../<path>` and is never one of
         // the root's `specs/`; a `specs/` one is handed back to git root-relative.
         let conflicts: Vec<String> = names(
@@ -298,10 +351,98 @@ pub fn sync(
         env,
         settings,
         &onto,
+        &build,
         base.as_deref(),
         &base_file,
         &applied,
+        false,
     )
+}
+
+/// The file `clm rebase` writes into git's `rebase-merge` directory when its rebase stops.
+const OURS: &str = "clm-rebase";
+
+/// Whether the marker `text` claims the rebase in `merging`, which lacks [`OURS`]: one it
+/// began and was stopped before it could write that file, as by a kill, replays the `HEAD`
+/// the marker records (`=head <commit>`, git's `orig-head`); a rebase begun by hand after
+/// its own finished replays the rebased branch, another commit. A marker an older `clm`
+/// wrote records no `=` line and claims it, as that `clm` read it.
+fn claims(text: &str, merging: &Path) -> bool {
+    let mut equals = text.lines().filter(|l| l.starts_with('='));
+    let Some(head) = text.lines().find_map(|l| l.strip_prefix("=head ")) else {
+        return equals.next().is_none();
+    };
+    fs::read_to_string(merging.join("orig-head")).is_ok_and(|o| o.trim() == head)
+}
+
+/// `build-branches`: whether the branch is a build's, and its component, asked of the gate
+/// once per run.
+struct Build {
+    yes: bool,
+    component: Option<String>,
+}
+
+impl Build {
+    /// The gate's answer for `name` at `head` against `onto` (`gate/evaluate-at`): a build's
+    /// when its kind is `code`, `light` or `mixed`, or it is named `impl/*` and needs no
+    /// review; with no merge base (`merged` false) by its name alone. Its component is
+    /// `<component>` of `impl/<component>`, else the one the gate reads from its files.
+    fn of(root: &Path, name: &str, onto: &str, head: &str, merged: bool) -> Result<Build, Error> {
+        let named = name.starts_with("impl/");
+        let by_name = name
+            .strip_prefix("impl/")
+            .filter(|c| !c.is_empty() && !c.contains('/'))
+            .map(str::to_string);
+        if !merged {
+            return Ok(Build {
+                yes: named,
+                component: by_name,
+            });
+        }
+        let outcome = clm_gate::evaluate_at(root, onto, head, false).map_err(Error::Git)?;
+        let yes = matches!(
+            outcome.kind,
+            clm_gate::Kind::Code | clm_gate::Kind::Light | clm_gate::Kind::Mixed
+        ) || named && !outcome.review;
+        Ok(Build {
+            yes,
+            component: if yes {
+                by_name.or(outcome.component)
+            } else {
+                None
+            },
+        })
+    }
+
+    /// The marker's line for it: `=build <component>`, `=build` or `=other`; `=` starts no
+    /// change ID.
+    fn line(&self) -> String {
+        match (self.yes, &self.component) {
+            (true, Some(c)) => format!("=build {c}"),
+            (true, None) => "=build".into(),
+            (false, _) => "=other".into(),
+        }
+    }
+
+    fn parse(line: &str) -> Option<Build> {
+        let yes = |component: Option<&str>| Build {
+            yes: true,
+            component: component.map(str::to_string),
+        };
+        match line {
+            "=other" => Some(Build {
+                yes: false,
+                component: None,
+            }),
+            "=build" => Some(yes(None)),
+            _ => line.strip_prefix("=build ").map(|c| yes(Some(c))),
+        }
+    }
+
+    /// The component of a build's branch, if it has one.
+    fn component(&self) -> Option<&str> {
+        self.component.as_deref().filter(|_| self.yes)
+    }
 }
 
 /// What follows the rebase, or the regenerated rename commit, on `HEAD`: the regenerate
@@ -314,28 +455,29 @@ fn conclude(
     env: &dyn Fn(&str) -> Option<String>,
     settings: impl FnOnce(&Path) -> Result<clm_health::Settings, String>,
     onto: &str,
+    build: &Build,
     base: Option<&str>,
     base_file: &Path,
     applied: &[String],
+    renamed: bool,
 ) -> Result<Report, Error> {
     // The `merged` lines come first, whatever the outcome.
-    let (mut lines, stale) = regenerate(root, onto, applied)?;
+    let (mut lines, stale) = regenerate(root, onto, applied, renamed)?;
     if !stale.is_empty() {
         // The base file stays: the next run, once the delta is fixed, still owes the
         // spec-changed report for what this rebase brought in.
         lines.extend(stale);
         return Ok(Report::left(lines));
     }
-    let branch = branch(root);
-    let changed = spec_changed(root, place, branch.as_deref(), base, onto)?;
+    let changed = spec_changed(root, place, build.component(), base, onto)?;
     let moved = !changed.is_empty();
     lines.extend(changed);
-    let (done, left) = archive_complete(root, branch.as_deref())?;
+    let (done, left) = archive_complete(root, build.yes)?;
     lines.extend(done);
     let mut warnings = Vec::new();
     // `file-proposal-items`: after archiving, judged by the graph the archive left, which
     // reads the working tree; a graph with violations files nothing, as it archives nothing.
-    if branch.as_deref().is_some_and(|b| b.starts_with("impl/")) {
+    if build.yes {
         let (graph, violations) = clm_model::load(root);
         if violations.is_empty() {
             let (filed, skipped) = items::file_proposals(root, &graph)?;
@@ -347,7 +489,7 @@ fn conclude(
     // temporary worktree removed on every exit path.
     let scratch = Scratch::new(root, place.prefix(), env)?;
     let left: Vec<String> = left.iter().map(clm_check::format).collect();
-    let judged = judge(root, &scratch, branch.as_deref(), settings, &left);
+    let judged = judge(root, &scratch, build.component(), settings, &left);
     let warning = scratch.remove();
     let (judged, passed) = match (judged, warning.as_deref()) {
         (Ok(judged), _) => judged,
@@ -377,13 +519,13 @@ fn conclude(
 fn judge(
     root: &Path,
     scratch: &Scratch,
-    branch: Option<&str>,
+    component: Option<&str>,
     load: impl FnOnce(&Path) -> Result<clm_health::Settings, String>,
     left: &[String],
 ) -> Result<(Vec<String>, bool), Error> {
     let mut lines = Vec::new();
     let settings = load(scratch.clm_root()).map_err(|e| scratch.unscratched(&e, root));
-    if let (Ok(health), Some(node)) = (&settings, node_of(branch)) {
+    if let (Ok(health), Some(node)) = (&settings, component) {
         let filed = items::file_reconsider(root, scratch.clm_root(), node, health)?;
         if filed.iter().any(|l| l.starts_with("filed ")) {
             scratch.checkout(&git(root, &["rev-parse", "HEAD"])?)?;
@@ -412,15 +554,16 @@ fn stash_tip(root: &Path) -> Result<Option<String>, Error> {
 /// file outside it reads `../<path>` and is never under the root's trees. It is
 /// each staged change, which the commits sync makes would sweep in; each tracked file
 /// modified or deleted under `specs/`, `changes/` or `backlog/`, which sync writes; each one
-/// `onto` changed since `base` (every one without a base), which the rebase writes; on
-/// `impl/*` every one, since the later steps read the working tree as `HEAD`; and each
+/// `onto` changed since `base` (every one without a base), which the rebase writes; on a
+/// build's branch (`strict`) every one, since the later steps read the working tree as
+/// `HEAD`; and each
 /// untracked file not ignored under `specs/` or `changes/`, which a `Re-apply` or `Archive`
 /// commit would sweep in. A rename counts under both its paths. Anything else the rebase
 /// sets aside and puts back.
 fn uncommitted(
     root: &Path,
     place: &Root,
-    branch: &str,
+    strict: bool,
     onto: &str,
     base: Option<&str>,
 ) -> Result<Vec<String>, Error> {
@@ -454,7 +597,6 @@ fn uncommitted(
         ),
         None => None,
     };
-    let strict = branch.starts_with("impl/");
     // Each entry is `XY <path>`: `X` the index against `HEAD`, `Y` the working tree against
     // the index.
     let mut paths = BTreeSet::new();
@@ -494,18 +636,6 @@ fn uncommitted(
             .map(|p| place.name(p)),
     );
     Ok(paths.into_iter().collect())
-}
-
-/// The branch checked out, if any.
-fn branch(root: &Path) -> Option<String> {
-    clm_git::current_branch(root).ok().flatten()
-}
-
-/// The node an `impl/<node>` branch builds; a node ID never contains `/`.
-fn node_of(branch: Option<&str>) -> Option<&str> {
-    branch?
-        .strip_prefix("impl/")
-        .filter(|node| !node.is_empty() && !node.contains('/'))
 }
 
 /// A node's spec at a commit: its bundle hash, its requirements' versions by ID, the paths
@@ -558,19 +688,19 @@ fn spec_at(root: &Path, place: &Root, rev: &str, node: &str) -> Result<SpecAt, E
     })
 }
 
-/// `spec-changed`: on a branch `impl/<node>`, when the node's bundle differs between `base`
+/// `spec-changed`: for a build's branch's component, when its bundle differs between `base`
 /// (the merge base before the rebase) and `onto`, says so: `spec changed <node>`, each
 /// `changed <path>` of the bundle that differs, each `requirement <id> <old> -> <new>` of the
 /// node's own requirements whose version changed, appeared or went, and what to read.
-/// Nothing on other branches, or when nothing in the bundle moved.
+/// Nothing without a component, or when nothing in the bundle moved.
 fn spec_changed(
     root: &Path,
     place: &Root,
-    branch: Option<&str>,
+    component: Option<&str>,
     base: Option<&str>,
     onto: &str,
 ) -> Result<Vec<String>, Error> {
-    let (Some(node), Some(base)) = (node_of(branch), base) else {
+    let (Some(node), Some(base)) = (component, base) else {
         return Ok(Vec::new());
     };
     // Nothing a bundle is made of moved: no trees to extract.
@@ -648,17 +778,18 @@ fn spec_changed(
     Ok(out)
 }
 
-/// `archive-complete` (`archive-on-sync`): on a branch `impl/*`, sets each `unbuilt` node with
-/// nothing pending at `HEAD` to `active`, and archives each complete change, deleting the
-/// backlog items it resolves, one `Archive <id>` commit each (the activations ride the first,
-/// or an `Activate <node>` commit of their own). Returns what it did (`activated <node>`,
-/// `archived <id>`) and what stopped an archive.
+/// `archive-complete` (`archive-on-sync`): on a build's branch (`build`), sets each `unbuilt`
+/// node with nothing pending at `HEAD` to `active`, and archives each complete change whose
+/// place in the archive is free, deleting the tracked backlog items it resolves, one
+/// `Archive <id>` commit each (the activations ride the first, or an `Activate <node>` commit
+/// of their own). Returns what it did (`activated <node>`, `archived <id>`) and each change
+/// whose place was taken.
 fn archive_complete(
     root: &Path,
-    branch: Option<&str>,
+    build: bool,
 ) -> Result<(Vec<String>, Vec<clm_model::Violation>), Error> {
     let mut done = Vec::new();
-    if !branch.is_some_and(|b| b.starts_with("impl/")) {
+    if !build {
         return Ok((done, Vec::new()));
     }
     let (graph, violations) = clm_model::load(root);
@@ -682,22 +813,23 @@ fn archive_complete(
         .filter(|n| n.frontmatter.status == clm_model::Status::Specd)
         .filter(|n| !pending.iter().any(|p| p.node == n.id))
         .collect();
-    let complete = clm_coverage::complete_changes(&graph, &markers);
     // The one refusal `archive` can give once a status is `done`, tested before anything is
-    // written, so a refused archive leaves the tree as it was.
-    for id in &complete {
-        let taken = Path::new("changes").join(clm_model::ARCHIVE_DIR).join(id);
-        if root.join(&taken).exists() {
-            return Ok((
-                done,
-                vec![clm_model::Violation {
-                    path: taken.clone(),
-                    rule: "sync/archive-complete",
-                    message: format!("`{}` already exists", taken.display()),
-                }],
-            ));
-        }
-    }
+    // written: a change whose place is taken is left where it is, and the rest go on.
+    let (complete, taken): (Vec<String>, Vec<String>) =
+        clm_coverage::complete_changes(&graph, &markers)
+            .into_iter()
+            .partition(|id| !root.join(archived(id)).exists());
+    let left = taken
+        .iter()
+        .map(|id| {
+            let taken = archived(id);
+            clm_model::Violation {
+                message: format!("`{}` already exists", taken.display()),
+                path: taken,
+                rule: "sync/archive-complete",
+            }
+        })
+        .collect();
     for node in &activated {
         let path = root.join(&node.path);
         write(&path, &with_status(&node.source, "active"))?;
@@ -738,7 +870,12 @@ fn archive_complete(
         git(root, &["commit", "-q", "-m", &format!("Archive {id}")])?;
         done.push(format!("archived {id}"));
     }
-    Ok((done, Vec::new()))
+    Ok((done, left))
+}
+
+/// Where change `id` goes in the archive.
+fn archived(id: &str) -> PathBuf {
+    Path::new("changes").join(clm_model::ARCHIVE_DIR).join(id)
 }
 
 /// `source` with the `status:` line of its frontmatter set to `status`; every other byte,
@@ -901,16 +1038,32 @@ fn change_files(root: &Path, rev: &str) -> Result<BTreeSet<String>, Error> {
 /// `regenerate-applied-specs`: sets `specs/` to `onto`'s with each change in `ids`
 /// re-applied (`regenerated`), committing the result when it differs from `HEAD`. A change
 /// that doesn't apply stops it before it writes anything to `specs/`. Then the deltas of the
-/// other live `proposed` or `approved` changes the regenerated tree made stale are merged
-/// too (`sync.regenerate/stale-delta-merge`). Returns the `merged` lines, and what is left: the violations
-/// and the stale-delta report.
+/// other live `proposed` or `approved` changes the regenerated tree made stale are merged,
+/// and those a merge or a hand resolution set to a base only the branch's tree had taken
+/// back (`sync.regenerate/stale-delta-merge`). With no change in `ids`, that is done against
+/// `onto`'s own `specs/`, writing nothing to `specs/`, only when the branch since `onto`
+/// changed a live change's delta file, unless the branch is a rename's (`renamed`), whose
+/// commit rebased those deltas itself. Returns the `merged` lines, and what is left: the
+/// violations and the stale-delta report.
 fn regenerate(
     root: &Path,
     onto: &str,
     ids: &[String],
+    renamed: bool,
 ) -> Result<(Vec<String>, Vec<String>), Error> {
     if ids.is_empty() {
-        return Ok((Vec::new(), Vec::new()));
+        if renamed || !deltas_moved(root, onto)? {
+            return Ok((Vec::new(), Vec::new()));
+        }
+        return match regenerated(root, onto, &[], true)? {
+            Regenerated::Tree(mut tree) => {
+                let mut merged = std::mem::take(&mut tree.merged);
+                let (lines, left) = tree.other_deltas(root, &[], onto)?;
+                merged.extend(lines);
+                Ok((merged, left))
+            }
+            Regenerated::Stopped { merged, left } => Ok((merged, left)),
+        };
     }
     let mut tree = match regenerated(root, onto, ids, true)? {
         Regenerated::Tree(tree) => tree,
@@ -959,6 +1112,32 @@ fn regenerate(
     Ok((merged_lines, left))
 }
 
+/// Whether a commit in `onto..HEAD` changes a delta file of a live `proposed` or `approved`
+/// change at `HEAD`, read by path, never by a commit's message, so a `Merge` commit and a
+/// hand resolution count alike.
+fn deltas_moved(root: &Path, onto: &str) -> Result<bool, Error> {
+    let mut dirs = Vec::new();
+    for file in change_files(root, "HEAD")? {
+        let Some(dir) = file.strip_suffix("change.md") else {
+            continue;
+        };
+        if dir.starts_with(&format!("changes/{}/", clm_model::ARCHIVE_DIR)) {
+            continue;
+        }
+        let text = git(root, &["show", &object("HEAD", &file)])?;
+        if clm_model::parse_change_frontmatter(&text).is_some_and(|fm| fm.status.is_pending()) {
+            dirs.push(format!("{dir}deltas"));
+        }
+    }
+    if dirs.is_empty() {
+        return Ok(false);
+    }
+    let range = format!("{onto}..HEAD");
+    let mut args = vec!["log", "--format=%H", &range, "--"];
+    args.extend(dirs.iter().map(String::as_str));
+    Ok(!git(root, &args)?.is_empty())
+}
+
 /// `autosync-policy`: on a `spec/*` branch, pushes `HEAD` with the working tree's spec paths
 /// (untracked files included) to `origin` as `autosync/<branch>`, leaving the working tree,
 /// the index and the branch untouched. Does nothing on other branches or when `origin`
@@ -970,7 +1149,7 @@ pub fn autosync(root: &Path) -> Result<(), Error> {
 /// `autosync` with `ssh`, the `GIT_SSH_COMMAND` of the environment the caller was given,
 /// handed to git as it is; with none, ssh may neither ask nor wait long.
 fn snapshot(root: &Path, ssh: Option<&OsStr>) -> Result<(), Error> {
-    let Some(branch) = branch(root) else {
+    let Some(branch) = clm_git::current_branch(root).ok().flatten() else {
         return Ok(());
     };
     if !branch.starts_with("spec/") {
