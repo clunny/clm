@@ -712,9 +712,6 @@ When the reader of `clm`'s stdout has gone, a print to it SHALL end the command 
 - WHEN a test reads it
 - THEN a link to `https://clm-app.dev` comes before its first `##` heading, and it links to `https://kubernetes.io/docs/concepts/architecture/controller/`, `https://github.com/obra/superpowers` and `https://claude.com/blog/the-ai-native-sdlc-playbook`
 
-#### Needs
-- ci/security-policy
-
 #### Serves
 - capability/learn-clm
 
@@ -923,7 +920,7 @@ For every entry under `crates/clm-upgrade/corpus/`, a copy upgraded with the bui
 - config/host-setting
 
 ### Requirement: verify-command
-`clm` SHALL dispatch `clm verify [--due [--event work-done] [--dry-run] | --commit <sha> | --import | --bisect <sha>]` to `clm-verify`, for the CLM repository found from the current directory (`root-from-cwd`), and `clm --help` SHALL list it. It SHALL pass `clm-verify`'s call `/proc/meminfo` as the memory file, a minute of 60 seconds, a grace of 10 seconds and a stop request it sets when `clm verify` gets `SIGINT` or `SIGTERM` while the mutation pass runs (`verify/mutation-pass`), a further such signal during the pass changing nothing; once the call returns after such a signal, `clm verify` SHALL exit with 128 plus the signal's number. A signal at any other time ends it as it would any process.
+`clm` SHALL dispatch `clm verify [--due [--event work-done] [--dry-run] | --commit <sha> | --import | --bisect <sha>]` to `clm-verify`, for the CLM repository found from the current directory (`root-from-cwd`), and `clm --help` SHALL list it. It SHALL call `clm-verify` with its standard call (`verify/mutation-pass`), whose stop request it sets when `clm verify` gets `SIGINT` or `SIGTERM` once it has printed an outcome line starting `verify passed ` until `clm-verify`'s call returns, the mutation pass and the filing of what it found (`verify/files-unproven`) together, a further such signal in that time changing nothing; once the call returns after such a signal, `clm verify` SHALL exit with 128 plus the signal's number. A signal at any other time ends it as it would any process.
 
 #### Scenario: dispatch
 - GIVEN a repository `clm init` has just set up

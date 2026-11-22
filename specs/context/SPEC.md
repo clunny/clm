@@ -11,14 +11,14 @@ serves: [capability/build-from-spec, architecture/ancestor-scoped-context]
 ## Contract
 `clm context <component>` deterministically prints the bundle an agent needs to work on a component: `ARCHITECTURE.md`, CLM's carried constraints in force in a project that isn't CLM's own (`carried-constraints`), the capabilities the component serves, the contract and design of every component among the ancestors from the root down to the component, the component's frontmatter, requirements and list of assets, and the contract of each component it depends on directly, through `depends_on`. `clm context <component> --hash` prints the bundle's content hash, so a caller can tell whether anything an agent working on the component would read has changed (`hash-based-staleness`). It exits 0 with the bundle or its hash, 1 with the graph's violations on standard output and no bundle, and 2 naming the component on standard error when there is no such component (`bundle-errors`); `--help` prints the usage and exits 0, and arguments it can't parse, or a stream it can't write, exit 2 (`commands-in-crate`).
 
-Crate `clm-context` offers the same to a caller that holds a graph (`bundle-components`): `bundle(graph, root, id)` is the bundle `clm context <id>` prints for the checkout at `root`, or nothing when the graph holds no such component, and doesn't judge the graph: for one with violations, where the command prints no bundle, it still gives the text; `hash(bundle)` is what `--hash` prints for it; `bundle_nodes(graph, id)` is the IDs of the components whose specs the bundle holds; and `served_capabilities(graph, component)` is the capability entries whose blocks it holds. `clm rebase` reads all four to report a spec that moved under a build and which files moved (`sync/spec-changed`). `bundle_from(graph, architecture, id)` gives the same bundle without a checkout, from the graph and the text of `ARCHITECTURE.md`, or none: the graph holds `CAPABILITIES.md`'s entries and the carried constraints in force (`bundle-from-text`). The crate builds for `wasm32-unknown-unknown` (`context-builds-for-wasm`), where it offers everything but the command's call.
+Crate `clm-context` offers the same to a caller that holds a graph (`bundle-components`): `bundle(graph, root, id)` is the bundle `clm context <id>` prints for the checkout at `root`, or nothing when the graph holds no such component, and doesn't judge the graph: for one with violations, where the command prints no bundle, it still gives the text; `hash(bundle)` is what `--hash` prints for it; `bundle_nodes(graph, id)` is the IDs of the components whose specs the bundle holds; and `served_capabilities(graph, component)` is the capability entries whose blocks it holds. `clm rebase` reads all four to report a spec that moved under a build and which files moved (`sync/spec-changed`).
 
 `clm-context` offers `clm context` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup, of which this command reads nothing, and a stream each for standard output and standard error, and returns the exit status. `Args` is the command's arguments, which `crates/clm`'s parser reads. `crates/clm` routes the command to the call and adds nothing to what it writes.
 
 ## Design
-Crate `clm-context` with `bundle(graph, root, node_id) -> Option<String>`, built on the `model` graph. It reads `ARCHITECTURE.md` from `root` and calls `bundle_from(graph, architecture: Option<&str>, node_id) -> Option<String>`, which does the rest and touches no filesystem. It gathers the bundle's parts in order (`bundle-deterministic`), each heading and each copied text a part of its own, trims each and joins them once with a blank line. Architecture IDs among a rule's serves add nothing to the served capabilities, since the whole of `ARCHITECTURE.md` is already there.
+Crate `clm-context` with `bundle(graph, root, node_id) -> Option<String>`, built on the `model` graph. It reads `ARCHITECTURE.md` from `root`, the one file it reads, and builds the rest from the graph, which holds `CAPABILITIES.md`'s entries and the carried constraints in force. It gathers the bundle's parts in order (`bundle-deterministic`), each heading and each copied text a part of its own, trims each and joins them once with a blank line. Architecture IDs among a rule's serves add nothing to the served capabilities, since the whole of `ARCHITECTURE.md` is already there.
 
-The command's call and its `Args` are compiled for native targets only, since the argument parser isn't built for wasm.
+The crate is built for the native targets alone: the web app links none of it, and nothing builds it for `wasm32-unknown-unknown`.
 
 ## Requirements
 
@@ -126,30 +126,6 @@ When `<component>` doesn't exist, `clm context` SHALL write the line ``clm conte
 - GIVEN component `a`, and component `b` whose `depends_on` names a component that doesn't exist
 - WHEN `clm context a` runs
 - THEN it exits 1, standard output holds one line per violation, the `model/dependency-dag` one among them, and nothing of `a`'s contract, and standard error is empty
-
-### Requirement: bundle-from-text
-`bundle_from` SHALL return, from a graph and the text of `ARCHITECTURE.md`, the same bundle `clm context` prints for a checkout with that graph and that file.
-
-#### Scenario: same as checkout
-- GIVEN a checkout with `ARCHITECTURE.md` and a component `a`
-- WHEN `bundle_from` runs on its graph and the file's text, and `clm context a` runs on the checkout
-- THEN the two outputs are equal
-
-#### Serves
-- capability/follow-from-browser
-- architecture/web-optional
-
-### Requirement: context-builds-for-wasm
-The `clm-context` crate SHALL build for `wasm32-unknown-unknown`.
-
-#### Scenario: wasm build
-- GIVEN the workspace with the `wasm32-unknown-unknown` target installed
-- WHEN `cargo build -p clm-context --target wasm32-unknown-unknown` runs
-- THEN it succeeds
-
-#### Serves
-- capability/follow-from-browser
-- architecture/web-optional
 
 ### Requirement: bundle-carries-constraints
 When the graph isn't the source of the carried constraints (`model/carried-constraints`), `clm context <component>` SHALL print, after `ARCHITECTURE.md`'s text (or first, when the file is absent) and before `# Capabilities served`, a section `# CLM's constraints`: one line saying these are the constraints CLM carries to every project, from the `clm` that runs, and that `clm guide constraints` explains their tiers; then, for each carried entry in force, in the carried order, `### Constraint: <slug> (<tier>)`, its statement and, for a `replaceable` entry, a line `Guarantee: <text>`. A carried entry the project's `ARCHITECTURE.md` replaces SHALL NOT appear. In the source the section SHALL NOT be printed, since its `ARCHITECTURE.md` already holds the entries. The section's first line SHALL also say that names in backticks it doesn't list are CLM's own decisions and constraints, kept in CLM's repository.
