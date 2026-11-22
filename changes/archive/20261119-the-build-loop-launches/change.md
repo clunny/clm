@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-build-loop-launches-a-component-before-the-component-whose]
 ---
 
