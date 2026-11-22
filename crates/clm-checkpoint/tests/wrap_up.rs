@@ -228,23 +228,18 @@ fn land_code(r: &Repo, branch: &str, tip: &str) -> String {
 
 /// The `landed` record of `branch` at `tip` in `commit`; its fingerprint is `fp-<tip>`.
 fn landed(commit: &str, branch: &str, tip: &str, review: bool, changes: &[&str]) -> Body {
-    Body::Landed {
-        commit: commit.into(),
-        branch: branch.into(),
-        kind: if branch.starts_with("spec/") {
+    Body::landed(
+        commit.into(),
+        branch.into(),
+        if branch.starts_with("spec/") {
             LandKind::Spec
         } else {
             LandKind::Code
         },
         review,
-        fingerprint: format!("fp-{tip}"),
-        code_key: None,
-        changes: changes.iter().map(|c| c.to_string()).collect(),
-        check_seconds: None,
-        steps: vec![],
-        recheck: None,
-        recheck_files: None,
-    }
+        format!("fp-{tip}"),
+    )
+    .with_changes(changes.iter().map(|c| c.to_string()).collect())
 }
 
 /// A build's worktree, where Claude Code puts a subagent's: `.claude/worktrees/agent-<item>`
@@ -1736,19 +1731,8 @@ impl Signed {
             basis: None,
         };
         clm_ledger::append(work, checked, &env).unwrap();
-        let land = Body::Landed {
-            commit: merge.into(),
-            branch: name.into(),
-            kind,
-            review,
-            fingerprint: format!("f-{name}"),
-            code_key: Some(code_key),
-            changes: vec![],
-            check_seconds: None,
-            steps: vec![],
-            recheck: None,
-            recheck_files: None,
-        };
+        let land = Body::landed(merge.into(), name.into(), kind, review, format!("f-{name}"))
+            .with_code_key(Some(code_key));
         let signed = clm_ledger::sign(work, land, "clm-land", &env).unwrap();
         clm_ledger::append(work, signed, &env).unwrap();
     }

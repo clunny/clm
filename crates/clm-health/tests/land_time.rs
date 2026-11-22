@@ -18,19 +18,15 @@ fn step(name: &str, seconds: u64, selected_by: &[&str]) -> TimedStep {
 
 fn land(root: &Path, home: &Path, commit: &str, steps: Vec<TimedStep>) {
     let check_seconds = steps.iter().map(|s| s.seconds).sum();
-    let body = Body::Landed {
-        commit: commit.into(),
-        branch: "impl/a".into(),
-        kind: LandKind::Code,
-        review: false,
-        fingerprint: "f".into(),
-        code_key: None,
-        changes: vec![],
-        check_seconds: Some(check_seconds),
-        steps,
-        recheck: None,
-        recheck_files: None,
-    };
+    let body = Body::landed(
+        commit.into(),
+        "impl/a".into(),
+        LandKind::Code,
+        false,
+        "f".into(),
+    )
+    .with_check_seconds(Some(check_seconds))
+    .with_steps(steps);
     clm_ledger::append(root, body, &ledger_common::env(home, &[])).unwrap();
 }
 

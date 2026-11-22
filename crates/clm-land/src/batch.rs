@@ -661,23 +661,23 @@ impl Batch<'_, '_, '_> {
             let mut entries: Vec<Entry> = Vec::new();
             for (i, m) in chain.members.iter().enumerate() {
                 entries.extend(efforts[i].iter().cloned().map(Into::into));
-                let landed = Body::Landed {
-                    commit: finals.commits[i].clone(),
-                    branch: m.wanted.branch.clone(),
-                    kind: m.judged.kind,
-                    review: m.judged.review,
-                    fingerprint: m.judged.fingerprint.clone(),
-                    code_key: Some(finals.key.clone()),
-                    changes: m.judged.changes.clone(),
-                    check_seconds: (i == 0).then_some(kept.seconds),
-                    steps: if i == 0 {
-                        kept.steps.clone()
-                    } else {
-                        Vec::new()
-                    },
-                    recheck: Some(kept.recheck),
-                    recheck_files: kept.files,
-                };
+                let landed = Body::landed(
+                    finals.commits[i].clone(),
+                    m.wanted.branch.clone(),
+                    m.judged.kind,
+                    m.judged.review,
+                    m.judged.fingerprint.clone(),
+                )
+                .with_code_key(Some(finals.key.clone()))
+                .with_changes(m.judged.changes.clone())
+                .with_check_seconds((i == 0).then_some(kept.seconds))
+                .with_steps(if i == 0 {
+                    kept.steps.clone()
+                } else {
+                    Vec::new()
+                })
+                .with_recheck(Some(kept.recheck))
+                .with_recheck_files(kept.files);
                 // Signed before the push, so a holder that can't sign lands no batch.
                 entries.push(if chain.signed {
                     repo.approval.sign(landed, clm_approval::LAND)?.into()

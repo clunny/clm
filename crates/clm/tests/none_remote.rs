@@ -90,19 +90,13 @@ fn a_repository_set_up_before_gets_its_remote_and_reconnects() {
     git(&work, &["add", "-A"]);
     git(&work, &["commit", "-q", "-m", "land"]);
     let landed = git(&work, &["rev-parse", "HEAD"]);
-    let body = Body::Landed {
-        commit: landed.clone(),
-        branch: "impl/a".into(),
-        kind: LandKind::Code,
-        review: false,
-        fingerprint: "f".into(),
-        code_key: None,
-        changes: vec![],
-        check_seconds: None,
-        steps: vec![],
-        recheck: None,
-        recheck_files: None,
-    };
+    let body = Body::landed(
+        landed.clone(),
+        "impl/a".into(),
+        LandKind::Code,
+        false,
+        "f".into(),
+    );
     clm_ledger::append(&work, body, &|_| None).unwrap();
     assert_eq!(remotes(&work), "");
 

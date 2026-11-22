@@ -650,19 +650,13 @@ pub(crate) fn land_to(
         } else {
             Vec::new()
         };
-        let landed = Body::Landed {
-            commit: merge.clone(),
-            branch: branch.clone(),
-            kind,
-            review,
-            fingerprint,
-            code_key: Some(key),
-            changes: changes.clone(),
-            check_seconds: timing.as_ref().map(|t| t.seconds),
-            steps: timing.map(|t| t.steps).unwrap_or_default(),
-            recheck,
-            recheck_files,
-        };
+        let landed = Body::landed(merge.clone(), branch.clone(), kind, review, fingerprint)
+            .with_code_key(Some(key))
+            .with_changes(changes.clone())
+            .with_check_seconds(timing.as_ref().map(|t| t.seconds))
+            .with_steps(timing.map(|t| t.steps).unwrap_or_default())
+            .with_recheck(recheck)
+            .with_recheck_files(recheck_files);
         // Signed before the push, so a land that can't sign pushes nothing; the pushes of
         // this merge commit share the record.
         let landed: Entry = match signed {

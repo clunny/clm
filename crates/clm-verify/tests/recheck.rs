@@ -23,19 +23,16 @@ fn breaking_lands() -> (Fixture, [String; 3]) {
 
 /// A `landed` record for `commit` with the given re-check.
 fn landed(f: &Fixture, commit: &str, recheck: Option<Recheck>, files: Option<u64>) {
-    let body = Body::Landed {
-        commit: commit.to_string(),
-        branch: "impl/x".to_string(),
-        kind: LandKind::Code,
-        review: false,
-        fingerprint: "fp".to_string(),
-        code_key: Some("codekey-of-the-land".to_string()),
-        changes: vec![],
-        check_seconds: None,
-        steps: vec![],
-        recheck,
-        recheck_files: files,
-    };
+    let body = Body::landed(
+        commit.to_string(),
+        "impl/x".to_string(),
+        LandKind::Code,
+        false,
+        "fp".to_string(),
+    )
+    .with_code_key(Some("codekey-of-the-land".to_string()))
+    .with_recheck(recheck)
+    .with_recheck_files(files);
     clm_ledger::append(&f.work(), body, &f.env()).unwrap();
 }
 
