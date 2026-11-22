@@ -442,6 +442,88 @@ impl Body {
         self
     }
 
+    /// A `landed` body with no code key, changes, check time, steps or recheck, so a caller
+    /// builds one without a literal of the variant and a field the variant gains later breaks
+    /// no caller (`landed-constructor`).
+    pub fn landed(
+        commit: String,
+        branch: String,
+        kind: LandKind,
+        review: bool,
+        fingerprint: String,
+    ) -> Body {
+        Body::Landed {
+            commit,
+            branch,
+            kind,
+            review,
+            fingerprint,
+            code_key: None,
+            changes: vec![],
+            check_seconds: None,
+            steps: vec![],
+            recheck: None,
+            recheck_files: None,
+        }
+    }
+
+    /// A `landed` body with `code_key` as its code key, and any other body unchanged.
+    pub fn with_code_key(mut self, code_key: Option<String>) -> Body {
+        if let Body::Landed { code_key: slot, .. } = &mut self {
+            *slot = code_key;
+        }
+        self
+    }
+
+    /// A `landed` body with `changes` as its changes, and any other body unchanged.
+    pub fn with_changes(mut self, changes: Vec<String>) -> Body {
+        if let Body::Landed { changes: slot, .. } = &mut self {
+            *slot = changes;
+        }
+        self
+    }
+
+    /// A `landed` body with `check_seconds` as its check time, and any other body unchanged.
+    pub fn with_check_seconds(mut self, check_seconds: Option<u64>) -> Body {
+        if let Body::Landed {
+            check_seconds: slot,
+            ..
+        } = &mut self
+        {
+            *slot = check_seconds;
+        }
+        self
+    }
+
+    /// A `landed` body with `steps` as its steps, and any other body unchanged.
+    pub fn with_steps(mut self, steps: Vec<TimedStep>) -> Body {
+        if let Body::Landed { steps: slot, .. } = &mut self {
+            *slot = steps;
+        }
+        self
+    }
+
+    /// A `landed` body with `recheck` as its recheck, and any other body unchanged.
+    pub fn with_recheck(mut self, recheck: Option<Recheck>) -> Body {
+        if let Body::Landed { recheck: slot, .. } = &mut self {
+            *slot = recheck;
+        }
+        self
+    }
+
+    /// A `landed` body with `recheck_files` as its count of files, and any other body
+    /// unchanged.
+    pub fn with_recheck_files(mut self, recheck_files: Option<u64>) -> Body {
+        if let Body::Landed {
+            recheck_files: slot,
+            ..
+        } = &mut self
+        {
+            *slot = recheck_files;
+        }
+        self
+    }
+
     /// The record kind, as `kind` holds it.
     pub fn kind(&self) -> &'static str {
         match self {
