@@ -106,6 +106,20 @@ fn a_setting_config_accepts_that_is_not_a_slug_is_refused() {
 }
 
 #[test]
+fn a_clone_file_of_white_space_is_taken_over() {
+    // req:ledger/writer-identity@39cf81bb
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), "T");
+    let file = dir.path().join(".git/clm/writer");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, " \n\t\n").unwrap();
+    let id = clm_ledger::writer(dir.path(), &env(dir.path(), &[])).unwrap();
+    let clone = id.strip_prefix("t/").expect(&id);
+    assert!(is_hex8(clone), "{id}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap().trim(), clone);
+}
+
+#[test]
 fn a_clm_toml_that_cannot_be_loaded() {
     // req:ledger/writer-identity@39cf81bb
     let dir = tempfile::tempdir().unwrap();
@@ -113,6 +127,7 @@ fn a_clm_toml_that_cannot_be_loaded() {
     // `[verify]` with no `check`: `config` refuses this file.
     std::fs::write(clone.join("clm.toml"), "[verify]\nmode = \"local\"\n").unwrap();
     let env = env(dir.path(), &[("CLM_WRITER", "clunny")]);
+    assert!(clm_config::load(Some(&clone), &env).is_err());
     let id = clm_ledger::writer(&clone, &env).unwrap();
     let digits = id.strip_prefix("clunny/").expect(&id);
     assert!(is_hex8(digits), "{id}");

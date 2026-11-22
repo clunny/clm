@@ -47,8 +47,8 @@ fn person(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<String, E
     };
     if person.is_empty() {
         return Err(Error::Writer(
-            "no writer: set `writer` (CLM_WRITER, or `writer = \"<name>\"` in config.toml), \
-             since git's user.name gives an empty name"
+            "no writer: set `writer` (CLM_WRITER, or `writer = \"<name>\"` in clm.local.toml \
+             or config.toml), since git's user.name gives an empty name"
                 .into(),
         ));
     }
