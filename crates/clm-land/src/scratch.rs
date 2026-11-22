@@ -68,8 +68,15 @@ impl Scratch {
 
 /// The land tree at `top` with `rev` checked out and clean: checked out and cleaned when git
 /// lists it and it is whole; otherwise, or when that fails, whatever is at `top` removed, git's
-/// worktree list pruned and the worktree added afresh.
+/// worktree list pruned and the worktree added afresh. What can't be removed, or added, is a
+/// failure naming `top`, exit 2 (`land/land-tree`).
 fn land_tree_at(root: &Path, top: &Path, rev: &str) -> Result<(), Error> {
+    let at_top = |e: &dyn std::fmt::Display| {
+        Error::Git(format!(
+            "can't make the land tree at {}: {e}",
+            top.display()
+        ))
+    };
     let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     let listed = clm_git::worktrees(root)?
         .iter()
@@ -77,13 +84,14 @@ fn land_tree_at(root: &Path, top: &Path, rev: &str) -> Result<(), Error> {
     if listed && whole(top) && checkout(top, rev).is_ok() {
         return Ok(());
     }
-    match std::fs::symlink_metadata(top) {
-        Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(top)?,
-        Ok(_) => std::fs::remove_file(top)?,
-        Err(_) => {}
-    }
+    let removed = match std::fs::symlink_metadata(top) {
+        Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(top),
+        Ok(_) => std::fs::remove_file(top),
+        Err(_) => Ok(()),
+    };
+    removed.map_err(|e| at_top(&e))?;
     clm_git::git(root, &["worktree", "prune"])?;
-    add(root, top, rev)
+    add(root, top, rev).map_err(|e| at_top(&e))
 }
 
 /// `git worktree add --detach` of `rev` at `top`.

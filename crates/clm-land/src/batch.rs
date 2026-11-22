@@ -585,7 +585,7 @@ impl Batch<'_, '_, '_> {
             )
         };
         self.warnings.push(format!(
-            "clm land: the check of the lands taken together failed; {next}"
+            "the check of the lands taken together failed; {next}"
         ));
         if !others.is_empty()
             && let Some(rest) = self.build(&others)?
@@ -707,7 +707,7 @@ impl Batch<'_, '_, '_> {
         if let Some(land) = repo.settings.land.value.as_ref() {
             crate::cap::apply(ctx.target, land.cap_gb(), &mut warnings);
         }
-        let appended = repo.append_all(entries)?;
+        let appended = repo.append_landed(entries, ctx.branch)?;
         if let Some(last) = appended.last()
             && !last.pushed
         {

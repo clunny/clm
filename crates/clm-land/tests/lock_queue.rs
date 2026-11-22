@@ -58,7 +58,7 @@ fn starts(f: &Fixture) -> Vec<String> {
 
 #[test]
 fn turns_in_arrival_order() {
-    // req:land/lock-queue@f4acb98c
+    // req:land/lock-queue@32c5dce4
     let f = Fixture::new("");
     logging_check(&f);
     let names = ["wa", "wb", "wc"];
@@ -96,7 +96,7 @@ fn turns_in_arrival_order() {
 
 #[test]
 fn a_checked_land_goes_first() {
-    // req:land/lock-queue@f4acb98c
+    // req:land/lock-queue@32c5dce4
     let f = Fixture::new("");
     logging_check(&f);
     f.write("readers-out", "file crates/a/tests/r.rs\n");
@@ -159,7 +159,7 @@ fn a_is_p1(f: &Fixture) {
 
 #[test]
 fn a_p1_land() {
-    // req:land/lock-queue@f4acb98c
+    // req:land/lock-queue@32c5dce4
     let f = Fixture::new("");
     a_is_p1(&f);
     logging_check(&f);
@@ -182,4 +182,134 @@ fn a_p1_land() {
     assert_eq!(starts.len(), 2, "{starts:?}");
     assert!(starts[0].contains("land-tree"), "{starts:?}");
     assert_eq!(tickets(&f.work()), 0);
+}
+
+/// `clm land <args>` as the call, in the fixture's main worktree, on a thread of its own so a
+/// run that never takes its turn fails the test rather than hanging it: its exit status,
+/// stdout and stderr.
+fn call(f: &Fixture, args: &[&str]) -> (u8, String, String) {
+    let (work, env) = (f.work(), f.env(&[]));
+    let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    let (sent, got) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = clm_land::land_command(&args, &work, &env, &mut out, &mut err);
+        let text = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+        let _ = sent.send((code, text(&out), text(&err)));
+    });
+    got.recv_timeout(Duration::from_secs(60))
+        .expect("`clm land` never finished")
+}
+
+/// Holds the lock file `.clm/<name>` as another process would, releasing it after a second.
+fn hold_for_a_second(f: &Fixture, name: &str) -> std::thread::JoinHandle<()> {
+    std::fs::create_dir_all(f.work().join(".clm")).unwrap();
+    let held = std::fs::File::create(f.work().join(".clm").join(name)).unwrap();
+    held.lock().unwrap();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(1));
+        drop(held);
+    })
+}
+
+#[test]
+fn the_waiting_lines() {
+    // req:land/lock-queue@32c5dce4
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a.txt", "x\n")]);
+    let home = std::fs::canonicalize(f.work()).unwrap().join(".clm");
+    let releaser = hold_for_a_second(&f, "land.lock");
+    let (code, _, stderr) = call(&f, &["impl/a"]);
+    releaser.join().unwrap();
+    assert_eq!(code, 0, "{stderr}");
+    let line = format!(
+        "waiting for another land's check on {}: 1 ahead",
+        home.join("land").display()
+    );
+    assert!(stderr.lines().any(|l| l == line), "{stderr}");
+    let releaser = hold_for_a_second(&f, "check.lock");
+    let (code, stdout, stderr) = call(&f, &["--check-only"]);
+    releaser.join().unwrap();
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.ends_with("checks pass\n"), "{stdout}");
+    let line = format!(
+        "waiting for another check on {}: 1 ahead",
+        home.join("check.lock").display()
+    );
+    assert!(stderr.lines().any(|l| l == line), "{stderr}");
+}
+
+#[test]
+fn a_ticket_it_cant_open() {
+    // req:land/lock-queue@32c5dce4
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new("");
+    let queue = f.work().join(".clm/check.queue");
+    std::fs::create_dir_all(&queue).unwrap();
+    // A waiting ticket whose run has ended, which no one may open.
+    let ticket = queue.join("00000000000000000000-ordinary-p5");
+    std::fs::write(&ticket, "").unwrap();
+    std::fs::set_permissions(&ticket, std::fs::Permissions::from_mode(0o000)).unwrap();
+    // Root opens it whatever its mode: the scenario can't be made there.
+    if std::fs::File::open(&ticket).is_ok() {
+        return;
+    }
+    let releaser = hold_for_a_second(&f, "check.lock");
+    let (code, stdout, stderr) = call(&f, &["--check-only"]);
+    releaser.join().unwrap();
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.ends_with("checks pass\n"), "{stdout}");
+    let waits: Vec<&str> = stderr.lines().filter(|l| l.contains(" ahead")).collect();
+    assert_eq!(waits.len(), 1, "{stderr}");
+    assert!(waits[0].ends_with(": 1 ahead"), "{stderr}");
+    assert!(ticket.exists());
+    std::fs::set_permissions(&ticket, std::fs::Permissions::from_mode(0o644)).unwrap();
+}
+
+#[test]
+fn an_unwritable_queue() {
+    // req:land/lock-queue@32c5dce4
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a.txt", "x\n")]);
+    let old = f.remote("main");
+    // A file where the check lock's queue would be.
+    std::fs::create_dir_all(f.work().join(".clm")).unwrap();
+    std::fs::write(f.work().join(".clm/check.queue"), "").unwrap();
+    let releaser = hold_for_a_second(&f, "check.lock");
+    let (code, _, stderr) = call(&f, &["--check-only"]);
+    releaser.join().unwrap();
+    assert_eq!(code, 2, "{stderr}");
+    assert!(stderr.contains(".clm/check.queue"), "{stderr}");
+    assert!(f.lines("check.log").is_empty());
+    // And where the land lock's would be.
+    std::fs::remove_file(f.work().join(".clm/check.queue")).unwrap();
+    std::fs::write(f.work().join(".clm/land.queue"), "").unwrap();
+    let releaser = hold_for_a_second(&f, "land.lock");
+    let (code, _, stderr) = call(&f, &["impl/a"]);
+    releaser.join().unwrap();
+    assert_eq!(code, 2, "{stderr}");
+    assert!(stderr.contains(".clm/land.queue"), "{stderr}");
+    assert!(f.lines("check.log").is_empty());
+    assert_eq!(f.remote("main"), old);
+    assert!(f.landed().is_empty());
+    assert!(f.checked().is_empty());
+}
+
+#[test]
+fn a_priority_that_cant_be_worked_out() {
+    // req:land/lock-queue@32c5dce4
+    // The fixture's `origin/main` holds no specs that load.
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a.txt", "x\n")]);
+    let releaser = hold_for_a_second(&f, "land.lock");
+    let (code, stdout, stderr) = call(&f, &["impl/a"]);
+    releaser.join().unwrap();
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.starts_with("landed "), "{stdout}");
+    let warning = "clm land: warning: land priority not worked out, queueing at P5: ";
+    let line = stderr
+        .lines()
+        .find(|l| l.starts_with(warning))
+        .expect(&stderr);
+    assert!(line.len() > warning.len(), "{stderr}");
 }

@@ -43,12 +43,18 @@ pub(crate) struct Logged {
 
 /// Runs `command` with its stdout and stderr on one pipe, copying what arrives to `err` and
 /// to `log`, created with its directories and truncated first. When the log can't be
-/// created, or a write to it fails, warns naming it and copies to `err` alone. Reads until
-/// the pipe closes, so a check must end what it starts.
-pub(crate) fn run(mut command: Command, log: Option<&Path>, err: Stderr) -> Result<Logged, Error> {
+/// created, or a write to it fails, warns as the command `name`, naming it, and copies to
+/// `err` alone (`land/shared-check-runner`). Reads until the pipe closes, so a check must end
+/// what it starts.
+pub(crate) fn run(
+    mut command: Command,
+    name: &str,
+    log: Option<&Path>,
+    err: Stderr,
+) -> Result<Logged, Error> {
     let warn = |log: &Path, e: std::io::Error| {
         err.line(&format!(
-            "clm land: warning: can't write the check's log at {}: {e}; its output goes to \
+            "{name}: warning: can't write the check's log at {}: {e}; its output goes to \
              stderr alone",
             log.display()
         ));

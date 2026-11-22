@@ -34,20 +34,26 @@ pub struct ReconnectArgs {
     pub root: Option<PathBuf>,
 }
 
-/// The command line `land_command` parses: the command's own arguments, without its name.
+// The command line `land_command` parses: the command's own arguments, without its name.
 #[derive(Parser)]
-#[command(name = "clm land", bin_name = "clm land", no_binary_name = true)]
+#[command(
+    name = "clm land",
+    bin_name = "clm land",
+    no_binary_name = true,
+    about = "Land a branch on `main`: gate it, merge it, check the merge, push it and record the land in the ledger; print `landed <sha> <kind>`"
+)]
 struct LandLine {
     #[command(flatten)]
     args: LandArgs,
 }
 
-/// The command line `reconnect_command` parses.
+// The command line `reconnect_command` parses.
 #[derive(Parser)]
 #[command(
     name = "clm reconnect",
     bin_name = "clm reconnect",
-    no_binary_name = true
+    no_binary_name = true,
+    about = "Push a `main` landed with no remote, and the local ledgers, to a newly added `origin`"
 )]
 struct ReconnectLine {
     #[command(flatten)]
@@ -76,11 +82,12 @@ where
     };
     let root = args.root.as_deref().unwrap_or(root);
     let branch = args.branch.as_deref();
+    let mut said = Output::default();
     let (done, err) = streamed(err, |stderr| match args.check_only {
-        true => crate::check_only::check_only_to(root, branch, env, stderr),
-        false => crate::land::land_to(root, branch, env, stderr),
+        true => crate::check_only::check_only_to(root, branch, env, stderr).map(|o| said = o),
+        false => crate::land::land_into(root, branch, env, stderr, &mut said),
     });
-    report("land", done, out, err).unwrap_or(2)
+    report("land", done, said, out, err).unwrap_or(2)
 }
 
 /// `clm reconnect`, as `land_command` takes its arguments.
@@ -100,10 +107,11 @@ where
         Err(code) => return code,
     };
     let root = args.root.as_deref().unwrap_or(root);
+    let mut said = Output::default();
     let (done, err) = streamed(err, |stderr| {
-        crate::reconnect::reconnect_to(root, env, stderr)
+        crate::reconnect::reconnect_to(root, env, stderr).map(|o| said = o)
     });
-    report("reconnect", done, out, err).unwrap_or(2)
+    report("reconnect", done, said, out, err).unwrap_or(2)
 }
 
 /// The parsed command line, or the exit status once the usage error (2, on `err`) or the help
@@ -133,20 +141,22 @@ fn streamed<R>(err: &mut dyn Write, run: impl FnOnce(Stderr) -> R) -> (R, &mut d
     (done, cell.into_inner())
 }
 
-/// Writes the outcome as `clm <command>` prints it: each warning on `err`, then the lines on
-/// `out`, and gives its exit status.
+/// Writes the outcome as `clm <command>` prints it: each warning `said` holds on `err`,
+/// whatever the outcome, then the lines on `out`, or the refusal on `err`, and gives its exit
+/// status (`land/commands-in-crate`).
 fn report(
     command: &str,
-    done: Result<Output, Error>,
+    done: Result<(), Error>,
+    said: Output,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> io::Result<u8> {
+    for warning in said.warnings {
+        writeln!(err, "clm {command}: warning: {warning}")?;
+    }
     match done {
-        Ok(done) => {
-            for warning in done.warnings {
-                writeln!(err, "clm {command}: warning: {warning}")?;
-            }
-            for line in done.lines {
+        Ok(()) => {
+            for line in said.lines {
                 writeln!(out, "{line}")?;
             }
             Ok(0)

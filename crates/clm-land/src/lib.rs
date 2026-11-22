@@ -33,7 +33,7 @@ pub use check_only::check_only;
 pub use command::{LandArgs, ReconnectArgs, land_command, reconnect_command};
 pub use land::land;
 pub use reconnect::reconnect;
-pub use runner::{CheckEnv, CheckRun, Step, run_check};
+pub use runner::{CheckEnv, CheckRun, Step, run_check, run_check_as};
 
 pub use clm_approval::{Env, Output};
 
@@ -115,6 +115,10 @@ impl From<std::io::Error> for Error {
 /// The branches deleted from `origin` once landed.
 const CLAIM_PREFIXES: [&str; 3] = ["impl/", "spec/", "propose/"];
 
+/// How a warning a land writes as it happens starts, as the command writes every other one
+/// after the run (`land/commands-in-crate`).
+const WARNING: &str = "clm land: warning: ";
+
 const OFFLINE: &str = "offline: origin can't be reached; push and land when it can";
 
 fn is_claim(branch: &str) -> bool {
@@ -159,7 +163,7 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, tried again after a failure (`land/fetch-retry-in-layer`).
+    /// `git fetch origin`, tried again after a failure (`land/offline-land`).
     fn fetch(&self) -> Result<(), Error> {
         self.fetch_with(&["fetch", clm_git::REMOTE])
     }
@@ -371,6 +375,7 @@ impl<'a> Repo<'a> {
             .map(|(_, path)| *path);
         runner::run_in(
             &self.places()?,
+            runner::LAND,
             check,
             dir,
             selection,
@@ -394,7 +399,7 @@ impl<'a> Repo<'a> {
         self.affected(exe, dir, &args, readers)
             .unwrap_or_else(|why| {
                 self.err.line(&format!(
-                    "clm affected failed: {why}; the check runs every test"
+                    "{WARNING}clm affected failed: {why}; the check runs every test"
                 ));
                 Selected::Failed
             })
@@ -408,7 +413,7 @@ impl<'a> Repo<'a> {
         let args = ["--overlap", head, base];
         self.affected(exe, dir, &args, true).unwrap_or_else(|why| {
             self.err.line(&format!(
-                "clm affected failed: {why}; the land checks its own selection"
+                "{WARNING}clm affected failed: {why}; the land checks its own selection"
             ));
             Selected::Failed
         })
@@ -492,11 +497,20 @@ impl<'a> Repo<'a> {
         Ok(clm_ledger::append(&self.root, entry, self.env)?)
     }
 
-    fn append_all(
+    /// `clm_ledger::append_all` of a land's records once `main` holds its merge commit: a failure is git's,
+    /// exit 2, and says that `main` holds the land and that landing `branch` again records it
+    /// (`land/land-push-retry`, `land/unrecorded-land-finished`).
+    fn append_landed(
         &self,
         entries: Vec<clm_ledger::Entry>,
+        branch: &str,
     ) -> Result<Vec<clm_ledger::Appended>, Error> {
-        Ok(clm_ledger::append_all(&self.root, entries, self.env)?)
+        clm_ledger::append_all(&self.root, entries, self.env).map_err(|e| {
+            Error::Git(format!(
+                "{e}\n`main` holds the land, but its records weren't written: run \
+                 `clm land {branch}` again to record it"
+            ))
+        })
     }
 }
 

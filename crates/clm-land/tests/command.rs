@@ -66,7 +66,7 @@ fn with_var<R>(name: &str, value: &str, run: impl FnOnce() -> R) -> R {
 
 #[test]
 fn a_command_called_in_a_test() {
-    // req:land/commands-in-crate@6ed92c77
+    // req:land/commands-in-crate@9f588532
     let f = Fixture::new("");
     f.write("check-prints", "echo checked\n");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -88,7 +88,7 @@ fn a_command_called_in_a_test() {
 
 #[test]
 fn what_the_gate_and_clm_check_print_reaches_the_error_stream() {
-    // req:land/commands-in-crate@6ed92c77
+    // req:land/commands-in-crate@9f588532
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     // The fixture's gate and `clm check`, saying something first.
@@ -127,7 +127,7 @@ fn what_the_gate_and_clm_check_print_reaches_the_error_stream() {
 
 #[test]
 fn the_root_option_overrides_the_root() {
-    // req:land/commands-in-crate@6ed92c77
+    // req:land/commands-in-crate@9f588532
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -139,7 +139,7 @@ fn the_root_option_overrides_the_root() {
 
 #[test]
 fn reconnect_called_in_a_test() {
-    // req:land/commands-in-crate@6ed92c77
+    // req:land/commands-in-crate@9f588532
     let f = Fixture::new("");
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let code = clm_land::reconnect_command(
@@ -156,7 +156,7 @@ fn reconnect_called_in_a_test() {
 
 #[test]
 fn arguments_it_cant_parse() {
-    // req:land/commands-in-crate@6ed92c77
+    // req:land/commands-in-crate@9f588532
     let f = Fixture::new("");
     let main = f.remote("main");
     let out = land(&f, &f.work(), &["--no-such-option"], &[]);
@@ -185,6 +185,111 @@ fn arguments_it_cant_parse() {
     );
     // The test's process goes on, and nothing landed.
     assert_eq!(f.remote("main"), main);
+}
+
+#[test]
+fn its_help() {
+    // req:land/commands-in-crate@9f588532
+    let f = Fixture::new("");
+    let out = land(&f, &f.work(), &["--help"], &[]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stderr.is_empty(), "{}", out.stderr);
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(
+        lines[..3],
+        [
+            "Land a branch on `main`: gate it, merge it, check the merge, push it and record \
+             the land in the ledger; print `landed <sha> <kind>`",
+            "",
+            "Usage: clm land [OPTIONS] [BRANCH]",
+        ],
+        "{}",
+        out.stdout
+    );
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let code =
+        clm_land::reconnect_command(["--help"], &f.work(), &f.env(&[]), &mut stdout, &mut stderr);
+    assert_eq!(code, 0, "{}", text(&stderr));
+    assert!(stderr.is_empty(), "{}", text(&stderr));
+    let stdout = text(&stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(
+        lines[..3],
+        [
+            "Push a `main` landed with no remote, and the local ledgers, to a newly added \
+             `origin`",
+            "",
+            "Usage: clm reconnect [OPTIONS]",
+        ],
+        "{stdout}"
+    );
+}
+
+#[test]
+fn warnings_carry_one_prefix() {
+    // req:land/commands-in-crate@9f588532
+    // A land whose effort can't be read: the fixture is no CLM repository to `clm effort`.
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    let out = land(&f, &f.work(), &["impl/a"], &[]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let effort = out
+        .stderr
+        .lines()
+        .filter(|l| l.starts_with("clm land: warning: effort not recorded: "))
+        .count();
+    assert_eq!(effort, 1, "{}", out.stderr);
+    // Each warning carries the prefix once.
+    assert!(
+        out.stderr
+            .lines()
+            .all(|l| l.matches("clm land: ").count() <= 1),
+        "{}",
+        out.stderr
+    );
+    // A `clm affected` that fails: said as it happens, before the check's output.
+    let f = Fixture::new("");
+    f.write("affected-fails", "");
+    f.write("check-prints", "echo checked\n");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    let out = land(&f, &f.work(), &["impl/a"], &[]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let lines: Vec<&str> = out.stderr.lines().collect();
+    let affected = lines
+        .iter()
+        .position(|l| l.starts_with("clm land: warning: clm affected failed: "))
+        .expect(&out.stderr);
+    let checked = lines
+        .iter()
+        .position(|l| *l == "checked")
+        .expect(&out.stderr);
+    assert!(affected < checked, "{}", out.stderr);
+    assert!(
+        lines.iter().all(|l| l.matches("clm land: ").count() <= 1),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn warnings_come_before_a_refusal() {
+    // req:land/commands-in-crate@9f588532
+    // A land refused once its effort warning is gathered: the warning, then the refusal.
+    let f = Fixture::new("");
+    f.write("check-fails", "");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    let out = land(&f, &f.work(), &["impl/a"], &[]);
+    assert_eq!(out.code, 1, "{}", out.stderr);
+    let lines: Vec<&str> = out.stderr.lines().collect();
+    let warning = lines
+        .iter()
+        .position(|l| l.starts_with("clm land: warning: effort not recorded: "))
+        .expect(&out.stderr);
+    let refusal = lines
+        .iter()
+        .rposition(|l| l.starts_with("clm land: ") && !l.starts_with("clm land: warning: "))
+        .expect(&out.stderr);
+    assert!(warning < refusal, "{}", out.stderr);
 }
 
 /// The first `git` on this process's `PATH`.
@@ -218,7 +323,7 @@ const PUSH_TO_MAIN_FAILS: &str = "if [ \"$1\" = push ]; then for a in \"$@\"; do
 
 #[test]
 fn refetch_fails() {
-    // req:land/land-push-retry@94d61d9c
+    // req:land/land-push-retry@8a065338
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
@@ -241,7 +346,7 @@ fn refetch_fails() {
 
 #[test]
 fn pushed_though_git_failed() {
-    // req:land/land-push-retry@94d61d9c
+    // req:land/land-push-retry@8a065338
     let f = Fixture::new("");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
     // A `git` that pushes to `main` and then reports a failure whatever happened.
@@ -263,8 +368,87 @@ fn pushed_though_git_failed() {
 }
 
 #[test]
+fn pushed_and_built_on() {
+    // req:land/land-push-retry@8a065338
+    let f = Fixture::new("");
+    let head = f.branch("impl/a", &[("b.txt", "b\n")]);
+    // A `git` whose push to `main` goes through, and then another land builds on it before
+    // the push is reported refused.
+    let built_on = "if [ \"$1\" = push ] && [ $status = 0 ]; then for a in \"$@\"; do \
+         case \"$a\" in *:refs/heads/main) m=${a%%:*}; \
+         next=$(\"$REAL\" commit-tree \"$m^{tree}\" -p \"$m\" -m 'built on'); \
+         \"$REAL\" push -q origin \"$next:refs/heads/main\"; exit 1;; esac; done; fi";
+    let path = fake_git(&f, "", built_on);
+    let out = with_var("PATH", &path, || {
+        land(&f, &f.work(), &["impl/a"], &[("PATH", &path)])
+    });
+    let stdout = out.stdout;
+    assert_eq!(out.code, 0, "{stdout}{}", out.stderr);
+    let main = f.remote("main");
+    let merge = f.parents(&f.path("origin.git"), &main)[0].clone();
+    assert_eq!(f.parents(&f.path("origin.git"), &merge)[1], head);
+    assert_eq!(
+        stdout.lines().next(),
+        Some(&*format!("landed {merge} code"))
+    );
+    let landed: Vec<_> = f
+        .landed()
+        .into_iter()
+        .filter(|b| matches!(b, Body::Landed { commit, .. } if *commit == merge))
+        .collect();
+    assert_eq!(landed.len(), 1);
+}
+
+#[test]
+fn append_fails_after_the_push() {
+    // req:land/land-push-retry@8a065338
+    let f = Fixture::new("");
+    let head = f.branch("impl/a", &[("b.txt", "b\n")]);
+    // Once a push to `main` has gone through, every write to a ledger ref fails.
+    let mark = f.path("pushed");
+    let before = format!(
+        "if [ -e '{m}' ] && [ \"$1\" = update-ref ]; then case \"$2\" in *clm/ledger/*) \
+         echo 'fake ledger failure' >&2; exit 1;; esac; fi",
+        m = mark.display()
+    );
+    let after = format!(
+        "if [ \"$1\" = push ] && [ $status = 0 ]; then for a in \"$@\"; do \
+         case \"$a\" in *:refs/heads/main) touch '{m}';; esac; done; fi",
+        m = mark.display()
+    );
+    let path = fake_git(&f, &before, &after);
+    let out = with_var("PATH", &path, || {
+        land(&f, &f.work(), &["impl/a"], &[("PATH", &path)])
+    });
+    let stderr = out.stderr;
+    assert_eq!(out.code, 2, "{stderr}");
+    assert!(stderr.contains("fake ledger failure"), "{stderr}");
+    assert!(stderr.contains("`main` holds the land"), "{stderr}");
+    assert!(stderr.contains("`clm land impl/a`"), "{stderr}");
+    let merge = f.remote("main");
+    assert_eq!(f.parents(&f.path("origin.git"), &merge)[1], head);
+    assert!(f.landed().is_empty());
+    // Again, the script gone: the land is finished, nothing merged.
+    let out = land(&f, &f.work(), &["impl/a"], &[]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(
+        out.stdout.lines().next(),
+        Some(&*format!("landed {merge} code"))
+    );
+    // req:land/commands-in-crate@9f588532
+    // What the land said before it found the land to finish is still said, once.
+    let effort = out
+        .stderr
+        .lines()
+        .filter(|l| l.starts_with("clm land: warning: effort not recorded: "))
+        .count();
+    assert_eq!(effort, 1, "{}", out.stderr);
+    assert_eq!(f.remote("main"), merge);
+}
+
+#[test]
 fn checked_code_takes_no_lock() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();
@@ -299,7 +483,7 @@ fn checked_code_takes_no_lock() {
 
 #[test]
 fn a_waiting_land_says_so() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     // Another process's land holds the lock, through a file of this test's own.
@@ -394,7 +578,12 @@ fn selection_fails_says_why() {
     assert_eq!(out.code, 0, "{stderr}");
     // The first non-empty line of its stderr, trimmed, on one line.
     let line = "clm affected failed: no graph here; the check runs every test";
-    assert!(stderr.lines().any(|l| l == line), "{stderr}");
+    assert!(
+        stderr
+            .lines()
+            .any(|l| l == format!("clm land: warning: {line}")),
+        "{stderr}"
+    );
     assert_eq!(f.lines("check-selection.log"), ["CLM_SELECTION=unset"]);
 }
 
@@ -409,13 +598,19 @@ fn readers_selection_fails_says_why() {
     let stderr = out.stderr;
     assert_eq!(out.code, 0, "{stderr}");
     let line = "clm affected failed: no graph here; the check runs every test";
-    assert!(stderr.lines().any(|l| l == line), "{stderr}");
+    assert!(
+        stderr
+            .lines()
+            .any(|l| l == format!("clm land: warning: {line}")),
+        "{stderr}"
+    );
     assert_eq!(f.lines("check-selection.log"), ["CLM_SELECTION=unset"]);
 }
 
 #[test]
 fn check_log_cant_be_created() {
     // req:land/check-log@6fefb1a1
+    // req:land/shared-check-runner@64d3e878
     let f = Fixture::new("");
     f.write("check-prints", "echo checked\n");
     f.branch("impl/a", &[("b.txt", "b\n")]);

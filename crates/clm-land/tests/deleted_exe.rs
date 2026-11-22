@@ -22,7 +22,7 @@ fn beside_self() -> tempfile::TempDir {
 
 #[test]
 fn the_running_binarys_file_deleted() {
-    // req:land/land-binary-copy@a11966b0
+    // req:land/land-binary-copy@735a6495
     if std::env::var_os(CHILD).is_none() {
         let scratch = beside_self();
         let copy = scratch.path().join("deleted-exe");
@@ -67,7 +67,7 @@ const REPLACED: &str = "CLM_TEST_REPLACED_EXE_CHILD";
 
 #[test]
 fn the_running_binarys_file_replaced() {
-    // req:land/land-binary-copy@a11966b0
+    // req:land/land-binary-copy@735a6495
     if std::env::var_os(REPLACED).is_none() {
         let scratch = beside_self();
         let copy = scratch.path().join("replaced-exe");

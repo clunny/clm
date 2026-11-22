@@ -406,7 +406,7 @@ fn clm_in_a_subdirectory_builds_under_its_own_clm_directory() {
 #[test]
 fn land_from_a_linked_worktree() {
     // req:land/shared-land-target@2c8695d7
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let linked = f.path("linked");
@@ -443,7 +443,7 @@ fn land_from_a_linked_worktree() {
 
 #[test]
 fn lock_held_through_the_gate_on_the_merge_and_the_push() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     // `origin`'s hook logs whether the lock is held when `main` is pushed.
@@ -475,7 +475,7 @@ done"#,
 #[test]
 fn caller_target_changes_nothing() {
     // req:land/shared-land-target@2c8695d7
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let env = f.env(&[("CARGO_TARGET_DIR", "/elsewhere")]);
@@ -496,7 +496,7 @@ fn caller_target_changes_nothing() {
 
 #[test]
 fn lock_released_after_a_failing_check() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.write("check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -520,7 +520,7 @@ fn lock_released_after_a_failing_check() {
 
 #[test]
 fn conflict_takes_no_lock() {
-    // req:land/land-target-lock@017c470a
+    // req:land/land-target-lock@7fda0acd
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.advance_main("b.txt", "other\n");
@@ -535,7 +535,7 @@ fn conflict_takes_no_lock() {
 
 #[test]
 fn copy_failure_refused() {
-    // req:land/land-binary-copy@a11966b0
+    // req:land/land-binary-copy@735a6495
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
@@ -548,6 +548,43 @@ fn copy_failure_refused() {
     assert_eq!(f.remote("main"), old);
     assert!(f.records().is_empty());
     assert!(f.lines("gate.log").is_empty());
+}
+
+#[test]
+fn every_command_named() {
+    // req:land/land-binary-copy@735a6495
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    // Each of the three commands a passing fake that records what the land's `TMPDIR` holds.
+    let seen = f.path("tmpdir-seen.log");
+    let tmp = f.tmpdir();
+    let recording = |name: &str, real: &str| {
+        let path = f.path(name);
+        let script = format!(
+            "#!/bin/sh\nls -a '{}' >> '{}'\nexec '{}' \"$@\"\n",
+            tmp.display(),
+            seen.display(),
+            f.path(real).display()
+        );
+        common::write_exec(&path, &script);
+        path.display().to_string()
+    };
+    let gate = recording("seen-gate", "bin/gate");
+    let check = recording("seen-check", "bin/clm-check");
+    let affected = recording("seen-affected", "bin/affected");
+    let env = f.env(&[
+        ("CLM_GATE", &gate),
+        ("CLM_CHECK", &check),
+        ("CLM_AFFECTED", &affected),
+    ]);
+    let out = clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
+    assert!(out.lines[0].starts_with("landed "), "{out:?}");
+    let seen = f.lines("tmpdir-seen.log");
+    assert!(!seen.is_empty());
+    assert!(
+        seen.iter().all(|entry| !entry.starts_with("land-bin-")),
+        "{seen:?}"
+    );
 }
 
 #[test]
@@ -723,7 +760,7 @@ fn a_land_that_compiles_nothing_uses_a_temporary_worktree() {
 
 #[test]
 fn one_tree_for_every_land() {
-    // req:land/land-tree@e95a603c
+    // req:land/land-tree@dbdc9528
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
@@ -743,8 +780,32 @@ fn one_tree_for_every_land() {
 }
 
 #[test]
+fn the_land_tree_cant_be_made() {
+    // req:land/land-tree@dbdc9528
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    let old = f.remote("main");
+    // A directory at `.clm/land-tree` holding a file in a directory no one may write: it can
+    // be neither removed nor made a worktree.
+    let stuck = f.work().join(".clm/land-tree/stuck");
+    std::fs::create_dir_all(&stuck).unwrap();
+    std::fs::write(stuck.join("f"), "x").unwrap();
+    std::fs::set_permissions(&stuck, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let done = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[]));
+    std::fs::set_permissions(&stuck, std::fs::Permissions::from_mode(0o755)).unwrap();
+    match done {
+        Err(clm_land::Error::Git(why)) => assert!(why.contains(".clm/land-tree"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+    assert!(f.lines("check.log").is_empty());
+    assert_eq!(f.remote("main"), old);
+    assert!(f.landed().is_empty());
+}
+
+#[test]
 fn leftovers_cleaned() {
-    // req:land/land-tree@e95a603c
+    // req:land/land-tree@dbdc9528
     let f = Fixture::new("");
     // Fails when an earlier check's file is still there, ignored or not.
     f.write(
@@ -766,7 +827,7 @@ fn leftovers_cleaned() {
 
 #[test]
 fn tree_repaired_after_clm_directory_removed() {
-    // req:land/land-tree@e95a603c
+    // req:land/land-tree@dbdc9528
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
@@ -780,7 +841,7 @@ fn tree_repaired_after_clm_directory_removed() {
 
 #[test]
 fn stale_directory_replaced() {
-    // req:land/land-tree@e95a603c
+    // req:land/land-tree@dbdc9528
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let stale = f.work().join(".clm/land-tree");
@@ -797,7 +858,7 @@ fn stale_directory_replaced() {
 
 #[test]
 fn nothing_untracked_in_a_project_that_doesnt_ignore_target() {
-    // req:land/land-tree@e95a603c
+    // req:land/land-tree@dbdc9528
     // The fixture's `.gitignore` holds only `clm init`'s lines.
     let f = Fixture::new("");
     let work = f.work();
@@ -819,7 +880,7 @@ fn nothing_untracked_in_a_project_that_doesnt_ignore_target() {
 
 #[test]
 fn broken_tree_repaired_without_touching_the_main_worktree() {
-    // req:land/land-tree@e95a603c
+    // req:land/land-tree@dbdc9528
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
@@ -855,7 +916,6 @@ fn capped(cap: bool, size: &str) -> Fixture {
 #[test]
 fn target_over_the_cap_cleared() {
     // req:land/land-target-cap@69c8919e
-    // req:land/shared-target-cap@07ebae61
     let f = capped(true, "2000000000");
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     assert!(out.lines.last().unwrap().starts_with("landed "), "{out:?}");

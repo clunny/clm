@@ -34,6 +34,19 @@ pub(crate) fn land_to(
     env: &Env,
     err: Stderr,
 ) -> Result<Output, Error> {
+    let mut out = Output::default();
+    land_into(root, branch, env, err, &mut out).map(|()| out)
+}
+
+/// As `land_to`, gathering what it prints in `out`, whose warnings stand whatever the
+/// outcome, so the command writes them before a refusal (`land/commands-in-crate`).
+pub(crate) fn land_into(
+    root: &Path,
+    branch: Option<&str>,
+    env: &Env,
+    err: Stderr,
+    out: &mut Output,
+) -> Result<(), Error> {
     let repo = Repo::open(root, env, err)?;
     let branch = repo.approval.branch_name(branch, "landed")?;
     let check = repo.settings.land.value.as_ref().map(|l| l.check.clone());
@@ -215,10 +228,7 @@ pub(crate) fn land_to(
             !p.via_settings && p.overlap.is_none() && !checked_with(&p.fold, key, &p.command)
         })
     };
-    let mut out = Output {
-        warnings: effort_warnings,
-        ..Default::default()
-    };
+    out.warnings.extend(effort_warnings);
     let mut temp: Option<Scratch> = None;
     // The land lock and the push turn, kept across attempts: a land that must start again
     // under them holds them still (`land/land-target-lock`, `land/push-turn`).
@@ -248,10 +258,9 @@ pub(crate) fn land_to(
                     head,
                     on_origin,
                 }) => {
-                    let mut done = std::mem::take(&mut out);
-                    return Ok(finish_found(
-                        &repo, &branch, &head, on_origin, &found, &mut done,
-                    ));
+                    let mut done = std::mem::take(out);
+                    *out = finish_found(&repo, &branch, &head, on_origin, &found, &mut done);
+                    return Ok(());
                 }
                 Err(Bail::Unrecorded {
                     commit,
@@ -268,7 +277,15 @@ pub(crate) fn land_to(
                         on_origin,
                         commit: &commit,
                     };
-                    return crate::finish::finish(&ctx);
+                    // What was said before stands beside what finishing says.
+                    let mut done = crate::finish::finish(&ctx)?;
+                    for warning in done.warnings.drain(..) {
+                        if !out.warnings.contains(&warning) {
+                            out.warnings.push(warning);
+                        }
+                    }
+                    out.lines = done.lines;
+                    return Ok(());
                 }
             }
         };
@@ -289,7 +306,7 @@ pub(crate) fn land_to(
             // ticket (`land/lock-queue`).
             let rank = Rank {
                 lane: Lane::Ordinary,
-                priority: land_priority(&repo, &branch, &p, &mut priority, &mut out),
+                priority: land_priority(&repo, &branch, &p, &mut priority, out),
             };
             let held = lock::land(target, rank, &branch, repo.err)?;
             // The land it waited for may have moved `main` or checked this code meanwhile.
@@ -320,8 +337,8 @@ pub(crate) fn land_to(
             match crate::batch::run(&ctx)? {
                 crate::batch::Outcome::Landed(mut done) => {
                     out.warnings.append(&mut done.warnings);
-                    done.warnings = std::mem::take(&mut out.warnings);
-                    return Ok(done);
+                    out.lines = done.lines;
+                    return Ok(());
                 }
                 crate::batch::Outcome::Proceed => {}
                 crate::batch::Outcome::Restart(mut said) => {
@@ -535,9 +552,7 @@ pub(crate) fn land_to(
             lane: check_lane,
             priority: match priority {
                 Some(priority) => priority,
-                None if runs => {
-                    land_priority_at(&repo, &branch, &base, &head, &mut priority, &mut out)
-                }
+                None if runs => land_priority_at(&repo, &branch, &base, &head, &mut priority, out),
                 None => Priority::P5,
             },
         };
@@ -688,7 +703,7 @@ pub(crate) fn land_to(
         let mut entries: Vec<clm_ledger::Entry> = effort.iter().cloned().map(Into::into).collect();
         entries.push(landed);
         let appended = repo
-            .append_all(entries)?
+            .append_landed(entries, &branch)?
             .pop()
             .expect("the landed record was appended last");
 
@@ -719,9 +734,9 @@ pub(crate) fn land_to(
             Verdict::Spec { review: true } => format!("landed {merge} spec review"),
         });
         if branch.starts_with("impl/") {
-            free_build_target(&repo, &branch, &mut out);
+            free_build_target(&repo, &branch, out);
         }
-        return Ok(out);
+        return Ok(());
     }
     Err(Error::Refused(format!(
         "`main` keeps moving: gave up after {ATTEMPTS} attempts"
