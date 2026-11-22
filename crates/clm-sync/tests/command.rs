@@ -8,6 +8,9 @@ use std::process::Command;
 
 use tempfile::TempDir;
 
+#[path = "../../clm-git/tests/exec/mod.rs"]
+mod exec;
+
 fn git(dir: &Path, args: &[&str]) {
     let out = Command::new("git")
         .args(["-c", "commit.gpgsign=false"])
@@ -169,7 +172,7 @@ fn conflicting() -> (TempDir, PathBuf) {
 
 #[test]
 fn a_command_called_in_a_test_writes_its_streams_and_returns_its_status() {
-    // req:sync/commands-in-crate@8e0be5d8
+    // req:sync/commands-in-crate@8e0be5d8 req:sync/autosync@462cfce4
     let (dir, work) = conflicting();
     // `--root` overrides the root the call is given.
     let elsewhere = dir.path().join("not-a-repo");
@@ -220,7 +223,7 @@ fn the_temporary_worktree_goes_under_the_tmpdir_the_environment_names() {
 
 #[test]
 fn a_failed_autosync_writes_why_and_returns_the_failures_status() {
-    // req:sync/commands-in-crate@8e0be5d8
+    // req:sync/commands-in-crate@8e0be5d8 req:sync/autosync@462cfce4
     let (dir, work) = conflicting();
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     write(&work, "specs/SPEC.md", "edited\n");
@@ -387,9 +390,92 @@ fn a_refused_sync_keeps_its_output() {
     assert_eq!(stdout.lines().last(), Some("rebase incomplete"), "{out:?}");
 }
 
+/// `conflicting()`'s work clone on a new branch `spec/x` with an uncommitted edit to
+/// `specs/SPEC.md`, whose `origin` is `url` when given.
+fn spec_branch_with_an_edit(url: Option<&str>) -> (TempDir, PathBuf) {
+    let (dir, work) = conflicting();
+    git(&work, &["checkout", "-q", "-b", "spec/x"]);
+    write(&work, "specs/SPEC.md", "edited\n");
+    if let Some(url) = url {
+        git(&work, &["remote", "set-url", "origin", url]);
+    }
+    (dir, work)
+}
+
+#[test]
+fn autosync_that_pushes_prints_nothing() {
+    // req:sync/autosync@462cfce4
+    let (dir, work) = spec_branch_with_an_edit(None);
+    let out = clm(&work, &["autosync"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty() && out.stderr.is_empty(), "{out:?}");
+    let origin = dir.path().join("origin");
+    let pushed = Command::new("git")
+        .args(["rev-parse", "--verify", "-q", "refs/heads/autosync/spec/x"])
+        .current_dir(&origin)
+        .output()
+        .unwrap();
+    assert!(pushed.status.success(), "nothing pushed: {pushed:?}");
+}
+
+/// Puts `dir` first on this process's `PATH` and takes `GIT_SSH_COMMAND` out of its
+/// environment; each test that calls it runs in a process of its own.
+fn path_first_without_ssh_command(dir: &Path) {
+    let path = std::env::var("PATH").unwrap_or_default();
+    // SAFETY: nextest runs each test in its own process, and this one starts no thread
+    // before it.
+    unsafe {
+        std::env::set_var("PATH", format!("{}:{path}", dir.display()));
+        std::env::remove_var("GIT_SSH_COMMAND");
+    }
+}
+
+#[test]
+fn autosync_lets_ssh_neither_ask_nor_wait() {
+    // req:sync/autosync@462cfce4
+    let (dir, work) = spec_branch_with_an_edit(Some("fakehost:repo.git"));
+    let bin = dir.path().join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let log = dir.path().join("ssh.log");
+    exec::write_exec(
+        &bin.join("ssh"),
+        &format!("#!/bin/sh\necho \"$@\" >> '{}'\nexit 1\n", log.display()),
+    );
+    path_first_without_ssh_command(&bin);
+
+    let out = clm(&work, &["autosync"]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    let args = fs::read_to_string(&log).expect("ssh never ran");
+    assert!(args.contains("-o BatchMode=yes"), "{args}");
+    assert!(args.contains("-o ConnectTimeout=10"), "{args}");
+}
+
+#[test]
+fn autosync_hands_git_the_ssh_command_it_is_given() {
+    // req:sync/autosync@462cfce4
+    let (dir, work) = spec_branch_with_an_edit(Some("fakehost:repo.git"));
+    let ran = dir.path().join("ran");
+    let ssh = dir.path().join("my-ssh");
+    exec::write_exec(
+        &ssh,
+        &format!("#!/bin/sh\ntouch '{}'\nexit 1\n", ran.display()),
+    );
+    path_first_without_ssh_command(&dir.path().join("no-such-dir"));
+    let command = ssh.to_string_lossy().into_owned();
+    let env = |key: &str| (key == "GIT_SSH_COMMAND").then(|| command.clone());
+
+    let out = clm_with(&work, &["autosync"], &env);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).starts_with("clm autosync: "),
+        "{out:?}"
+    );
+    assert!(ran.exists(), "the given ssh command never ran: {out:?}");
+}
+
 #[test]
 fn autosync_exits_0_off_a_spec_branch() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let (_dir, work) = conflicting();
     let out = clm(&work, &["autosync"]);
     assert_eq!(

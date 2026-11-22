@@ -1502,7 +1502,7 @@ fn autosync_tip(r: &Repo, branch: &str) -> Option<String> {
 
 #[test]
 fn autosync_pushes_uncommitted_spec_work_only() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     write(&r.work, "notes.txt", "private\n");
@@ -1530,7 +1530,7 @@ fn autosync_pushes_uncommitted_spec_work_only() {
 
 #[test]
 fn autosync_snapshots_capabilities() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "CAPABILITIES.md", "## Capabilities\n");
 
@@ -1542,7 +1542,7 @@ fn autosync_snapshots_capabilities() {
 
 #[test]
 fn autosync_snapshots_agents_md() {
-    // req:sync/agents-md-spec-path@353e8eb7
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "AGENTS.md", "# Agents\n");
 
@@ -1554,7 +1554,7 @@ fn autosync_snapshots_agents_md() {
 
 #[test]
 fn autosync_pushes_nothing_new() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     autosync(&r.work).unwrap();
@@ -1570,7 +1570,7 @@ fn autosync_pushes_nothing_new() {
 
 #[test]
 fn autosync_never_signs_its_snapshot() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     // Signing that would fail (or prompt) on every turn.
     git(&r.work, &["config", "commit.gpgsign", "true"]);
@@ -1582,7 +1582,7 @@ fn autosync_never_signs_its_snapshot() {
 
 #[test]
 fn autosync_with_nothing_uncommitted_pushes_head() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     commit(&r.work, "delta");
@@ -1595,17 +1595,21 @@ fn autosync_with_nothing_uncommitted_pushes_head() {
 
 #[test]
 fn autosync_ignores_other_branches() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("impl/x/a");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     let refs = origin_refs(&r);
+    autosync(&r.work).unwrap();
+    assert_eq!(origin_refs(&r), refs);
+    // Nor on a detached `HEAD`.
+    git(&r.work, &["checkout", "-q", "--detach"]);
     autosync(&r.work).unwrap();
     assert_eq!(origin_refs(&r), refs);
 }
 
 #[test]
 fn autosync_skips_a_tree_already_on_the_branch() {
-    // req:sync/autosync@9720eb37
+    // req:sync/autosync@462cfce4
     let r = repo("spec/x");
     write(&r.work, "changes/x/deltas/a.md", &adds_x());
     commit(&r.work, "delta");

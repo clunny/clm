@@ -962,8 +962,14 @@ fn regenerate(
 /// `autosync-policy`: on a `spec/*` branch, pushes `HEAD` with the working tree's spec paths
 /// (untracked files included) to `origin` as `autosync/<branch>`, leaving the working tree,
 /// the index and the branch untouched. Does nothing on other branches or when `origin`
-/// already has the same tree.
+/// already has the same tree. A `GIT_SSH_COMMAND` in this process's environment is git's.
 pub fn autosync(root: &Path) -> Result<(), Error> {
+    snapshot(root, std::env::var_os("GIT_SSH_COMMAND").as_deref())
+}
+
+/// `autosync` with `ssh`, the `GIT_SSH_COMMAND` of the environment the caller was given,
+/// handed to git as it is; with none, ssh may neither ask nor wait long.
+fn snapshot(root: &Path, ssh: Option<&OsStr>) -> Result<(), Error> {
     let Some(branch) = branch(root) else {
         return Ok(());
     };
@@ -1025,13 +1031,13 @@ pub fn autosync(root: &Path) -> Result<(), Error> {
     }
     // Nothing may prompt or wait long: no credential prompts, and ssh fails fast rather
     // than asking for a passphrase or host key, unless the user set their own ssh command.
-    let mut env = vec![("GIT_TERMINAL_PROMPT", OsStr::new("0"))];
-    if std::env::var_os("GIT_SSH_COMMAND").is_none() {
-        env.push((
+    let env = [
+        ("GIT_TERMINAL_PROMPT", OsStr::new("0")),
+        (
             "GIT_SSH_COMMAND",
-            OsStr::new("ssh -o BatchMode=yes -o ConnectTimeout=10"),
-        ));
-    }
+            ssh.unwrap_or(OsStr::new("ssh -o BatchMode=yes -o ConnectTimeout=10")),
+        ),
+    ];
     let push = [
         "push",
         "--quiet",
