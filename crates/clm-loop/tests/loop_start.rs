@@ -106,7 +106,8 @@ fn orphan(fx: &Fixture, name: &str, kind: Kind) {
 fn a_refused_relaunch() {
     // req:orchestrator.loop/loop-start@f2c48928
     // req:orchestrator.loop/return-rules@3c0219a4: the finish of a planned run whose `clm run`
-    // refused passes no `--returned`, which `ran`'s exact match proves.
+    // refused passes no `--returned`, which `ran`'s exact match proves, and says none of its
+    // `kept` lines.
     let fx = Fixture::new();
     orphan(&fx, "build:a", Kind::Build);
     fx.set("run-exit-a", "1");
@@ -114,10 +115,18 @@ fn a_refused_relaunch() {
         "run-reason-a",
         "a has uncommitted changes in its worktree\n",
     );
+    fx.set("finish-a", "kept /w/a: a running process holds its lock\n");
 
     let actions = start(&fx.options(), "opus", false).unwrap();
 
     assert_eq!(fx.ran("run --finish a"), 1);
+    assert!(
+        !actions
+            .iter()
+            .filter_map(|a| a.strip_prefix("say "))
+            .any(|f| fs::read_to_string(f).unwrap().contains("kept")),
+        "{actions:?}"
+    );
     assert!(!actions.iter().any(|a| a.starts_with("launch build:a")));
     let text = said(line(&actions, "say "));
     assert!(text.contains("build:a wasn't relaunched"), "{text}");

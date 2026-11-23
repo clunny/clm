@@ -474,7 +474,7 @@ fn a_drafts_return_reported_twice() {
     running(&fx, "draft:d", Kind::Draft, "t-1");
     // Another draft still runs, so no fold is due.
     running(&fx, "draft:e", Kind::Draft, "t-2");
-    for _ in 0..2 {
+    let report = || {
         returned(
             &fx.options(),
             "draft:d",
@@ -483,10 +483,16 @@ fn a_drafts_return_reported_twice() {
             None,
             None,
         )
-        .unwrap();
-    }
+        .unwrap()
+    };
+    report();
+    // A flag the repeated report mustn't clear: it changes nothing but the lease.
+    fx.change_run("draft:d", |r| r.resumed = true);
+    let before = fx.file();
+    report();
     assert_eq!(fx.ran("draft --finish d"), 1, "{:?}", fx.calls());
-    assert_eq!(fx.file().review, ["d"]);
+    let after = unchanged_but_for_the_lease(before, fx.file());
+    assert_eq!(after.review, ["d"]);
 }
 
 #[test]
@@ -518,6 +524,26 @@ fn a_landed_run_in_the_background_with_no_task() {
 
     assert!(why.contains("clm build launched"), "{why}");
     assert_eq!(fx.finishes("a"), 0, "{:?}", fx.calls());
+    unchanged_but_for_the_lease(before, fx.file());
+
+    // Whatever the run's kind: a `land:` run with no task is refused alike.
+    let mut land = run("land:b", Kind::Fold, "sonnet", RunState::Running, None);
+    land.kind = None;
+    land.command = Some("clm land spec/b".to_string());
+    fx.add_run(land);
+    let before = fx.file();
+    let refused = returned(
+        &fx.options(),
+        "land:b",
+        None,
+        "landed 1a2b3c4",
+        Some("running"),
+        None,
+    );
+    assert!(
+        matches!(&refused, Err(clm_git::Failure::Refused(why)) if why.contains("clm build launched")),
+        "{refused:?}"
+    );
     unchanged_but_for_the_lease(before, fx.file());
 }
 

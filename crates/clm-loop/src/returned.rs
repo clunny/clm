@@ -281,14 +281,10 @@ pub fn returned(
     }
     // The `stop` a background run's `landed` return owes names its task: with none reported,
     // nothing changes (`return-rules`).
-    let command = name.starts_with("land:") || name == "verify";
-    if !command
-        && cause == Some("running")
-        && result.trim().starts_with("landed ")
-        && listed.task_id.is_none()
-    {
-        return Err(no_task(name));
-    }
+    let stop_task = match (cause, result.trim().starts_with("landed ")) {
+        (Some("running"), true) => Some(listed.task_id.clone().ok_or_else(|| no_task(name))?),
+        _ => None,
+    };
     let (run, outstanding) = state::update(&options.root, |f| {
         f.lease = Some(now());
         let run = f.run_mut(name).ok_or_else(no_run)?;
@@ -323,8 +319,7 @@ pub fn returned(
         return crate::step::next_actions(options, notes);
     }
     let mut lines = Vec::new();
-    if landed_line && cause == Some("running") {
-        let task = run.task_id.as_deref().ok_or_else(|| no_task(name))?;
+    if let Some(task) = &stop_task {
         lines.push(format!("stop {name} {task}"));
     }
     let proposed = line
