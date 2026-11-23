@@ -485,3 +485,25 @@ fn scenario_an_unproven_item_is_no_draft() {
     let lines = lines(&r);
     assert_eq!(lines, ["group bug:gate [gate] P5 0 v"]);
 }
+
+/// `clm triage` with `args` through its call: the status and the output stream.
+fn triage_out(r: &Repo, args: &[&str]) -> (u8, String) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_triage::triage_command(args, &r.work, &r.work, &|_| None, &mut out, &mut err);
+    let err = String::from_utf8(err).unwrap();
+    assert!(err.is_empty(), "{err}");
+    (code, String::from_utf8(out).unwrap())
+}
+
+#[test]
+fn scenario_a_lapsed_claim() {
+    // req:orchestrator.triage/triage@37e6d0f3
+    let r = with_items(&[("t", "kind: bug\n")]);
+    push_propose(&r.work, "t", 5);
+    assert_eq!(
+        triage_out(&r, &["--expiry", "4"]),
+        (0, "group bug: [] P5 0 t\n".to_string())
+    );
+    // Within a longer expiry the claim still holds it.
+    assert_eq!(triage_out(&r, &["--expiry", "6"]), (0, String::new()));
+}

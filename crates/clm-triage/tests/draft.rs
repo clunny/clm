@@ -264,6 +264,7 @@ fn scenario_items_claimed_and_prompt_written() {
         "git switch -c spec/20261027-a",
         "resolves",
         "left <slug>",
+        "left <slug>: components corrected to <components>",
         "--diff-filter=A",
         "changes/archive/",
         "already fixes",

@@ -200,7 +200,7 @@ fn scenario_items_claimed_and_prompt_written() {
         .lines()
         .find(|l| l.contains("`a`"))
         .unwrap_or_else(|| panic!("{p}"));
-    for needle in ["bug", "P3", "check", "check/x"] {
+    for needle in ["bug", "P3", "components `[check]`", "check/x"] {
         assert!(item_a.contains(needle), "{needle}: {item_a}");
     }
     for needle in [
@@ -210,6 +210,7 @@ fn scenario_items_claimed_and_prompt_written() {
         &format!("git switch -c spec/{id} origin/main"),
         "resolves",
         "left <slug>",
+        "left <slug>: components corrected to <components>",
         "git log -1 --diff-filter=A --format=%as origin/main -- backlog/<slug>.md",
         "changes/archive/",
         "already fixes",
@@ -339,12 +340,68 @@ fn an_unknown_item_is_left() {
 fn a_slug_given_twice_is_claimed_once() {
     // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
+    let today_was = today();
     let ran = clm_draft(&r, &f, &["a", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     assert_eq!(ran.stderr.lines().count(), 1, "{}", ran.stderr);
-    assert!(drafted_id(&ran).ends_with("-a"), "{}", ran.stderr);
+    assert!(!ran.stderr.contains("left"), "{}", ran.stderr);
+    let id = drafted_id(&ran);
+    assert!(
+        [today(), today_was].iter().any(|d| id == format!("{d}-a")),
+        "{}",
+        ran.stderr
+    );
     let p = prompt_of(&r, &ran);
     assert_eq!(p.matches("### `backlog/a.md`").count(), 1);
+}
+
+#[test]
+fn scenario_an_item_gone_from_main() {
+    // req:orchestrator.triage/draft@938d1a0c
+    let (r, f) = (with_items(), fake());
+    // A commit deleting `backlog/a.md`, held on `origin` off any branch until the fake `git`
+    // moves `main` to it.
+    git(&r.work, &["rm", "-q", "backlog/a.md"]);
+    git(&r.work, &["commit", "-qm", "drop a"]);
+    let gone = git(&r.work, &["rev-parse", "HEAD"]).trim().to_string();
+    git(&r.work, &["push", "-q", "origin", "HEAD:refs/x/gone"]);
+    git(&r.work, &["reset", "-q", "--hard", "HEAD~1"]);
+    let real = output(Command::new("sh").args(["-c", "command -v git"]));
+    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
+    let flag = f.out.join("moved");
+    // After the first push naming `origin` (the claim of `a`), `main` loses `backlog/a.md`.
+    write_exec(
+        &f.bin.join("git"),
+        &format!(
+            "#!/bin/sh\n\"{real}\" \"$@\"\ncode=$?\n\
+             if [ \"$1\" = push ] && [ ! -f \"{flag}\" ]; then\n\
+             case \" $* \" in *\" origin \"*)\n\
+             touch \"{flag}\"\n\
+             \"{real}\" --git-dir=\"{origin}\" update-ref refs/heads/main {gone}\n\
+             esac\nfi\nexit $code\n",
+            flag = flag.display(),
+            origin = r.origin.display(),
+        ),
+    );
+    let today_was = today();
+    let ran = clm_draft(&r, &f, &["a", "b"]);
+    assert!(flag.exists(), "the fake git moved main");
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let left = ran
+        .stderr
+        .lines()
+        .find(|l| l.starts_with("left a: "))
+        .unwrap_or_else(|| panic!("{}", ran.stderr));
+    assert!(left.contains("backlog/a.md"), "{left}");
+    let id = drafted_id(&ran);
+    assert!(
+        [today(), today_was].iter().any(|d| id == format!("{d}-b")),
+        "{}",
+        ran.stderr
+    );
+    let p = prompt_of(&r, &ran);
+    assert!(p.contains("### `backlog/b.md`"), "{p}");
+    assert!(!p.contains("### `backlog/a.md`"), "{p}");
 }
 
 #[test]

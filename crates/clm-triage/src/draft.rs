@@ -370,6 +370,12 @@ fn prompt_for(
     } else {
         format!("`priority: {highest}`, the highest among them")
     };
+    // `land.approval/branch-head`'s refusals, for a branch the draft pushed early.
+    let pushed = "A branch you pushed early lands as it stands. When `clm land` refuses it \
+                because it has diverged from `origin/<branch>`, that is a rebase you didn't \
+                push: push with `clm branch push` and land again. When it refuses it because \
+                it is behind `origin/<branch>`, another session pushed the branch: stop with \
+                `stopped: <reason>`.";
     let rebase = "run `clm rebase` and resolve what it reports (conflicted files, stale deltas, \
                 check failures), committing each fix, until its last line is `rebase ok`";
     let mut p = String::from(if resume.is_some() {
@@ -528,7 +534,9 @@ fn prompt_for(
          change yourself, and never push `main`: only `clm land` does. When an item can't be \
          designed without a fact only the human knows or a step only they can take, leave it \
          out of `resolves` and put `left <slug>: <reason>` for it in your final message, \
-         before its closing line; its claim lapses. Claude Code may ask the human to confirm \
+         before its closing line; its claim is released when the draft is finished, \
+         except the claim of an item a waiting change's branch edits, which lapses at its \
+         expiry. Claude Code may ask the human to confirm \
          a tool call: wait for that. When Claude Code refuses a write, don't write it another \
          way, such as through Bash: report the item as left. Every subagent you launch, on \
          any path, names its model through the Agent tool's `model`. Keep the scratch files \
@@ -567,8 +575,8 @@ fn prompt_for(
          `impl/`, `spec/`, `propose/` and `autosync/`, with no claim and any test it adds \
          citing no requirement: delete the item in a commit whose \
          trailer block holds `Resolves: backlog/<slug>`, land it with `clm land <branch>` \
-         once `clm gate --base origin/main` prints `code`, which deletes the pushed branch, \
-         and take the item out of `resolves` \
+         once `clm gate --base origin/main` prints `code`, which deletes the pushed branch \
+         ({pushed}), and take the item out of `resolves` \
          (`small-change-no-claim`). When that Design must change, the change edits the \
          Design, keeps the item in `resolves` and adds a `kind: deferred` item for the code. \
          The bugs whose fix is code-only and lies in one \
@@ -579,8 +587,8 @@ fn prompt_for(
          `Resolves: backlog/<slug>`. {setup_step}Run the repository's checks as `CLAUDE.md` asks, confirm \
          `clm gate --base origin/main` prints `code`, write the pull request body to `{PR_BODY}`, \
          open the pull request with `clm pr open impl/<component> --title <title> --body-file {PR_BODY}` \
-         and land the branch with `clm land impl/<component>`, then `git switch spec/<id>` to go \
-         on. Those items leave `resolves`. When the fix claim is refused, each of that component's \
+         and land the branch with `clm land impl/<component>` ({pushed}), then \
+         `git switch spec/<id>` to go on. Those items leave `resolves`. When the fix claim is refused, each of that component's \
          code-only bugs is left, with `left <slug>: <reason>` naming the claim's reason, since \
          a spec change has nothing to say about them. A code-only bug whose fix lies in no \
          component the item names is filed on the wrong component, since `clm claim --fix` takes only \
@@ -755,7 +763,7 @@ fn prompt_for(
          `clm land spec/<id>` and go by what it prints: a line `landed <sha> ...` ends the \
          draft (unless an item the answers turned into a bug still waits for its fix); otherwise go by its last line. `gate/up-to-date` or a conflict with `main` \
          means {rebase}, push with `clm branch push` and land again; a failing \
-         check means fix it, commit, push and land again.\n\n\
+         check means fix it, commit, push and land again. {pushed}\n\n\
          Before deciding there is no spec change, report the CLM defects you met with \
          `clm defect` on `spec/<id>` (`defect-reports`): `clm defect` writes to the current \
          branch, and once the branch is deleted a report has nowhere to go. A report is a \
