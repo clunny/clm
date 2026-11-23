@@ -33,9 +33,11 @@ fn filing(mode: &str, entry: Option<&str>) -> Filing {
     filing_with(mode, entry, "")
 }
 
-/// As `filing`, with `extra` appended to the clone's `clm.toml`.
+/// As `filing`, with `extra` appended to the clone's `clm.toml`, each `{dir}` in it written as
+/// the fixture's directory.
 fn filing_with(mode: &str, entry: Option<&str>, extra: &str) -> Filing {
     let f = Fixture::new(None);
+    let extra = extra.replace("{dir}", &f.path("").display().to_string());
     let version = clm_model::load(&f.work())
         .0
         .requirement("a/thing")
@@ -378,9 +380,13 @@ fn a_stop_with_nothing_current_to_file_says_nothing() {
 #[test]
 fn a_filing_command_ended_by_a_signal() {
     // req:verify/files-unproven@1f7d71f7
-    // The land's check sends `SIGINT` to its own shell, as a Ctrl-C at a terminal reaches
-    // every process of `clm verify`'s group.
-    let p = filing_with("local", None, "\n[land]\ncheck = \"kill -INT $$\"\n");
+    // The land's check writes its process group and sends `SIGINT` to its own shell, as a
+    // Ctrl-C at a terminal reaches every process of `clm verify`'s group.
+    let p = filing_with(
+        "local",
+        None,
+        "\n[land]\ncheck = \"ps -o pgid= -p $$ > {dir}check-pgid; kill -INT $$\"\n",
+    );
     let before = p.head();
     let out = p.f.due();
     assert_eq!(out.code, 0);
@@ -390,6 +396,15 @@ fn a_filing_command_ended_by_a_signal() {
     assert_ne!(note, "unproven: not filed: stopped");
     // The reason names the check the signal ended.
     assert!(note.contains("kill -INT $$"), "{note}");
+    // The check ran in this process's group, not in one of its own, so a signal sent to the
+    // group reaches it.
+    let own = std::process::Command::new("ps")
+        .args(["-o", "pgid=", "-p", &std::process::id().to_string()])
+        .output()
+        .unwrap();
+    let own = String::from_utf8(own.stdout).unwrap();
+    let checks = fs::read_to_string(p.f.path("check-pgid")).expect("the check ran");
+    assert_eq!(checks.trim(), own.trim());
     assert_eq!(p.head(), before);
     assert_eq!(p.on_origin(&p.item()), None);
     no_branch_left(&p);
