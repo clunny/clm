@@ -4,6 +4,7 @@ mod common;
 
 use std::fs;
 
+use clm_git::Failure;
 use clm_loop::{Kind, RunState, cleared, returned, step, stored_plan};
 use common::{Fixture, line, rfc3339, run};
 
@@ -23,7 +24,7 @@ fn stop(fx: &Fixture, name: &str, result: &str, cause: &str, until: Option<&str>
 
 #[test]
 fn a_limit() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     running(&fx, "build:a", "t-1");
     let until = rfc3339(clm_git::now() + 3600);
@@ -48,7 +49,7 @@ fn a_limit() {
 
 #[test]
 fn a_limit_resumes_each_time_it_recurs() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     running(&fx, "build:a", "t-1");
     for _ in 0..3 {
@@ -62,7 +63,7 @@ fn a_limit_resumes_each_time_it_recurs() {
 
 #[test]
 fn a_full_disk_cleared() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     running(&fx, "build:a", "t-1");
     stop(&fx, "build:a", "none", "disk", None);
@@ -81,11 +82,15 @@ fn a_full_disk_cleared() {
     let after = cleared(&fx.options(), "disk").unwrap();
     line(&after, "resume build:a t-1 ");
     assert!(cleared(&fx.options(), "the moon").is_err());
+    assert!(matches!(
+        cleared(&fx.options(), "the-moon"),
+        Err(Failure::Refused(_))
+    ));
 }
 
 #[test]
 fn an_outage_resumes_at_once_the_first_time() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     fx.session("opus");
     running(&fx, "build:a", "t-1");
@@ -102,7 +107,7 @@ fn an_outage_resumes_at_once_the_first_time() {
 
 #[test]
 fn a_second_work_stop() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     fx.session("opus");
     let mut a = run(
@@ -124,7 +129,7 @@ fn a_second_work_stop() {
 
 #[test]
 fn a_first_context_stop_rebuilds() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     fx.session("opus");
     running(&fx, "build:a", "t-1");
@@ -134,7 +139,7 @@ fn a_first_context_stop_rebuilds() {
 
 #[test]
 fn an_undelivered_resume_rebuilds() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     fx.session("opus");
     running(&fx, "build:a", "t-1");
@@ -149,7 +154,7 @@ fn an_undelivered_resume_rebuilds() {
 
 #[test]
 fn blocked_and_running_relaunch_nothing() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     // req:orchestrator.loop/return-rules@3c0219a4: a return with `--cause running` and no
     // `landed` line leaves the run running, counts no stop and finishes nothing.
     let fx = Fixture::new();
@@ -174,7 +179,7 @@ fn blocked_and_running_relaunch_nothing() {
 
 #[test]
 fn a_recurring_limit_resumes_one_run_at_a_time() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     for (name, task) in [("build:a", "t-1"), ("build:b", "t-2")] {
         running(&fx, name, task);
@@ -219,40 +224,85 @@ fn a_recurring_limit_resumes_one_run_at_a_time() {
 
 #[test]
 fn an_unknown_cause_or_until_is_refused() {
-    // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/stop-causes@775754ab
     let fx = Fixture::new();
     running(&fx, "build:a", "t-1");
+    // An `origin` that can't be reached: a refusal fetches nothing, so it isn't a git failure.
+    let gone = fx.tmp.path().join("gone.git");
+    clm_git::git(
+        &fx.work,
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    )
+    .unwrap();
+    let file = fx.loop_dir().join("loop");
+    let before = fs::read(&file).unwrap();
+    let until = rfc3339(1);
+    for (cause, until) in [
+        ("weather", None),
+        ("limit", Some("soon")),
+        ("work", Some(until.as_str())),
+    ] {
+        let refused = returned(&fx.options(), "build:a", None, "none", Some(cause), until);
+        assert!(
+            matches!(refused, Err(Failure::Refused(_))),
+            "{cause} {until:?}: {refused:?}"
+        );
+        assert_eq!(
+            fs::read(&file).unwrap(),
+            before,
+            "{cause}: the loop file is unchanged"
+        );
+    }
+}
+
+#[test]
+fn a_stop_with_nothing_to_resume() {
+    // req:orchestrator.loop/stop-causes@775754ab
+    // A limit with no `--until` resumes the run 30 minutes after the return.
+    let fx = Fixture::new();
+    running(&fx, "build:a", "t-1");
+    let first = stop(&fx, "build:a", "none", "limit", None);
+    assert!(!first.iter().any(|l| l.starts_with("resume ")), "{first:?}");
+    let shift = |minutes: u64| {
+        fx.change_run("build:a", |r| {
+            let after = r.resume.as_mut().unwrap().after.as_mut().unwrap();
+            *after -= minutes * 60;
+        });
+    };
+    shift(29);
+    let at_29 = step(&fx.options()).unwrap();
+    assert!(!at_29.iter().any(|l| l.starts_with("resume ")), "{at_29:?}");
+    shift(2);
+    let at_31 = step(&fx.options()).unwrap();
+    line(&at_31, "resume build:a t-1 ");
+
+    // A planned run with no task ID has nothing to resume: it is rebuilt.
+    let fx = Fixture::new();
+    fx.session("opus");
+    fx.add_run(run(
+        "build:a",
+        Kind::Build,
+        "sonnet",
+        RunState::Planned,
+        None,
+    ));
+    let actions = stop(&fx, "build:a", "none", "outage", None);
+    line(&actions, "launch build:a build opus ");
+    assert_eq!(fx.file().run("build:a").unwrap().round, 2);
+
+    // A build whose branch has landed is finished as returned, with nothing to resume.
+    let fx = Fixture::new();
+    running(&fx, "build:a", "t-1");
+    clm_git::git(
+        &fx.work,
+        &["push", "-q", "origin", "origin/impl/a:refs/heads/main"],
+    )
+    .unwrap();
+    let actions = stop(&fx, "build:a", "none", "limit", None);
+    assert_eq!(fx.ran("run --finish a --returned"), 1, "{:?}", fx.calls());
+    assert_eq!(fx.file().run("build:a").unwrap().state, RunState::Returned);
     assert!(
-        returned(
-            &fx.options(),
-            "build:a",
-            None,
-            "none",
-            Some("weather"),
-            None
-        )
-        .is_err()
-    );
-    assert!(
-        returned(
-            &fx.options(),
-            "build:a",
-            None,
-            "none",
-            Some("limit"),
-            Some("soon")
-        )
-        .is_err()
-    );
-    assert!(
-        returned(
-            &fx.options(),
-            "build:a",
-            None,
-            "none",
-            Some("work"),
-            Some(&rfc3339(1))
-        )
-        .is_err()
+        !actions.iter().any(|l| l.starts_with("resume ")),
+        "{actions:?}"
     );
 }
