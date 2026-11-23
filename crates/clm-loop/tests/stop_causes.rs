@@ -150,6 +150,8 @@ fn an_undelivered_resume_rebuilds() {
 #[test]
 fn blocked_and_running_relaunch_nothing() {
     // req:orchestrator.loop/stop-causes@ceb78f17
+    // req:orchestrator.loop/return-rules@3c0219a4: a return with `--cause running` and no
+    // `landed` line leaves the run running, counts no stop and finishes nothing.
     let fx = Fixture::new();
     running(&fx, "build:a", "t-1");
     running(&fx, "build:b", "t-2");
@@ -164,7 +166,10 @@ fn blocked_and_running_relaunch_nothing() {
         !background.iter().any(|l| l.starts_with("launch ")),
         "{background:?}"
     );
-    assert_eq!(fx.file().run("build:b").unwrap().state, RunState::Running);
+    let b = fx.file().run("build:b").unwrap().clone();
+    assert_eq!(b.state, RunState::Running);
+    assert!(b.stops.is_empty(), "{:?}", b.stops);
+    assert_eq!(fx.finishes("b"), 0, "{:?}", fx.calls());
 }
 
 #[test]

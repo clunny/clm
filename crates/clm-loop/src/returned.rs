@@ -79,7 +79,22 @@ fn finish(options: &Options, run: &Run, line: &str, returned: bool) -> Result<Fi
             says.push(say(options, &format!("left {left}"))?);
         }
     }
+    // What a build's `--returned` finish or a draft's finish keeps stays for the human; what a
+    // build's finish without it keeps, the return's finish removes (`return-rules`).
+    if run.kind == Some(Kind::Draft) || (run.kind == Some(Kind::Build) && returned) {
+        says.extend(kept(options, &output)?);
+    }
     Ok(Finished { landed, says })
+}
+
+/// The `say` actions for each line starting `kept ` that a finish printed (`return-rules`).
+pub(crate) fn kept(options: &Options, output: &str) -> Result<Vec<String>, Failure> {
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("kept "))
+        .map(|l| say(options, l))
+        .collect()
 }
 
 /// Finishes a build or draft as a run that returned with no closing line and no cause, and
@@ -257,19 +272,25 @@ pub fn returned(
         lines.extend(crate::step::next_actions(options, notes)?);
         return Ok(lines);
     }
+    let no_run = || Failure::Refused(format!("the loop has no run {name}"));
+    let listed = known.ok_or_else(no_run)?;
+    // A report repeated, such as after a timeout, of a run other than a build (whose returns
+    // are handled above) finishes nothing twice and changes nothing but the lease.
+    if listed.state == RunState::Returned {
+        return crate::step::next_actions(options, notes);
+    }
+    // The `stop` a background run's `landed` return owes names its task: with none reported,
+    // nothing changes (`return-rules`).
+    let stop_task = match (cause, result.trim().starts_with("landed ")) {
+        (Some("running"), true) => Some(listed.task_id.clone().ok_or_else(|| no_task(name))?),
+        _ => None,
+    };
     let (run, outstanding) = state::update(&options.root, |f| {
         f.lease = Some(now());
-        let run = f
-            .run_mut(name)
-            .ok_or_else(|| Failure::Refused(format!("the loop has no run {name}")))?;
+        let run = f.run_mut(name).ok_or_else(no_run)?;
         let outstanding = std::mem::take(&mut run.resumed);
         Ok((run.clone(), outstanding))
     })?;
-    // A report repeated, such as after a timeout, of a run other than a build (whose returns
-    // are handled above) finishes nothing twice.
-    if run.state == RunState::Returned {
-        return crate::step::next_actions(options, notes);
-    }
     if name.starts_with("land:") {
         return land_returned(options, &run, result.trim(), notes);
     }
@@ -298,10 +319,7 @@ pub fn returned(
         return crate::step::next_actions(options, notes);
     }
     let mut lines = Vec::new();
-    if landed_line && cause == Some("running") {
-        let task = run.task_id.as_deref().ok_or_else(|| {
-            Failure::Refused(format!("{name} has no task ID: report it with `launched`"))
-        })?;
+    if let Some(task) = &stop_task {
         lines.push(format!("stop {name} {task}"));
     }
     let proposed = line
@@ -440,6 +458,15 @@ pub fn returned(
     Ok(lines)
 }
 
+/// The refusal of a `landed` return with `--cause running` from a run with no task ID, whose
+/// `stop` would name none (`return-rules`).
+fn no_task(name: &str) -> Failure {
+    Failure::Refused(format!(
+        "{name} has no task ID to stop: report it with `clm build launched {name} <task-id>`, \
+         then report its return again"
+    ))
+}
+
 /// The return of `land:<batch>`, a `clm land spec/<batch>` the session ran (`plan-fold`).
 fn land_returned(
     options: &Options,
@@ -474,6 +501,7 @@ fn land_returned(
             {
                 lines.push(say(options, &format!("left {left}"))?);
             }
+            lines.extend(kept(options, &ran.stdout)?);
         }
     } else if !line.contains("gate/approval") {
         lines.push(say(

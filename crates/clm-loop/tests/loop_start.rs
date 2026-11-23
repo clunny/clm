@@ -10,7 +10,7 @@ use common::{Fixture, line, run};
 
 #[test]
 fn a_live_loop() {
-    // req:orchestrator.loop/loop-start@7540e54b
+    // req:orchestrator.loop/loop-start@f2c48928
     let fx = Fixture::new();
     fx.set_lease(2);
     let before = fs::read(fx.loop_dir().join("loop")).unwrap();
@@ -24,7 +24,7 @@ fn a_live_loop() {
 
 #[test]
 fn taking_over_a_live_loop() {
-    // req:orchestrator.loop/loop-start@7540e54b
+    // req:orchestrator.loop/loop-start@f2c48928
     let fx = Fixture::new();
     fx.set_lease(2);
     start(&fx.options(), "opus", true).unwrap();
@@ -33,7 +33,7 @@ fn taking_over_a_live_loop() {
 
 #[test]
 fn adopting_a_lapsed_loop() {
-    // req:orchestrator.loop/loop-start@7540e54b
+    // req:orchestrator.loop/loop-start@f2c48928
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -60,6 +60,13 @@ fn adopting_a_lapsed_loop() {
         RunState::Running,
         Some("t-3"),
     ));
+    fx.add_run(run(
+        "build:c",
+        Kind::Build,
+        "sonnet",
+        RunState::Returned,
+        Some("t-4"),
+    ));
     fx.set_lease(20);
 
     let actions = start(&fx.options(), "opus", false).unwrap();
@@ -75,6 +82,8 @@ fn adopting_a_lapsed_loop() {
     assert_eq!(line(&actions, "run verify "), "run verify clm verify --due");
     let file = fx.file();
     assert!(file.run("fold:x").is_none());
+    // A returned run is dropped from the loop file.
+    assert!(file.run("build:c").is_none());
     // A relaunched orphan counts no stop, and is planned again, owed a `launched`.
     for name in ["build:a", "draft:d", "verify"] {
         let run = file.run(name).unwrap();
@@ -95,9 +104,10 @@ fn orphan(fx: &Fixture, name: &str, kind: Kind) {
 
 #[test]
 fn a_refused_relaunch() {
-    // req:orchestrator.loop/loop-start@7540e54b
-    // req:orchestrator.loop/return-rules@374e0702: the finish of a planned run whose `clm run`
-    // refused passes no `--returned`, which `ran`'s exact match proves.
+    // req:orchestrator.loop/loop-start@f2c48928
+    // req:orchestrator.loop/return-rules@3c0219a4: the finish of a planned run whose `clm run`
+    // refused passes no `--returned`, which `ran`'s exact match proves, and says none of its
+    // `kept` lines.
     let fx = Fixture::new();
     orphan(&fx, "build:a", Kind::Build);
     fx.set("run-exit-a", "1");
@@ -105,10 +115,18 @@ fn a_refused_relaunch() {
         "run-reason-a",
         "a has uncommitted changes in its worktree\n",
     );
+    fx.set("finish-a", "kept /w/a: a running process holds its lock\n");
 
     let actions = start(&fx.options(), "opus", false).unwrap();
 
     assert_eq!(fx.ran("run --finish a"), 1);
+    assert!(
+        !actions
+            .iter()
+            .filter_map(|a| a.strip_prefix("say "))
+            .any(|f| fs::read_to_string(f).unwrap().contains("kept")),
+        "{actions:?}"
+    );
     assert!(!actions.iter().any(|a| a.starts_with("launch build:a")));
     let text = said(line(&actions, "say "));
     assert!(text.contains("build:a wasn't relaunched"), "{text}");
@@ -130,7 +148,7 @@ fn a_refused_relaunch() {
 
 #[test]
 fn a_refused_relaunch_of_a_build_that_landed_says_nothing() {
-    // req:orchestrator.loop/loop-start@7540e54b
+    // req:orchestrator.loop/loop-start@f2c48928
     let fx = Fixture::new();
     orphan(&fx, "build:a", Kind::Build);
     fx.set("run-exit-a", "1");
@@ -148,7 +166,7 @@ fn a_refused_relaunch_of_a_build_that_landed_says_nothing() {
 
 #[test]
 fn a_draft_with_nothing_to_resume() {
-    // req:orchestrator.loop/loop-start@7540e54b
+    // req:orchestrator.loop/loop-start@f2c48928
     let fx = Fixture::new();
     orphan(&fx, "draft:d", Kind::Draft);
     fx.set("resume-exit-d", "1");
@@ -168,7 +186,7 @@ fn a_draft_with_nothing_to_resume() {
 
 #[test]
 fn a_relaunch_for_want_of_a_place_stays_an_orphan() {
-    // req:orchestrator.loop/loop-start@7540e54b
+    // req:orchestrator.loop/loop-start@f2c48928
     let fx = Fixture::new();
     orphan(&fx, "build:a", Kind::Build);
     fx.set("run-exit-a", "3");
