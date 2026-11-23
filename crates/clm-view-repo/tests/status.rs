@@ -153,7 +153,7 @@ fn remote_ref(root: &Path, name: &str, hours: u64) {
 
 #[test]
 fn status_and_view_never_fetch() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = base();
     let d = dir.path();
     write(d, "specs/z/SPEC.md", &node("specd", &["x"]));
@@ -227,7 +227,7 @@ fn nodes_line(text: &str) -> String {
 
 #[test]
 fn scenario_oversized_node() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = sized("");
     // `c`'s code is over the repository's budget but within the `size_budget` it sets.
     write(
@@ -250,7 +250,7 @@ fn scenario_oversized_node() {
 
 #[test]
 fn scenario_budget_accepted() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = sized("size_budget: { code_tokens: 1000 }\n");
     let text = status(dir.path());
     assert!(!nodes_line(&text).contains("oversized"), "{text}");
@@ -259,7 +259,7 @@ fn scenario_budget_accepted() {
 
 #[test]
 fn sizes_that_cant_be_checked_mark_nothing() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = sized("");
     write(
         dir.path(),
@@ -306,7 +306,7 @@ fn ledger_ref(root: &Path, writer: &str, records: &str) {
 
 #[test]
 fn status_has_no_review_section() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = base();
     let d = dir.path();
     claim_refs(d, &[]);
@@ -339,7 +339,7 @@ fn origin_ahead(root: &Path, n: usize) {
 
 #[test]
 fn the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = base();
     let d = dir.path();
     claim_refs(d, &[]);
@@ -355,7 +355,7 @@ fn the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to() {
 
 #[test]
 fn scenario_checkout_named() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = base();
     let d = dir.path();
     claim_refs(d, &[]);
@@ -377,7 +377,7 @@ fn scenario_checkout_named() {
 
 #[test]
 fn scenario_checkout_behind() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = base();
     let d = dir.path();
     claim_refs(d, &[]);
@@ -404,7 +404,7 @@ fn scenario_checkout_behind() {
 
 #[test]
 fn scenario_no_origin() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = base();
     let d = dir.path();
     git_env(d, &["init", "-q", "-b", "main"], &[]);
@@ -428,7 +428,7 @@ fn scenario_no_origin() {
 
 #[test]
 fn no_repository_names_no_commit() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = base();
     let out = clm_status(dir.path());
     // Outside a repository the sizes can't be measured: said on stderr, and nothing marked.
@@ -448,4 +448,41 @@ fn no_repository_names_no_commit() {
         text.lines().nth(1).unwrap().starts_with("  components "),
         "{text}"
     );
+}
+
+#[test]
+fn scenario_a_main_it_cant_compare() {
+    // req:view.repo/reads-the-repository@dd91d681
+    let dir = base();
+    let d = dir.path();
+    claim_refs(d, &[]);
+    // `origin/main` names a commit the repository's objects don't hold.
+    fs::write(
+        d.join(".git/refs/remotes/origin/main"),
+        format!("{}\n", "d".repeat(40)),
+    )
+    .unwrap();
+    let stderr = |out: &Output| String::from_utf8(out.stderr.clone()).unwrap();
+    let not_compared = |out: &Output| {
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        assert!(
+            stderr(out).starts_with("checkout not compared: "),
+            "{}",
+            stderr(out)
+        );
+    };
+    let out = clm_status(d);
+    not_compared(&out);
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(
+        text.lines().nth(1),
+        Some(format!("  commit {}", head7(d)).as_str()),
+        "{text}"
+    );
+    let out = clm(d, &["view", "flight", "--format", "json"]);
+    not_compared(&out);
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["checkout"]["commit"], head7(d), "{v:#}");
+    assert_eq!(v["checkout"].get("behind"), None, "{v:#}");
+    not_compared(&clm(d, &["pending"]));
 }

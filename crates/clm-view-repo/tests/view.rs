@@ -107,7 +107,7 @@ fn json(out: &Output) -> serde_json::Value {
 
 #[test]
 fn scenario_offline() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/x/SPEC.md", &node("", &["p"]));
@@ -142,7 +142,7 @@ fn scenario_offline() {
 
 #[test]
 fn scenario_oversized_on_the_chart() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = two_nodes();
     // `a`'s spec is over the repository's spec budget; it sets no `size_budget`.
     write(
@@ -184,7 +184,7 @@ fn scenario_oversized_on_the_chart() {
 
 #[test]
 fn sizes_that_cant_be_checked_mark_nothing() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = two_nodes();
     write(
         dir.path(),
@@ -230,7 +230,7 @@ fn behind_origin(root: &Path, n: usize) {
 
 #[test]
 fn scenario_checkout_behind_on_the_chart() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = two_nodes();
     let d = dir.path();
     init(d);
@@ -264,7 +264,7 @@ fn scenario_checkout_behind_on_the_chart() {
 
 #[test]
 fn scenario_checkout_current() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = two_nodes();
     let d = dir.path();
     init(d);
