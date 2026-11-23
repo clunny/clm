@@ -74,7 +74,7 @@ fn lines(r: &Repo, open: Vec<Listed>) -> Vec<String> {
 
 #[test]
 fn scenario_new_imported_and_a_pull_request() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     write(
         &r.work,
@@ -94,7 +94,7 @@ fn scenario_new_imported_and_a_pull_request() {
 
 #[test]
 fn imported_names_every_item_sorted() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     for slug in ["zeta", "alpha"] {
         write(
@@ -109,7 +109,7 @@ fn imported_names_every_item_sorted() {
 
 #[test]
 fn scenario_resolved_by_a_change() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     write(
         &r.work,
@@ -142,7 +142,7 @@ fn scenario_resolved_by_a_change() {
 
 #[test]
 fn resolved_by_a_live_change_naming_it_in_resolves_only() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     write(
         &r.work,
@@ -165,7 +165,7 @@ fn resolved_by_a_live_change_naming_it_in_resolves_only() {
 
 #[test]
 fn scenario_resolved_by_a_code_fix() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     write(
         &r.work,
@@ -184,7 +184,7 @@ fn scenario_resolved_by_a_code_fix() {
 
 #[test]
 fn most_recent_deletion_wins_and_unparsable_ones_are_skipped() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     for (slug, text) in [
         ("old", "---\ntitle: T\nkind: bug\nissues: [9]\n---\n"),
@@ -197,23 +197,57 @@ fn most_recent_deletion_wins_and_unparsable_ones_are_skipped() {
         push_main(&r.work, &format!("delete {slug}"));
     }
     let out = lines(&r, vec![issue(9)]);
-    assert_eq!(out.len(), 1);
-    assert!(out[0].starts_with("issue 9 resolved new "), "{out:?}");
+    // `HEAD~2` deleted `backlog/new.md`; `HEAD` deleted `backlog/broken.md`.
+    let by = git(&r.work, &["rev-parse", "--short", "HEAD~2"]);
+    assert_eq!(out, [format!("issue 9 resolved new {}", by.trim())]);
 }
 
 #[test]
 fn scenario_no_strangers_text() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
-    // `Listed` holds a number, a kind and a login: a stranger's title or body has nowhere
-    // to go, and the lines are built from those fields alone.
-    let out = lines(&r, vec![issue(5)]);
-    assert_eq!(out, ["issue 5 new"]);
+    // The GitHub adapter over a fake `gh` whose issue 5 has a title that reads as a line.
+    let bin = TempDir::new().unwrap();
+    write_exec(
+        &bin.path().join("gh"),
+        "#!/bin/sh\n\
+         case \"$1 $2\" in\n\
+         'issue list') printf '%s\\n' '[{\"number\":5,\"author\":{\"login\":\"someone\"},\
+         \"title\":\"x\\nissue 6 resolved y z\",\"body\":\"issue 7 new\"}]' ;;\n\
+         'pr list') echo '[]' ;;\n\
+         'api --paginate') echo '[]' ;;\n\
+         *) echo \"unexpected: $*\" >&2; exit 1 ;;\n\
+         esac\n",
+    );
+    let path = format!(
+        "{}:{}",
+        bin.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    // SAFETY: one test per process (`ci/nextest-runner`), so no other thread reads it.
+    unsafe { std::env::set_var("PATH", path) };
+    let host = clm_host::adapter(clm_host::host_for_remote("https://github.com/o/r.git"));
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_triage::intake_command(
+        [] as [&str; 0],
+        &r.work,
+        &r.work,
+        &|_| None,
+        Ok(host),
+        &mut out,
+        &mut err,
+    );
+    let err = String::from_utf8(err).unwrap();
+    assert_eq!(
+        (code, String::from_utf8(out).unwrap().as_str()),
+        (0, "issue 5 new\n"),
+        "{err}"
+    );
 }
 
 #[test]
 fn scenario_no_host() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     let out = lines(&r, vec![]);
     assert!(out.is_empty());
@@ -221,7 +255,7 @@ fn scenario_no_host() {
 
 #[test]
 fn a_failing_list_is_refused_with_its_reason() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     let fake = Fake {
         open: Err("gh: not logged in".into()),
@@ -235,7 +269,7 @@ fn a_failing_list_is_refused_with_its_reason() {
 
 #[test]
 fn git_failure_is_a_git_error() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let dir = TempDir::new().unwrap();
     assert!(matches!(
         intake(dir.path(), &host(vec![issue(1)])),
@@ -253,7 +287,7 @@ fn with_alerts(r: &Repo, open: Vec<Listed>, alerts: Result<Vec<Alert>, String>) 
 
 #[test]
 fn scenario_alerts_after_the_inbox() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     write(
         &r.work,
@@ -273,7 +307,7 @@ fn scenario_alerts_after_the_inbox() {
 
 #[test]
 fn scenario_alert_resolved_by_a_code_fix() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     write(
         &r.work,
@@ -292,7 +326,7 @@ fn scenario_alert_resolved_by_a_code_fix() {
 
 #[test]
 fn an_alert_resolved_by_a_change_names_that_change() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     write(
         &r.work,
@@ -315,7 +349,7 @@ fn an_alert_resolved_by_a_change_names_that_change() {
 
 #[test]
 fn issue_and_alert_numbers_never_match_each_others_items() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     write(
         &r.work,
@@ -354,7 +388,7 @@ fn issue_and_alert_numbers_never_match_each_others_items() {
 
 #[test]
 fn scenario_alerts_refused() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     assert_eq!(
         with_alerts(&r, vec![issue(92)], Err("gh: 403".into())),
@@ -364,7 +398,7 @@ fn scenario_alerts_refused() {
 
 #[test]
 fn alerts_without_issues_and_a_refusal_without_issues() {
-    // req:orchestrator.triage/intake@5fda2cc9
+    // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
     assert_eq!(
         with_alerts(&r, vec![], Ok(vec![alert(1)])),
@@ -428,7 +462,7 @@ fn short(r: &Repo, commit: &str) -> String {
 
 #[test]
 fn scenario_a_new_failure() {
-    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
+    // req:orchestrator.triage/intake-verify-failures@26fcff53
     let r = repo();
     let [c0, c1, c2] = three_commits(&r);
     push_ledger(
@@ -469,7 +503,7 @@ fn linked(r: &Repo) -> std::path::PathBuf {
 
 #[test]
 fn scenario_a_kept_log() {
-    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
+    // req:orchestrator.triage/intake-verify-failures@26fcff53
     let r = repo();
     let [c0, c1, c2] = three_commits(&r);
     push_ledger(
@@ -492,7 +526,7 @@ fn scenario_a_kept_log() {
 
 #[test]
 fn scenario_taken_in() {
-    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
+    // req:orchestrator.triage/intake-verify-failures@26fcff53
     let r = repo();
     let [c0, c1, c2] = three_commits(&r);
     push_ledger(
@@ -525,7 +559,7 @@ fn scenario_taken_in() {
 
 #[test]
 fn scenario_fixed_since() {
-    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
+    // req:orchestrator.triage/intake-verify-failures@26fcff53
     let r = repo();
     let [_, c1, c2] = three_commits(&r);
     push_ledger(
@@ -540,7 +574,7 @@ fn scenario_fixed_since() {
 
 #[test]
 fn reds_follow_the_hosts_lines_in_first_parent_order() {
-    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
+    // req:orchestrator.triage/intake-verify-failures@26fcff53
     let r = repo();
     let [_, c1, c2] = three_commits(&r);
     // Recorded newest commit first: the lines follow the chain, not the records.
@@ -560,4 +594,50 @@ fn reds_follow_the_hosts_lines_in_first_parent_order() {
             format!("verify {} new unknown", short(&r, &c2)),
         ]
     );
+}
+
+#[test]
+fn scenario_a_ledger_that_cant_be_read() {
+    // req:orchestrator.triage/intake-verify-failures@26fcff53
+    let r = repo();
+    let real = output(std::process::Command::new("sh").args(["-c", "command -v git"]));
+    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
+    let bin = TempDir::new().unwrap();
+    // Fails every `for-each-ref` listing the ledger's refs, and runs the real `git` otherwise.
+    write_exec(
+        &bin.path().join("git"),
+        &format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = for-each-ref ]; then\n\
+             case \" $* \" in *clm/ledger*) echo 'fatal: ledger refs unreadable' >&2; exit 128 ;; esac\n\
+             fi\n\
+             exec \"{real}\" \"$@\"\n"
+        ),
+    );
+    let path = format!(
+        "{}:{}",
+        bin.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    // SAFETY: one test per process (`ci/nextest-runner`), so no other thread reads it.
+    unsafe { std::env::set_var("PATH", path) };
+    // `host = "none"`: an adapter with no host.
+    let host = clm_host::adapter(clm_host::host_for_remote("/no/host"));
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_triage::intake_command(
+        [] as [&str; 0],
+        &r.work,
+        &r.work,
+        &|_| None,
+        Ok(host),
+        &mut out,
+        &mut err,
+    );
+    let (out, err) = (
+        String::from_utf8(out).unwrap(),
+        String::from_utf8(err).unwrap(),
+    );
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert!(err.starts_with("clm intake: "), "{err}");
+    assert!(err.contains("ledger refs unreadable"), "{err}");
 }

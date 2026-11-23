@@ -53,7 +53,7 @@ fn origin_holds_claim(r: &Repo) -> bool {
 
 #[test]
 fn draft_fetches_through_fetch_retrying() {
-    // req:orchestrator.triage/draft-fetch-retries-race@84e46d8b
+    // req:orchestrator.triage/draft-fetch-retries-race@6d61d984
     let bin = tempfile::tempdir().unwrap();
     let fake = bin.path().join("git");
     fs::write(&fake, FAKE).unwrap();
@@ -74,6 +74,11 @@ fn draft_fetches_through_fetch_retrying() {
 
     // A fetch that keeps failing is git's message, and holds nothing.
     let g = with_item();
+    push_files(
+        &g.work,
+        "spec/20261027-a",
+        &[("changes/20261027-a/change.md", &change("applied"))],
+    );
     fs::write(g.work.join(".git/fake-mode"), "always").unwrap();
     match run(&g) {
         Err(DraftError::Failed(clm_triage::Error::Git(why))) => {
@@ -84,11 +89,13 @@ fn draft_fetches_through_fetch_retrying() {
     // `--finish` and `--fold` go on after one lost race, and report git's message when
     // the fetch keeps failing.
     let ids = ["20261027-a".to_string()];
+    fs::remove_file(g.work.join(".git/fake-calls")).unwrap();
     fs::write(g.work.join(".git/fake-mode"), "once").unwrap();
     clm_triage::finish(&g.work, "20261027-a", 4).expect("finish goes on");
     fs::remove_file(g.work.join(".git/fake-calls")).unwrap();
     fs::write(g.work.join(".git/fake-mode"), "once").unwrap();
-    clm_triage::fold(&g.work, &ids).expect("fold goes on");
+    let folded = clm_triage::fold(&g.work, &ids).expect("fold goes on");
+    assert!(folded.launcher.is_some(), "{:?}", folded.left);
     fs::write(g.work.join(".git/fake-mode"), "always").unwrap();
     match clm_triage::finish(&g.work, "20261027-a", 4) {
         Err(clm_triage::Error::Git(why)) => assert!(why.contains("cannot lock ref"), "{why}"),
@@ -99,6 +106,37 @@ fn draft_fetches_through_fetch_retrying() {
         other => panic!("{other:?}"),
     }
     fs::remove_file(g.work.join(".git/fake-mode")).unwrap();
+
+    // `--resume` and `clm intake` go on after one lost race too, and report git's message
+    // when the fetch keeps failing.
+    let k = with_item();
+    push_files(
+        &k.work,
+        "spec/20261027-a",
+        &[("changes/20261027-a/change.md", &change("applied"))],
+    );
+    let host = clm_host::adapter(clm_host::host_for_remote("/no/host"));
+    let set = |mode: &str| {
+        let _ = fs::remove_file(k.work.join(".git/fake-calls"));
+        fs::write(k.work.join(".git/fake-mode"), mode).unwrap();
+    };
+    set("once");
+    clm_triage::resume(&k.work, "20261027-a", None, 3, 4).expect("resume goes on");
+    set("once");
+    clm_triage::intake(&k.work, &*host).expect("intake goes on");
+    set("always");
+    match clm_triage::resume(&k.work, "20261027-a", None, 3, 4) {
+        Err(DraftError::Failed(clm_triage::Error::Git(why))) => {
+            assert!(why.contains("cannot lock ref"), "{why}")
+        }
+        other => panic!("{other:?}"),
+    }
+    set("always");
+    match clm_triage::intake(&k.work, &*host) {
+        Err(clm_triage::Error::Git(why)) => assert!(why.contains("cannot lock ref"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+    fs::remove_file(k.work.join(".git/fake-mode")).unwrap();
 
     // An unreachable origin is `origin can't be reached`.
     let h = with_item();

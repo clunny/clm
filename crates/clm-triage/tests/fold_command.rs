@@ -126,7 +126,7 @@ fn local_branches(r: &Repo) -> String {
 
 #[test]
 fn scenario_several_changes_folded() {
-    // req:orchestrator.triage/fold@9b310060
+    // req:orchestrator.triage/fold@e1d817ce
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "resolves: [x]\n");
     spec_branch(&r, "20261027-b", "applied", "");
@@ -222,7 +222,7 @@ fn scenario_several_changes_folded() {
 
 #[test]
 fn scenario_fold_branch_name_taken() {
-    // req:orchestrator.triage/fold@9b310060
+    // req:orchestrator.triage/fold@e1d817ce
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     spec_branch(&r, "20261027-b", "applied", "");
@@ -243,7 +243,7 @@ fn scenario_fold_branch_name_taken() {
 
 #[test]
 fn scenario_one_change() {
-    // req:orchestrator.triage/fold@9b310060
+    // req:orchestrator.triage/fold@e1d817ce
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "resolves: [x]\n");
     let ran = fold(&r, &["20261027-a"]);
@@ -276,7 +276,7 @@ fn scenario_one_change() {
 
 #[test]
 fn scenario_missing_or_unapplied_change_left() {
-    // req:orchestrator.triage/fold@9b310060
+    // req:orchestrator.triage/fold@e1d817ce
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     spec_branch(&r, "20261027-p", "proposed", "");
@@ -316,7 +316,7 @@ fn scenario_missing_or_unapplied_change_left() {
 
 #[test]
 fn scenario_nothing_to_fold() {
-    // req:orchestrator.triage/fold@9b310060
+    // req:orchestrator.triage/fold@e1d817ce
     let r = repo();
     let ran = fold(&r, &["20261027-z"]);
     assert_eq!(ran.code, Some(1), "{}", ran.stderr);
@@ -326,7 +326,7 @@ fn scenario_nothing_to_fold() {
 
 #[test]
 fn changes_fold_in_the_order_given() {
-    // req:orchestrator.triage/fold@9b310060
+    // req:orchestrator.triage/fold@e1d817ce
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     spec_branch(&r, "20261027-b", "applied", "");
@@ -348,7 +348,7 @@ fn changes_fold_in_the_order_given() {
 
 #[test]
 fn the_launcher_names_the_file_by_its_absolute_path() {
-    // req:orchestrator.triage/fold@9b310060
+    // req:orchestrator.triage/fold@e1d817ce
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     // Run in the clone, so `--root .` is the clone.
@@ -363,7 +363,7 @@ fn the_launcher_names_the_file_by_its_absolute_path() {
 
 #[test]
 fn an_earlier_fold_prompt_is_replaced_and_clm_is_excluded() {
-    // req:orchestrator.triage/fold@9b310060
+    // req:orchestrator.triage/fold@e1d817ce
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     write(
@@ -376,4 +376,34 @@ fn an_earlier_fold_prompt_is_replaced_and_clm_is_excluded() {
     assert!(!prompt(&r, "20261027-a").contains("stale-earlier-prompt"));
     let exclude = fs::read_to_string(r.work.join(".git/info/exclude")).unwrap();
     assert!(exclude.lines().any(|l| l == ".clm/"), "{exclude}");
+}
+
+#[test]
+fn scenario_an_id_given_twice() {
+    // req:orchestrator.triage/fold@e1d817ce
+    let r = repo();
+    spec_branch(&r, "20261027-a", "applied", "");
+    spec_branch(&r, "20261027-b", "applied", "");
+    let ran = fold(&r, &["20261027-a", "20261027-b", "20261027-a"]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    assert!(!ran.stderr.contains("left"), "{}", ran.stderr);
+    let p = prompt(&r, "20261027-a");
+    assert_eq!(
+        p.matches("git diff origin/main...origin/spec/20261027-a")
+            .count(),
+        1,
+        "{p}"
+    );
+}
+
+#[test]
+fn scenario_a_fold_prompt_that_cant_be_written() {
+    // req:orchestrator.triage/fold@e1d817ce
+    let r = repo();
+    spec_branch(&r, "20261027-a", "applied", "");
+    write(&r.work, ".clm/prompts/fold", "a file, not a directory\n");
+    let ran = fold(&r, &["20261027-a"]);
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(ran.stderr.contains(".clm/prompts/fold"), "{}", ran.stderr);
 }

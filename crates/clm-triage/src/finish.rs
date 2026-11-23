@@ -36,7 +36,7 @@ pub(crate) fn finish_in(
 ) -> Result<String, Error> {
     let root = &root
         .canonicalize()
-        .map_err(|e| Error::Refused(format!("{}: {e}", root.display())))?;
+        .map_err(|e| Error::Git(format!("{}: {e}", root.display())))?;
     if change.is_empty() || change.contains('/') {
         return Err(Error::Refused(format!("`{change}` isn't a change ID")));
     }
@@ -53,6 +53,7 @@ pub(crate) fn finish_in(
         if let Ok(file) = &place.file {
             let waiting = !(by_tree || by_branch);
             release_claims(root, change, file, expiry_hours, waiting, &mut done)?;
+            done.extend(left_items(root, change, file));
         }
         free_place(root, change)?;
         done.push(format!("freed {change}"));
@@ -170,6 +171,38 @@ fn release_claims(
         }
     }
     Ok(())
+}
+
+/// `left <slug>: <change> doesn't resolve it` for each `propose/<slug>` the place names, in
+/// its order, whose `backlog/<slug>.md` `origin/main` holds and which the change's `resolves`
+/// doesn't name: the items the draft left, which the build loop records
+/// (`orchestrator.loop/return-rules`). The `change.md` read is the first that exists of the
+/// live and archived paths on `origin/main`, then on `origin/spec/<change>`; none, or one
+/// that doesn't parse, resolves nothing.
+fn left_items(root: &Path, change: &str, place: &PlaceFile) -> Vec<String> {
+    let exists = |rev: &str| git(root, &["cat-file", "-e", rev]).is_ok();
+    let resolves = ["main".to_string(), format!("spec/{change}")]
+        .iter()
+        .flat_map(|branch| {
+            [
+                format!("changes/{change}/change.md"),
+                format!("changes/archive/{change}/change.md"),
+            ]
+            .map(|path| format!("refs/remotes/{REMOTE}/{branch}:{path}"))
+        })
+        .find(|rev| exists(rev))
+        .and_then(|rev| git(root, &["show", &rev]).ok())
+        .and_then(|text| parse_change_frontmatter(&text))
+        .map(|fm| fm.resolves)
+        .unwrap_or_default();
+    place
+        .branches
+        .iter()
+        .filter_map(|b| b.strip_prefix("propose/"))
+        .filter(|slug| !resolves.iter().any(|r| r == slug))
+        .filter(|slug| exists(&format!("refs/remotes/{REMOTE}/main:backlog/{slug}.md")))
+        .map(|slug| format!("left {slug}: {change} doesn't resolve it"))
+        .collect()
 }
 
 /// Deletes branch `name` on `origin`, leased on `tip`, the tip the fetch read

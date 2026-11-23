@@ -172,7 +172,7 @@ fn local_branches(r: &Repo) -> String {
 
 #[test]
 fn scenario_items_claimed_and_prompt_written() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     let before = local_branches(&r);
     let worktrees = git(&r.work, &["worktree", "list", "--porcelain"]);
@@ -200,7 +200,7 @@ fn scenario_items_claimed_and_prompt_written() {
         .lines()
         .find(|l| l.contains("`a`"))
         .unwrap_or_else(|| panic!("{p}"));
-    for needle in ["bug", "P3", "check", "check/x"] {
+    for needle in ["bug", "P3", "components `[check]`", "check/x"] {
         assert!(item_a.contains(needle), "{needle}: {item_a}");
     }
     for needle in [
@@ -210,6 +210,7 @@ fn scenario_items_claimed_and_prompt_written() {
         &format!("git switch -c spec/{id} origin/main"),
         "resolves",
         "left <slug>",
+        "left <slug>: components corrected to <components>",
         "git log -1 --diff-filter=A --format=%as origin/main -- backlog/<slug>.md",
         "changes/archive/",
         "already fixes",
@@ -286,7 +287,7 @@ fn scenario_items_claimed_and_prompt_written() {
 
 #[test]
 fn a_p5_draft_sets_no_priority() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["b"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -297,7 +298,7 @@ fn a_p5_draft_sets_no_priority() {
 
 #[test]
 fn scenario_one_item_refused() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["a", "b"]);
@@ -317,7 +318,7 @@ fn scenario_one_item_refused() {
 
 #[test]
 fn scenario_nothing_claimed() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["b"]);
@@ -328,7 +329,7 @@ fn scenario_nothing_claimed() {
 
 #[test]
 fn an_unknown_item_is_left() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["nope", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -337,19 +338,75 @@ fn an_unknown_item_is_left() {
 
 #[test]
 fn a_slug_given_twice_is_claimed_once() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
+    let today_was = today();
     let ran = clm_draft(&r, &f, &["a", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     assert_eq!(ran.stderr.lines().count(), 1, "{}", ran.stderr);
-    assert!(drafted_id(&ran).ends_with("-a"), "{}", ran.stderr);
+    assert!(!ran.stderr.contains("left"), "{}", ran.stderr);
+    let id = drafted_id(&ran);
+    assert!(
+        [today(), today_was].iter().any(|d| id == format!("{d}-a")),
+        "{}",
+        ran.stderr
+    );
     let p = prompt_of(&r, &ran);
     assert_eq!(p.matches("### `backlog/a.md`").count(), 1);
 }
 
 #[test]
+fn scenario_an_item_gone_from_main() {
+    // req:orchestrator.triage/draft@938d1a0c
+    let (r, f) = (with_items(), fake());
+    // A commit deleting `backlog/a.md`, held on `origin` off any branch until the fake `git`
+    // moves `main` to it.
+    git(&r.work, &["rm", "-q", "backlog/a.md"]);
+    git(&r.work, &["commit", "-qm", "drop a"]);
+    let gone = git(&r.work, &["rev-parse", "HEAD"]).trim().to_string();
+    git(&r.work, &["push", "-q", "origin", "HEAD:refs/x/gone"]);
+    git(&r.work, &["reset", "-q", "--hard", "HEAD~1"]);
+    let real = output(Command::new("sh").args(["-c", "command -v git"]));
+    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
+    let flag = f.out.join("moved");
+    // After the first push naming `origin` (the claim of `a`), `main` loses `backlog/a.md`.
+    write_exec(
+        &f.bin.join("git"),
+        &format!(
+            "#!/bin/sh\n\"{real}\" \"$@\"\ncode=$?\n\
+             if [ \"$1\" = push ] && [ ! -f \"{flag}\" ]; then\n\
+             case \" $* \" in *\" origin \"*)\n\
+             touch \"{flag}\"\n\
+             \"{real}\" --git-dir=\"{origin}\" update-ref refs/heads/main {gone}\n\
+             esac\nfi\nexit $code\n",
+            flag = flag.display(),
+            origin = r.origin.display(),
+        ),
+    );
+    let today_was = today();
+    let ran = clm_draft(&r, &f, &["a", "b"]);
+    assert!(flag.exists(), "the fake git moved main");
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let left = ran
+        .stderr
+        .lines()
+        .find(|l| l.starts_with("left a: "))
+        .unwrap_or_else(|| panic!("{}", ran.stderr));
+    assert!(left.contains("backlog/a.md"), "{left}");
+    let id = drafted_id(&ran);
+    assert!(
+        [today(), today_was].iter().any(|d| id == format!("{d}-b")),
+        "{}",
+        ran.stderr
+    );
+    let p = prompt_of(&r, &ran);
+    assert!(p.contains("### `backlog/b.md`"), "{p}");
+    assert!(!p.contains("### `backlog/a.md`"), "{p}");
+}
+
+#[test]
 fn scenario_cap_reached() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let (r, f) = (with_items(), fake());
     let placed =
         clm_orchestrator::take_place(&r.work, "x", clm_orchestrator::PlaceKind::Build, &[], 3, 4)
@@ -368,7 +425,7 @@ fn scenario_cap_reached() {
 
 #[test]
 fn scenario_nothing_claimed_frees_the_place() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["b"]);
@@ -420,7 +477,7 @@ fn draft_worktree(r: &Repo, id: &str, name: &str) -> PathBuf {
 
 #[test]
 fn scenario_landed_draft_tidied() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-x";
     let wt = draft_worktree(&r, id, "agent-2");
@@ -449,7 +506,7 @@ fn scenario_landed_draft_tidied() {
 
 #[test]
 fn an_archived_draft_has_landed_and_a_dirty_worktree_stays() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-z";
     let wt = draft_worktree(&r, id, "agent-3");
@@ -473,7 +530,7 @@ fn an_archived_draft_has_landed_and_a_dirty_worktree_stays() {
 
 #[test]
 fn scenario_folded_drafts_branches_deleted() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-f";
     let wt = draft_worktree(&r, id, "agent-5");
@@ -514,7 +571,7 @@ fn scenario_folded_drafts_branches_deleted() {
 
 #[test]
 fn a_kept_worktree_keeps_its_branch() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-k";
     let wt = draft_worktree(&r, id, "agent-6");
@@ -540,7 +597,7 @@ fn a_kept_worktree_keeps_its_branch() {
 
 #[test]
 fn a_local_branch_with_unpushed_commits_is_kept() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-u";
     let wt = draft_worktree(&r, id, "agent-7");
@@ -553,16 +610,117 @@ fn a_local_branch_with_unpushed_commits_is_kept() {
         &change("applied"),
     );
     push_main(&r.work, "landed");
+    let tip = git(&r.work, &["rev-parse", &format!("spec/{id}")]);
     let ran = clm_finish(&r, id);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     assert!(!wt.exists(), "the clean worktree is gone");
+    assert_eq!(
+        git(&r.work, &["rev-parse", &format!("spec/{id}")]),
+        tip,
+        "the branch holding unpushed commits stays as it was"
+    );
+    assert!(
+        ran.stdout
+            .lines()
+            .any(|l| l == format!("kept spec/{id}: commits not on origin")),
+        "{}",
+        ran.stdout
+    );
+}
+
+/// Every ref of the clone, and every ref of `origin`.
+fn refs(r: &Repo) -> (String, String) {
+    (
+        git(&r.work, &["for-each-ref"]),
+        git(&r.origin, &["for-each-ref"]),
+    )
+}
+
+#[test]
+fn scenario_a_finish_that_refuses_or_keeps() {
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
+    let r = with_items();
+    let id = "20261027-k";
+    write(
+        &r.work,
+        &format!("changes/{id}/change.md"),
+        &change("applied"),
+    );
+    push_main(&r.work, "landed");
+    // A branch on `origin` the clone hasn't fetched shows whether a call fetched.
+    push_branch(&r.work, "impl/unfetched", 0);
+    git(
+        &r.work,
+        &["update-ref", "-d", "refs/remotes/origin/impl/unfetched"],
+    );
+    let root = r.work.display().to_string();
+    for bad in ["", "a/b"] {
+        let before = refs(&r);
+        let ran = draft_call(&["--finish", bad, "--root", &root], &r.work, &r.work, &[]);
+        assert_eq!(ran.code, Some(1), "{bad}: {}", ran.stderr);
+        assert!(ran.stdout.is_empty(), "{bad}: {}", ran.stdout);
+        assert!(
+            ran.stderr.contains("isn't a change ID"),
+            "{bad}: {}",
+            ran.stderr
+        );
+        assert_eq!(refs(&r), before, "{bad}: nothing changed, nothing fetched");
+    }
+
+    // Run from inside the draft's worktree, it keeps that worktree and its branch.
+    let wt = draft_worktree(&r, id, "agent-k");
+    let ran = draft_call(&["--finish", id, "--root", &root], &r.work, &wt, &[]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let name = wt.display().to_string();
+    assert!(!ran.stdout.contains(&name), "{}", ran.stdout);
+    assert!(wt.is_dir(), "the worktree it runs in stays");
     assert_ne!(
         git(&r.work, &["branch", "--list", &format!("spec/{id}")]).trim(),
         "",
-        "the branch holding unpushed commits stays"
+        "its branch stays"
     );
+
+    // A worktree whose removal git refuses is kept with git's reason; the other goes.
+    let ro = r.work.join(".claude/worktrees/ro");
+    fs::create_dir_all(&ro).unwrap();
+    let stuck = ro.join("agent-s");
+    let branch = format!("spec/{id}");
+    git(
+        &r.work,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-f",
+            stuck.to_str().unwrap(),
+            &branch,
+        ],
+    );
+    let stuck = stuck.canonicalize().unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&ro, fs::Permissions::from_mode(0o555)).unwrap();
+    // As root the directory stays writable, and git can't be made to refuse.
+    let probe = ro.join("probe");
+    if fs::write(&probe, "").is_ok() {
+        fs::remove_file(&probe).unwrap();
+        fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+    let ran = draft_call(&["--finish", id, "--root", &root], &r.work, &r.work, &[]);
+    fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     assert!(
-        ran.stdout.contains(&format!("kept spec/{id}: ")),
+        ran.stdout
+            .lines()
+            .any(|l| l.starts_with(&format!("kept {}: ", stuck.display()))),
+        "{}",
+        ran.stdout
+    );
+    assert!(!wt.exists(), "the other clean worktree is removed");
+    assert!(
+        ran.stdout
+            .lines()
+            .any(|l| l == format!("removed {}", wt.display())),
         "{}",
         ran.stdout
     );
@@ -613,7 +771,7 @@ fn local_branch(r: &Repo, branch: &str) -> String {
 
 #[test]
 fn scenario_landed_fold_tidied() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-a-fold";
     let branch = format!("spec/{id}");
@@ -636,7 +794,7 @@ fn scenario_landed_fold_tidied() {
 
 #[test]
 fn scenario_fold_not_landed() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let (b, c) = ("spec/20261027-b-fold", "spec/20261027-c-fold");
     let wt_b = fold_worktree(&r, b, "agent-9");
@@ -656,7 +814,7 @@ fn scenario_fold_not_landed() {
 
 #[test]
 fn scenario_landed_fold_with_uncommitted_work() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-d-fold";
     let branch = format!("spec/{id}");
@@ -682,7 +840,7 @@ fn scenario_landed_fold_with_uncommitted_work() {
 
 #[test]
 fn a_landed_fold_branch_on_origin_is_deleted_only_when_in_main() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-e-fold";
     let branch = format!("spec/{id}");
@@ -698,7 +856,7 @@ fn a_landed_fold_branch_on_origin_is_deleted_only_when_in_main() {
 
 #[test]
 fn scenario_draft_waiting_for_review() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-y";
     let wt = draft_worktree(&r, id, "agent-4");
@@ -718,7 +876,7 @@ fn scenario_draft_waiting_for_review() {
 
 #[test]
 fn finishing_a_draft_with_no_place_exits_0() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let ran = clm_finish(&r, "20261027-none");
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -743,9 +901,76 @@ fn place_taken(r: &Repo, id: &str, hours: u64, branches: &[&str]) {
     fs::write(dir.join(id), text).unwrap();
 }
 
+/// The index of the line of `out` that is `line`.
+fn line_at(out: &str, line: &str) -> Option<usize> {
+    out.lines().position(|l| l == line)
+}
+
+#[test]
+fn scenario_items_the_draft_left() {
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
+    // `with_items` holds `backlog/a.md` and `backlog/b.md`, and no `backlog/c.md`.
+    let r = with_items();
+    let id = "20261027-l";
+    place_taken(
+        &r,
+        id,
+        1,
+        &[&format!("spec/{id}"), "propose/a", "propose/b", "propose/c"],
+    );
+    push_files(
+        &r.work,
+        &format!("spec/{id}"),
+        &[(
+            &format!("changes/{id}/change.md"),
+            &change_md("proposed", "resolves: [a]\n"),
+        )],
+    );
+    let ran = clm_finish(&r, id);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let left = line_at(&ran.stdout, &format!("left b: {id} doesn't resolve it"));
+    let freed = line_at(&ran.stdout, &format!("freed {id}"));
+    assert!(
+        left.is_some() && freed.is_some() && left < freed,
+        "{}",
+        ran.stdout
+    );
+    assert!(
+        !ran.stdout
+            .lines()
+            .any(|l| l.starts_with("left a") || l.starts_with("left c")),
+        "{}",
+        ran.stdout
+    );
+    let again = clm_finish(&r, id);
+    assert_eq!(again.code, Some(0), "{}", again.stderr);
+    assert!(
+        !again.stdout.lines().any(|l| l.starts_with("left")),
+        "{}",
+        again.stdout
+    );
+}
+
+#[test]
+fn scenario_a_draft_that_left_every_item() {
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
+    let r = with_items();
+    let id = "20261027-v";
+    place_taken(&r, id, 1, &[&format!("spec/{id}"), "propose/a"]);
+    let ran = clm_finish(&r, id);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let left = line_at(&ran.stdout, &format!("left a: {id} doesn't resolve it"));
+    let freed = line_at(&ran.stdout, &format!("freed {id}"));
+    assert!(
+        left.is_some() && freed.is_some() && left < freed,
+        "{}",
+        ran.stdout
+    );
+}
+
 #[test]
 fn scenario_worktree_left_behind_by_its_moved_branch() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-m";
     let wt = draft_worktree(&r, id, "agent-m");
@@ -788,7 +1013,7 @@ fn scenario_worktree_left_behind_by_its_moved_branch() {
 
 #[test]
 fn scenario_staged_work_not_in_history_kept() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-n";
     let wt = draft_worktree(&r, id, "agent-n");
@@ -812,7 +1037,7 @@ fn scenario_staged_work_not_in_history_kept() {
 
 #[test]
 fn scenario_landed_drafts_claims_released() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-r";
     place_taken(
@@ -840,7 +1065,7 @@ fn scenario_landed_drafts_claims_released() {
 
 #[test]
 fn scenario_moved_items_claim_kept_while_the_change_waits() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-w";
     place_taken(
@@ -872,7 +1097,7 @@ fn scenario_moved_items_claim_kept_while_the_change_waits() {
 
 #[test]
 fn scenario_another_sessions_later_claim_kept() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-s";
     place_taken(&r, id, 6, &[&format!("spec/{id}"), "propose/a"]);
@@ -886,7 +1111,7 @@ fn scenario_another_sessions_later_claim_kept() {
 
 #[test]
 fn scenario_no_place_no_release() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-q";
     push_propose(&r.work, "a", 1);
@@ -904,7 +1129,7 @@ fn scenario_no_place_no_release() {
 
 #[test]
 fn clm_triage_prints_the_lines_and_exits_0() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let triage = |root: &std::path::Path| {
         let root = root.display().to_string();
         let (mut out, mut err) = (Vec::new(), Vec::new());
@@ -998,8 +1223,27 @@ fn prompt_of(r: &Repo, ran: &Ran) -> String {
 }
 
 #[test]
+fn scenario_specs_that_dont_load() {
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
+    let (r, f) = (with_items(), fake());
+    write(&r.work, "specs/check/SPEC.md", "---\nnot: [closed\n---\n");
+    push_main(&r.work, "broken");
+    let ran = clm_draft(&r, &f, &["a"]);
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(
+        ran.stderr
+            .lines()
+            .any(|l| l.starts_with("specs/check/SPEC.md: ")),
+        "{}",
+        ran.stderr
+    );
+    assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
+}
+
+#[test]
 fn scenario_launcher() {
-    // req:orchestrator.triage/draft-prompt-file@d84d9985
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
     let r = repo();
     write(
         &r.work,
@@ -1028,7 +1272,7 @@ fn scenario_launcher() {
 
 #[test]
 fn scenario_earlier_prompt_replaced() {
-    // req:orchestrator.triage/draft-prompt-file@d84d9985
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
     let (r, f) = (with_items(), fake());
     let id = format!("{}-a", today());
     write(
@@ -1044,7 +1288,7 @@ fn scenario_earlier_prompt_replaced() {
 
 #[test]
 fn scenario_no_prompts_directory() {
-    // req:orchestrator.triage/draft-prompt-file@d84d9985
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
     let (r, f) = (with_items(), fake());
     write(&r.work, ".clm/prompts", "a file\n");
     let ran = clm_draft(&r, &f, &["a"]);
@@ -1057,7 +1301,7 @@ fn scenario_no_prompts_directory() {
 
 #[test]
 fn a_prompt_that_cant_be_written_frees_the_place() {
-    // req:orchestrator.triage/draft-prompt-file@d84d9985
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
     let (r, f) = (with_items(), fake());
     // A directory where the file goes, for either date the run may see.
     let dates = [today(), today()];
@@ -1073,7 +1317,7 @@ fn a_prompt_that_cant_be_written_frees_the_place() {
 
 #[test]
 fn clm_draft_passes_the_declared_setup_into_the_prompt() {
-    // req:orchestrator.triage/draft-prompt-setup@45e6b734
+    // req:orchestrator.triage/draft-prompt-setup@6fda252a
     let r = with_items();
     let ran = clm_draft(&r, &fake(), &["b"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -1091,7 +1335,7 @@ fn clm_draft_passes_the_declared_setup_into_the_prompt() {
 
 #[test]
 fn scenario_a_draft_that_pushed() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let id = "20261112-x";
     push_files(
@@ -1118,7 +1362,7 @@ fn scenario_a_draft_that_pushed() {
 
 #[test]
 fn resume_reuses_the_drafts_own_place_when_the_cap_is_full() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let id = "20261112-v";
     push_files(
@@ -1144,7 +1388,7 @@ fn resume_reuses_the_drafts_own_place_when_the_cap_is_full() {
 
 #[test]
 fn resume_takes_the_newer_of_the_two_spec_branches() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let id = "20261112-w";
     let path = format!("changes/{id}/change.md");
@@ -1162,7 +1406,7 @@ fn resume_takes_the_newer_of_the_two_spec_branches() {
 
 #[test]
 fn scenario_nothing_pushed() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let ran = clm_draft_env(&r, &fake(), &["--resume", "20261112-y"], &[]);
     assert_eq!(ran.code, Some(1), "{}", ran.stderr);
@@ -1176,7 +1420,7 @@ fn scenario_nothing_pushed() {
 
 #[test]
 fn resume_with_no_free_place_takes_nothing() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let id = "20261112-z";
     push_files(
@@ -1189,4 +1433,29 @@ fn resume_with_no_free_place_takes_nothing() {
     assert_eq!(ran.code, Some(3), "{}", ran.stderr);
     assert_eq!(ran.stdout, "");
     assert_eq!(place_names(&r), vec!["other".to_string()]);
+}
+
+#[test]
+fn scenario_a_resume_it_cant_take() {
+    // req:orchestrator.triage/draft-resume@38d12444
+    let r = with_items();
+    let ran = clm_draft(&r, &fake(), &["--resume", "a/b"]);
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(
+        ran.stderr.contains("`a/b` isn't a change ID"),
+        "{}",
+        ran.stderr
+    );
+    assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
+    let ran = clm_draft(
+        &r,
+        &fake(),
+        &["--resume", "20261112-x", "--answers", "answers.md"],
+    );
+    assert_eq!(ran.code, Some(2), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(ran.stderr.contains("--resume"), "{}", ran.stderr);
+    assert!(ran.stderr.contains("Usage: clm draft"), "{}", ran.stderr);
+    assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
 }
