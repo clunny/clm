@@ -11,7 +11,7 @@ use support::*;
 
 #[test]
 fn scenario_a_command_called_in_a_test() {
-    // req:orchestrator.run/commands-in-crate@57a3e9af
+    // req:orchestrator.run/commands-in-crate@14428b0e
     let (r, f) = (repo(), fake());
     // The launcher on standard output, nothing on standard error, and status 0.
     let ran = ran_with(
@@ -66,7 +66,7 @@ fn scenario_a_command_called_in_a_test() {
 
 #[test]
 fn scenario_no_free_place_is_status_3() {
-    // req:orchestrator.run/commands-in-crate@57a3e9af
+    // req:orchestrator.run/commands-in-crate@14428b0e
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "a", 0);
     git(&r.work, &["fetch", "-q", "origin"]);
@@ -97,7 +97,7 @@ fn scenario_no_free_place_is_status_3() {
 
 #[test]
 fn scenario_arguments_it_cant_parse() {
-    // req:orchestrator.run/commands-in-crate@57a3e9af
+    // req:orchestrator.run/commands-in-crate@14428b0e
     let here = std::env::current_dir().unwrap();
     let none = |_: &str| None;
     for (name, call) in [
@@ -135,3 +135,143 @@ type Call = fn(
     &mut dyn std::io::Write,
     &mut dyn std::io::Write,
 ) -> u8;
+
+#[test]
+fn scenario_help() {
+    // req:orchestrator.run/commands-in-crate@14428b0e
+    let here = std::env::current_dir().unwrap();
+    let none = |_: &str| None;
+    for (call, description, usage, options) in [
+        (
+            clm_run::run_command::<Vec<&str>, &str> as Call,
+            "Claim a component, or pick up its unfinished build, write the prompt for a session \
+             that builds and lands its pending requirements to `.clm/prompts/<component>.md`, \
+             and print a launcher naming that file. With `--finish`, free the component's build \
+             place instead and, once its branch has landed, remove its clean worktrees under \
+             `.claude/worktrees/`, keeping one whose lock a running process holds unless \
+             `--returned` says the build's subagent has handed back",
+            "Usage: clm run [OPTIONS] <COMPONENT>",
+            &[
+                "--finish",
+                "--returned",
+                "--expiry",
+                "--review-model",
+                "--root",
+            ][..],
+        ),
+        (
+            clm_run::setup_command::<Vec<&str>, &str>,
+            "Run the repository's `[build] setup`, which makes a fresh worktree ready to run \
+             its tests",
+            "Usage: clm setup [OPTIONS]",
+            &["--root"][..],
+        ),
+        (
+            clm_run::superpowers_command::<Vec<&str>, &str>,
+            "Print the path of a skill's SKILL.md in the pinned superpowers copy builds follow",
+            "Usage: clm superpowers <SKILL>",
+            &[][..],
+        ),
+    ] {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let status = call(vec!["--help"], &here, &here, &none, &mut out, &mut err);
+        let out = String::from_utf8(out).unwrap();
+        assert_eq!(status, 0, "{out}");
+        assert!(err.is_empty(), "{}", String::from_utf8_lossy(&err));
+        let mut lines = out.lines();
+        assert_eq!(lines.next(), Some(description), "{out}");
+        assert_eq!(lines.next(), Some(""), "{out}");
+        assert_eq!(lines.next(), Some(usage), "{out}");
+        for option in options {
+            assert!(out.contains(option), "{option} missing from {out}");
+        }
+    }
+}
+
+#[test]
+fn scenario_a_root_given_by_root() {
+    // req:orchestrator.run/commands-in-crate@14428b0e
+    let (r, f) = (repo(), fake());
+    let parent = r.work.parent().unwrap();
+    let gone = parent.join("no-such-root");
+    let gone_arg = gone.to_str().unwrap();
+    // The call of `clm run b` with a root that doesn't exist: 1 naming it, nothing claimed.
+    let ran = ran_with(
+        |env, out, err| {
+            clm_run::run_command(["b", "--root", gone_arg], &r.work, parent, env, out, err)
+        },
+        &run_env(&f, &[]),
+    );
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(ran.stderr.contains(gone_arg), "{}", ran.stderr);
+    assert!(remote_tip(&r, "impl/b").is_none(), "no claim");
+    assert!(place_names(&r).is_empty(), "no place");
+    // The call of `clm setup` with that root: 1 naming it, nothing run.
+    let seen = parent.join("seen");
+    write(
+        &r.work,
+        "clm.toml",
+        &format!("[build]\nsetup = \"touch {}\"\n", seen.display()),
+    );
+    let ran = ran_with(
+        |env, out, err| {
+            clm_run::setup_command(["--root", gone_arg], &r.work, parent, env, out, err)
+        },
+        &run_env(&f, &[]),
+    );
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert!(ran.stderr.contains(gone_arg), "{}", ran.stderr);
+    assert!(!seen.exists(), "nothing run");
+    // The call of `clm run b` in `r`'s parent with `--root r` writes `r/.clm/prompts/b.md`.
+    std::fs::remove_file(r.work.join("clm.toml")).unwrap();
+    let ran = ran_with(
+        |env, out, err| {
+            let line = ["b", "--root", "work"];
+            clm_run::run_command(line, Path::new("/nonexistent"), parent, env, out, err)
+        },
+        &run_env(&f, &[]),
+    );
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    assert!(r.work.join(".clm/prompts/b.md").is_file());
+}
+
+/// A stream whose every write fails.
+struct Broken;
+
+impl std::io::Write for Broken {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("broken"))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("broken"))
+    }
+}
+
+#[test]
+fn scenario_a_stream_that_cant_be_written() {
+    // req:orchestrator.run/commands-in-crate@14428b0e
+    let (r, f) = (repo(), fake());
+    let env = run_env(&f, &[]);
+    let lookup = |k: &str| env.get(k).cloned();
+    let root = r.work.to_str().unwrap();
+    // `clm run b`: 2, and the claim, the place `b` and the prompt it wrote stay.
+    let mut err = Vec::new();
+    let line = ["b", "--root", root];
+    let status = clm_run::run_command(line, &r.work, &r.work, &lookup, &mut Broken, &mut err);
+    assert_eq!(status, 2, "{}", String::from_utf8_lossy(&err));
+    assert!(remote_tip(&r, "impl/b").is_some(), "the claim stays");
+    assert_eq!(place_names(&r), ["b"]);
+    assert!(r.work.join(".clm/prompts/b.md").is_file());
+    // `clm run --finish b` with the place `b`: 2.
+    let line = ["--finish", "b", "--root", root];
+    let status = clm_run::run_command(line, &r.work, &r.work, &lookup, &mut Broken, &mut err);
+    assert_eq!(status, 2);
+    // `clm setup` running `echo ready`, whose output passes through to that stream: 2.
+    write(&r.work, "clm.toml", "[build]\nsetup = \"echo ready\"\n");
+    let mut err = Vec::new();
+    let line = ["--root", root];
+    let status = clm_run::setup_command(line, &r.work, &r.work, &lookup, &mut Broken, &mut err);
+    assert_eq!(status, 2, "{}", String::from_utf8_lossy(&err));
+}

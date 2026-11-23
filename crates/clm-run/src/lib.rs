@@ -3,7 +3,7 @@
 //! requirements and lands them with `clm land` to `.clm/prompts/<node>.md`, printing a short
 //! launcher that names it (`builds-in-subagents`, `build-prompt-file`,
 //! `unattended-superpowers`, `land-locally`). It starts no session and makes no worktree:
-//! `implement` gives the launcher to a subagent in its own Claude Code worktree.
+//! `build` gives the launcher to a subagent in its own Claude Code worktree.
 //! `clm superpowers <skill>` resolves the pinned copy builds follow.
 
 use std::collections::HashMap;
@@ -81,14 +81,12 @@ const EXECUTION_SKILLS: &[&str] = &[
     "superpowers:finishing-a-development-branch",
 ];
 
-/// The review (`advisory-code-review`): `/code-review` at this level, plus this subagent.
-/// Why a build never waits on a background command by matching processes by name
-/// (`background-work-stopped`).
+/// Why a build never waits on a background command by matching processes by name.
 const BACKGROUND_WAIT: &str = ", never through a loop, watch or monitor that matches \
                                processes by name (such as `pgrep -f`): such a match also finds \
                                other builds' processes and outlives the command it waits for.";
 
-/// A land the session started is waited for to its end (`background-work-stopped`).
+/// A land the session started is waited for to its end (`one-report-per-run`).
 const LAND_WAIT: &str = " Wait for a `clm land` you started{check_land} until its completion \
                           notice arrives, however long that takes, since lands queue behind \
                           other builds' lands and can take many minutes. Never write your final \
@@ -111,6 +109,7 @@ const LAND_WAIT: &str = " Wait for a `clm land` you started{check_land} until it
                           one report and the final message would then never reach the \
                           orchestrating session.";
 
+/// The review (`advisory-code-review`): `/code-review` at this level, plus this subagent.
 const REVIEW_LEVEL: &str = "medium";
 const SPEC_AUDITOR: &str = "clm:spec-auditor";
 
@@ -227,6 +226,10 @@ pub struct Job {
     /// Whether the root sets `wiring`, so a build changes only its own component's files
     /// and its stale markers in another's are listed apart (`pending-prompt`).
     pub wiring: bool,
+    /// Whether the repository's `[verify]` sets `mutate`, so the mutation pass after the land
+    /// judges the tests and the prompt leaves out the hand-run spot-checks
+    /// (`prompt-spot-checks`).
+    pub mutate: bool,
 }
 
 /// The prompt for `job`.
@@ -266,7 +269,7 @@ pub fn prompt(job: &Job) -> String {
     // configured command by its path (`check-before-land`, `land-check-command`).
     // The background rule names the check command, and says running it in the background
     // keeps it one plain command, only when the repository sets one
-    // (`background-work-stopped`, `prompt-check-command`).
+    // (`prompt-check-command`).
     let (rerun, again, background) = match &job.check {
         Some(check) => (
             format!(
@@ -337,6 +340,27 @@ pub fn prompt(job: &Job) -> String {
         "Re-citing a marker of your own requirement, wherever its file sits, is allowed \
          (`architecture/path-ownership`)."
     };
+    // Your component's files, what the land refuses once the root names `wiring`, and, while
+    // it names none, the instruction that is then all that holds a build to them.
+    let own = "your component's files are those your component's `tests` match, wherever they \
+               sit, and those its `paths` match that no other component's `tests` match \
+               (`path-ownership`, `components-own-their-tests`)";
+    let own_files = if job.wiring {
+        format!(
+            "`clm land` refuses a build that changes a file `gate/own-files` gives as not its \
+             own, naming the file and its owner, before it runs any check \
+             (`land/build-holds-own-files`): {own}, beside the root's `wiring` files, which \
+             every build may change, and a capability test your component's rules serve, \
+             which `capability-tests-follow-rules` below says when to change."
+        )
+    } else {
+        format!(
+            "This repository's root names no `wiring`, so no program refuses a build's change \
+             to another component's file, and your build keeps to its own: {own}, apart from \
+             the exception `capability-tests-follow-rules` states below and the re-citing \
+             above, wherever its file sits."
+        )
+    };
     let capability_tests = if job.capability_tests {
         " This component builds the capability tests: each capability under that heading is one \
          its tests prove at the project's public boundary, whether or not a rule serves it; \
@@ -345,7 +369,7 @@ pub fn prompt(job: &Job) -> String {
         ""
     };
     // The marker's name is built so it never stands whole in this file, or `clm affected`
-    // would take the file for a reader (`prompt-doc-readers`).
+    // would take the file for a reader (`doc-readers-marked`).
     let reads = concat!("clm:", "reads");
     let doc_readers = format!(
         "A test you write or change that reads a file of the repository's own tree (not a \
@@ -358,7 +382,7 @@ pub fn prompt(job: &Job) -> String {
          spec branch that breaks it land and leaves `main` failing every later code land's \
          check. "
     );
-    // Only a repository with a `[land] check` has a check to record (`prompt-recorded-check`).
+    // Only a repository with a `[land] check` has a check to record (`worktree-check-counts`).
     let recorded = if job.check.is_some() {
         "A passing `clm land --check-only` on a committed `HEAD` that contains `origin/main`, \
          with no uncommitted change and no untracked file git doesn't ignore, is recorded, so \
@@ -413,6 +437,29 @@ pub fn prompt(job: &Job) -> String {
          component's files, and otherwise record it as a backlog item and name that item in \
          your pull request body."
     );
+    // The build spot-checks its tests by mutation by hand only where no mutation pass after
+    // the land judges them (`prompt-spot-checks`, `mutation-after-land`).
+    let (spot_checks, mutants) = if job.mutate {
+        ("", "")
+    } else {
+        (
+            "Once the requirements you built pass their tests, and before the review, spot-check \
+             them by mutation: for each key rule you built, break the rule in the code on purpose \
+             and confirm that a test citing the requirement fails, adding or fixing a test when \
+             none does. Run them safely: commit the work first, so that restoring a file from \
+             that commit loses nothing; count a mutant only when the code still compiles with \
+             it, since a build error fails every test and proves none; count it as killed only \
+             when a named test fails, read from the run's list of failures rather than its exit \
+             status; restore each mutated file from the commit and `touch` it, so a build tool \
+             that judges freshness by file times rebuilds it rather than keeping the mutant in \
+             the binary; run a script that loops over mutants with `sh`, not `zsh`, which \
+             doesn't split an unquoted list into words; mutate nothing while the repository's \
+             checks run; and end with `git status` showing no change to a tracked file. List \
+             each mutant, with the test that failed or the test you added, under `## Review` in \
+             the pull request body.\n\n",
+            ", a spot-check's runs of a mutant included,",
+        )
+    };
     // Before any test run, a build prepares its fresh worktree (`prompt-setup`).
     let setup = if job.setup.is_some() {
         format!(
@@ -439,7 +486,10 @@ pub fn prompt(job: &Job) -> String {
     };
     let ship = format!(
         "Commit everything, then {sync}. Then {again} confirm \
-         `clm gate --base origin/main` prints `code`, and push with \
+         `clm gate --base origin/main` prints `code`, or `spec` for a branch that changes no \
+         code file, such as one whose only change deletes a backlog item a live change lists in \
+         `resolves` or is \
+         `clm rebase`'s archive move, which lands on checks (`three-routes-onto-main`), and push with \
          `clm branch push`. Write the whole pull request body with `Write` to \
          `{PR_BODY}` (outside git, like the logs) and open the branch's pull request with \
          `clm pr open {branch} --title <title> --body-file {PR_BODY}`. To correct the body, \
@@ -514,11 +564,7 @@ pub fn prompt(job: &Job) -> String {
          code its markers mark that no other requirement needs (`no-dead-code`), unless its \
          entry below says it was not your component's, and delete \
          or keep each of its tests as its entry below says (`removal-needs-a-yes`). {recite} \
-         Your build changes only your own component's files: those your component's `tests` match, \
-         wherever they sit, and those its `paths` match that no other component's `tests` match \
-         (`path-ownership`, `components-own-their-tests`), apart from the two exceptions \
-         `capability-tests-follow-rule` and `template-migration-fix` state below and the \
-         re-citing above in a file no component's `tests` match. Put each new test in a file your \
+         {own_files} Put each new test in a file your \
          component's `tests` match, or its `paths` when it sets no `tests`, and never add a test \
          to a file another component owns. When a requirement you build can't be built within \
          those files (it needs a file no glob of your component matches, an import its \
@@ -561,23 +607,10 @@ pub fn prompt(job: &Job) -> String {
          {BUDGET} requirements built, leaving the rest pending for the next run; list what you \
          left under `## Left pending` in the pull request body. A landed branch is progress whatever \
          it leaves.\n\n\
-         Once the requirements you built pass their tests, and before the review, spot-check \
-         them by mutation: for each key rule you built, break the rule in the code on purpose \
-         and confirm that a test citing the requirement fails, adding or fixing a test when \
-         none does. Run them safely: commit the work first, so that restoring a file from \
-         that commit loses nothing; count a mutant only when the code still compiles with \
-         it, since a build error fails every test and proves none; count it as killed only \
-         when a named test fails, read from the run's list of failures rather than its exit \
-         status; restore each mutated file from the commit and `touch` it, so a build tool \
-         that judges freshness by file times rebuilds it rather than keeping the mutant in \
-         the binary; run a script that loops over mutants with `sh`, not `zsh`, which \
-         doesn't split an unquoted list into words; mutate nothing while the repository's \
-         checks run; and end with `git status` showing no change to a tracked file. List \
-         each mutant, with the test that failed or the test you added, under `## Review` in \
-         the pull request body.\n\n\
+         {spot_checks}\
          Your build's slot is {slot}. The project's tests run beside other builds' tests on this \
-         host (`tests-run-concurrently`), so every test command you run by hand, a \
-         spot-check's runs of a mutant included, runs with `CLM_SLOT={slot}` set before the \
+         host (`tests-run-concurrently`), so every test command you run by hand{mutants} runs \
+         with `CLM_SLOT={slot}` set before the \
          command{check_slot}. A test you write binds no fixed port, writes no \
          fixed path outside its checkout and the system's temporary directory, and starts no \
          server another run could share; a port or path it must know in advance is keyed on \
@@ -613,7 +646,15 @@ pub fn prompt(job: &Job) -> String {
          are released when that branch lands. When your branch does the work of a `deferred` \
          item whose `components` name your component, such as removing code a build kept for another \
          component that no longer uses it, delete its `backlog/<slug>.md` on your own branch in a \
-         commit whose trailer block holds `Resolves: backlog/<slug>`. A `question`, `human-task` \
+         commit whose trailer block holds `Resolves: backlog/<slug>`. A `bug` item whose \
+         `components` name your component and whose `unproven` lists a requirement says the \
+         mutation pass found that the requirement's tests notice no change to its code \
+         (`verify/files-unproven`): mend each such test so it fails when the code it proves \
+         breaks, or say in the resolving commit why the test is sound, and delete the item's \
+         `backlog/<slug>.md` in a commit whose trailer block holds `Resolves: backlog/<slug>`, \
+         on a branch that changes your component's files, since only there does the gate take \
+         that deletion as part of a code branch (`code-fix-resolves-bug`). \
+         A `question`, `human-task` \
          or `idea` item you can't delete that way goes under `## Backlog` in the pull request body, \
          as any other backlog edit you can't make.\n\n\
          Flag a workaround against a requirement when one of these happens while you build it: \
@@ -884,7 +925,9 @@ fn superpowers_skill(skill: &str, cwd: &Path, env: Env) -> Result<String, Error>
 /// `sh -c` with standard input closed, and returns what to print on success. A command that
 /// fails is a refusal naming the command and its status; none set prints that and runs nothing.
 /// The settings' `[env]` variables are set for the command, over the caller's own. What the
-/// command prints is passed through to `out` and `err` as it comes.
+/// command prints is passed through to `out` and `err` as it comes; when either can't be
+/// written, the result is [`Error::Git`] once the command has ended, which the call exits 2
+/// with (`commands-in-crate`).
 pub fn setup(
     root: &Path,
     env: Env,
@@ -943,24 +986,33 @@ pub fn setup(
             None => break,
         }
     }
+    // Once the command has ended, whatever its status: what it printed didn't all get
+    // through, which is `clm setup`'s own failure (exit 2).
+    let unwritten = streams.iter().any(|(_, ok)| !ok);
     let status = match ended {
         Some(status) => status,
         // Every sender is gone without the end: only the waiter's panic does that.
         None => Err(std::io::Error::other("lost the command's exit status")),
     }
     .map_err(cant_run)?;
-    if status.success() {
-        return Ok(String::new());
-    }
     let how = match (status.code(), signal(&status)) {
-        (Some(code), _) => format!("exit {code}, status {code}"),
-        (None, Some(n)) => format!("killed by signal {n}"),
-        (None, None) => "no exit status".to_string(),
+        _ if status.success() => None,
+        (Some(code), _) => Some(format!("exit {code}, status {code}")),
+        (None, Some(n)) => Some(format!("killed by signal {n}")),
+        (None, None) => Some("no exit status".to_string()),
     };
-    Err(Error::Refused(format!(
-        "setup failed: `{}` ended with {how}",
-        build.setup
-    )))
+    let failed = how
+        .as_ref()
+        .map(|how| format!("setup failed: `{}` ended with {how}", build.setup));
+    match (unwritten, failed) {
+        (true, failed) => Err(Error::Git(format!(
+            "can't write what `{}` printed{}",
+            build.setup,
+            failed.map(|f| format!("; {f}")).unwrap_or_default()
+        ))),
+        (false, Some(failed)) => Err(Error::Refused(failed)),
+        (false, None) => Ok(String::new()),
+    }
 }
 
 /// What `setup` hears from its command: output on stream `0` (stdout) or `1` (stderr), a
@@ -1032,6 +1084,7 @@ pub fn run(
     let settings = clm_config::load(Some(root), env).map_err(|e| Error::Refused(e.to_string()))?;
     let check = settings.land.value.map(|land| land.check);
     let setup = settings.build.value.map(|build| build.setup);
+    let mutate = settings.verify.value.is_some_and(|v| v.mutate.is_some());
     // Before anything is claimed, so a missing skill leaves nothing behind.
     let skills = SKILLS
         .iter()
@@ -1072,7 +1125,11 @@ pub fn run(
         &branch,
         expiry_hours,
         skills,
-        Settled { check, setup },
+        Settled {
+            check,
+            setup,
+            mutate,
+        },
         review_model,
     );
     if built.is_err() && placed == Placed::New {
@@ -1103,6 +1160,8 @@ struct Settled {
     check: Option<String>,
     /// `[build] setup`.
     setup: Option<String>,
+    /// Whether `[verify]` sets `mutate`.
+    mutate: bool,
 }
 
 /// What `run` does once the build holds its place.
@@ -1126,20 +1185,37 @@ fn build(
     // (`pending-prompt`); the branch never edits `specs/`, so their history is `main`'s.
     let main = format!("{REMOTE}/main");
     let merged = merged_tree(root, &main, &format!("refs/heads/{branch}"))?;
-    let tmp = clm_git::extract_tree(root, merged.as_deref().unwrap_or(&main))?;
+    let read_from_main = merged.is_none();
+    let merged = merged.as_deref().unwrap_or(&main);
+    let tmp = clm_git::extract_tree(root, merged)?;
     let tree = tmp.path();
     let (graph, markers, pending) = pending_in(tree, node)?;
-    let mut job = job(root, &main, tree, &graph, &markers, node, &pending)?;
+    let mut job = job(
+        root,
+        &main,
+        (merged, tree),
+        &graph,
+        &markers,
+        node,
+        &pending,
+    )?;
     job.resumed = resumed;
-    job.read_from_main = merged.is_none();
+    job.read_from_main = read_from_main;
     job.skills = skills;
     job.check = settled.check;
     job.setup = settled.setup;
+    job.mutate = settled.mutate;
     job.review_model = review_model.map(str::to_string);
     job.slot = place_slot(root, branch)?;
-    // A write that fails leaves the claim, which the next `clm run` resumes.
+    // A write that fails leaves the claim, which the next `clm run` resumes. The prompt goes
+    // to a temporary file renamed over the earlier one, so a failed write leaves that whole.
     let file = prompts.join(format!("{node}.md"));
-    fs::write(&file, prompt(&job)).map_err(|e| {
+    let written = tempfile::NamedTempFile::new_in(&prompts).and_then(|mut tmp| {
+        tmp.write_all(prompt(&job).as_bytes())?;
+        tmp.persist(&file).map_err(|e| e.error)?;
+        Ok(())
+    });
+    written.map_err(|e| {
         Error::Refused(format!(
             "{}: {e}; run `clm run {node}` again once it can be written",
             file.display()
@@ -1457,18 +1533,20 @@ fn blockers(lines: &[Pending], p: &Pending) -> Blocked {
     }
 }
 
-/// The job for `node`, whose tree at `rev` in the repository at `root` is extracted at
-/// `tree`, with `graph`, every marker, `scanned`, and the whole list `pending` returns,
-/// `lines`, read from it.
+/// The job for `node` in the repository at `root`, whose specs' history is `rev`'s and whose
+/// tree-ish `extracted.0`, `rev` merged with the branch, is extracted at `extracted.1`, with
+/// `graph`, every marker, `scanned`, and the whole list `pending` returns, `lines`, read from
+/// it.
 fn job(
     root: &Path,
     rev: &str,
-    tree: &Path,
+    extracted: (&str, &Path),
     graph: &Graph,
     scanned: &[Marker],
     node: &str,
     lines: &[Pending],
 ) -> Result<Job, Error> {
+    let (merged, tree) = extracted;
     let mut pending: Vec<&Pending> = lines.iter().filter(|p| p.node == node).collect();
     pending.sort_by(|a, b| (a.priority, &a.id).cmp(&(b.priority, &b.id)));
     let spec = graph.nodes[node].path.to_string_lossy().into_owned();
@@ -1477,15 +1555,23 @@ fn job(
     let mut blocked = Vec::new();
     // The approved lists' lines, read once the first behind or obsolete requirement needs them.
     let mut approved: Option<Vec<ListLine>> = None;
-    // Once the root sets `wiring`, the component that owns a marker's file when that isn't
-    // `node` and no `wiring` glob lets every build edit it: the files `clm land` refuses
-    // this build's edit to (`land/build-holds-own-files`).
-    let foreign_owner = |m: &clm_coverage::Marker| {
-        let wiring = graph.wiring()?;
-        let file = m.path.to_string_lossy();
-        let owner = clm_coverage::owner(graph, &m.path)?;
-        (owner != node && !wiring.iter().any(|g| clm_coverage::matches(g, &file))).then_some(owner)
+    // Once the root sets `wiring`, the owner of each file holding a `behind` marker that
+    // `gate` gives as not this build's to change, the files `clm land` refuses this
+    // build's edit to (`gate/own-files`, `land/build-holds-own-files`).
+    let not_ours: HashMap<String, String> = if graph.wiring().is_some() {
+        let mut files: Vec<String> = pending
+            .iter()
+            .filter(|p| p.state == ReqState::Behind)
+            .flat_map(|p| &p.markers)
+            .map(|m| m.path.to_string_lossy().into_owned())
+            .collect();
+        files.sort();
+        files.dedup();
+        not_ours_to_change(root, rev, (merged, tree), &files, node)?
+    } else {
+        HashMap::new()
     };
+    let foreign_owner = |m: &clm_coverage::Marker| not_ours.get(m.path.to_string_lossy().as_ref());
     for p in pending {
         let b = blockers(lines, p);
         if !b.by.is_empty() || !b.cited_in.is_empty() {
@@ -1583,6 +1669,7 @@ fn job(
         slot: 0,
         setup: None,
         wiring: graph.wiring().is_some(),
+        mutate: false,
     })
 }
 
@@ -1677,6 +1764,68 @@ fn not_its_own(
     take_out.sort_by(|a, b| (&a.path, a.line).cmp(&(&b.path, b.line)));
     e.take_out = take_out.iter().map(|m| m.to_string()).collect();
     (delete, e)
+}
+
+/// The files, each with its owner, that `gate` gives as not `node`'s build's to change
+/// (`gate/own-files`): it judges a commit object on `base` holding the tree-ish
+/// `extracted.0`, extracted at `extracted.1`, with each of `files` modified, as `clm land`
+/// would judge a branch that changes them. The commit is written as objects only, with no
+/// ref naming it, so nothing of the clone moves. Every one of `files` is asked about; a file the
+/// branch itself changes may come back too, which a caller looking up `files` never reads.
+fn not_ours_to_change(
+    root: &Path,
+    base: &str,
+    extracted: (&str, &Path),
+    files: &[String],
+    node: &str,
+) -> Result<HashMap<String, String>, Error> {
+    if files.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let (treeish, tree) = extracted;
+    let scratch = tempfile::TempDir::new().map_err(|e| Error::Git(format!("temp dir: {e}")))?;
+    let index = scratch.path().join("index");
+    let with = |env: &[(&str, &std::ffi::OsStr)], args: &[&str], stdin: Option<&[u8]>| {
+        let options = clm_git::Options { stdin, env };
+        clm_git::run(root, "git", args, options)
+            .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+    };
+    let own_index = [("GIT_INDEX_FILE", index.as_os_str())];
+    with(&own_index, &["read-tree", treeish], None)?;
+    for file in files {
+        let mut text = fs::read(tree.join(file)).unwrap_or_default();
+        text.push(b'\n');
+        let blob = with(&[], &["hash-object", "-w", "--stdin"], Some(&text))?;
+        let entry = format!("100644,{blob},{file}");
+        with(
+            &own_index,
+            &["update-index", "--add", "--cacheinfo", &entry],
+            None,
+        )?;
+    }
+    let probe = with(&own_index, &["write-tree"], None)?;
+    let who: &std::ffi::OsStr = "clm run".as_ref();
+    let mail: &std::ffi::OsStr = "clm@localhost".as_ref();
+    let identity = [
+        ("GIT_AUTHOR_NAME", who),
+        ("GIT_AUTHOR_EMAIL", mail),
+        ("GIT_COMMITTER_NAME", who),
+        ("GIT_COMMITTER_EMAIL", mail),
+    ];
+    let commit = with(
+        &identity,
+        &[
+            "commit-tree",
+            &probe,
+            "-p",
+            base,
+            "-m",
+            "the files clm run asks about",
+        ],
+        None,
+    )?;
+    let found = clm_gate::foreign_files(root, base, &commit, node).map_err(Error::Git)?;
+    Ok(found.into_iter().map(|f| (f.path, f.owner)).collect())
 }
 
 /// The lines of every change's `deleted-tests.txt` in the tree at `tree`, live or archived
@@ -2018,7 +2167,7 @@ mod tests {
         let job = job(
             dir.path(),
             "HEAD",
-            dir.path(),
+            ("HEAD", dir.path()),
             &graph,
             &scanned,
             "c",
@@ -2030,7 +2179,7 @@ mod tests {
 
     #[test]
     fn scenario_another_component_s_removed_capability() {
-        // req:orchestrator.run/pending-prompt@e02d8d3a
+        // req:orchestrator.run/pending-prompt@15d82893
         let cite = format!("// {}:capability/gone", "req");
         let test = format!("#[test]\nfn old_cap() {{\n    {cite}\n}}\n");
         let p = prompt_for_c(
@@ -2074,7 +2223,7 @@ mod tests {
 
     #[test]
     fn scenario_another_component_s_requirement_whose_own_files_don_t_cite_it() {
-        // req:orchestrator.run/pending-prompt@e02d8d3a
+        // req:orchestrator.run/pending-prompt@15d82893
         let gone = format!("// {}:b/gone\n", "req");
         let lib = format!("//\n//\n//\n{gone}pub fn f() {{}}\n");
         let files = |at: &str, b_cites: &str| {
@@ -2132,7 +2281,7 @@ mod tests {
 
     #[test]
     fn a_wait_on_its_own_id_names_the_other_lines_components_sorted() {
-        // req:orchestrator.run/pending-prompt@e02d8d3a
+        // req:orchestrator.run/pending-prompt@15d82893
         let line = |node: &str, waits_on: &[&str]| Pending {
             id: "b/gone".into(),
             node: node.into(),
@@ -2157,7 +2306,7 @@ mod tests {
 
     #[test]
     fn a_test_that_also_cites_a_held_requirement_loses_only_its_marker() {
-        // req:orchestrator.run/pending-prompt@e02d8d3a
+        // req:orchestrator.run/pending-prompt@15d82893
         let test = format!(
             "#[test]\nfn both() {{\n    // {r}:g/gone\n    // {r}:c/s\n}}\n",
             r = "req"

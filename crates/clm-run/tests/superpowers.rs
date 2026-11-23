@@ -11,7 +11,7 @@ use tempfile::TempDir;
 
 #[test]
 fn override_dir() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let dir = TempDir::new().unwrap();
     let skill = with_skill(dir.path());
     let o = clm_superpowers(
@@ -24,7 +24,7 @@ fn override_dir() {
 
 #[test]
 fn relative_override_prints_an_absolute_path() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let dir = TempDir::new().unwrap();
     let skill = with_skill(&dir.path().canonicalize().unwrap().join("sp"));
     // Run in `dir`, as the process's current directory reads it.
@@ -39,7 +39,7 @@ fn relative_override_prints_an_absolute_path() {
 
 #[test]
 fn empty_override_counts_as_unset() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let (cache, skill) = pinned_cache();
     let o = clm_superpowers(
         "brainstorming",
@@ -54,7 +54,7 @@ fn empty_override_counts_as_unset() {
 
 #[test]
 fn unknown_skill() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let dir = TempDir::new().unwrap();
     with_skill(dir.path());
     // Only the name check keeps `skills/brainstorming` and `../brainstorming` from
@@ -79,7 +79,7 @@ fn unknown_skill() {
 
 #[test]
 fn skill_dir_without_skill_md() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join("skills/brainstorming")).unwrap();
     let o = clm_superpowers(
@@ -93,7 +93,7 @@ fn skill_dir_without_skill_md() {
 
 #[test]
 fn symlinked_cache_prints_the_path_run_loads() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let (cache, _) = pinned_cache();
     let links = TempDir::new().unwrap();
     let link = links.path().join("cache");

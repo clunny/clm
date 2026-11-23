@@ -20,7 +20,7 @@ fn clm_setup(cwd: &Path) -> Output {
 
 #[test]
 fn setup_runs_in_the_root_it_is_given() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("clm.toml"),
@@ -35,7 +35,7 @@ fn setup_runs_in_the_root_it_is_given() {
 
 #[test]
 fn scenario_setup_runs_in_the_root() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     let r = repo("[build]\nsetup = \"touch ready\"\n");
     let out = clm_setup(&r.path().join("src"));
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
@@ -45,7 +45,7 @@ fn scenario_setup_runs_in_the_root() {
 
 #[test]
 fn scenario_setup_fails() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     let r = repo("[build]\nsetup = \"exit 3\"\n");
     let out = clm_setup(r.path());
     assert_eq!(out.status.code(), Some(1));
@@ -57,7 +57,7 @@ fn scenario_setup_fails() {
 
 #[test]
 fn a_setup_killed_by_a_signal_says_so() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     let r = repo("[build]\nsetup = \"kill -9 $$\"\n");
     let out = clm_setup(r.path());
     assert_eq!(out.status.code(), Some(1));
@@ -67,7 +67,7 @@ fn a_setup_killed_by_a_signal_says_so() {
 
 #[test]
 fn setup_passes_output_through_and_closes_stdin() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     // The call, made by this test run again as a process whose standard input the outer run
     // holds open, writes what it got to the repository the outer run made.
     if let Some(root) = std::env::var_os(HELD_STDIN_ROOT) {
@@ -114,7 +114,7 @@ fn setup_passes_output_through_and_closes_stdin() {
 
 #[test]
 fn scenario_nothing_declared() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     let r = repo("[land]\ncheck = \"true\"\n");
     let out = clm_setup(r.path());
     assert_eq!(out.status.code(), Some(0));
@@ -123,7 +123,7 @@ fn scenario_nothing_declared() {
 
 #[test]
 fn scenario_unreadable_settings() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     let r = repo("[build\nsetup = \n");
     let out = clm_setup(r.path());
     assert_eq!(out.status.code(), Some(1));
@@ -137,7 +137,7 @@ fn scenario_unreadable_settings() {
 
 #[test]
 fn a_process_left_in_the_background_holds_up_nothing() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     // The background `sleep` keeps the command's standard output and error open long after
     // `sh` has ended.
     let r = repo("[build]\nsetup = \"sleep 30 & echo started\"\n");

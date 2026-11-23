@@ -69,12 +69,13 @@ fn job() -> Job {
         slot: 2,
         setup: None,
         wiring: false,
+        mutate: false,
     }
 }
 
 #[test]
 fn names_the_branch_skills_plan_and_bundle() {
-    // req:orchestrator.run/run@9b5c5d12
+    // req:orchestrator.run/run@5ea05da6
     let p = prompt(&job());
     let first = p.lines().next().unwrap();
     assert!(first.contains("git switch impl/b"), "{p}");
@@ -124,7 +125,7 @@ fn scenario_prompt_workaround() {
 
 #[test]
 fn scenario_check_command_named() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
+    // req:orchestrator.run/prompt-check-command@c1defe4a
     let mut j = job();
     j.check = Some("scripts/check.sh".into());
     let p = prompt(&j);
@@ -141,15 +142,8 @@ fn scenario_check_command_named() {
 }
 
 #[test]
-fn scenario_no_check_command() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
-    let p = prompt(&job());
-    assert!(!p.contains("--check-only"), "{p}");
-}
-
-#[test]
 fn names_no_target_directory() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
+    // req:orchestrator.run/prompt-check-command@c1defe4a
     let mut j = job();
     j.check = Some("scripts/check.sh".into());
     for p in [prompt(&j), prompt(&job())] {
@@ -160,7 +154,7 @@ fn names_no_target_directory() {
 
 #[test]
 fn scenario_behind_and_obsolete() {
-    // req:orchestrator.run/pending-prompt@e02d8d3a
+    // req:orchestrator.run/pending-prompt@15d82893
     let p = prompt(&job());
     let pending = p.find("## Pending requirements").unwrap();
     let list = &p[pending..];
@@ -183,7 +177,7 @@ fn scenario_behind_and_obsolete() {
 
 #[test]
 fn scenario_an_obsolete_requirement_s_tests() {
-    // req:orchestrator.run/pending-prompt@e02d8d3a
+    // req:orchestrator.run/pending-prompt@15d82893
     let mut j = job();
     let gone = &mut j.pending[2];
     gone.delete = vec!["t.rs::old_rule".into()];
@@ -219,7 +213,7 @@ fn scenario_an_obsolete_requirement_s_tests() {
 
 #[test]
 fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
-    // req:orchestrator.run/pending-prompt@e02d8d3a
+    // req:orchestrator.run/pending-prompt@15d82893
     let mut j = job();
     j.wiring = true;
     let x = &mut j.pending[0];
@@ -245,7 +239,7 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
 
 #[test]
 fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wiring() {
-    // req:orchestrator.run/pending-prompt@e02d8d3a
+    // req:orchestrator.run/pending-prompt@15d82893
     let without = prompt(&job());
     assert!(
         without.contains("wherever its file sits, is allowed"),
@@ -262,18 +256,8 @@ fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wirin
 }
 
 #[test]
-fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@e02d8d3a
-    let p = prompt(&job());
-    let list = &p[p.find("## Pending requirements").unwrap()..];
-    assert!(!list.contains("- `b/z` unbuilt"), "{list}");
-    assert!(list.contains("`b/z`, blocked by `backlog/q`"), "{list}");
-    assert!(list.contains("`b/w`, blocked by `c/z`"), "{list}");
-}
-
-#[test]
 fn a_line_waiting_on_its_own_id_names_the_components_that_cite_it() {
-    // req:orchestrator.run/pending-prompt@e02d8d3a
+    // req:orchestrator.run/pending-prompt@15d82893
     let mut j = job();
     j.blocked = vec![
         Blocked {
@@ -302,7 +286,7 @@ fn a_line_waiting_on_its_own_id_names_the_components_that_cite_it() {
 
 #[test]
 fn resume_prompt_says_the_branch_exists() {
-    // req:orchestrator.run/run@9b5c5d12
+    // req:orchestrator.run/run@5ea05da6
     let mut j = job();
     j.resumed = true;
     assert!(prompt(&j).contains("`impl/b` already exists"));
@@ -311,7 +295,7 @@ fn resume_prompt_says_the_branch_exists() {
 
 #[test]
 fn scenario_capability_tests_component_waits_for_a_changed_rule() {
-    // req:orchestrator.run/capability-waits-for-changed-rule@831f33e5
+    // req:orchestrator.run/capability-waits-for-changed-rule@bf5900a7
     let mut j = job();
     j.capability_tests = true;
     let p = prompt(&j);
@@ -326,7 +310,7 @@ fn scenario_capability_tests_component_waits_for_a_changed_rule() {
 
 #[test]
 fn scenario_other_component_has_no_capability_wait() {
-    // req:orchestrator.run/capability-waits-for-changed-rule@831f33e5
+    // req:orchestrator.run/capability-waits-for-changed-rule@bf5900a7
     let p = prompt(&job());
     assert!(!p.contains("serving-rules-order-capabilities"), "{p}");
     assert!(!p.contains("leave it pending"), "{p}");
@@ -334,7 +318,7 @@ fn scenario_other_component_has_no_capability_wait() {
 
 #[test]
 fn scenario_prompt_slot() {
-    // req:orchestrator.run/prompt-slot@7c75a139
+    // req:orchestrator.run/prompt-slot@ae658078
     for resumed in [false, true] {
         let mut j = job();
         j.resumed = resumed;

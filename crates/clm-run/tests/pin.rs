@@ -21,7 +21,7 @@ fn files(dir: &Path) -> Vec<PathBuf> {
 
 #[test]
 fn one_pin() {
-    // req:orchestrator.run/pin-file@a682a3d8
+    // req:orchestrator.run/pin-file@3d9c5f84
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let pin = fs::read_to_string(crate_dir.join("superpowers.pin")).unwrap();
     let line = pin.strip_suffix('\n').unwrap_or(&pin);
@@ -51,19 +51,5 @@ fn one_pin() {
         for field in [tag, commit] {
             assert!(!text.contains(field), "{} names {field}", file.display());
         }
-    }
-}
-
-#[test]
-fn no_eval_in_the_crate() {
-    // req:orchestrator.run/superpowers-path@411708d0
-    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for file in files(&crate_dir.join("src")) {
-        let text = fs::read_to_string(&file).unwrap();
-        assert!(
-            !text.contains("plugin/evals"),
-            "{} names plugin/evals",
-            file.display()
-        );
     }
 }

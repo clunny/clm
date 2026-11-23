@@ -17,7 +17,7 @@ use tempfile::TempDir;
 
 #[test]
 fn scenario_node_prepared() {
-    // req:orchestrator.run/run@9b5c5d12
+    // req:orchestrator.run/run@5ea05da6
     let _env = into_process();
     let (r, f) = (repo(), fake());
     let (launcher, p) = launched_in(&r.work, &r.work, &f, "b", &[]);
@@ -63,7 +63,7 @@ fn scenario_node_prepared() {
 
 #[test]
 fn scenario_claimed_elsewhere() {
-    // req:orchestrator.run/run@9b5c5d12
+    // req:orchestrator.run/run@5ea05da6
     let _env = into_process();
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "b", 1);
@@ -72,10 +72,27 @@ fn scenario_claimed_elsewhere() {
     assert!(local_tip(&r, "impl/b").is_none());
 }
 
+#[test]
+fn a_skill_whose_fetch_fails_refuses_before_claiming() {
+    // req:orchestrator.run/run@5ea05da6
+    let _env = into_process();
+    let (r, f) = (repo(), fake());
+    let cache = TempDir::new().unwrap();
+    // No override, so the pinned copy is fetched, and git refuses its https fetch.
+    let env = [
+        ("CLM_SUPERPOWERS_DIR", Path::new("")),
+        ("XDG_CACHE_HOME", cache.path()),
+        ("GIT_ALLOW_PROTOCOL", Path::new("file")),
+    ];
+    refused(&r, &f, "b", &env, 2);
+    assert!(remote_tip(&r, "impl/b").is_none(), "no claim");
+    assert!(place_names(&r).is_empty(), "no place");
+}
+
 #[cfg(unix)]
 #[test]
 fn scenario_worktree_git_cant_remove() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let _env = into_process();
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
@@ -140,7 +157,7 @@ fn fake_git(f: &Fake) {
 
 #[test]
 fn scenario_a_run_whose_fetch_loses_a_ref_race() {
-    // req:orchestrator.run/run-fetch-retries-race@4a85eabb
+    // req:orchestrator.run/run-fetch-retries-race@901c36c0
     let _env = into_process();
     let (r, f) = (repo(), fake());
     fake_git(&f);
@@ -158,7 +175,7 @@ fn scenario_a_run_whose_fetch_loses_a_ref_race() {
 
 #[test]
 fn scenario_a_run_whose_fetch_keeps_failing() {
-    // req:orchestrator.run/run-fetch-retries-race@4a85eabb
+    // req:orchestrator.run/run-fetch-retries-race@901c36c0
     let _env = into_process();
     let (r, f) = (repo(), fake());
     fake_git(&f);
@@ -175,7 +192,7 @@ fn scenario_a_run_whose_fetch_keeps_failing() {
 
 #[test]
 fn scenario_a_finish_whose_fetch_loses_a_ref_race() {
-    // req:orchestrator.run/run-fetch-retries-race@4a85eabb
+    // req:orchestrator.run/run-fetch-retries-race@901c36c0
     let _env = into_process();
     let (r, f) = (repo(), fake());
     fake_git(&f);
@@ -190,7 +207,7 @@ fn scenario_a_finish_whose_fetch_loses_a_ref_race() {
 
 #[test]
 fn pinned_copy() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let _env = into_process();
     let (cache, skill) = pinned_cache();
     // No git on PATH: any attempt to fetch would fail.
@@ -204,11 +221,40 @@ fn pinned_copy() {
     );
     assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
     assert_eq!(stdout(&o), format!("{}\n", skill.display()));
+
+    // `XDG_CACHE_HOME` set to the empty string, and `HOME` holding the copy under `.cache/`.
+    let home = TempDir::new().unwrap();
+    let skill = with_skill(
+        &home
+            .path()
+            .join(".cache/clm/superpowers")
+            .join(SUPERPOWERS_COMMIT),
+    );
+    let o = clm_superpowers(
+        "brainstorming",
+        &[
+            ("XDG_CACHE_HOME", "".as_ref()),
+            ("HOME", home.path().as_os_str()),
+            ("PATH", empty.path().as_os_str()),
+        ],
+    );
+    assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
+    assert_eq!(stdout(&o), format!("{}\n", skill.display()));
+
+    // Neither set: 1 naming both, and no path.
+    let o = clm_superpowers("brainstorming", &[("PATH", empty.path().as_os_str())]);
+    assert_eq!(o.status.code(), Some(1), "{}", stderr(&o));
+    assert_eq!(stdout(&o), "");
+    let err = stderr(&o);
+    assert!(
+        err.contains("XDG_CACHE_HOME") && err.contains("HOME"),
+        "{err}"
+    );
 }
 
 #[test]
 fn bad_name_is_refused_before_fetching() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let _env = into_process();
     let cache = TempDir::new().unwrap();
     let o = clm_superpowers(
@@ -219,12 +265,13 @@ fn bad_name_is_refused_before_fetching() {
         ],
     );
     assert_eq!(o.status.code(), Some(1), "{}", stderr(&o));
+    assert_eq!(stdout(&o), "", "no path");
     assert!(!cache.path().join("clm").exists());
 }
 
 #[test]
 fn fetch_fails() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let _env = into_process();
     let cache = TempDir::new().unwrap();
     // Git refuses the https fetch, so this needs no network.
@@ -249,7 +296,7 @@ fn fetch_fails() {
 
 #[test]
 fn no_reserved_words() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let _env = into_process();
     let dir = TempDir::new().unwrap();
     with_skill(dir.path());
@@ -309,7 +356,7 @@ fn snapshot(dir: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
 
 #[test]
 fn a_clone_the_environment_names_is_left_alone() {
-    // req:orchestrator.run/superpowers-path@411708d0
+    // req:orchestrator.run/superpowers-path@27168d3f
     let _env = into_process();
     let cache = TempDir::new().unwrap();
     let root = TempDir::new().unwrap();
@@ -360,7 +407,7 @@ fn a_clone_the_environment_names_is_left_alone() {
 
 #[test]
 fn scenario_setup_gets_the_projects_variables() {
-    // req:orchestrator.run/setup-command@fdb7c407
+    // req:orchestrator.run/setup-command@357d0a31
     let _env = into_process();
     let r = setup_repo(
         "[build]\nsetup = \"echo $RELAY_SERVER_IMAGE > seen\"\n[env]\nRELAY_SERVER_IMAGE = \"relay:amd64\"\n",
