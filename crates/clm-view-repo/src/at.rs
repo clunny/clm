@@ -36,11 +36,16 @@ struct Tree {
     prefix: String,
 }
 
-/// A blob's text, or `None` when it is binary (a NUL in its first 8000 bytes, as git
-/// judges it) or not UTF-8, which the working tree's scan skips too.
+/// Whether git judges a blob binary: a NUL in its first 8000 bytes. A binary file holds no
+/// marker (`view-at-rev`) and counts toward no size, as `clm size` judges it.
+fn binary(bytes: &[u8]) -> bool {
+    bytes[..bytes.len().min(BINARY_PROBE)].contains(&0)
+}
+
+/// A blob's text, or `None` when it is binary or not UTF-8, which the working tree's scan
+/// skips too.
 fn text(bytes: &[u8]) -> Option<&str> {
-    let probe = &bytes[..bytes.len().min(BINARY_PROBE)];
-    if probe.contains(&0) {
+    if binary(bytes) {
         return None;
     }
     std::str::from_utf8(bytes).ok()
@@ -110,7 +115,7 @@ pub(crate) fn read(
             .iter()
             .filter(|(path, bytes)| {
                 let full = format!("{}{}", tree.prefix, path.to_string_lossy());
-                text(bytes).is_some() && !clm_check::linguist_excluded(&tree.attributes, &full)
+                !binary(bytes) && !clm_check::linguist_excluded(&tree.attributes, &full)
             })
             .map(|(path, bytes)| (path.clone(), Length::of(path, bytes)))
             .collect();

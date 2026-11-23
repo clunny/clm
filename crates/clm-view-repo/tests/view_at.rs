@@ -96,7 +96,7 @@ fn tree_state(d: &Path) -> (String, String) {
 
 #[test]
 fn scenario_ahead_of_the_checkout() {
-    // req:view.repo/view-at-rev@3e653d69
+    // req:view.repo/view-at-rev@a1f0b81d
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     let before = tree_state(d);
@@ -112,7 +112,7 @@ fn scenario_ahead_of_the_checkout() {
 
 #[test]
 fn scenario_header() {
-    // req:view.repo/view-at-rev@3e653d69
+    // req:view.repo/view-at-rev@a1f0b81d
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     fetch_head(
@@ -151,7 +151,7 @@ fn fetch_head(path: &Path, ago: std::time::Duration) {
 
 #[test]
 fn scenario_fetched_from_another_worktree() {
-    // req:view.repo/view-at-rev@3e653d69
+    // req:view.repo/view-at-rev@a1f0b81d
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     git(d, &["switch", "-q", "--detach"]);
@@ -170,9 +170,19 @@ fn scenario_fetched_from_another_worktree() {
     let first = text.lines().next().unwrap();
     assert!(first.contains(" · fetched 1m ago"), "{text}");
     assert!(first.ends_with("· checkout impl/a"), "{text}");
-    // The other way round: the main checkout sees the linked worktree's newer fetch.
+    // The other way round: the main checkout sees the newer fetch of a second linked
+    // worktree whose directory was deleted without `git worktree prune`.
+    let gone = linked.path().join("gone");
+    git(
+        d,
+        &["worktree", "add", "-q", "--detach", gone.to_str().unwrap()],
+    );
+    let theirs = git(&gone, &["rev-parse", "--path-format=absolute", "--git-dir"]);
+    let theirs = Path::new(theirs.trim()).join("FETCH_HEAD");
+    fetch_head(&theirs, std::time::Duration::from_secs(120));
+    fs::remove_dir_all(&gone).unwrap();
+    assert!(theirs.exists());
     fetch_head(&main, std::time::Duration::from_secs(30 * 3600));
-    fetch_head(&own, std::time::Duration::from_secs(120));
     let text = stdout(&clm(d, &["view", "spec", "--at", "origin/main"]));
     let first = text.lines().next().unwrap();
     assert!(first.contains(" · fetched 2m ago"), "{text}");
@@ -190,7 +200,7 @@ fn node_json<'v>(v: &'v serde_json::Value, id: &str) -> &'v serde_json::Value {
 
 #[test]
 fn scenario_detached_never_fetched() {
-    // req:view.repo/view-at-rev@3e653d69
+    // req:view.repo/view-at-rev@a1f0b81d
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     git(d, &["switch", "-q", "--detach"]);
@@ -209,18 +219,84 @@ fn scenario_detached_never_fetched() {
 
 #[test]
 fn scenario_no_such_commit() {
-    // req:view.repo/view-at-rev@3e653d69
+    // req:view.repo/view-at-rev@a1f0b81d
     let dir = ahead_of_the_checkout();
     let out = clm(dir.path(), &["view", "spec", "--at", "nowhere"]);
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty(), "{out:?}");
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("nowhere"), "{err}");
+    // A revision that begins with `-` is read as one, never as an option.
+    for args in [
+        &["view", "spec", "--at=--all"][..],
+        &["pending", "--at=--all"][..],
+        &["view", "spec", "--at", "--all"][..],
+        &["pending", "--at", "--all"][..],
+    ] {
+        let out = clm(dir.path(), args);
+        assert_eq!(out.status.code(), Some(1), "{args:?}: {out:?}");
+        assert!(out.stdout.is_empty(), "{args:?}: {out:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("`--all`"), "{args:?}: {err}");
+    }
+}
+
+#[test]
+fn a_commit_it_cant_read() {
+    // req:view.repo/view-at-rev@a1f0b81d
+    // No repository: `HEAD` names nothing that can be read.
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", &node("", &["x"]));
+    for args in [
+        &["view", "spec", "--at", "HEAD"][..],
+        &["pending", "--at", "HEAD"][..],
+    ] {
+        let out = clm(d, args);
+        assert_eq!(out.status.code(), Some(1), "{args:?}: {out:?}");
+        assert!(out.stdout.is_empty(), "{args:?}: {out:?}");
+        let err = stderr(&out);
+        assert!(err.contains("`HEAD`"), "{args:?}: {err}");
+        assert!(err.contains("not a git repository"), "{args:?}: {err}");
+    }
+    // A partial clone whose `origin/main` blobs were never fetched: refused, fetching none.
+    let origin = ahead_of_the_checkout();
+    let o = origin.path();
+    git(o, &["switch", "-q", "main"]);
+    git(o, &["merge", "-q", "--ff-only", "origin/main"]);
+    git(o, &["config", "uploadpack.allowFilter", "true"]);
+    git(o, &["config", "uploadpack.allowAnySHA1InWant", "true"]);
+    let place = TempDir::new().unwrap();
+    let clone = place.path().join("c");
+    git(
+        place.path(),
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "clone",
+            "-q",
+            "--filter=blob:none",
+            "--no-checkout",
+            &format!("file://{}", o.display()),
+            clone.to_str().unwrap(),
+        ],
+    );
+    let objects = || git(&clone, &["count-objects", "-v"]);
+    let before = objects();
+    let out = clm(&clone, &["view", "spec", "--at", "origin/main"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    // Named, and why: the blob git couldn't read without fetching.
+    let err = stderr(&out);
+    assert!(err.starts_with("`origin/main`: "), "{err}");
+    assert!(err.contains("cat-file"), "{err}");
+    assert_eq!(objects(), before);
 }
 
 #[test]
 fn at_a_commit_sizes_by_its_own_settings() {
-    // req:view.repo/view-at-rev@3e653d69
+    // req:view.repo/view-at-rev@a1f0b81d
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     // The working tree's settings mark `a`; the commit holds no `clm.toml`, so its
@@ -248,11 +324,35 @@ fn at_a_commit_sizes_by_its_own_settings() {
     ));
     assert_eq!(node_json(&here, "a")["oversized"], false, "{here:#}");
     assert_eq!(node_json(&there, "a")["oversized"], true, "{there:#}");
+    // A commit whose `clm.toml` doesn't parse: sized by nothing, said on stderr.
+    git(d, &["switch", "-q", "--detach", "origin/main"]);
+    write(d, "clm.toml", "[component_size\n");
+    // `a`'s spec over the default budget: nothing marks it, not even the defaults.
+    let big = format!("{}\n{}\n", node("", &["x"]), "word ".repeat(20000));
+    write(d, "specs/a/SPEC.md", &big);
+    git(d, &["add", "-A"]);
+    git(d, &["commit", "-qm", "broken budgets"]);
+    git(d, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(d, &["switch", "-q", "impl/a"]);
+    let out = clm(
+        d,
+        &["view", "spec", "--at", "origin/main", "--format", "json"],
+    );
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(
+        stderr(&out).starts_with("size not checked: "),
+        "{}",
+        stderr(&out)
+    );
+    let there = json(&out);
+    for n in there["nodes"].as_array().unwrap() {
+        assert_ne!(n["oversized"], true, "{there:#}");
+    }
 }
 
 #[test]
 fn at_a_commit_below_the_repositorys_top() {
-    // req:view.repo/view-at-rev@3e653d69
+    // req:view.repo/view-at-rev@a1f0b81d
     // The CLM root is `clm/` in a larger repository whose top `.gitattributes` marks `a`'s
     // generated code, and which holds a binary blob citing `a/x`, and a backlog item.
     let dir = TempDir::new().unwrap();
@@ -264,7 +364,12 @@ fn at_a_commit_below_the_repositorys_top() {
     write(&d, "specs/a/SPEC.md", &a);
     write(&d, "clm.toml", "[component_size]\ncode_tokens = 10\n");
     write(&d, "src/gen.rs", &"x".repeat(400));
-    write(top, ".gitattributes", "clm/src/gen.rs linguist-generated\n");
+    write(&d, "src/vendor.rs", &"y".repeat(400));
+    write(
+        top,
+        ".gitattributes",
+        "clm/src/gen.rs linguist-generated\nclm/src/vendor.rs linguist-vendored\n",
+    );
     write(
         &d,
         "backlog/q.md",
@@ -275,18 +380,31 @@ fn at_a_commit_below_the_repositorys_top() {
     fs::write(d.join("blob.bin"), format!("\0// {REQ}a/x@{x}\n")).unwrap();
     init(top);
     git(top, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
-    // The working tree moves on; `--at` reads the commit.
+    // The working tree moves on; `--at` reads the commit, its `.gitattributes` included.
     fs::remove_file(d.join("backlog/q.md")).unwrap();
-    let v = json(&clm(
-        &d,
-        &["view", "spec", "--at", "origin/main", "--format", "json"],
-    ));
+    fs::remove_file(top.join(".gitattributes")).unwrap();
+    let at = || {
+        json(&clm(
+            &d,
+            &["view", "spec", "--at", "origin/main", "--format", "json"],
+        ))
+    };
+    let v = at();
     let a = node_json(&v, "a");
     assert_eq!(a["oversized"], false, "{v:#}");
     assert_eq!(a["current"], 0, "{v:#}");
     assert_eq!(a["backlog"][0]["slug"], "q", "{v:#}");
+    // A 400-byte file that isn't UTF-8 and holds no NUL is text to git: it counts.
+    let mut latin = vec![b'a'; 399];
+    latin.push(0xe9);
+    fs::write(d.join("src/latin.rs"), latin).unwrap();
+    git(top, &["add", "clm/src/latin.rs"]);
+    git(top, &["commit", "-qm", "latin"]);
+    git(top, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    let v = at();
+    assert_eq!(node_json(&v, "a")["oversized"], true, "{v:#}");
     let here = json(&clm(&d, &["view", "spec", "--format", "json"]));
-    assert_eq!(node_json(&here, "a")["oversized"], false, "{here:#}");
+    assert_eq!(node_json(&here, "a")["oversized"], true, "{here:#}");
 }
 
 fn stderr(out: &Output) -> String {
@@ -473,7 +591,7 @@ fn in_test(s: &str) -> String {
 
 #[test]
 fn at_a_commit_changes_from_its_tree_and_claims_from_the_refs() {
-    // req:view.repo/view-at-rev@3e653d69
+    // req:view.repo/view-at-rev@a1f0b81d
     // `HEAD` holds a live change the working tree has deleted, and `origin/impl/a` claims
     // `a`: `--at HEAD` lists the commit's change, and both list the claim.
     let dir = ahead_of_the_checkout();

@@ -68,7 +68,7 @@ pub struct ViewArgs {
     #[arg(long, default_value_t = DEFAULT_WIDTH as u16, value_parser = clap::value_parser!(u16).range(1..))]
     pub width: u16,
     /// Describe this commit, read from git's objects, instead of the working tree.
-    #[arg(long)]
+    #[arg(long, allow_hyphen_values = true)]
     pub at: Option<String>,
     /// Repository root (default: the CLM repository holding the current directory).
     #[arg(long)]
@@ -84,7 +84,7 @@ pub struct PendingArgs {
     pub node: Option<String>,
     /// List this commit's pending requirements, read from git's objects, instead of the
     /// working tree's.
-    #[arg(long)]
+    #[arg(long, allow_hyphen_values = true)]
     pub at: Option<String>,
     /// Repository root (default: the CLM repository holding the current directory).
     #[arg(long)]
