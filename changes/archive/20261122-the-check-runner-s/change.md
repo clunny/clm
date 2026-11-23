@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-check-runner-s-warning-names-clm-land-when-clm-verify-runs-it]
 ---
 
