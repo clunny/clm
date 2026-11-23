@@ -39,6 +39,12 @@ resolves: [ctrl-c-during-clm-verify-s-filing-still-kills-its-git-children]
 - `clm verify`'s outcome line, stdout and exit status stay as they are (`files-unproven`, `clm/verify-command`).
 - No other component's code changes (`path-ownership`).
 
+## Settled by the builder check and the audit
+
+- The audit pointed out that a SHALL running the filing's children *in* `clm verify`'s process group depends on how `vcs`'s and `land`'s runners start them, which neither Contract promises. The requirement now says only what `verify` controls: it SHALL NOT put them in a group of their own.
+- The stop is judged once an entry still at its current version is found, before each step that writes and commits, pushes and lands, so a stop with nothing current to file prints nothing. The scenario proves the first of those judgements. The later ones are the same flag read at a step boundary.
+- The signal scenario's check is the root `clm.toml`'s `[land] check`, which `clm_land::land` reads from the clone. Its second run follows one more land that sets a passing check, so `R` and the branch's name are worked out again from the new `origin/main`.
+
 ## Open questions
 
 None.
