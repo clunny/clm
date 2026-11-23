@@ -266,7 +266,7 @@ pub(crate) fn land_into(
                 crate::finish::OnMain::Elsewhere(commit) => {
                     return Err(crate::finish::OnMain::elsewhere(&branch, &commit));
                 }
-                crate::finish::OnMain::Unrecorded(commit) => {
+                crate::finish::OnMain::Unrecorded(_) => {
                     // The locks in their order: a push turn held alone is let go first.
                     if lock.is_none() {
                         turn = None;
@@ -279,7 +279,6 @@ pub(crate) fn land_into(
                         branch: &branch,
                         head: &$head,
                         on_origin: $on_origin,
-                        commit: &commit,
                         locked: lock.is_some(),
                         turned: turn.is_some(),
                     };
@@ -332,13 +331,17 @@ pub(crate) fn land_into(
                 priority: land_priority(&repo, &branch, &p, &mut priority, out),
             };
             let held = lock::land(target, rank, &branch, repo.err)?;
+            let waited = held.waited;
+            // Held while preparing again, so finishing a land found unrecorded doesn't wait for
+            // the lock this land holds.
+            lock = Some(held);
             // The land it waited for may have moved `main` or checked this code meanwhile.
-            if held.waited {
+            if waited {
                 p = prepared!();
             }
-            if check_runs(&p) {
-                lock = Some(held);
-                lock_rank = Some(rank);
+            match check_runs(&p) {
+                true => lock_rank = Some(rank),
+                false => lock = None,
             }
         }
         // The lands waiting for the lock land with this one, once, as it takes the lock

@@ -131,15 +131,15 @@ pub(crate) struct Ctx<'a, 'r> {
     pub(crate) branch: &'a str,
     pub(crate) head: &'a str,
     pub(crate) on_origin: Option<String>,
-    pub(crate) commit: &'a str,
     /// Whether the land already holds the land lock, and the push turn, which finishing then
     /// takes no second time.
     pub(crate) locked: bool,
     pub(crate) turned: bool,
 }
 
-/// Appends the records of the land that merged `ctx.head` as `ctx.commit` and of every other
-/// land of its push that has none, under the land lock, and prints `landed`; refused with
+/// Appends the records of the land that merged `ctx.head`, by the commit `main` holds once the
+/// locks are taken, and of every other land of its push that has none, under the land lock and
+/// the push turn, and prints `landed`; refused with
 /// `ledger/unrecorded-land` when no `checked` record covers the commit or the land was not one
 /// `clm land` would have made.
 pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
@@ -163,7 +163,8 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
     repo.fetch()?;
     let fold = clm_ledger::fold(&repo.root)?;
     let mut out = Output::default();
-    match on_main(repo, &fold, ctx.branch, ctx.head)? {
+    // What `main` holds now, not what it held before the wait.
+    let commit = match on_main(repo, &fold, ctx.branch, ctx.head)? {
         Some(OnMain::Found(found)) => {
             return Ok(crate::land::found(
                 repo,
@@ -175,16 +176,24 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
             ));
         }
         Some(OnMain::Elsewhere(commit)) => return Err(OnMain::elsewhere(ctx.branch, &commit)),
-        Some(OnMain::Unrecorded(_)) | None => {}
-    }
+        Some(OnMain::Unrecorded(commit)) => commit,
+        // `main` no longer holds the head: a land of it starts afresh.
+        None => {
+            return Err(Error::Refused(format!(
+                "`{}` is no longer on main: land it again",
+                ctx.branch
+            )));
+        }
+    };
+    let commit = commit.as_str();
     let refuse = |why: &str| {
         Error::Refused(format!(
             "{}: ledger/unrecorded-land: {} is on main with no `landed` record, and {why}",
-            ctx.commit, ctx.commit
+            commit, commit
         ))
     };
     let commits = chain(repo)?;
-    let Some(at) = commits.iter().position(|c| c.sha == ctx.commit) else {
+    let Some(at) = commits.iter().position(|c| c.sha == commit) else {
         return Err(refuse("it isn't on main's first-parent chain"));
     };
     // The run of commits holding the same `Checked:` line is one push's lands.
@@ -199,12 +208,12 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
         }
     }
     let command = match ctx.check {
-        Some(check) => crate::checked_command(check, &repo.env_at(ctx.commit)?),
+        Some(check) => crate::checked_command(check, &repo.env_at(commit)?),
         None => "clm check".to_string(),
     };
     // The key the check ran on: the code key of the run's last commit when the line names it,
     // else the commit's own.
-    let own = clm_ledger::code_key(&repo.root, ctx.commit)?;
+    let own = clm_ledger::code_key(&repo.root, commit)?;
     let key = if !line.is_empty() && clm_ledger::code_key(&repo.root, &commits[lo].sha)? == line {
         line
     } else {
@@ -217,7 +226,7 @@ pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
     if signed {
         repo.approval.require_key()?;
     }
-    let dir = Scratch::temp(repo, ctx.commit)?;
+    let dir = Scratch::temp(repo, commit)?;
     let mut entries: Vec<Entry> = Vec::new();
     let mut found = None;
     for (i, commit) in commits.iter().enumerate().take(hi + 1).skip(lo) {
