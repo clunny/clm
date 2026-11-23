@@ -13,12 +13,10 @@ use std::path::{Path, PathBuf};
 
 use clm_coverage::{Marker, Pending, State as ReqState};
 use clm_gate::{ListLine, list_lines};
-use clm_git::{git, git_isolated};
+use clm_git::{REMOTE, git, git_isolated};
 use clm_model::{Files, Graph};
 pub use clm_orchestrator::Error;
-use clm_orchestrator::{
-    PlaceKind, Placed, REMOTE, claim_local, free_place, place_slot, take_place,
-};
+use clm_orchestrator::{PlaceKind, Placed, claim_local, free_place, place_slot, take_place};
 
 mod command;
 pub use command::{
