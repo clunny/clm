@@ -4,9 +4,11 @@ mod common;
 
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use clm_ledger::Body;
-use clm_verify::Outcome;
+use clm_verify::{Call, Outcome};
 use common::{Fixture, write_exec};
 
 /// The start of the marker the fixture's test carries, built so the literal never appears
@@ -28,7 +30,14 @@ struct Filing {
 /// A clone whose `main` holds a test citing `a/thing`, verified green with a `mutated` record
 /// naming `a/thing@<entry>` (the current version when `entry` is `None`), so nothing is due.
 fn filing(mode: &str, entry: Option<&str>) -> Filing {
+    filing_with(mode, entry, "")
+}
+
+/// As `filing`, with `extra` appended to the clone's `clm.toml`, each `{dir}` in it written as
+/// the fixture's directory.
+fn filing_with(mode: &str, entry: Option<&str>, extra: &str) -> Filing {
     let f = Fixture::new(None);
+    let extra = extra.replace("{dir}", &f.path("").display().to_string());
     let version = clm_model::load(&f.work())
         .0
         .requirement("a/thing")
@@ -36,7 +45,7 @@ fn filing(mode: &str, entry: Option<&str>) -> Filing {
         .version()
         .to_string();
     let toml = format!(
-        "[verify]\ncheck = \"{}\"\nmode = \"{mode}\"\ntriggers = []\nmutate = \"true\"\n",
+        "[verify]\ncheck = \"{}\"\nmode = \"{mode}\"\ntriggers = []\nmutate = \"true\"\n{extra}",
         f.path("bin/check").display()
     );
     let found = f.land(
@@ -95,13 +104,37 @@ impl Filing {
     }
 }
 
+/// `clm verify --due` with its stop request set to `stop`.
+fn due_stopped(p: &Filing, stop: bool) -> Outcome {
+    let stop = AtomicBool::new(stop);
+    let memory = p.f.path("no-such-meminfo");
+    let call = Call {
+        memory: &memory,
+        minute: Duration::from_secs(60),
+        grace: Duration::from_secs(10),
+        stop: &stop,
+    };
+    p.f.due_with(&call)
+}
+
+/// No branch `unproven/*` is left, on `origin` or in the clone, and no worktree of one.
+fn no_branch_left(p: &Filing) {
+    assert_eq!(p.origin(&["branch", "--list", "unproven/*"]), "");
+    assert_eq!(
+        p.f.git(&p.f.work(), &["branch", "--list", "unproven/*"]),
+        ""
+    );
+    let trees = p.f.git(&p.f.work(), &["worktree", "list", "--porcelain"]);
+    assert!(!trees.contains("unproven"), "{trees}");
+}
+
 fn said(out: &Outcome, start: &str) -> Option<String> {
     out.notes.iter().find(|n| n.starts_with(start)).cloned()
 }
 
 #[test]
 fn filed_and_read_as_not_built() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.due();
@@ -154,7 +187,7 @@ fn filed_and_read_as_not_built() {
 
 #[test]
 fn already_filed() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("local", None);
     p.f.due();
     let filed = p.head();
@@ -165,7 +198,7 @@ fn already_filed() {
 
 #[test]
 fn reworded_since() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("local", Some("11111111"));
     let before = p.head();
     let out = p.f.due();
@@ -176,7 +209,7 @@ fn reworded_since() {
 
 #[test]
 fn resolved_by_a_build() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("local", None);
     p.f.due();
     p.sync();
@@ -193,7 +226,7 @@ fn resolved_by_a_build() {
 
 #[test]
 fn the_land_fails() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("local", None);
     let hook = p.f.path("origin.git/hooks/pre-receive");
     write_exec(
@@ -219,7 +252,7 @@ fn the_land_fails() {
 
 #[test]
 fn pipeline_mode_files_nothing() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("pipeline", None);
     let before = p.head();
     let out = p.f.due();
@@ -229,7 +262,7 @@ fn pipeline_mode_files_nothing() {
 
 #[test]
 fn a_commit_verification_files_nothing() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.run(&clm_verify::Request::Commit(p.found.clone()));
@@ -239,7 +272,7 @@ fn a_commit_verification_files_nothing() {
 
 #[test]
 fn a_dry_run_files_nothing() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.dry(false);
@@ -277,7 +310,7 @@ fn a_dry_run_files_nothing() {
 
 #[test]
 fn a_verification_that_ends_in_an_error_files_nothing() {
-    // req:verify/files-unproven@1dbfc127
+    // req:verify/files-unproven@1f7d71f7
     let p = filing("local", None);
     // A trigger holds, and the verify tree's lock can't be opened (a directory stands in its
     // place), so the verification ends in a failure once its settings are loaded; a filing
@@ -306,4 +339,88 @@ fn a_verification_that_ends_in_an_error_files_nothing() {
     fs::remove_dir(work.join(".clm/verify.lock")).unwrap();
     let out = p.f.due();
     assert!(said(&out, "unproven: filed 1 items").is_some(), "{out:?}");
+}
+
+#[test]
+fn stopped_before_it_files() {
+    // req:verify/files-unproven@1f7d71f7
+    let p = filing("local", None);
+    let before = p.head();
+    let out = due_stopped(&p, true);
+    assert!(out.line.starts_with("verify not-due"), "{}", out.line);
+    assert_eq!(out.code, 0);
+    assert_eq!(
+        said(&out, "unproven:").as_deref(),
+        Some("unproven: not filed: stopped")
+    );
+    assert_eq!(p.head(), before);
+    assert_eq!(p.on_origin(&p.item()), None);
+    no_branch_left(&p);
+    // With the stop request unset, the next call files the item.
+    let out = due_stopped(&p, false);
+    assert_eq!(
+        said(&out, "unproven:").as_deref(),
+        Some("unproven: filed 1 items for 1 requirements")
+    );
+    assert!(p.on_origin(&p.item()).is_some());
+    no_branch_left(&p);
+}
+
+#[test]
+fn a_stop_with_nothing_current_to_file_says_nothing() {
+    // req:verify/files-unproven@1f7d71f7
+    let p = filing("local", Some("11111111"));
+    let before = p.head();
+    let out = due_stopped(&p, true);
+    assert_eq!(said(&out, "unproven:"), None);
+    assert_eq!(p.head(), before);
+    no_branch_left(&p);
+}
+
+#[test]
+fn a_filing_command_ended_by_a_signal() {
+    // req:verify/files-unproven@1f7d71f7
+    // The land's check writes its process group and sends `SIGINT` to its own shell, as a
+    // Ctrl-C at a terminal reaches every process of `clm verify`'s group.
+    let p = filing_with(
+        "local",
+        None,
+        "\n[land]\ncheck = \"ps -o pgid= -p $$ > {dir}check-pgid; kill -INT $$\"\n",
+    );
+    let before = p.head();
+    let out = p.f.due();
+    assert_eq!(out.code, 0);
+    assert!(out.line.starts_with("verify not-due"), "{}", out.line);
+    let note = said(&out, "unproven: not filed:").expect("a note");
+    assert!(note.len() > "unproven: not filed:".len(), "{note}");
+    assert_ne!(note, "unproven: not filed: stopped");
+    // The reason names the check the signal ended.
+    assert!(note.contains("kill -INT $$"), "{note}");
+    // The check ran in this process's group, not in one of its own, so a signal sent to the
+    // group reaches it.
+    let own = std::process::Command::new("ps")
+        .args(["-o", "pgid=", "-p", &std::process::id().to_string()])
+        .output()
+        .unwrap();
+    let own = String::from_utf8(own.stdout).unwrap();
+    let checks = fs::read_to_string(p.f.path("check-pgid")).expect("the check ran");
+    assert_eq!(checks.trim(), own.trim());
+    assert_eq!(p.head(), before);
+    assert_eq!(p.on_origin(&p.item()), None);
+    no_branch_left(&p);
+    // One more land sets a check that passes, and the next call files the item.
+    let toml = format!(
+        "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nmutate = \"true\"\n\n\
+         [land]\ncheck = \"exit 0\"\n",
+        p.f.path("bin/check").display()
+    );
+    p.f.land(&[("clm.toml", &toml)], "a check that passes");
+    let out = p.f.due();
+    assert_eq!(
+        said(&out, "unproven:").as_deref(),
+        Some("unproven: filed 1 items for 1 requirements"),
+        "{out:?}"
+    );
+    assert!(p.on_origin(&p.item()).is_some());
+    no_branch_left(&p);
 }

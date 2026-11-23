@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [ctrl-c-during-clm-verify-s-filing-still-kills-its-git-children]
 ---
 
