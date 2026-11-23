@@ -73,7 +73,17 @@ fn the_disk_frees() {
     thread::spawn(move || {
         let _ = tx.send(wait(&options, 0.1));
     });
-    thread::sleep(Duration::from_millis(1500));
+    // The disk is freed only once `wait` has read it full: a fixed sleep let a loaded host free
+    // it before the first read, so nothing was ever held back by the disk.
+    let started = Instant::now();
+    while fx.ran("machine --format json") == 0 {
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "wait never ran clm machine"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+    thread::sleep(Duration::from_millis(500));
     assert!(rx.try_recv().is_err(), "the disk holds build:a back");
     let freed = Instant::now();
     fx.disk(Some(1), "warn");

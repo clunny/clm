@@ -6,7 +6,10 @@ use std::fs;
 use std::path::Path;
 
 use clm_git::Failure;
-use clm_loop::{Kind, RunState, StopMode, returned, start, start_with_notes, step, stop};
+use clm_loop::{
+    Kind, RunState, StopMode, approved, cleared, release, returned, start, start_with_notes, step,
+    stop,
+};
 use common::{Fixture, line, run};
 
 const SECTION: &str = "\n## The human's notes for this loop\n\n";
@@ -138,6 +141,24 @@ fn unreadable_notes_stop_every_launch() {
     assert_eq!(fs::read(&loop_file).unwrap(), before);
     assert_eq!(fx.finishes("b"), 0);
 
+    // Every other command that may write a prompt reads them first too.
+    let options = fx.options();
+    let others: [(&str, Result<Vec<String>, Failure>); 4] = [
+        ("release", release(&options, "b")),
+        ("approved", approved(&options, "b1")),
+        ("cleared", cleared(&options, "disk")),
+        ("start", start(&options, "opus", true)),
+    ];
+    for (command, got) in others {
+        let Err(Failure::Git(why)) = got else {
+            panic!("{command} read notes that aren't UTF-8");
+        };
+        assert!(why.contains("loop.notes"), "{command}: {why}");
+        assert_eq!(fs::read(&loop_file).unwrap(), before, "{command}");
+    }
+    assert_eq!(fx.ran("branch delete impl/b"), 0);
+    assert_eq!(fx.finishes("b"), 0);
+
     // `start --notes` replaces them without reading the old file.
     fs::write(fx.work.join("notes.md"), "New notes.").unwrap();
     let actions = start_with_notes(&fx.options(), "opus", true, Path::new("notes.md")).unwrap();
@@ -147,4 +168,17 @@ fn unreadable_notes_stop_every_launch() {
         prompt(&actions, "build:a")
     );
     assert_eq!(fs::read_to_string(&notes_file).unwrap(), "New notes.");
+}
+
+#[test]
+fn notes_of_white_space_add_no_section() {
+    // req:orchestrator.loop/notes-reach-every-launch@025f71af
+    let fx = Fixture::new();
+    fx.set("next", "a\n");
+    fs::write(fx.work.join("blank.md"), "  \n\t\n").unwrap();
+    let actions = start_with_notes(&fx.options(), "opus", false, Path::new("blank.md")).unwrap();
+    assert_eq!(
+        prompt(&actions, "build:a"),
+        "loop run build:a\nlauncher for a\n"
+    );
 }

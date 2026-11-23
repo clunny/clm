@@ -913,11 +913,12 @@ fn actions(options: &Options, notes: &str) -> Result<Vec<String>, Failure> {
         Ok((lines, ended, f.clone()))
     })?;
     if ended {
-        // The notes were the loop's: the next one starts with none.
-        state::remove_notes(&options.root)?;
         let text = crate::summary::summary(options, &file, &plan.view)?;
         let mut out = say_lines;
         out.push(say(options, &text)?);
+        // The notes were the loop's: the next one starts with none. Removed once nothing but
+        // `end` is left to print, so a step that fails before it keeps them.
+        state::remove_notes(&options.root)?;
         out.push("end".to_string());
         return Ok(out);
     }
