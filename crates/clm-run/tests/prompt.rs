@@ -69,6 +69,7 @@ fn job() -> Job {
         slot: 2,
         setup: None,
         wiring: false,
+        mutate: false,
     }
 }
 
@@ -294,7 +295,7 @@ fn resume_prompt_says_the_branch_exists() {
 
 #[test]
 fn scenario_capability_tests_component_waits_for_a_changed_rule() {
-    // req:orchestrator.run/capability-waits-for-changed-rule@831f33e5
+    // req:orchestrator.run/capability-waits-for-changed-rule@bf5900a7
     let mut j = job();
     j.capability_tests = true;
     let p = prompt(&j);
@@ -309,7 +310,7 @@ fn scenario_capability_tests_component_waits_for_a_changed_rule() {
 
 #[test]
 fn scenario_other_component_has_no_capability_wait() {
-    // req:orchestrator.run/capability-waits-for-changed-rule@831f33e5
+    // req:orchestrator.run/capability-waits-for-changed-rule@bf5900a7
     let p = prompt(&job());
     assert!(!p.contains("serving-rules-order-capabilities"), "{p}");
     assert!(!p.contains("leave it pending"), "{p}");

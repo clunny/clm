@@ -152,8 +152,31 @@ fn scenario_prompt_pr_body() {
 }
 
 #[test]
+fn scenario_mutation_spot_checks() {
+    // req:orchestrator.run/prompt-spot-checks@5757491a
+    let (r, f) = (repo(), fake());
+    let p = prompt(&r, &f, "b", &[]);
+    assert!(p.contains("spot-check them by mutation"), "{p}");
+    assert!(
+        p.contains(
+            "List each mutant, with the test that failed or the test you added, under `## Review`"
+        ),
+        "{p}"
+    );
+    let (r, f) = (repo(), fake());
+    write(
+        &r.work,
+        "clm.toml",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"scripts/mutate.sh\"\n",
+    );
+    let p = prompt(&r, &f, "b", &[]);
+    assert!(!p.contains("spot-check"), "{p}");
+}
+
+#[test]
 fn scenario_capability_nodes_prompt() {
     // req:orchestrator.run/prompt-serves@1c7d5c95
+    // req:orchestrator.run/capability-waits-for-changed-rule@bf5900a7
     let (r, f) = (repo(), fake());
     write(
         &r.work,
@@ -163,10 +186,16 @@ fn scenario_capability_nodes_prompt() {
     );
     write(&r.work, "specs/capability/SPEC.md", &node("", &[]));
     push_main(&r.work, "capabilities");
+    let waits = "When a capability's test can't pass because a rule it exercises is still \
+                 `behind`";
     let p = prompt(&r, &f, "capability", &[]);
     assert!(p.contains("public boundary"), "{p}");
+    assert!(p.contains(waits), "{p}");
+    assert!(p.contains("`serving-rules-order-capabilities`"), "{p}");
     let p = prompt(&r, &f, "b", &[]);
     assert!(!p.contains("public boundary"), "{p}");
+    assert!(!p.contains(waits), "{p}");
+    assert!(!p.contains("serving-rules-order-capabilities"), "{p}");
 }
 
 #[test]

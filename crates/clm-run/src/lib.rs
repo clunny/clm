@@ -227,6 +227,10 @@ pub struct Job {
     /// Whether the root sets `wiring`, so a build changes only its own component's files
     /// and its stale markers in another's are listed apart (`pending-prompt`).
     pub wiring: bool,
+    /// Whether the repository's `[verify]` sets `mutate`, so the mutation pass after the land
+    /// judges the tests and the prompt leaves out the hand-run spot-checks
+    /// (`prompt-spot-checks`).
+    pub mutate: bool,
 }
 
 /// The prompt for `job`.
@@ -413,6 +417,29 @@ pub fn prompt(job: &Job) -> String {
          component's files, and otherwise record it as a backlog item and name that item in \
          your pull request body."
     );
+    // The build spot-checks its tests by mutation by hand only where no mutation pass after
+    // the land judges them (`prompt-spot-checks`, `mutation-after-land`).
+    let (spot_checks, mutants) = if job.mutate {
+        ("", "")
+    } else {
+        (
+            "Once the requirements you built pass their tests, and before the review, spot-check \
+             them by mutation: for each key rule you built, break the rule in the code on purpose \
+             and confirm that a test citing the requirement fails, adding or fixing a test when \
+             none does. Run them safely: commit the work first, so that restoring a file from \
+             that commit loses nothing; count a mutant only when the code still compiles with \
+             it, since a build error fails every test and proves none; count it as killed only \
+             when a named test fails, read from the run's list of failures rather than its exit \
+             status; restore each mutated file from the commit and `touch` it, so a build tool \
+             that judges freshness by file times rebuilds it rather than keeping the mutant in \
+             the binary; run a script that loops over mutants with `sh`, not `zsh`, which \
+             doesn't split an unquoted list into words; mutate nothing while the repository's \
+             checks run; and end with `git status` showing no change to a tracked file. List \
+             each mutant, with the test that failed or the test you added, under `## Review` in \
+             the pull request body.\n\n",
+            " a spot-check's runs of a mutant included,",
+        )
+    };
     // Before any test run, a build prepares its fresh worktree (`prompt-setup`).
     let setup = if job.setup.is_some() {
         format!(
@@ -561,23 +588,10 @@ pub fn prompt(job: &Job) -> String {
          {BUDGET} requirements built, leaving the rest pending for the next run; list what you \
          left under `## Left pending` in the pull request body. A landed branch is progress whatever \
          it leaves.\n\n\
-         Once the requirements you built pass their tests, and before the review, spot-check \
-         them by mutation: for each key rule you built, break the rule in the code on purpose \
-         and confirm that a test citing the requirement fails, adding or fixing a test when \
-         none does. Run them safely: commit the work first, so that restoring a file from \
-         that commit loses nothing; count a mutant only when the code still compiles with \
-         it, since a build error fails every test and proves none; count it as killed only \
-         when a named test fails, read from the run's list of failures rather than its exit \
-         status; restore each mutated file from the commit and `touch` it, so a build tool \
-         that judges freshness by file times rebuilds it rather than keeping the mutant in \
-         the binary; run a script that loops over mutants with `sh`, not `zsh`, which \
-         doesn't split an unquoted list into words; mutate nothing while the repository's \
-         checks run; and end with `git status` showing no change to a tracked file. List \
-         each mutant, with the test that failed or the test you added, under `## Review` in \
-         the pull request body.\n\n\
+         {spot_checks}\
          Your build's slot is {slot}. The project's tests run beside other builds' tests on this \
-         host (`tests-run-concurrently`), so every test command you run by hand, a \
-         spot-check's runs of a mutant included, runs with `CLM_SLOT={slot}` set before the \
+         host (`tests-run-concurrently`), so every test command you run by hand,{mutants} runs \
+         with `CLM_SLOT={slot}` set before the \
          command{check_slot}. A test you write binds no fixed port, writes no \
          fixed path outside its checkout and the system's temporary directory, and starts no \
          server another run could share; a port or path it must know in advance is keyed on \
@@ -1043,6 +1057,7 @@ pub fn run(
     let settings = clm_config::load(Some(root), env).map_err(|e| Error::Refused(e.to_string()))?;
     let check = settings.land.value.map(|land| land.check);
     let setup = settings.build.value.map(|build| build.setup);
+    let mutate = settings.verify.value.is_some_and(|v| v.mutate.is_some());
     // Before anything is claimed, so a missing skill leaves nothing behind.
     let skills = SKILLS
         .iter()
@@ -1083,7 +1098,11 @@ pub fn run(
         &branch,
         expiry_hours,
         skills,
-        Settled { check, setup },
+        Settled {
+            check,
+            setup,
+            mutate,
+        },
         review_model,
     );
     if built.is_err() && placed == Placed::New {
@@ -1114,6 +1133,8 @@ struct Settled {
     check: Option<String>,
     /// `[build] setup`.
     setup: Option<String>,
+    /// Whether `[verify]` sets `mutate`.
+    mutate: bool,
 }
 
 /// What `run` does once the build holds its place.
@@ -1156,6 +1177,7 @@ fn build(
     job.skills = skills;
     job.check = settled.check;
     job.setup = settled.setup;
+    job.mutate = settled.mutate;
     job.review_model = review_model.map(str::to_string);
     job.slot = place_slot(root, branch)?;
     // A write that fails leaves the claim, which the next `clm run` resumes. The prompt goes
@@ -1620,6 +1642,7 @@ fn job(
         slot: 0,
         setup: None,
         wiring: graph.wiring().is_some(),
+        mutate: false,
     })
 }
 
