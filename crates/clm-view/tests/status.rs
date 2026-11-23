@@ -164,11 +164,11 @@ fn scenario_aligned_columns() {
     let ten: Vec<String> = (0..10).map(|i| format!("r{i}")).collect();
     let ten: Vec<&str> = ten.iter().map(String::as_str).collect();
     write(d, "specs/a/SPEC.md", &node("active", &ten));
-    write(d, "specs/check/SPEC.md", &node("specd", &["x", "y"]));
+    write(d, "specs/check/SPEC.md", &node("active", &["x", "y"]));
     let text = status(d);
     assert!(
         text.contains(
-            "\ncomponents\n  a      active  0/10\n  check  specd   0/2\n  clm    active  0/0\n\n"
+            "\ncomponents\n  a      active  0/10\n  check  active  0/2\n  clm    active  0/0\n\n"
         ),
         "{text}"
     );
