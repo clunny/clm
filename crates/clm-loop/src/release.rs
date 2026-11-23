@@ -13,6 +13,7 @@ use crate::{Options, time};
 pub fn release(options: &Options, component: &str) -> Result<Vec<String>, Failure> {
     let root = &options.root;
     let name = format!("build:{component}");
+    let notes = state::notes(root)?;
     clm_git::fetch(root)?;
     refresh_holds(options)?;
     if let Some(run) = state::read(root).and_then(|f| f.run(&name).cloned()) {
@@ -47,6 +48,6 @@ pub fn release(options: &Options, component: &str) -> Result<Vec<String>, Failur
         f.runs.retain(|r| r.name != name);
         Ok(())
     })?;
-    lines.extend(next_actions(options)?);
+    lines.extend(next_actions(options, &notes)?);
     Ok(lines)
 }

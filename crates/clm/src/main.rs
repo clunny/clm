@@ -235,6 +235,9 @@ enum BuildAction {
         /// Take the loop although another session's lease is live.
         #[arg(long)]
         take_over: bool,
+        /// The human's notes for every run the loop launches.
+        #[arg(long, value_name = "FILE")]
+        notes: Option<PathBuf>,
     },
     /// Print the actions to take now.
     Step,
@@ -1088,7 +1091,11 @@ fn build(root: PathBuf, cwd: PathBuf, action: BuildAction) -> ExitCode {
         BuildAction::Start {
             session_model,
             take_over,
-        } => clm_loop::start(&options, &session_model, take_over),
+            notes,
+        } => match notes {
+            Some(notes) => clm_loop::start_with_notes(&options, &session_model, take_over, &notes),
+            None => clm_loop::start(&options, &session_model, take_over),
+        },
         BuildAction::Step => clm_loop::step(&options),
         BuildAction::Launched { name, task_id } => {
             clm_loop::launched(&options, &name, &task_id).map(|()| Vec::new())

@@ -207,6 +207,7 @@ pub fn returned(
                 Failure::Refused(format!("--until `{text}` isn't an RFC 3339 time"))
             })?),
         };
+    let notes = &state::notes(&options.root)?;
     clm_git::fetch(&options.root)?;
     // The late report of an earlier run of that name changes nothing but the lease: a return
     // from a task the loop keeps under the name, whether or not a run of it is listed
@@ -221,7 +222,7 @@ pub fn returned(
             "clm build: the return from task {task} is a late report of an earlier run of \
              {name}, which the loop has finished; it changed nothing"
         );
-        return crate::step::next_actions(options);
+        return crate::step::next_actions(options, notes);
     }
     // `clm verify` prints notes on stderr after its outcome line, so a session reading both
     // streams as one may report a note: refused before every other rule (`plan-verify`).
@@ -240,7 +241,7 @@ pub fn returned(
     if let Some(known) = &known
         && late_report(options, known, result.trim())
     {
-        return crate::step::next_actions(options);
+        return crate::step::next_actions(options, notes);
     }
     // A build the loop already finished, as `claim-gone-ends-a-build` may before its subagent
     // hands back: its return finishes it again with `--returned`, which removes the worktree the
@@ -253,7 +254,7 @@ pub fn returned(
         if !result.trim().starts_with("waiting:") {
             lines.extend(finish(options, known, "", true)?.says);
         }
-        lines.extend(crate::step::next_actions(options)?);
+        lines.extend(crate::step::next_actions(options, notes)?);
         return Ok(lines);
     }
     let (run, outstanding) = state::update(&options.root, |f| {
@@ -267,18 +268,18 @@ pub fn returned(
     // A report repeated, such as after a timeout, of a run other than a build (whose returns
     // are handled above) finishes nothing twice.
     if run.state == RunState::Returned {
-        return crate::step::next_actions(options);
+        return crate::step::next_actions(options, notes);
     }
     if name.starts_with("land:") {
-        return land_returned(options, &run, result.trim());
+        return land_returned(options, &run, result.trim(), notes);
     }
     if name == "verify" {
-        return verify_returned(options, &run, result.trim());
+        return verify_returned(options, &run, result.trim(), notes);
     }
     let line = result.trim();
     // A run still waiting on a command stays running and frees nothing.
     if line.starts_with("waiting:") {
-        return crate::step::next_actions(options);
+        return crate::step::next_actions(options, notes);
     }
     // A run the loop stopped keeps its claim, branch and place, and nothing is finished.
     if cause == Some("stopped") {
@@ -289,12 +290,12 @@ pub fn returned(
             }
             Ok(())
         })?;
-        return crate::step::next_actions(options);
+        return crate::step::next_actions(options, notes);
     }
     let landed_line = line.starts_with("landed ");
     // A task the agent harness still lists as running background work is left to run.
     if cause == Some("running") && !landed_line {
-        return crate::step::next_actions(options);
+        return crate::step::next_actions(options, notes);
     }
     let mut lines = Vec::new();
     if landed_line && cause == Some("running") {
@@ -345,7 +346,7 @@ pub fn returned(
             }
             Ok(())
         })?;
-        lines.extend(crate::step::next_actions(options)?);
+        lines.extend(crate::step::next_actions(options, notes)?);
         return Ok(lines);
     }
     let finished = finish(options, &run, line, true)?;
@@ -435,12 +436,17 @@ pub fn returned(
         }
         Ok(())
     })?;
-    lines.extend(crate::step::next_actions(options)?);
+    lines.extend(crate::step::next_actions(options, notes)?);
     Ok(lines)
 }
 
 /// The return of `land:<batch>`, a `clm land spec/<batch>` the session ran (`plan-fold`).
-fn land_returned(options: &Options, run: &Run, line: &str) -> Result<Vec<String>, Failure> {
+fn land_returned(
+    options: &Options,
+    run: &Run,
+    line: &str,
+    notes: &str,
+) -> Result<Vec<String>, Failure> {
     let batch = run
         .name
         .strip_prefix("land:")
@@ -490,12 +496,17 @@ fn land_returned(options: &Options, run: &Run, line: &str) -> Result<Vec<String>
         }
         Ok(())
     })?;
-    lines.extend(crate::step::next_actions(options)?);
+    lines.extend(crate::step::next_actions(options, notes)?);
     Ok(lines)
 }
 
 /// The return of `verify`, a `clm verify --due` the session ran (`plan-verify`).
-fn verify_returned(options: &Options, run: &Run, line: &str) -> Result<Vec<String>, Failure> {
+fn verify_returned(
+    options: &Options,
+    run: &Run,
+    line: &str,
+    notes: &str,
+) -> Result<Vec<String>, Failure> {
     state::update(&options.root, |f: &mut LoopFile| {
         if line.starts_with("verify failed") && !f.red_verifies.iter().any(|r| r == line) {
             f.red_verifies.push(line.to_string());
@@ -506,5 +517,5 @@ fn verify_returned(options: &Options, run: &Run, line: &str) -> Result<Vec<Strin
         }
         Ok(())
     })?;
-    crate::step::next_actions(options)
+    crate::step::next_actions(options, notes)
 }
