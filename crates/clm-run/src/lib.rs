@@ -3,7 +3,7 @@
 //! requirements and lands them with `clm land` to `.clm/prompts/<node>.md`, printing a short
 //! launcher that names it (`builds-in-subagents`, `build-prompt-file`,
 //! `unattended-superpowers`, `land-locally`). It starts no session and makes no worktree:
-//! `implement` gives the launcher to a subagent in its own Claude Code worktree.
+//! `build` gives the launcher to a subagent in its own Claude Code worktree.
 //! `clm superpowers <skill>` resolves the pinned copy builds follow.
 
 use std::collections::HashMap;
@@ -81,14 +81,12 @@ const EXECUTION_SKILLS: &[&str] = &[
     "superpowers:finishing-a-development-branch",
 ];
 
-/// The review (`advisory-code-review`): `/code-review` at this level, plus this subagent.
-/// Why a build never waits on a background command by matching processes by name
-/// (`background-work-stopped`).
+/// Why a build never waits on a background command by matching processes by name.
 const BACKGROUND_WAIT: &str = ", never through a loop, watch or monitor that matches \
                                processes by name (such as `pgrep -f`): such a match also finds \
                                other builds' processes and outlives the command it waits for.";
 
-/// A land the session started is waited for to its end (`background-work-stopped`).
+/// A land the session started is waited for to its end (`one-report-per-run`).
 const LAND_WAIT: &str = " Wait for a `clm land` you started{check_land} until its completion \
                           notice arrives, however long that takes, since lands queue behind \
                           other builds' lands and can take many minutes. Never write your final \
@@ -111,6 +109,7 @@ const LAND_WAIT: &str = " Wait for a `clm land` you started{check_land} until it
                           one report and the final message would then never reach the \
                           orchestrating session.";
 
+/// The review (`advisory-code-review`): `/code-review` at this level, plus this subagent.
 const REVIEW_LEVEL: &str = "medium";
 const SPEC_AUDITOR: &str = "clm:spec-auditor";
 
@@ -270,7 +269,7 @@ pub fn prompt(job: &Job) -> String {
     // configured command by its path (`check-before-land`, `land-check-command`).
     // The background rule names the check command, and says running it in the background
     // keeps it one plain command, only when the repository sets one
-    // (`background-work-stopped`, `prompt-check-command`).
+    // (`prompt-check-command`).
     let (rerun, again, background) = match &job.check {
         Some(check) => (
             format!(
@@ -341,6 +340,27 @@ pub fn prompt(job: &Job) -> String {
         "Re-citing a marker of your own requirement, wherever its file sits, is allowed \
          (`architecture/path-ownership`)."
     };
+    // Your component's files, what the land refuses once the root names `wiring`, and, while
+    // it names none, the instruction that is then all that holds a build to them.
+    let own = "your component's files are those your component's `tests` match, wherever they \
+               sit, and those its `paths` match that no other component's `tests` match \
+               (`path-ownership`, `components-own-their-tests`)";
+    let own_files = if job.wiring {
+        format!(
+            "`clm land` refuses a build that changes a file `gate/own-files` gives as not its \
+             own, naming the file and its owner, before it runs any check \
+             (`land/build-holds-own-files`): {own}, beside the root's `wiring` files, which \
+             every build may change, and a capability test your component's rules serve, \
+             which `capability-tests-follow-rules` below says when to change."
+        )
+    } else {
+        format!(
+            "This repository's root names no `wiring`, so no program refuses a build's change \
+             to another component's file, and your build keeps to its own: {own}, apart from \
+             the exception `capability-tests-follow-rules` states below and the re-citing \
+             above, wherever its file sits."
+        )
+    };
     let capability_tests = if job.capability_tests {
         " This component builds the capability tests: each capability under that heading is one \
          its tests prove at the project's public boundary, whether or not a rule serves it; \
@@ -349,7 +369,7 @@ pub fn prompt(job: &Job) -> String {
         ""
     };
     // The marker's name is built so it never stands whole in this file, or `clm affected`
-    // would take the file for a reader (`prompt-doc-readers`).
+    // would take the file for a reader (`doc-readers-marked`).
     let reads = concat!("clm:", "reads");
     let doc_readers = format!(
         "A test you write or change that reads a file of the repository's own tree (not a \
@@ -362,7 +382,7 @@ pub fn prompt(job: &Job) -> String {
          spec branch that breaks it land and leaves `main` failing every later code land's \
          check. "
     );
-    // Only a repository with a `[land] check` has a check to record (`prompt-recorded-check`).
+    // Only a repository with a `[land] check` has a check to record (`worktree-check-counts`).
     let recorded = if job.check.is_some() {
         "A passing `clm land --check-only` on a committed `HEAD` that contains `origin/main`, \
          with no uncommitted change and no untracked file git doesn't ignore, is recorded, so \
@@ -466,7 +486,9 @@ pub fn prompt(job: &Job) -> String {
     };
     let ship = format!(
         "Commit everything, then {sync}. Then {again} confirm \
-         `clm gate --base origin/main` prints `code`, and push with \
+         `clm gate --base origin/main` prints `code`, or `spec` for a branch that changes no \
+         code file, such as one whose only change deletes a resolved backlog item or is \
+         `clm rebase`'s archive move, which lands on checks (`three-routes-onto-main`), and push with \
          `clm branch push`. Write the whole pull request body with `Write` to \
          `{PR_BODY}` (outside git, like the logs) and open the branch's pull request with \
          `clm pr open {branch} --title <title> --body-file {PR_BODY}`. To correct the body, \
@@ -541,11 +563,7 @@ pub fn prompt(job: &Job) -> String {
          code its markers mark that no other requirement needs (`no-dead-code`), unless its \
          entry below says it was not your component's, and delete \
          or keep each of its tests as its entry below says (`removal-needs-a-yes`). {recite} \
-         Your build changes only your own component's files: those your component's `tests` match, \
-         wherever they sit, and those its `paths` match that no other component's `tests` match \
-         (`path-ownership`, `components-own-their-tests`), apart from the two exceptions \
-         `capability-tests-follow-rule` and `template-migration-fix` state below and the \
-         re-citing above in a file no component's `tests` match. Put each new test in a file your \
+         {own_files} Put each new test in a file your \
          component's `tests` match, or its `paths` when it sets no `tests`, and never add a test \
          to a file another component owns. When a requirement you build can't be built within \
          those files (it needs a file no glob of your component matches, an import its \
@@ -627,7 +645,13 @@ pub fn prompt(job: &Job) -> String {
          are released when that branch lands. When your branch does the work of a `deferred` \
          item whose `components` name your component, such as removing code a build kept for another \
          component that no longer uses it, delete its `backlog/<slug>.md` on your own branch in a \
-         commit whose trailer block holds `Resolves: backlog/<slug>`. A `question`, `human-task` \
+         commit whose trailer block holds `Resolves: backlog/<slug>`. A `bug` item whose \
+         `components` name your component and whose `unproven` lists a requirement says the \
+         mutation pass found that the requirement's tests notice no change to its code \
+         (`verify/files-unproven`): mend each such test so it fails when the code it proves \
+         breaks, or say in the resolving commit why the test is sound, and delete the item's \
+         `backlog/<slug>.md` in a commit whose trailer block holds `Resolves: backlog/<slug>`. \
+         A `question`, `human-task` \
          or `idea` item you can't delete that way goes under `## Backlog` in the pull request body, \
          as any other backlog edit you can't make.\n\n\
          Flag a workaround against a requirement when one of these happens while you build it: \
