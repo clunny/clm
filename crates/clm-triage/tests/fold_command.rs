@@ -377,3 +377,33 @@ fn an_earlier_fold_prompt_is_replaced_and_clm_is_excluded() {
     let exclude = fs::read_to_string(r.work.join(".git/info/exclude")).unwrap();
     assert!(exclude.lines().any(|l| l == ".clm/"), "{exclude}");
 }
+
+#[test]
+fn scenario_an_id_given_twice() {
+    // req:orchestrator.triage/fold@e1d817ce
+    let r = repo();
+    spec_branch(&r, "20261027-a", "applied", "");
+    spec_branch(&r, "20261027-b", "applied", "");
+    let ran = fold(&r, &["20261027-a", "20261027-b", "20261027-a"]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    assert!(!ran.stderr.contains("left"), "{}", ran.stderr);
+    let p = prompt(&r, "20261027-a");
+    assert_eq!(
+        p.matches("git diff origin/main...origin/spec/20261027-a")
+            .count(),
+        1,
+        "{p}"
+    );
+}
+
+#[test]
+fn scenario_a_fold_prompt_that_cant_be_written() {
+    // req:orchestrator.triage/fold@e1d817ce
+    let r = repo();
+    spec_branch(&r, "20261027-a", "applied", "");
+    write(&r.work, ".clm/prompts/fold", "a file, not a directory\n");
+    let ran = fold(&r, &["20261027-a"]);
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(ran.stderr.contains(".clm/prompts/fold"), "{}", ran.stderr);
+}

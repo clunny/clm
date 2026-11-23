@@ -610,16 +610,103 @@ fn a_local_branch_with_unpushed_commits_is_kept() {
         &change("applied"),
     );
     push_main(&r.work, "landed");
+    let tip = git(&r.work, &["rev-parse", &format!("spec/{id}")]);
     let ran = clm_finish(&r, id);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     assert!(!wt.exists(), "the clean worktree is gone");
+    assert_eq!(
+        git(&r.work, &["rev-parse", &format!("spec/{id}")]),
+        tip,
+        "the branch holding unpushed commits stays as it was"
+    );
+    assert!(
+        ran.stdout
+            .lines()
+            .any(|l| l == format!("kept spec/{id}: commits not on origin")),
+        "{}",
+        ran.stdout
+    );
+}
+
+/// Every ref of the clone, and every ref of `origin`.
+fn refs(r: &Repo) -> (String, String) {
+    (
+        git(&r.work, &["for-each-ref"]),
+        git(&r.origin, &["for-each-ref"]),
+    )
+}
+
+#[test]
+fn scenario_a_finish_that_refuses_or_keeps() {
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
+    let r = with_items();
+    let id = "20261027-k";
+    write(
+        &r.work,
+        &format!("changes/{id}/change.md"),
+        &change("applied"),
+    );
+    push_main(&r.work, "landed");
+    // A branch on `origin` the clone hasn't fetched shows whether a call fetched.
+    push_branch(&r.work, "impl/unfetched", 0);
+    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/impl/unfetched"]);
+    let root = r.work.display().to_string();
+    for bad in ["", "a/b"] {
+        let before = refs(&r);
+        let ran = draft_call(&["--finish", bad, "--root", &root], &r.work, &r.work, &[]);
+        assert_eq!(ran.code, Some(1), "{bad}: {}", ran.stderr);
+        assert!(ran.stdout.is_empty(), "{bad}: {}", ran.stdout);
+        assert!(ran.stderr.contains("isn't a change ID"), "{bad}: {}", ran.stderr);
+        assert_eq!(refs(&r), before, "{bad}: nothing changed, nothing fetched");
+    }
+
+    // Run from inside the draft's worktree, it keeps that worktree and its branch.
+    let wt = draft_worktree(&r, id, "agent-k");
+    let ran = draft_call(&["--finish", id, "--root", &root], &r.work, &wt, &[]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let name = wt.display().to_string();
+    assert!(!ran.stdout.contains(&name), "{}", ran.stdout);
+    assert!(wt.is_dir(), "the worktree it runs in stays");
     assert_ne!(
         git(&r.work, &["branch", "--list", &format!("spec/{id}")]).trim(),
         "",
-        "the branch holding unpushed commits stays"
+        "its branch stays"
     );
+
+    // A worktree whose removal git refuses is kept with git's reason; the other goes.
+    let ro = r.work.join(".claude/worktrees/ro");
+    fs::create_dir_all(&ro).unwrap();
+    let stuck = ro.join("agent-s");
+    let branch = format!("spec/{id}");
+    git(
+        &r.work,
+        &["worktree", "add", "-q", "-f", stuck.to_str().unwrap(), &branch],
+    );
+    let stuck = stuck.canonicalize().unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&ro, fs::Permissions::from_mode(0o555)).unwrap();
+    // As root the directory stays writable, and git can't be made to refuse.
+    let probe = ro.join("probe");
+    if fs::write(&probe, "").is_ok() {
+        fs::remove_file(&probe).unwrap();
+        fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+    let ran = draft_call(&["--finish", id, "--root", &root], &r.work, &r.work, &[]);
+    fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     assert!(
-        ran.stdout.contains(&format!("kept spec/{id}: ")),
+        ran.stdout
+            .lines()
+            .any(|l| l.starts_with(&format!("kept {}: ", stuck.display()))),
+        "{}",
+        ran.stdout
+    );
+    assert!(!wt.exists(), "the other clean worktree is removed");
+    assert!(
+        ran.stdout
+            .lines()
+            .any(|l| l == format!("removed {}", wt.display())),
         "{}",
         ran.stdout
     );
@@ -1052,6 +1139,25 @@ fn prompt_file(r: &Repo, id: &str) -> PathBuf {
 fn prompt_of(r: &Repo, ran: &Ran) -> String {
     let file = prompt_file(r, &drafted_id(ran));
     fs::read_to_string(&file).unwrap_or_else(|e| panic!("{}: {e}", file.display()))
+}
+
+#[test]
+fn scenario_specs_that_dont_load() {
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
+    let (r, f) = (with_items(), fake());
+    write(&r.work, "specs/check/SPEC.md", "---\nnot: [closed\n---\n");
+    push_main(&r.work, "broken");
+    let ran = clm_draft(&r, &f, &["a"]);
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(
+        ran.stderr
+            .lines()
+            .any(|l| l.starts_with("specs/check/SPEC.md: ")),
+        "{}",
+        ran.stderr
+    );
+    assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
 }
 
 #[test]
