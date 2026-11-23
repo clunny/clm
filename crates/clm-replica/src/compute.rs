@@ -356,15 +356,45 @@ fn taken(state: &State, graph: &Graph, now: u64) -> Taken {
     }
 }
 
-/// Unix seconds of an RFC 3339 UTC time, `None` for one that doesn't read.
+/// Unix seconds of the instant an RFC 3339 time names (`Z` or a `±HH:MM` offset, an
+/// optional fraction), `None` for one that doesn't read as one, trailing text included.
 fn unix_time(iso: &str) -> Option<u64> {
     let b = iso.as_bytes();
-    if b.len() < 20 || b[4] != b'-' || b[10] != b'T' {
+    let digits = |r: std::ops::Range<usize>| -> Option<i64> {
+        let part = b.get(r)?;
+        part.iter()
+            .all(u8::is_ascii_digit)
+            .then(|| part.iter().fold(0, |n, d| n * 10 + i64::from(d - b'0')))
+    };
+    let at = |i: usize, c: &[u8]| b.get(i).is_some_and(|x| c.contains(x));
+    if !(at(4, b"-") && at(7, b"-") && at(10, b"Tt") && at(13, b":") && at(16, b":")) {
         return None;
     }
-    let num = |r: std::ops::Range<usize>| iso.get(r)?.parse::<i64>().ok();
-    let (y, m, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
-    let (hh, mm, ss) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    let (y, m, d) = (digits(0..4)?, digits(5..7)?, digits(8..10)?);
+    let (hh, mm, ss) = (digits(11..13)?, digits(14..16)?, digits(17..19)?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || hh > 23 || mm > 59 || ss > 60 {
+        return None;
+    }
+    let mut i = 19;
+    if at(i, b".") {
+        let start = i + 1;
+        i = start + b[start..].iter().take_while(|c| c.is_ascii_digit()).count();
+        if i == start {
+            return None;
+        }
+    }
+    let offset = match b.get(i)? {
+        b'Z' | b'z' if i + 1 == b.len() => 0,
+        sign @ (b'+' | b'-') if i + 6 == b.len() && at(i + 3, b":") => {
+            let (oh, om) = (digits(i + 1..i + 3)?, digits(i + 4..i + 6)?);
+            if oh > 23 || om > 59 {
+                return None;
+            }
+            let minutes = oh * 60 + om;
+            if *sign == b'+' { minutes } else { -minutes }
+        }
+        _ => return None,
+    };
     // Days from civil (Howard Hinnant).
     let y = if m <= 2 { y - 1 } else { y };
     let era = y.div_euclid(400);
@@ -373,5 +403,5 @@ fn unix_time(iso: &str) -> Option<u64> {
     let doy = (153 * mp + 2) / 5 + d - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days = era * 146_097 + doe - 719_468;
-    u64::try_from(days * 86_400 + hh * 3600 + mm * 60 + ss).ok()
+    u64::try_from(days * 86_400 + hh * 3600 + mm * 60 + ss - offset * 60).ok()
 }

@@ -249,7 +249,7 @@ fn preparing_until_the_spec_files_are_in() {
 
 #[test]
 fn events_keep_the_latest_hundred() {
-    // req:replica/apply-what-changed@2585c229
+    // req:replica/implementation-ledger@995f19b2
     let mut r = ready(&base(), "111", 1000);
     for at in 0..150u64 {
         r.apply(Change::Event(Event::Push {

@@ -47,7 +47,7 @@ fn branch_ref(r: &mut Replica, name: &str, sha: &str, time: u64, change: Option<
 
 #[test]
 fn lands_and_approvals_come_from_the_ledger() {
-    // req:replica/implementation-ledger@cda28ef8
+    // req:replica/implementation-ledger@995f19b2
     let mut r = scratch(&clm_repo(), "111");
     ledger(
         &mut r,
@@ -68,6 +68,10 @@ fn lands_and_approvals_come_from_the_ledger() {
     );
     push(&mut r, "impl/a", 10, 5);
     push(&mut r, "clm/ledger/bob/1a2b3c4d", 10, 10);
+    // A closed pull request adds nothing to the feed.
+    let mut closed = pull(9, "impl/a", "sa");
+    closed.open = false;
+    r.apply(Change::Pull(closed));
     r.recompute(at(11, 0));
     let imp = view(&r, "implementation");
     let feed: Vec<(&str, &str, &str)> = imp["activity"]
@@ -99,7 +103,7 @@ fn lands_and_approvals_come_from_the_ledger() {
 
 #[test]
 fn a_claim_is_a_created_impl_branch() {
-    // req:replica/implementation-ledger@cda28ef8
+    // req:replica/implementation-ledger@995f19b2
     let mut r = scratch(&clm_repo(), "111");
     r.apply(Change::Event(Event::Create {
         branch: "impl/a".into(),
@@ -120,8 +124,45 @@ fn a_claim_is_a_created_impl_branch() {
 }
 
 #[test]
+fn claims_and_odd_records() {
+    // req:replica/implementation-ledger@995f19b2
+    let mut r = scratch(&clm_repo(), "111");
+    for (branch, m) in [("impl/a", 0), ("spec/y", 5), ("impl/archive/x", 10)] {
+        r.apply(Change::Event(Event::Create {
+            branch: branch.into(),
+            at: at(9, m),
+            actor: "gh-user".into(),
+        }));
+    }
+    let approved = |id: &str, branch: &str, when: &str| {
+        record(json!({
+            "id": id, "kind": "approved", "writer": "alice/web", "at": when,
+            "fingerprint": "f", "branch": branch, "change": null,
+        }))
+    };
+    ledger(
+        &mut r,
+        "clm/ledger/alice/web",
+        &[
+            approved("1", "spec/z", "2026-10-01"),
+            approved("2", "spec/w", "2026-10-01T12:00:00+02:00"),
+            approved("3", "spec/v", "2026-10-01T11:00:00Z and more"),
+        ],
+    );
+    r.recompute(at(13, 0));
+    let imp = view(&r, "implementation");
+    assert_eq!(
+        imp["activity"],
+        json!([
+            {"kind": "approval", "at": at(10, 0), "actor": "alice", "ref": "spec/w"},
+            {"kind": "claim", "at": at(9, 0), "actor": "gh-user", "ref": "a"},
+        ])
+    );
+}
+
+#[test]
 fn the_feed_is_a_hundred_entries_at_most() {
-    // req:replica/implementation-ledger@cda28ef8
+    // req:replica/implementation-ledger@995f19b2
     let mut r = scratch(&clm_repo(), "111");
     let lines: Vec<String> = (0..120)
         .map(|i| {
@@ -145,7 +186,7 @@ fn the_feed_is_a_hundred_entries_at_most() {
 
 #[test]
 fn a_page_says_whether_its_head_was_checked() {
-    // req:replica/implementation-ledger@cda28ef8
+    // req:replica/implementation-ledger@995f19b2
     let mut r = scratch(&clm_repo(), "111");
     ledger(
         &mut r,
@@ -162,6 +203,8 @@ fn a_page_says_whether_its_head_was_checked() {
     branch_ref(&mut r, "impl/d", "sd", at(9, 0), None);
     r.apply(Change::Pull(pull(7, "impl/a", "sa")));
     r.apply(Change::Pull(pull(8, "impl/b", "sb")));
+    // Two open pull requests on one branch: its page is the lower number's.
+    r.apply(Change::Pull(pull(6, "impl/b", "sb")));
     // Its head's key isn't known, so `checked` is left out.
     r.apply(Change::Pull(pull(9, "impl/d", "sd")));
     // A fork's pull request from a branch of the same name is no page either.
@@ -175,7 +218,8 @@ fn a_page_says_whether_its_head_was_checked() {
     assert_eq!(pages["impl/a"]["number"], 7);
     assert_eq!(pages["impl/a"]["url"], "https://example.test/pull/7");
     assert_eq!(pages["impl/a"]["checked"], true);
-    assert_eq!(pages["impl/b"]["number"], 8);
+    assert_eq!(pages["impl/b"]["number"], 6);
+    assert_eq!(pages["impl/d"]["number"], 9);
     assert_eq!(pages["impl/b"]["checked"], false);
     assert!(pages["impl/d"].get("checked").is_none(), "{pages}");
     assert!(pages.get("impl/c").is_none(), "no pull request, no page");
