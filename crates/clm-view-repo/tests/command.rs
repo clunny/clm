@@ -253,12 +253,19 @@ fn scenario_help() {
             assert!(out.contains(word), "clm {name} --help lacks {word}: {out}");
         }
     }
-    // `text` is the default form, and 100 the default width.
+    // The views and forms are each listed as one option's values; `text` is the default
+    // form, and 100 the default width.
     let mut out = Vec::new();
     call("view", &["--help"], &mut out);
     let out = String::from_utf8(out).unwrap();
-    assert!(out.contains("[default: text]"), "{out}");
-    assert!(out.contains("[default: 100]"), "{out}");
+    for line in [
+        "[possible values: spec, flight, blockers, queue]",
+        "[possible values: text, ansi, svg, json]",
+        "[default: text]",
+        "[default: 100]",
+    ] {
+        assert!(out.contains(line), "lacks {line}: {out}");
+    }
 }
 
 /// A stream whose every write fails.
@@ -278,11 +285,19 @@ fn scenario_an_output_it_cant_write() {
     // req:view.repo/commands-in-crate@ec1f97fe
     let dir = fixture();
     let root = dir.path().to_str().unwrap();
-    let (code, _) = call("status", &["--root", root], &mut Broken);
-    assert_eq!(code, 1);
-    let (code, _) = call("view", &["--help"], &mut Broken);
-    assert_eq!(code, 1);
-    // The caller's process goes on: this line runs.
-    let (code, _) = call("pending", &["--help"], &mut Broken);
-    assert_eq!(code, 1);
+    // With an output it can write, each returns 0 and says nothing on the error stream, so
+    // the 1s below come from the failed writes alone.
+    for (name, args) in [
+        ("status", &["--root", root][..]),
+        ("view", &["--help"][..]),
+        ("pending", &["--help"][..]),
+    ] {
+        assert_eq!(
+            call(name, args, &mut Vec::new()),
+            (0, String::new()),
+            "{name}"
+        );
+        // The caller's process goes on after each.
+        assert_eq!(call(name, args, &mut Broken), (1, String::new()), "{name}");
+    }
 }

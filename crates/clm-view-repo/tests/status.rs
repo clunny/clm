@@ -456,12 +456,13 @@ fn scenario_a_main_it_cant_compare() {
     let dir = base();
     let d = dir.path();
     claim_refs(d, &[]);
-    // `origin/main` names a commit the repository's objects don't hold.
-    fs::write(
-        d.join(".git/refs/remotes/origin/main"),
-        format!("{}\n", "d".repeat(40)),
-    )
-    .unwrap();
+    // `origin/main` names a commit the repository's objects don't hold: one made for it,
+    // whose loose object is then deleted, so this holds whatever format git keeps refs in.
+    let tree = git_env(d, &["rev-parse", "HEAD^{tree}"], &[]);
+    let gone = git_env(d, &["commit-tree", tree.trim(), "-m", "gone"], &[]);
+    let gone = gone.trim();
+    git_env(d, &["update-ref", "refs/remotes/origin/main", gone], &[]);
+    fs::remove_file(d.join(".git/objects").join(&gone[..2]).join(&gone[2..])).unwrap();
     let stderr = |out: &Output| String::from_utf8(out.stderr.clone()).unwrap();
     let not_compared = |out: &Output| {
         assert_eq!(out.status.code(), Some(0), "{out:?}");

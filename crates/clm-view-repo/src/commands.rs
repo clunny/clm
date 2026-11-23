@@ -64,7 +64,7 @@ pub struct ViewArgs {
     /// The form: a chart, the chart with ANSI colour, an SVG document or the model.
     #[arg(long, value_enum, default_value_t = ViewFormat::Text)]
     pub format: ViewFormat,
-    /// Columns the chart fits in, at least 1.
+    /// Columns the chart fits in, from 1 to 65535.
     #[arg(long, default_value_t = DEFAULT_WIDTH as u16, value_parser = clap::value_parser!(u16).range(1..))]
     pub width: u16,
     /// Describe this commit, read from git's objects, instead of the working tree.
