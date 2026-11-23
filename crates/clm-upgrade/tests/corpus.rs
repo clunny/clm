@@ -11,15 +11,30 @@ fn corpus() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("corpus")
 }
 
-/// The `clm` built from this tree, next to the test binaries' `deps` directory.
+/// The `clm` built from this tree, at the path cargo reports it wrote, so it's found
+/// whichever target directory the runner (`cargo nextest`, `cargo llvm-cov`) builds in.
 fn built_clm() -> PathBuf {
-    let status = Command::new(env!("CARGO"))
-        .args(["build", "-q", "-p", "clm"])
-        .status()
+    let out = Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "-q",
+            "-p",
+            "clm",
+            "--bin",
+            "clm",
+            "--message-format=json-render-diagnostics",
+        ])
+        .stderr(std::process::Stdio::inherit())
+        .output()
         .unwrap();
-    assert!(status.success(), "cargo build -p clm");
-    let exe = std::env::current_exe().unwrap();
-    let clm = exe.parent().unwrap().parent().unwrap().join("clm");
+    assert!(out.status.success(), "cargo build -p clm");
+    let clm = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|msg| msg["reason"] == "compiler-artifact" && msg["target"]["name"] == "clm")
+        .find_map(|msg| msg["executable"].as_str().map(PathBuf::from))
+        .expect("cargo build -p clm reported no clm executable");
     assert!(clm.exists(), "{} is not built", clm.display());
     clm
 }
