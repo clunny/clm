@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [land-approval-s-old-calls-gone-names-calls-its-contract-no-longer-offers]
 ---
 
