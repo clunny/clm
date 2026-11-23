@@ -86,6 +86,31 @@ fn a_push_listing_every_kind_of_file() {
 }
 
 #[test]
+fn a_first_build_fetches_the_kept_text_first() {
+    // req:web.worker.replica/fetches-what-the-replica-wants@bb23e1f0
+    let fake = fake_with(
+        "111",
+        repo_files(&[
+            ("a.rs", "fn a() {}"),
+            ("web/.gitattributes", "* text\n"),
+            ("clm.toml", "\n"),
+            ("README.md", "# r\n"),
+            ("docs/decisions/d.md", "# d\n"),
+        ]),
+    );
+    built(&fake);
+    let fetched = fake.gh.fetched_paths();
+    let last_kept = fetched.iter().rposition(|p| clm_replica::keeps_text(p));
+    let first_other = fetched.iter().position(|p| !clm_replica::keeps_text(p));
+    assert!(last_kept < first_other, "{fetched:?}");
+    assert!(fetched.contains(&"a.rs".to_string()), "{fetched:?}");
+    assert!(!fetched.contains(&"README.md".to_string()), "{fetched:?}");
+    for p in ["web/.gitattributes", "clm.toml", "docs/decisions/d.md"] {
+        assert!(fetched.contains(&p.to_string()), "{fetched:?}");
+    }
+}
+
+#[test]
 fn a_ledger_append() {
     // req:web.worker.replica/applies-events@f75e1a7c
     let mut repo = FakeRepo::new("111", repo_files(&[]));
