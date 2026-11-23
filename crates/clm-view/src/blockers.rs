@@ -25,7 +25,8 @@ pub struct Root {
     pub root: String,
     /// `node` or `backlog`.
     pub kind: String,
-    /// A node's queue state (`ready` or `claimed`), or an item's kind.
+    /// A node's queue state (`ready` or `claimed`, or `blocked` for a cycle of needs, which
+    /// is named by the first of its nodes' IDs), or an item's kind.
     pub state: String,
     /// A `question` or `human-task` item.
     pub waits_on_human: bool,
@@ -47,22 +48,36 @@ pub struct Held {
 enum Target {
     Node(String),
     Item(String),
+    /// A cycle of needs, by the first of its nodes' IDs in byte order.
+    Cycle(String),
 }
 
 /// Where the release of pending line `line`, which a node waits on, will come from
 /// (`requirement-needs`, `check.coverage/wait-lines`): its node when nothing blocks it, else
 /// each of its blockers in turn, its items and what the lines `waits` gives for it reach. A
 /// wait is followed to the line it names, never by the requirement's ID alone, which an
-/// obsolete requirement's several lines share. `seen` holds the lines already walked, by node
-/// and ID, so shared waits are walked once and a cycle of needs, which the model reports as a
-/// violation, still terminates.
+/// obsolete requirement's several lines share. `path` holds the lines on this walk, by node
+/// and ID: a wait that comes back to one of them is a cycle of needs, which the model reports
+/// as a violation, and its target is the cycle. `seen` holds every line already walked, so a
+/// line another branch reached is walked once, its targets already in `out`.
 fn need_targets<'a>(
     line: &'a Pending,
     lines: &'a [Pending],
+    path: &mut Vec<(&'a str, &'a str)>,
     seen: &mut BTreeSet<(&'a str, &'a str)>,
     out: &mut BTreeSet<Target>,
 ) {
-    if !seen.insert((line.node.as_str(), line.id.as_str())) {
+    let here = (line.node.as_str(), line.id.as_str());
+    if let Some(at) = path.iter().position(|p| *p == here) {
+        let first = path[at..]
+            .iter()
+            .map(|(node, _)| *node)
+            .min()
+            .unwrap_or(here.0);
+        out.insert(Target::Cycle(first.to_string()));
+        return;
+    }
+    if !seen.insert(here) {
         return;
     }
     if line.blocked_by.is_empty() && line.waits_on.is_empty() {
@@ -74,9 +89,11 @@ fn need_targets<'a>(
             .iter()
             .map(|slug| Target::Item(format!("backlog/{slug}"))),
     );
+    path.push(here);
     for next in waits(lines, line) {
-        need_targets(next, lines, seen, out);
+        need_targets(next, lines, path, seen, out);
     }
+    path.pop();
 }
 
 /// The `blockers` view; its arguments are [`crate::flight_view`]'s.
@@ -114,7 +131,13 @@ pub fn blockers_view(
                                 .filter(|p| p.node == n.node && p.waits_on.iter().any(|w| w == id))
                             {
                                 for line in waits(&lines, own).into_iter().filter(|p| p.id == *id) {
-                                    need_targets(line, &lines, &mut seen, &mut targets);
+                                    need_targets(
+                                        line,
+                                        &lines,
+                                        &mut Vec::new(),
+                                        &mut seen,
+                                        &mut targets,
+                                    );
                                 }
                             }
                         }
@@ -151,6 +174,20 @@ pub fn blockers_view(
                     for next in &edges[start] {
                         queue_.push_back((next.clone(), Vec::new()));
                     }
+                }
+                // A cycle holds up every node whose chain reaches it but the one it is
+                // named by.
+                Target::Cycle(id) if id == start => {}
+                Target::Cycle(id) => {
+                    root_kind
+                        .entry(id.clone())
+                        .or_insert(("node".into(), "blocked".into(), false));
+                    let via: Vec<String> = path.iter().rev().cloned().collect();
+                    roots
+                        .entry(id.clone())
+                        .or_default()
+                        .entry(start.to_string())
+                        .or_insert(via);
                 }
                 Target::Node(id) => {
                     let state = match states.get(id.as_str()) {
