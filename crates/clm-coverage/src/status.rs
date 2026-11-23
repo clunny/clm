@@ -1,9 +1,8 @@
 //! `clm status`'s `components` and `changes` sections (`status-report`). `view` lays them out.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::fmt;
 
-use clm_model::{Change, ChangeStatus, Graph, Layer};
+use clm_model::{Change, ChangeStatus, Graph, Layer, STATUS_TERMS};
 
 use crate::coverage::{Marker, State, cited_entry, report};
 use crate::pending::entries_node;
@@ -24,31 +23,6 @@ pub struct StatusReport {
     /// current, and that nothing cites a requirement it removed that the spec no longer
     /// holds.
     pub changes: Vec<(String, Vec<Row>)>,
-}
-
-impl fmt::Display for StatusReport {
-    /// Each section's name, then its rows indented two spaces, or four under a group's
-    /// name, itself indented two; cells separated by two spaces; `none` for no rows.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "components")?;
-        if self.nodes.is_empty() {
-            writeln!(f, "  none")?;
-        }
-        for row in &self.nodes {
-            writeln!(f, "  {}", row.join("  "))?;
-        }
-        writeln!(f, "changes")?;
-        if self.changes.is_empty() {
-            writeln!(f, "  none")?;
-        }
-        for (status, rows) in &self.changes {
-            writeln!(f, "  {status}")?;
-            for row in rows {
-                writeln!(f, "    {}", row.join("  "))?;
-            }
-        }
-        Ok(())
-    }
 }
 
 fn status_name(status: ChangeStatus) -> String {
@@ -284,7 +258,11 @@ pub fn status_report(graph: &Graph, markers: &[Marker]) -> StatusReport {
             let done = all.iter().filter(|r| current(&r.id)).count();
             vec![
                 node.id.clone(),
-                format!("{:?}", node.frontmatter.status).to_lowercase(),
+                STATUS_TERMS
+                    .iter()
+                    .find(|(s, _)| *s == node.frontmatter.status)
+                    .map_or("", |(_, word)| word)
+                    .to_string(),
                 format!("{done}/{total}"),
             ]
         })
