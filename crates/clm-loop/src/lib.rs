@@ -21,7 +21,7 @@ pub use state::{Batch, Escalation, Hold, Kind, LoopFile, Run, RunState, StopMode
 
 pub use release::release;
 pub use returned::returned;
-pub use step::{approved, cleared, launched, start, step, stop};
+pub use step::{approved, cleared, launched, start, start_with_notes, step, stop};
 pub use wait::wait;
 
 /// What `clm build` was given.

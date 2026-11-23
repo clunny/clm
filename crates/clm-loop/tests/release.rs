@@ -4,6 +4,7 @@ mod common;
 
 use std::fs;
 
+use clm_git::Failure;
 use clm_loop::{Kind, RunState, release};
 use common::{Fixture, run};
 
@@ -54,7 +55,7 @@ fn orphan(fx: &Fixture) {
 
 #[test]
 fn a_dead_sessions_build_released() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     let (tree, c) = built_branch(&fx);
     orphan(&fx);
@@ -86,7 +87,7 @@ fn a_dead_sessions_build_released() {
 
 #[test]
 fn a_live_run_is_refused() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     built_branch(&fx);
     fx.add_run(run(
@@ -114,7 +115,7 @@ fn a_live_run_is_refused() {
 
 #[test]
 fn an_orphan_a_take_over_holds_is_refused() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     built_branch(&fx);
     let mut r = run(
@@ -140,7 +141,7 @@ fn an_orphan_a_take_over_holds_is_refused() {
 
 #[test]
 fn a_stopped_run_may_be_released() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     built_branch(&fx);
     fx.add_run(run(
@@ -156,7 +157,7 @@ fn a_stopped_run_may_be_released() {
 
 #[test]
 fn another_clones_claim_is_left_alone() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     built_branch(&fx);
     fx.set("branch-exit", "1");
@@ -176,7 +177,7 @@ fn another_clones_claim_is_left_alone() {
 
 #[test]
 fn a_git_failure_of_the_delete_exits_2() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     fx.set("branch-exit", "2");
     fx.set("branch-reason", "git failed");
@@ -186,7 +187,7 @@ fn a_git_failure_of_the_delete_exits_2() {
 
 #[test]
 fn nothing_to_release() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     let lines = release(&fx.options(), "a").unwrap();
     assert!(lines.iter().all(|l| !l.starts_with("kept")), "{lines:?}");
@@ -194,7 +195,7 @@ fn nothing_to_release() {
 
 #[test]
 fn a_printed_build_released() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     for state in [RunState::Planned, RunState::Returned] {
         let fx = Fixture::new();
         built_branch(&fx);
@@ -208,7 +209,7 @@ fn a_printed_build_released() {
 
 #[test]
 fn a_hold_that_went_quiet_lets_the_release_go_ahead() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     built_branch(&fx);
     orphan(&fx);
@@ -225,7 +226,7 @@ fn a_hold_that_went_quiet_lets_the_release_go_ahead() {
 
 #[test]
 fn the_kept_name_carries_a_utc_time_and_the_actions_follow() {
-    // req:orchestrator.loop/release@ebbd6c47
+    // req:orchestrator.loop/release@42e41cb9
     let fx = Fixture::new();
     built_branch(&fx);
     let lines = release(&fx.options(), "a").unwrap();
@@ -237,4 +238,25 @@ fn the_kept_name_carries_a_utc_time_and_the_actions_follow() {
     });
     assert!(ok && kept.len() == 16, "{kept}");
     assert!(fx.ran("wrap-up") > 0, "the step's actions were read");
+}
+
+#[test]
+fn a_release_finished_on_a_second_run() {
+    // req:orchestrator.loop/release@42e41cb9
+    let fx = Fixture::new();
+    built_branch(&fx);
+    orphan(&fx);
+    fx.set("finish-exit-a", "2");
+    let Err(Failure::Git(why)) = release(&fx.options(), "a") else {
+        panic!("a failed finish didn't fail the release");
+    };
+    assert!(why.contains("finish failed"), "{why}");
+    assert!(fx.file().run("build:a").is_some(), "the run is kept");
+    assert_eq!(fx.ran("run --finish a"), 1);
+
+    fs::remove_file(fx.fake.join("finish-exit-a")).unwrap();
+    let lines = release(&fx.options(), "a").unwrap();
+    assert!(!lines.iter().any(|l| l.starts_with("kept ")), "{lines:?}");
+    assert_eq!(fx.ran("run --finish a"), 2);
+    assert!(fx.file().run("build:a").is_none());
 }

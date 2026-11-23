@@ -362,6 +362,37 @@ fn parse(bytes: &[u8]) -> Result<LoopFile, String> {
     }
 }
 
+/// The human's notes for the loop, `<git common dir>/clm/loop.notes`: empty when it holds none,
+/// and a failure naming the file when it can't be read as UTF-8 text (`notes-reach-every-launch`).
+pub(crate) fn notes(root: &Path) -> Result<String, Failure> {
+    let path = dir_path(root)?.join("loop.notes");
+    match fs::read(&path) {
+        Ok(bytes) => String::from_utf8(bytes)
+            .map_err(|_| Failure::Git(format!("{}: not UTF-8 text", path.display()))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(Failure::Git(format!("{}: {e}", path.display()))),
+    }
+}
+
+/// Keeps `text` as the loop's notes, replacing any, through a temporary file and a rename.
+pub(crate) fn set_notes(root: &Path, text: &str) -> Result<(), Failure> {
+    let dir = dir(root)?;
+    let (tmp, path) = (dir.join("loop.notes.tmp"), dir.join("loop.notes"));
+    fs::write(&tmp, text).map_err(|e| Failure::Git(format!("{}: {e}", tmp.display())))?;
+    fs::rename(&tmp, &path).map_err(|e| Failure::Git(format!("{}: {e}", path.display())))
+}
+
+/// Removes the loop's notes, when the loop ends.
+pub(crate) fn remove_notes(root: &Path) -> Result<(), Failure> {
+    let path = dir_path(root)?.join("loop.notes");
+    match fs::remove_file(&path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(Failure::Git(format!("{}: {e}", path.display())))
+        }
+        _ => Ok(()),
+    }
+}
+
 /// The loop file as it stands, read without a lock or a write: none when the clone has none
 /// or it can't be read.
 pub fn read(root: &Path) -> Option<LoopFile> {

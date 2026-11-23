@@ -21,7 +21,7 @@ fn said(action: &str) -> String {
 
 #[test]
 fn a_landed_build_whose_return_never_arrived() {
-    // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
+    // req:orchestrator.loop/claim-gone-ends-a-build@225d5baf
     let fx = Fixture::new();
     running(&fx, "t-1");
     fx.drop_claim("a");
@@ -47,7 +47,7 @@ fn a_landed_build_whose_return_never_arrived() {
 
 #[test]
 fn a_drain_ends() {
-    // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
+    // req:orchestrator.loop/claim-gone-ends-a-build@225d5baf
     let fx = Fixture::new();
     running(&fx, "t-1");
     fx.drop_claim("a");
@@ -66,7 +66,7 @@ fn a_drain_ends() {
 
 #[test]
 fn a_merged_claim_still_on_origin() {
-    // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
+    // req:orchestrator.loop/claim-gone-ends-a-build@225d5baf
     let fx = Fixture::new();
     running(&fx, "t-1");
     // The claim's branch stays on `origin`, as the second parent of a merge on `main`.
@@ -84,7 +84,7 @@ fn a_merged_claim_still_on_origin() {
 
 #[test]
 fn a_claim_gone_with_nothing_landed() {
-    // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
+    // req:orchestrator.loop/claim-gone-ends-a-build@225d5baf
     let fx = Fixture::new();
     running(&fx, "t-1");
     fx.drop_claim("a");
@@ -99,23 +99,33 @@ fn a_claim_gone_with_nothing_landed() {
 
 #[test]
 fn an_orphan_is_finished_and_its_left_lines_are_said() {
-    // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
+    // req:orchestrator.loop/claim-gone-ends-a-build@225d5baf
     let fx = Fixture::new();
     running(&fx, "t-1");
     fx.change_run("build:a", |r| r.orphan = true);
     fx.drop_claim("a");
-    fx.set("finish-a", "left notes.txt: not committed\n");
+    fx.set(
+        "finish-a",
+        "left notes.txt: not committed\nkept /w/agent-1: a running process holds its lock\n",
+    );
 
     let actions = step(&fx.options()).unwrap();
 
     assert_eq!(fx.ran("run --finish a"), 1);
     assert!(said(line(&actions, "say ")).contains("left notes.txt: not committed"));
+    // A worktree the finish keeps for its subagent is not the human's to hear of.
+    let says: Vec<String> = actions
+        .iter()
+        .filter(|l| l.starts_with("say "))
+        .map(|l| said(l))
+        .collect();
+    assert!(!says.iter().any(|s| s.contains("kept ")), "{says:?}");
     assert_eq!(fx.file().run("build:a").unwrap().state, RunState::Returned);
 }
 
 #[test]
 fn a_live_claim() {
-    // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
+    // req:orchestrator.loop/claim-gone-ends-a-build@225d5baf
     let fx = Fixture::new();
     running(&fx, "t-1");
 
@@ -127,7 +137,7 @@ fn a_live_claim() {
 
 #[test]
 fn only_a_running_build_is_finished() {
-    // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
+    // req:orchestrator.loop/claim-gone-ends-a-build@225d5baf
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",

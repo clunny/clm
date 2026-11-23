@@ -18,7 +18,7 @@ fn said(action: &str) -> String {
 
 #[test]
 fn stop_now() {
-    // req:orchestrator.loop/build-stop@0b42fa2a
+    // req:orchestrator.loop/build-stop@fe0b4da4
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-1");
     running(&fx, "draft:c", Kind::Draft, "t-2");
@@ -77,7 +77,7 @@ fn origin(fx: &Fixture) -> String {
 
 #[test]
 fn a_drain_launches_nothing_new_and_lets_runs_finish() {
-    // req:orchestrator.loop/build-stop@0b42fa2a
+    // req:orchestrator.loop/build-stop@fe0b4da4
     let fx = Fixture::new();
     fx.set("next", "b\n");
     fx.set("triage", "group bug:x [x] P1 0 x1\n");

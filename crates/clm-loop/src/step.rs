@@ -24,8 +24,14 @@ fn prompt_path(options: &Options, name: &str) -> Result<PathBuf, Failure> {
 }
 
 /// Writes a run's prompt file: the line `loop run <name>`, then the launcher as its command
-/// printed it.
-fn write_prompt(options: &Options, name: &str, launcher: &str) -> Result<String, Failure> {
+/// printed it, then the human's notes for the loop when they hold more than white space
+/// (`notes-reach-every-launch`).
+fn write_prompt(
+    options: &Options,
+    name: &str,
+    launcher: &str,
+    notes: &str,
+) -> Result<String, Failure> {
     let path = prompt_path(options, name)?;
     let abilities = clm_agent_harness::abilities(options.agent_harness);
     let mut text = format!("loop run {name}\n{launcher}");
@@ -43,6 +49,10 @@ fn write_prompt(options: &Options, name: &str, launcher: &str) -> Result<String,
             "\nThis agent harness makes no worktree for a subagent: work in {}, a worktree of origin/main the loop added for this run.\n",
             worktree.display()
         ));
+    }
+    if !notes.trim().is_empty() {
+        text.push_str("\n## The human's notes for this loop\n\n");
+        text.push_str(notes);
     }
     fs::write(&path, text).map_err(|e| Failure::Git(format!("{}: {e}", path.display())))?;
     Ok(path.display().to_string())
@@ -337,11 +347,12 @@ fn launch_run(
     mut run: Run,
     args: &[&str],
     relaunch: bool,
+    notes: &str,
 ) -> Result<Prepared, Failure> {
     let ran = clm(options, args)?;
     match ran.code {
         0 => {
-            if run.kind == Some(Kind::Draft) && run.name.is_empty() {
+            if run.kind == Some(Kind::Draft) && !relaunch {
                 // A new draft is named by the change ID `clm draft` chose.
                 let id = ran
                     .stderr
@@ -353,7 +364,7 @@ fn launch_run(
                     })?;
                 run.name = format!("draft:{id}");
             }
-            run.prompt = Some(write_prompt(options, &run.name, &ran.stdout)?);
+            run.prompt = Some(write_prompt(options, &run.name, &ran.stdout, notes)?);
             Ok(Prepared::Run(Box::new(run)))
         }
         3 => Ok(Prepared::NoPlace),
@@ -371,7 +382,12 @@ fn launch_run(
     }
 }
 
-fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepared, Failure> {
+fn prepare(
+    options: &Options,
+    file: &LoopFile,
+    launch: &Launch,
+    notes: &str,
+) -> Result<Prepared, Failure> {
     match launch {
         Launch::Build { component, model } => {
             let run = planned(
@@ -385,18 +401,20 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
                 run,
                 &["run", component, "--review-model", &file.session_model],
                 false,
+                notes,
             )
         }
-        Launch::Draft { items, model, .. } => {
-            let mut run = planned("", Some(Kind::Draft), model, None);
+        Launch::Draft { key, items, model } => {
+            // Named by its group until `clm draft` names its change.
+            let mut run = planned(&format!("draft:{key}"), Some(Kind::Draft), model, None);
             run.items = items.clone();
             let mut args = vec!["draft"];
             args.extend(items.iter().map(String::as_str));
-            launch_run(options, run, &args, false)
+            launch_run(options, run, &args, false, notes)
         }
         Launch::Archive { id, model } => {
             let name = format!("archive:{id}");
-            let prompt = write_prompt(options, &name, &archive_prompt(id))?;
+            let prompt = write_prompt(options, &name, &archive_prompt(id), notes)?;
             Ok(Prepared::Run(Box::new(planned(
                 &name,
                 Some(Kind::Archive),
@@ -410,7 +428,7 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
             run.items = ids.clone();
             let mut args = vec!["draft", "--fold"];
             args.extend(ids.iter().map(String::as_str));
-            launch_run(options, run, &args, false)
+            launch_run(options, run, &args, false, notes)
         }
         Launch::Land { batch } => {
             let mut run = planned(&format!("land:{batch}"), None, "", None);
@@ -442,11 +460,12 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
                         run,
                         &["run", component, "--review-model", &file.session_model],
                         true,
+                        notes,
                     )
                 }
                 (Some(Kind::Draft), _) => {
                     let id = name.strip_prefix("draft:").unwrap_or(name);
-                    launch_run(options, run, &["draft", "--resume", id], true)
+                    launch_run(options, run, &["draft", "--resume", id], true, notes)
                 }
                 (Some(Kind::Fold | Kind::Archive), _) => Ok(Prepared::Drop(name.clone())),
                 (None, _) => Ok(Prepared::Run(Box::new(run))),
@@ -698,6 +717,7 @@ fn retry_escalations(options: &Options) -> Result<bool, Failure> {
 /// `clm build approved <batch>`: the human approved a fold batch through `clm approve`, so the
 /// session may land it.
 pub fn approved(options: &Options, batch: &str) -> Result<Vec<String>, Failure> {
+    let notes = state::notes(&options.root)?;
     clm_git::fetch(&options.root)?;
     state::update(&options.root, |f| {
         f.lease = Some(now());
@@ -709,7 +729,7 @@ pub fn approved(options: &Options, batch: &str) -> Result<Vec<String>, Failure> 
         found.approved = true;
         Ok(())
     })?;
-    actions(options)
+    actions(options, &notes)
 }
 
 /// `clm build cleared disk`: the human freed the disk, so the runs it stopped may resume.
@@ -719,13 +739,14 @@ pub fn cleared(options: &Options, what: &str) -> Result<Vec<String>, Failure> {
             "`{what}` isn't a condition the human clears: say `disk`"
         )));
     }
+    let notes = state::notes(&options.root)?;
     clm_git::fetch(&options.root)?;
     state::update(&options.root, |f| {
         f.lease = Some(now());
         f.conditions.disk = false;
         Ok(())
     })?;
-    actions(options)
+    actions(options, &notes)
 }
 
 /// The names of the clone's places that count.
@@ -742,7 +763,7 @@ pub(crate) fn held_places(options: &Options) -> Result<Vec<String>, Failure> {
 
 /// The actions to take now: fetch, do the housekeeping, read the snapshot, compute the plan,
 /// prepare each run it launches, record them and print one line per action.
-fn actions(options: &Options) -> Result<Vec<String>, Failure> {
+fn actions(options: &Options, notes: &str) -> Result<Vec<String>, Failure> {
     clm_git::fetch(&options.root)?;
     state::update(&options.root, |f| {
         f.lease = Some(now());
@@ -770,7 +791,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     let mut changes = Vec::new();
     let mut stored_file = snapshot.file.clone();
     for launch in &plan.launches {
-        match prepare(options, &stored_file, launch)? {
+        match prepare(options, &stored_file, launch, notes)? {
             Prepared::NoPlace => break,
             Prepared::Nothing => {}
             Prepared::Refused(name, reason) => {
@@ -895,6 +916,9 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
         let text = crate::summary::summary(options, &file, &plan.view)?;
         let mut out = say_lines;
         out.push(say(options, &text)?);
+        // The notes were the loop's: the next one starts with none. Removed once nothing but
+        // `end` is left to print, so a step that fails before it keeps them.
+        state::remove_notes(&options.root)?;
         out.push("end".to_string());
         return Ok(out);
     }
@@ -921,21 +945,53 @@ fn action_line(run: &Run) -> Option<String> {
     }
 }
 
-/// The actions a `returned` prints after it has recorded a run's return.
-pub(crate) fn next_actions(options: &Options) -> Result<Vec<String>, Failure> {
-    actions(options)
+/// The actions a `returned` or `release` prints after it has recorded what it was given, with
+/// the notes it read before it recorded anything.
+pub(crate) fn next_actions(options: &Options, notes: &str) -> Result<Vec<String>, Failure> {
+    actions(options, notes)
 }
 
 /// `clm build step`: the actions to take now.
 pub fn step(options: &Options) -> Result<Vec<String>, Failure> {
-    actions(options)
+    let notes = state::notes(&options.root)?;
+    actions(options, &notes)
 }
 
-/// `clm build start --session-model <alias> [--take-over]`: begins or adopts the loop.
+/// `clm build start --session-model <alias> [--take-over]`: begins or adopts the loop, keeping
+/// its notes as they are.
 pub fn start(
     options: &Options,
     session_model: &str,
     take_over: bool,
+) -> Result<Vec<String>, Failure> {
+    let notes = state::notes(&options.root)?;
+    begin(options, session_model, take_over, &notes, false)
+}
+
+/// `clm build start --session-model <alias> [--take-over] --notes <file>`: begins or adopts the
+/// loop with the human's notes in `notes`, a path taken against `options.cwd`, replacing any it
+/// held without reading them (`notes-reach-every-launch`).
+pub fn start_with_notes(
+    options: &Options,
+    session_model: &str,
+    take_over: bool,
+    notes: &std::path::Path,
+) -> Result<Vec<String>, Failure> {
+    let path = options.cwd.join(notes);
+    let text = fs::read(&path)
+        .map_err(|e| e.to_string())
+        .and_then(|bytes| String::from_utf8(bytes).map_err(|_| "not UTF-8 text".to_string()))
+        .map_err(|why| Failure::Refused(format!("--notes {}: {why}", notes.display())))?;
+    begin(options, session_model, take_over, &text, true)
+}
+
+/// `start`'s body: `keep` writes `notes` as the loop's once the lease is taken.
+fn begin(
+    options: &Options,
+    session_model: &str,
+    take_over: bool,
+    notes: &str,
+    keep: bool,
 ) -> Result<Vec<String>, Failure> {
     clm_git::fetch(&options.root)?;
     let main = clm_git::git(&options.root, &["rev-parse", "origin/main"])?;
@@ -988,7 +1044,10 @@ pub fn start(
         }
         Ok(())
     })?;
-    actions(options)
+    if keep {
+        state::set_notes(&options.root, notes)?;
+    }
+    actions(options, notes)
 }
 
 /// `clm build launched <name> <task-id>`: records the task ID of a run the session launched.
@@ -997,6 +1056,11 @@ pub fn launched(options: &Options, name: &str, task_id: &str) -> Result<(), Fail
         let listed = f
             .run(name)
             .ok_or_else(|| Failure::Refused(format!("the loop has no run {name}")))?;
+        if listed.state == RunState::Returned {
+            return Err(Failure::Refused(format!(
+                "the loop has finished run {name}: it returned, and no launch of it is waiting"
+            )));
+        }
         if listed.task_id.as_deref() != Some(task_id)
             && let Some((owner, earlier)) = f.task_owner(task_id)
         {

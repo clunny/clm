@@ -21,11 +21,18 @@ F='@FAKE@'
 echo "$*" >> "$F/calls"
 case "$1" in
 next) cat "$F/next" 2>/dev/null; exit 0 ;;
-triage) cat "$F/triage" 2>/dev/null; exit 0 ;;
+triage)
+  if [ -f "$F/triage-exit" ]; then echo "triage refused" >&2; exit "$(cat "$F/triage-exit")"; fi
+  cat "$F/triage" 2>/dev/null; exit 0 ;;
+upgrade) cat "$F/upgrade" 2>/dev/null; exit "$(cat "$F/upgrade-exit" 2>/dev/null || echo 0)" ;;
 view) if [ -f "$F/flight.json" ]; then cat "$F/flight.json"; else echo '{"nodes":[]}'; fi ;;
 wrap-up) pwd > "$F/wrap-up-cwd"; cat "$F/wrap-up" 2>/dev/null; echo "wrap-up ok"; exit 0 ;;
 run)
-  if [ "$2" = "--finish" ]; then cat "$F/finish-$3" 2>/dev/null; exit 0; fi
+  if [ "$2" = "--finish" ]; then
+    cat "$F/finish-$3" 2>/dev/null
+    if [ -f "$F/finish-exit-$3" ]; then echo "finish failed" >&2; exit "$(cat "$F/finish-exit-$3")"; fi
+    exit 0
+  fi
   if [ -f "$F/run-exit-$2" ]; then cat "$F/run-reason-$2" >&2 2>/dev/null; exit "$(cat "$F/run-exit-$2")"; fi
   if [ -f "$F/lock" ]; then
     if flock -n "$(cat "$F/lock")" true; then echo free > "$F/lock-result"; else echo held > "$F/lock-result"; fi
@@ -54,6 +61,7 @@ draft)
   if [ "$2" = "--finish" ]; then cat "$F/finish-$3" 2>/dev/null; exit 0; fi
   if [ "$2" = "--resume" ] && [ -f "$F/resume-exit-$3" ]; then cat "$F/resume-reason-$3" >&2 2>/dev/null; exit "$(cat "$F/resume-exit-$3")"; fi
   if [ "$2" = "--resume" ]; then echo "resume launcher for $3"; echo "draft $3" >&2; exit 0; fi
+  if [ -f "$F/draft-exit" ]; then echo "draft refused" >&2; exit "$(cat "$F/draft-exit")"; fi
   n=$(cat "$F/draft-n" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$F/draft-n"
   echo "draft launcher for $*"; echo "draft d$n" >&2 ;;
 esac
