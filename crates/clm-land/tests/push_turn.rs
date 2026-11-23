@@ -232,3 +232,40 @@ fn the_turn_lasts_until_the_records_are_appended() {
         assert_eq!(log.last().map(String::as_str), Some("held"), "{log:?}");
     }
 }
+
+#[test]
+fn lands_taken_together_hold_the_turn_until_their_records_are_appended() {
+    // req:land/push-turn@a2816e96
+    let f = Fixture::new("");
+    log_turn_at_ledger_pushes(&f);
+    f.branch("impl/a", &[("a2.txt", "x\n")]);
+    f.branch("impl/b", &[("b.txt", "x\n")]);
+    std::fs::create_dir_all(f.work().join(".clm")).unwrap();
+    let held = std::fs::File::create(f.work().join(".clm/land.lock")).unwrap();
+    held.lock().unwrap();
+    let env = f.env(&[]);
+    let land_tickets = |n: usize| {
+        std::fs::read_dir(f.work().join(".clm/land.queue"))
+            .map(|d| {
+                d.filter_map(Result::ok)
+                    .filter(|e| e.file_name().to_string_lossy().contains("-ordinary-p"))
+                    .count()
+            })
+            .unwrap_or(0)
+            >= n
+    };
+    std::thread::scope(|s| {
+        let a = s.spawn(|| clm_land::land(&f.work(), Some("impl/a"), &env));
+        wait_for("impl/a's ticket", || land_tickets(1));
+        let b = s.spawn(|| clm_land::land(&f.work(), Some("impl/b"), &env));
+        wait_for("impl/b's ticket", || land_tickets(2));
+        drop(held);
+        for out in [a.join().unwrap().unwrap(), b.join().unwrap().unwrap()] {
+            assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+        }
+    });
+    // Taken together, on one check.
+    assert_eq!(f.lines("check.log").len(), 1);
+    let log = f.lines("turn.log");
+    assert_eq!(log.last().map(String::as_str), Some("held"), "{log:?}");
+}

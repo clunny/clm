@@ -107,9 +107,8 @@ fn a_light_branch_landed_before() {
 #[test]
 fn landed_while_it_checked() {
     // req:land/already-on-main@5d3c9a80
-    // req:land/push-turn@a2816e96
     // The first clone's check waits until the second clone has landed `impl/a`; the land that
-    // then takes its push turn finds that land's merge recorded.
+    // then takes its push turn finds that land's merge and its record.
     let f = Fixture::new("");
     let head = f.branch("impl/a", &[("a2.txt", "x\n")]);
     let second = f.clone_as("second", "Second");
@@ -242,6 +241,62 @@ fn a_branch_already_landed_under_a_newer_main() {
     f.advance_main("backlog/a-broke.md", item);
     f.git(&f.work(), &["fetch", "-q", "origin"]);
     f.git(&f.work(), &["branch", "impl/a", &head]);
+    // And a request for changes on what a new land of `impl/a` would land, which refuses one
+    // whatever its diff (`changes-requested-holds`): asked first, the land already made stands.
+    let fp = f.fingerprint("impl/a");
+    let requested = serde_json::json!({"id": "r1", "writer": "alice/web",
+        "at": "2026-10-28T11:00:00.000Z", "kind": "changes_requested", "branch": "impl/a",
+        "fingerprint": fp, "text": "No"});
+    f.web_ledger("alice/web", &[requested]);
     let again = clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
     assert_eq!(again.lines[0], format!("landed {m} code"), "{again:?}");
+}
+
+/// Marks `work` a CLM repository, untracked, and writes a transcript of session `s1` on
+/// `branch` under `HOME`'s `.claude/projects`, as `clm effort record` reads them.
+fn session(f: &Fixture, branch: &str) {
+    let work = f.work();
+    std::fs::create_dir_all(work.join("specs")).unwrap();
+    std::fs::write(work.join("specs/SPEC.md"), "---\ntitle: T\n---\n").unwrap();
+    let encoded: String = work
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let dir = f.path(".claude/projects").join(encoded);
+    std::fs::create_dir_all(&dir).unwrap();
+    let line = serde_json::json!({
+        "sessionId": "s1",
+        "gitBranch": branch,
+        "cwd": work,
+        "timestamp": "2026-10-30T00:00:00.000Z",
+        "message": {"id": "m1", "model": "claude-opus-5-5", "usage": {"input_tokens": 10, "output_tokens": 5}},
+    });
+    std::fs::write(dir.join("s1.jsonl"), format!("{line}\n")).unwrap();
+}
+
+#[test]
+fn a_branch_landed_before_records_its_effort() {
+    // req:land/already-on-main@5d3c9a80
+    // The branch's effort this machine hasn't recorded is appended, as a land does.
+    let f = Fixture::new("");
+    let head = f.branch("impl/a", &[("a2.txt", "x\n")]);
+    let env = f.env(&[]);
+    clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
+    let m = f.remote("main");
+    session(&f, "impl/a");
+    f.git(&f.work(), &["branch", "impl/a", &head]);
+    let again = clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
+    assert_eq!(again.lines[0], format!("landed {m} code"), "{again:?}");
+    let efforts: Vec<Body> = f
+        .records()
+        .into_iter()
+        .map(|r| r.body)
+        .filter(|b| matches!(b, Body::Effort { .. }))
+        .collect();
+    assert!(
+        matches!(&efforts[..], [Body::Effort { branch, session, .. }] if branch == "impl/a" && session == "s1"),
+        "{efforts:?} {:?}",
+        again.warnings
+    );
 }
