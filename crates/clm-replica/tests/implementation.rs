@@ -321,9 +321,12 @@ fn a_rename_branch_names_its_archived_change() {
 #[test]
 fn taken_carries_the_recompute_time_and_expiry() {
     // req:replica/taken-items@ddb71f1e
+    // req:replica/implementation-models@7362f595
     let mut r = scratch(&clm_repo(), "111");
     r.recompute(at(12, 0));
     let imp = view(&r, "implementation");
+    assert_eq!(imp["sha"], "111");
+    assert_eq!(imp["coverage"], json!({"state": "complete"}));
     assert_eq!(imp["now"], at(12, 0));
     assert_eq!(imp["expiry_hours"], 4);
     assert_eq!(imp["taken"], json!({"changes": [], "claims": []}));
@@ -333,7 +336,7 @@ fn taken_carries_the_recompute_time_and_expiry() {
 
 #[test]
 fn blocked_by_a_need_on_a_claimed_component() {
-    // req:replica/implementation-models@26aaf4c5
+    // req:replica/implementation-models@7362f595
     let mut f = clm_repo();
     // `b` has one pending requirement, which needs `a/p`, uncited on `a`.
     f.insert(
@@ -377,28 +380,41 @@ fn blocked_by_a_need_on_a_claimed_component() {
 
 #[test]
 fn an_incomplete_index_gives_the_models_nothing_cited() {
-    // req:replica/implementation-models@26aaf4c5
-    let f = clm_repo();
-    let mut r = Replica::default();
-    r.apply(tree("111", &f));
-    let spec: Vec<String> = r
-        .pending_fetch()
-        .into_iter()
-        .filter(|p| p.ends_with(".md"))
-        .collect();
-    r.apply(Change::Tip {
-        sha: "111".into(),
-        files: spec.iter().map(|p| file(p, &f[p])).collect(),
-        removed: Vec::new(),
-    });
-    // A source file still to scan.
-    let mut with_src = f.clone();
-    with_src.insert("src.rs".into(), b"fn x() {}\n".to_vec());
-    r.apply(tree("111", &with_src));
-    r.recompute(at(12, 0));
+    // req:replica/implementation-models@7362f595
+    let mut f = clm_repo();
+    let version = version_of(&f, "a/p");
+    f.insert("t.rs".into(), cites("a/p", &version).into_bytes());
+    let now = at(12, 0);
+    let pending_on = |imp: &Value, id: &str| {
+        imp["flight"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["node"] == id)
+    };
+    // Every file scanned: `t.rs`'s marker counts, so `a` has nothing pending.
+    let whole = ready(&f, "111", now);
+    let complete = view(&whole, "implementation");
+    assert_eq!(complete["coverage"], json!({"state": "complete"}));
+    assert!(!pending_on(&complete, "a"), "{}", complete["flight"]);
+    // The same replica with a second source file, `u.rs`, still to scan.
+    let mut r = scratch(&f, "111");
+    let mut with_u = f.clone();
+    with_u.insert("u.rs".into(), b"fn u() {}\n".to_vec());
+    r.apply(tree("111", &with_u));
+    assert_eq!(r.pending_fetch(), ["u.rs"]);
+    r.recompute(now);
     let imp = view(&r, "implementation");
-    assert_eq!(imp["coverage"]["state"], "indexing");
-    assert_eq!(imp["coverage"]["done"], 0.0);
+    assert_eq!(imp["coverage"], json!({"state": "indexing", "done": 0.5}));
+    // The models count no marker: `t.rs`'s citation is left out, so `a/p` is pending.
+    let dir = tempfile::tempdir().unwrap();
+    write_checkout(dir.path(), &with_u);
+    let (graph, _) = clm_model::load(dir.path());
+    let flight = clm_view::flight_view(&graph, &[], &[], now, 4);
+    assert_eq!(imp["flight"], serde_json::to_value(flight).unwrap());
+    let blockers = clm_view::blockers_view(&graph, &[], &[], now, 4);
+    assert_eq!(imp["blockers"], serde_json::to_value(blockers).unwrap());
+    assert!(pending_on(&imp, "a"), "{}", imp["flight"]);
 }
 
 fn proposed(id: &str, writer: &str, h: u64, m: u64, slug: &str) -> String {
