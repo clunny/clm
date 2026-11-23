@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn file_round_trips() {
-        // req:orchestrator/place-slots@e7802b3b
+        // req:orchestrator/place-slots@89c41981
         let f = PlaceFile {
             kind: PlaceKind::Draft,
             taken: 1_793_059_200,

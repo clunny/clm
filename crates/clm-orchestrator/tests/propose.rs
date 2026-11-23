@@ -55,7 +55,7 @@ fn lines(r: &Repo, nodes: &[&str]) -> Vec<String> {
 
 #[test]
 fn scenario_racing_proposers() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     let other = r.work.with_file_name("other");
     git(
@@ -89,7 +89,7 @@ fn scenario_racing_proposers() {
 
 #[test]
 fn scenario_live_claim_refused() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     let sha = push_propose(&r.work, "q", 1);
     let why = refused(claim(&r.work, "backlog/q", 4));
@@ -99,7 +99,7 @@ fn scenario_live_claim_refused() {
 
 #[test]
 fn scenario_proposed_in_a_spec_branch() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     push_files(
         &r.work,
@@ -116,7 +116,7 @@ fn scenario_proposed_in_a_spec_branch() {
 
 #[test]
 fn scenario_proposed_only_in_an_autosync_snapshot() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     push_files(
         &r.work,
@@ -133,7 +133,7 @@ fn scenario_proposed_only_in_an_autosync_snapshot() {
 #[test]
 fn scenario_own_spec_work() {
     // Scenario "own claim renewed".
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     let branch = format!("spec/{C}");
     push_files(
@@ -157,7 +157,7 @@ fn scenario_own_spec_work() {
 
 #[test]
 fn expiry_decides_whether_a_claim_is_live() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     push_propose(&r.work, "q", 2);
     assert!(refused(claim(&r.work, "backlog/q", 4)).contains("claimed by propose/q"));
@@ -166,7 +166,7 @@ fn expiry_decides_whether_a_claim_is_live() {
 
 #[test]
 fn scenario_resolved_by_a_change_on_main() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     write(
         &r.work,
@@ -181,7 +181,7 @@ fn scenario_resolved_by_a_change_on_main() {
 
 #[test]
 fn scenario_merged_spec_work_no_longer_holds() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     push_files(
         &r.work,
@@ -217,7 +217,7 @@ fn scenario_merged_spec_work_no_longer_holds() {
 
 #[test]
 fn scenario_lapsed_claim_taken_over() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = with_q();
     let old = push_propose(&r.work, "q", 5);
     assert_eq!(claim(&r.work, "backlog/q", 4).unwrap(), "propose/q");
@@ -231,7 +231,7 @@ fn scenario_lapsed_claim_taken_over() {
 
 #[test]
 fn scenario_unknown_item() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = repo();
     let why = refused(claim(&r.work, "backlog/q", 4));
     assert!(why.contains("no such item"), "{why}");
@@ -374,7 +374,7 @@ fn scenario_taken_items_same_as_proposals() {
 
 #[test]
 fn scenario_taken_from_refs_same_as_taken_items() {
-    // req:orchestrator/taken-from-refs@6c708d1b
+    // req:orchestrator/taken-from-refs@3a34a00e
     let r = each_kind();
     write(&r.work, "backlog/q.md", &item("c"));
     push_main(&r.work, "q on c");
@@ -437,7 +437,7 @@ fn scenario_taken_from_refs_same_as_taken_items() {
 
 #[test]
 fn taken_from_refs_skips_changes_on_main_and_refs_without_the_change() {
-    // req:orchestrator/taken-from-refs@6c708d1b
+    // req:orchestrator/taken-from-refs@3a34a00e
     let r = with_q();
     write(
         &r.work,
