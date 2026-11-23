@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [land-s-contract-still-lists-run-check-after-runner-names-its]
 ---
 
