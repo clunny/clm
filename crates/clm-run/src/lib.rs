@@ -884,7 +884,9 @@ fn superpowers_skill(skill: &str, cwd: &Path, env: Env) -> Result<String, Error>
 /// `sh -c` with standard input closed, and returns what to print on success. A command that
 /// fails is a refusal naming the command and its status; none set prints that and runs nothing.
 /// The settings' `[env]` variables are set for the command, over the caller's own. What the
-/// command prints is passed through to `out` and `err` as it comes.
+/// command prints is passed through to `out` and `err` as it comes; when either can't be
+/// written, the result is [`Error::Git`] once the command has ended, which the call exits 2
+/// with (`commands-in-crate`).
 pub fn setup(
     root: &Path,
     env: Env,
@@ -943,12 +945,21 @@ pub fn setup(
             None => break,
         }
     }
+    // Once the command has ended, whatever its status: what it printed didn't all get
+    // through, which is `clm setup`'s own failure (exit 2).
+    let unwritten = streams.iter().any(|(_, ok)| !ok);
     let status = match ended {
         Some(status) => status,
         // Every sender is gone without the end: only the waiter's panic does that.
         None => Err(std::io::Error::other("lost the command's exit status")),
     }
     .map_err(cant_run)?;
+    if unwritten {
+        return Err(Error::Git(format!(
+            "can't write what `{}` printed",
+            build.setup
+        )));
+    }
     if status.success() {
         return Ok(String::new());
     }

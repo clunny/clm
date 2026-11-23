@@ -140,7 +140,6 @@ fn scenario_check_command_named() {
     assert!(!p.contains("with `scripts/check.sh`"), "{p}");
 }
 
-
 #[test]
 fn names_no_target_directory() {
     // req:orchestrator.run/prompt-check-command@8a568bf6
@@ -254,7 +253,6 @@ fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wirin
         "{with}"
     );
 }
-
 
 #[test]
 fn a_line_waiting_on_its_own_id_names_the_components_that_cite_it() {

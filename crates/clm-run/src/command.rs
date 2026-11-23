@@ -54,7 +54,12 @@ pub struct SuperpowersArgs {
 #[command(
     name = "clm run",
     no_binary_name = true,
-    about = "Claim a component, or pick up its unfinished build, and write its build's prompt."
+    about = "Claim a component, or pick up its unfinished build, write the prompt for a session \
+             that builds and lands its pending requirements to `.clm/prompts/<component>.md`, \
+             and print a launcher naming that file. With `--finish`, free the component's \
+             build place instead and, once its branch has landed, remove its clean worktrees \
+             under `.claude/worktrees/`, keeping one whose lock a running process holds unless \
+             `--returned` says the build's subagent has handed back"
 )]
 struct RunLine {
     #[command(flatten)]
@@ -65,7 +70,8 @@ struct RunLine {
 #[command(
     name = "clm setup",
     no_binary_name = true,
-    about = "Run the repository's `[build] setup`."
+    about = "Run the repository's `[build] setup`, which makes a fresh worktree ready to run \
+             its tests"
 )]
 struct SetupLine {
     #[command(flatten)]
@@ -76,7 +82,7 @@ struct SetupLine {
 #[command(
     name = "clm superpowers",
     no_binary_name = true,
-    about = "Print the path of a skill's SKILL.md in the pinned superpowers copy."
+    about = "Print the path of a skill's SKILL.md in the pinned superpowers copy builds follow"
 )]
 struct SuperpowersLine {
     #[command(flatten)]
@@ -135,8 +141,12 @@ where
     T: Into<OsString> + Clone,
 {
     parsed(args, out, err, |SetupLine { args }: SetupLine, out, err| {
+        // A root that doesn't exist is refused before the settings are read, as `run` does.
         let root = cwd.join(args.root.as_deref().unwrap_or(root));
-        let result = crate::setup(&root, env, out, err);
+        let result = root
+            .canonicalize()
+            .map_err(|e| Error::Refused(format!("{}: {e}", root.display())))
+            .and_then(|root| crate::setup(&root, env, out, err));
         printed("setup", result, out, err)
     })
 }
