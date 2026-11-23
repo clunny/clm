@@ -64,7 +64,7 @@ pub struct ViewArgs {
     /// The form: a chart, the chart with ANSI colour, an SVG document or the model.
     #[arg(long, value_enum, default_value_t = ViewFormat::Text)]
     pub format: ViewFormat,
-    /// Columns the chart fits in, at least 1.
+    /// Columns the chart fits in, from 1 to 65535.
     #[arg(long, default_value_t = DEFAULT_WIDTH as u16, value_parser = clap::value_parser!(u16).range(1..))]
     pub width: u16,
     /// Describe this commit, read from git's objects, instead of the working tree.
@@ -238,7 +238,7 @@ fn report(violations: &[Violation], out: &mut dyn Write) -> u8 {
 
 /// `A` parsed from `args`, the strings after the command's name. A usage error is written to
 /// `err` (help to `out`), and `Err` carries the status the command exits with: 2 for a usage
-/// error.
+/// error, 0 for help, or 1 when the help can't be written to `out`.
 fn parse<'a, A, I, S>(
     name: &'static str,
     args: I,
@@ -256,8 +256,10 @@ where
         .try_get_matches_from(argv)
         .and_then(|matches| A::from_arg_matches(&matches));
     parsed.map_err(|e| {
-        let stream = if e.use_stderr() { err } else { out };
-        let _ = write!(stream, "{}", e.render());
-        u8::try_from(e.exit_code()).unwrap_or(2)
+        if e.use_stderr() {
+            let _ = write!(err, "{}", e.render());
+            return u8::try_from(e.exit_code()).unwrap_or(2);
+        }
+        written(out, &e.render().to_string())
     })
 }

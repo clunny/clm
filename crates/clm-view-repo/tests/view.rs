@@ -107,7 +107,7 @@ fn json(out: &Output) -> serde_json::Value {
 
 #[test]
 fn scenario_offline() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/x/SPEC.md", &node("", &["p"]));
@@ -142,7 +142,7 @@ fn scenario_offline() {
 
 #[test]
 fn scenario_oversized_on_the_chart() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = two_nodes();
     // `a`'s spec is over the repository's spec budget; it sets no `size_budget`.
     write(
@@ -184,7 +184,7 @@ fn scenario_oversized_on_the_chart() {
 
 #[test]
 fn sizes_that_cant_be_checked_mark_nothing() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = two_nodes();
     write(
         dir.path(),
@@ -230,7 +230,7 @@ fn behind_origin(root: &Path, n: usize) {
 
 #[test]
 fn scenario_checkout_behind_on_the_chart() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = two_nodes();
     let d = dir.path();
     init(d);
@@ -264,7 +264,7 @@ fn scenario_checkout_behind_on_the_chart() {
 
 #[test]
 fn scenario_checkout_current() {
-    // req:view.repo/reads-the-repository@8ad0cdee
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = two_nodes();
     let d = dir.path();
     init(d);
@@ -284,13 +284,21 @@ fn scenario_checkout_current() {
     let bare = two_nodes();
     let text = stdout(&clm(bare.path(), &["view", "spec"]));
     assert!(!text.contains("commit "), "{text}");
-    let v = json(&clm(bare.path(), &["view", "spec", "--format", "json"]));
+    let out = clm(bare.path(), &["view", "spec", "--format", "json"]);
+    let v = json(&out);
     assert_eq!(v.get("checkout"), None, "{v:#}");
+    // Nor can the sizes be measured there: said on stderr, and no component marked.
+    let err = String::from_utf8(out.stderr.clone()).unwrap();
+    assert!(err.starts_with("size not checked: "), "{err}");
+    assert_eq!(out.status.code(), Some(0));
+    for node in v["nodes"].as_array().unwrap() {
+        assert_ne!(node["oversized"], true, "{node:#}");
+    }
 }
 
 #[test]
 fn scenario_width() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = TempDir::new().unwrap();
     let long = "n".repeat(60);
     write(dir.path(), "specs/SPEC.md", ROOT);
@@ -331,7 +339,7 @@ fn scenario_width() {
 
 #[test]
 fn scenario_unknown_view() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = two_nodes();
     let stderr = |out: &Output| String::from_utf8(out.stderr.clone()).unwrap();
     let out = clm(dir.path(), &["view", "everything"]);
@@ -348,15 +356,22 @@ fn scenario_unknown_view() {
     let out = clm(dir.path(), &["view", "queue", "--format", "svg"]);
     assert_eq!(out.status.code(), Some(2));
     assert!(stderr(&out).contains("svg"), "{}", stderr(&out));
-    let out = clm(dir.path(), &["view", "spec", "--width", "0"]);
-    assert_eq!(out.status.code(), Some(2));
-    assert!(stderr(&out).contains("--width"), "{}", stderr(&out));
-    assert!(out.stdout.is_empty(), "{out:?}");
+    for width in ["0", "70000"] {
+        let out = clm(dir.path(), &["view", "spec", "--width", width]);
+        assert_eq!(out.status.code(), Some(2), "--width {width}");
+        assert!(stderr(&out).contains("--width"), "{}", stderr(&out));
+        assert!(out.stdout.is_empty(), "{out:?}");
+    }
+    // Both ends of the range are taken.
+    for width in ["1", "65535"] {
+        let out = clm(dir.path(), &["view", "spec", "--width", width]);
+        assert_eq!(out.status.code(), Some(0), "--width {width}: {out:?}");
+    }
 }
 
 #[test]
 fn violations_exit_1() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = two_nodes();
     write(dir.path(), "specs/c/SPEC.md", "---\ntitle: C\n---\n");
     let out = clm(dir.path(), &["view", "spec"]);
@@ -371,7 +386,7 @@ fn violations_exit_1() {
 
 #[test]
 fn scenario_claimed_node_and_command_matches_library() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = two_nodes();
     init(dir.path());
     claim_ref(dir.path(), "a", 1);
