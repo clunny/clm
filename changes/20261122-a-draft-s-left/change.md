@@ -23,7 +23,7 @@ The reason the line gives is the finish's own (`<change> doesn't resolve it`), n
 
 ## Outcome
 
-- `clm draft --finish <change>`, with the place `<change>` there, prints `left <slug>: <change> doesn't resolve it`, after its `released` lines and before `freed <change>`, for each item the place claims that `origin/main`'s `backlog/` holds and that the change's `resolves` doesn't name; the `change.md` is read from `origin/main` (live or archived) when it is there, else from `origin/spec/<change>`, and with none, every such item is printed. With no place it prints no `left` line, so a second finish of the same draft (after a fold lands, `land:` returns) records nothing again.
+- `clm draft --finish <change>`, with the place `<change>` there, prints `left <slug>: <change> doesn't resolve it`, after its `released` lines and before `freed <change>`, for each item the place claims that `origin/main`'s `backlog/` holds and that the change's `resolves` doesn't name; the `change.md` is the first of `changes/<change>/` and `changes/archive/<change>/` (where a rename change keeps it) on `origin/main`, then on `origin/spec/<change>`; with none, or a first one that doesn't parse, every such item is printed. With no place it prints no `left` line, so a second finish of the same draft (after a fold lands, `land:` returns) records nothing again.
 - `clm build returned` for a draft records those slugs as it already does (`returned.rs`); `finish_gone_drafts` prints nothing new, since a draft it finishes has none of its items on `origin/main`.
 
 ## Edge cases
@@ -35,4 +35,5 @@ The reason the line gives is the finish's own (`<change> doesn't resolve it`), n
 ## Open questions
 
 - The draft prompt says the next `clm triage` drafts an item whose components the draft corrected; under the loop that waits for the next loop. Telling such an item apart (its `backlog/<slug>.md` changed by the change) is possible while the change waits on `origin/spec/<change>`, but not once it has landed and that branch is gone, so the finish doesn't try (`yagni`). If the human wants the loop to redraft such items in the same run, that is a change to `return-rules` or `plan-order`, which the plan holds.
+- The `triage` skill reads `left` lines from a draft's report, not from `clm draft --finish`, so nothing there breaks; but an item left can now show in the finish's output too, with the reason `<change> doesn't resolve it`. Whether the skill's summary should mention or ignore the finish's lines is a `plugin` wording question, left for wave 5's skill pass.
 - This modifies `orchestrator.triage/draft-finish`, which wave 4's build of `orchestrator.triage` re-cites: landing this before that build lands moves the requirement's version under it, which its `clm rebase` picks up as `behind`. If the fold batch holding this comes up for approval before both wave builds have landed, the human may prefer to wait.
