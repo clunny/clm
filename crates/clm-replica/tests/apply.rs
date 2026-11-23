@@ -133,7 +133,7 @@ fn ledgers_refs_and_pulls_apply_too() {
 
 #[test]
 fn three_pushes_one_recompute() {
-    // req:replica/batched-recompute@5e04a3ca
+    // req:replica/batched-recompute@d88f848b
     let mut r = ready(&base(), "111", 100);
     for sha in ["222", "333", "444"] {
         r.apply(Change::Tip {
@@ -149,6 +149,7 @@ fn three_pushes_one_recompute() {
         Answer::Preparing { .. } => panic!("preparing"),
     };
     assert_eq!(described(&r), ("111".to_string(), 100));
+    assert!(r.stale());
     r.recompute(160);
     assert_eq!(described(&r), ("444".to_string(), 160));
     assert!(!r.stale());
@@ -156,13 +157,20 @@ fn three_pushes_one_recompute() {
 
 #[test]
 fn a_claim_lapses_four_hours_after_its_push() {
-    // req:replica/batched-recompute@5e04a3ca
+    // req:replica/batched-recompute@d88f848b
     let ten = 10 * 3600;
     let mut r = scratch(&base(), "111");
     r.apply(Change::Ref {
         name: "impl/a".into(),
         sha: Some("c1".into()),
         time: ten,
+        change: None,
+    });
+    // A later claim: the earliest lapse is the one returned.
+    r.apply(Change::Ref {
+        name: "impl/b".into(),
+        sha: Some("c2".into()),
+        time: ten + 1800,
         change: None,
     });
     let next = r.recompute(11 * 3600).next;
@@ -174,11 +182,20 @@ fn a_claim_lapses_four_hours_after_its_push() {
     // Without a claim, no time.
     let mut none = scratch(&base(), "111");
     assert_eq!(none.recompute(100).next, None);
+    // A `propose/<item>` claim lapses as an `impl/<component>` one does.
+    let mut proposed = scratch(&base(), "111");
+    proposed.apply(Change::Ref {
+        name: "propose/x".into(),
+        sha: Some("p1".into()),
+        time: ten + 1800,
+        change: None,
+    });
+    assert_eq!(proposed.recompute(11 * 3600).next, Some(14 * 3600 + 1800));
 }
 
 #[test]
 fn recompute_waits_for_the_spec_files() {
-    // req:replica/batched-recompute@5e04a3ca
+    // req:replica/batched-recompute@d88f848b
     let f = base();
     let mut r = Replica::default();
     r.apply(tree("111", &f));
@@ -186,11 +203,36 @@ fn recompute_waits_for_the_spec_files() {
     assert!(r.stale(), "nothing was computed");
     assert!(matches!(r.view("snapshot"), Some(Answer::Preparing { .. })));
     assert_eq!(r.view("nothing"), None);
+
+    // A ready replica force-pushed to a tree listing a spec file it doesn't hold keeps its
+    // views at the old tip.
+    let mut ready_one = ready(&f, "111", 100);
+    let mut after = f.clone();
+    after.insert(
+        "specs/n/SPEC.md".into(),
+        node("", &[], "active").into_bytes(),
+    );
+    ready_one.apply(tree("222", &after));
+    // A live claim, so a recompute that computed would give its lapse.
+    ready_one.apply(Change::Ref {
+        name: "impl/a".into(),
+        sha: Some("c1".into()),
+        time: 150,
+        change: None,
+    });
+    assert_eq!(ready_one.recompute(200).next, None);
+    assert!(ready_one.stale(), "nothing was computed");
+    match ready_one.view("snapshot") {
+        Some(Answer::Ready {
+            sha, computed_at, ..
+        }) => assert_eq!((sha.as_str(), computed_at), ("111", 100)),
+        other => panic!("{other:?}"),
+    }
 }
 
 #[test]
 fn preparing_until_the_spec_files_are_in() {
-    // req:replica/preparing@73597926
+    // req:replica/preparing@6b210d1a
     let mut f = files(&[
         ("ARCHITECTURE.md", "# A\n"),
         ("specs/SPEC.md", &node("", &[], "active")),
@@ -249,7 +291,7 @@ fn preparing_until_the_spec_files_are_in() {
 
 #[test]
 fn events_keep_the_latest_hundred() {
-    // req:replica/apply-what-changed@2585c229
+    // req:replica/implementation-ledger@995f19b2
     let mut r = ready(&base(), "111", 1000);
     for at in 0..150u64 {
         r.apply(Change::Event(Event::Push {

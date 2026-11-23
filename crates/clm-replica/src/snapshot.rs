@@ -184,7 +184,7 @@ pub(crate) fn build(state: &State, graph: &Graph, violations: &[String], files: 
         },
         sizes: oversized.err().unwrap_or_else(|| "checked".into()),
         spec: serde_json::to_value(spec).unwrap_or(Value::Null),
-        nodes: nodes(graph, complete.then_some(&cited)),
+        nodes: nodes(graph, &markers, complete.then_some(&cited)),
         changes: changes(graph, &markers, complete),
         backlog: backlog(graph, files),
         resolved: graph
@@ -209,14 +209,24 @@ pub(crate) fn build(state: &State, graph: &Graph, violations: &[String], files: 
     serde_json::to_value(snapshot).unwrap_or(Value::Null)
 }
 
-fn nodes(graph: &Graph, cited: Option<&BTreeMap<&str, &Cited>>) -> Vec<NodeView> {
+/// Each component, its `status` the word `clm status` writes on its row.
+fn nodes(
+    graph: &Graph,
+    markers: &[Marker],
+    cited: Option<&BTreeMap<&str, &Cited>>,
+) -> Vec<NodeView> {
+    let words: BTreeMap<String, String> = clm_coverage::status_report(graph, markers)
+        .nodes
+        .into_iter()
+        .filter_map(|row| Some((row.first()?.clone(), row.get(1)?.clone())))
+        .collect();
     graph
         .nodes
         .values()
         .map(|n| NodeView {
             id: n.id.clone(),
             title: n.frontmatter.title.clone(),
-            status: lower(&n.frontmatter.status),
+            status: words.get(&n.id).cloned().unwrap_or_default(),
             parent: n.parent.clone(),
             depends_on: n.frontmatter.depends_on.clone(),
             contract: n.contract.clone(),

@@ -19,8 +19,9 @@ fn strings(v: &Value) -> Vec<String> {
 }
 
 /// An unbuilt and an active component, a test citing `a/p` at its current version and
-/// `b/q` at an older one, a Markdown file citing `b/r`, an applied change and a backlog
-/// item blocking `b/r`.
+/// `b/q` at an older one, a Markdown file citing `b/r`, an applied change, a backlog
+/// item blocking `b/r`, a text asset of `b`, a binary file outside the spec directories
+/// and a decision.
 fn fixture() -> FileMap {
     let mut f = clm_repo();
     f.insert(
@@ -46,13 +47,19 @@ fn fixture() -> FileMap {
             "backlog/thing.md",
             "---\ntitle: A thing\nkind: human\ncomponents: [b]\nblocks: [b/r]\n---\nBody.\n",
         ),
+        ("specs/b/assets/note.txt", "a note\n"),
+        (
+            "docs/decisions/d.md",
+            "---\ntitle: D\ndate: 2026-10-01\nstatus: accepted\n---\nWhy.\n",
+        ),
     ]));
+    f.insert("img/logo.bin".into(), vec![0xff, 0x00, 0xfe, 0x01]);
     f
 }
 
 #[test]
 fn fixture_repo_matches_clm() {
-    // req:replica/snapshot-matches-clm@98d112e9
+    // req:replica/snapshot-matches-clm@3e19d262
     let f = fixture();
     let dir = tempfile::tempdir().unwrap();
     write_checkout(dir.path(), &f);
@@ -78,6 +85,21 @@ fn fixture_repo_matches_clm() {
     }
     let a_row = status.nodes.iter().find(|r| r[0] == "a").unwrap();
     assert_eq!(a_row[2], "1/1");
+    // The unbuilt component's word is the one on its `clm status` row.
+    let b_row = status.nodes.iter().find(|r| r[0] == "b").unwrap();
+    let b = nodes.iter().find(|n| n["id"] == "b").unwrap();
+    assert_eq!(b["status"], b_row[1].as_str());
+
+    // The text asset with the checkout's hash, the decision, and no violation.
+    assert_eq!(
+        b["assets"]["note.txt"],
+        graph.nodes["b"].assets["note.txt"].as_str()
+    );
+    assert_eq!(
+        snap["decisions"],
+        json!([{"name": "d", "title": "D", "date": "2026-10-01", "status": "accepted"}])
+    );
+    assert_eq!(snap["violations"], json!([]));
 
     // Coverage, requirement by requirement, as `clm coverage` reports it.
     let coverage = clm_check::coverage(dir.path()).unwrap();
@@ -125,11 +147,28 @@ fn fixture_repo_matches_clm() {
     let none = std::collections::BTreeSet::new();
     let spec = clm_view::spec_view(&graph, &clm_coverage::scan(dir.path()).req, Some(&none));
     assert_eq!(snap["spec"], serde_json::to_value(&spec).unwrap());
+
+    // A backlog item whose frontmatter doesn't parse: the line `clm check` prints for it.
+    let mut bad = f.clone();
+    bad.insert(
+        "backlog/bad.md".into(),
+        b"---\ntitle: [unclosed\n---\nBody.\n".to_vec(),
+    );
+    let dir = tempfile::tempdir().unwrap();
+    write_checkout(dir.path(), &bad);
+    let (_, violations) = clm_model::load(dir.path());
+    let lines: Vec<String> = violations.iter().map(clm_check::format).collect();
+    assert!(
+        !lines.is_empty() && lines.iter().all(|l| l.starts_with("backlog/bad.md: ")),
+        "{lines:?}"
+    );
+    let snap = view(&ready(&bad, "111", 100), "snapshot");
+    assert_eq!(snap["violations"], json!(lines));
 }
 
 #[test]
 fn a_binary_asset_hashes_text_only_when_it_is_text() {
-    // req:replica/snapshot-matches-clm@98d112e9
+    // req:replica/snapshot-matches-clm@3e19d262
     // A binary file outside the spec directories never blocks completeness, and a text
     // asset hashes as the checkout's does.
     let mut f = fixture();
@@ -154,7 +193,7 @@ fn a_binary_asset_hashes_text_only_when_it_is_text() {
 
 #[test]
 fn a_complete_change_reports_complete() {
-    // req:replica/snapshot-matches-clm@98d112e9
+    // req:replica/snapshot-matches-clm@3e19d262
     let mut f = fixture();
     // `tests/t.rs` now cites `a/p`, `b/q` and `b/r` at their versions (archive-on-sync).
     let cited: String = ["a/p", "b/q", "b/r"]

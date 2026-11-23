@@ -88,7 +88,7 @@ fn fold() -> clm_ledger::Fold {
 
 #[test]
 fn the_capabilities_report_clm_gives() {
-    // req:replica/capabilities-report@2b1b6dac
+    // req:replica/capabilities-report@ede24f3a
     let f = capability_files();
     let mut r = scratch(&f, "111");
     with_effort(&mut r);
@@ -113,7 +113,7 @@ fn the_capabilities_report_clm_gives() {
 
 #[test]
 fn a_tip_holding_allowed_signers_is_signed() {
-    // req:replica/capabilities-report@2b1b6dac
+    // req:replica/capabilities-report@ede24f3a
     let mut f = capability_files();
     f.insert(
         "docs/allowed_signers".into(),
@@ -126,7 +126,7 @@ fn a_tip_holding_allowed_signers_is_signed() {
 
 #[test]
 fn the_architecture_report_clm_gives() {
-    // req:replica/architecture-report@03e92222
+    // req:replica/architecture-report@30fe9216
     let f = architecture_files();
     let mut r = scratch(&f, "111");
     with_effort(&mut r);
@@ -159,7 +159,7 @@ fn the_architecture_report_clm_gives() {
 
 #[test]
 fn the_architecture_while_indexing_leaves_current_unknown() {
-    // req:replica/architecture-report@03e92222
+    // req:replica/architecture-report@30fe9216
     let f = architecture_files();
     let mut r = Replica::default();
     r.apply(tree("111", &f));

@@ -23,41 +23,28 @@ fn cargo(args: &[&str]) -> Output {
 }
 
 #[test]
-fn manifest_names_no_host_crate() {
-    // req:replica/host-neutral@5f781488
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-    let table: toml::Table = std::fs::read_to_string(path).unwrap().parse().unwrap();
-    for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
-        let Some(deps) = table.get(section).and_then(|d| d.as_table()) else {
-            continue;
-        };
-        for banned in BANNED {
-            assert!(!deps.contains_key(banned), "{section} names {banned}");
-        }
-    }
-}
-
-#[test]
 fn dependency_tree_names_no_host_crate() {
-    // req:replica/host-neutral@5f781488
-    let out = cargo(&["tree", "-e", "normal", "--prefix", "none"]);
+    // req:replica/host-neutral@5db0ac4a
+    let out = cargo(&["tree", "-e", "normal,build", "--prefix", "none"]);
     assert!(
         out.status.success(),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
     let tree = String::from_utf8(out.stdout).unwrap();
+    let names: Vec<&str> = tree
+        .lines()
+        .filter_map(|l| l.split_whitespace().next())
+        .collect();
+    assert!(names.contains(&"clm-replica"), "{tree}");
     for banned in BANNED {
-        assert!(
-            !tree.contains(&format!("{banned} ")),
-            "{banned} in:\n{tree}"
-        );
+        assert!(!names.contains(&banned), "{banned} in:\n{tree}");
     }
 }
 
 #[test]
 fn builds_for_wasm() {
-    // req:replica/host-neutral@5f781488
+    // req:replica/host-neutral@5db0ac4a
     // A separate target dir, so the build doesn't wait on the outer `cargo test`'s lock.
     let dir = workspace().join("target/wasm-test");
     let out = cargo(&[
