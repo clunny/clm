@@ -341,7 +341,7 @@ fn launch_run(
     let ran = clm(options, args)?;
     match ran.code {
         0 => {
-            if run.kind == Some(Kind::Draft) && run.name.is_empty() {
+            if run.kind == Some(Kind::Draft) && !relaunch {
                 // A new draft is named by the change ID `clm draft` chose.
                 let id = ran
                     .stderr
@@ -387,8 +387,9 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
                 false,
             )
         }
-        Launch::Draft { items, model, .. } => {
-            let mut run = planned("", Some(Kind::Draft), model, None);
+        Launch::Draft { key, items, model } => {
+            // Named by its group until `clm draft` names its change.
+            let mut run = planned(&format!("draft:{key}"), Some(Kind::Draft), model, None);
             run.items = items.clone();
             let mut args = vec!["draft"];
             args.extend(items.iter().map(String::as_str));
@@ -997,6 +998,11 @@ pub fn launched(options: &Options, name: &str, task_id: &str) -> Result<(), Fail
         let listed = f
             .run(name)
             .ok_or_else(|| Failure::Refused(format!("the loop has no run {name}")))?;
+        if listed.state == RunState::Returned {
+            return Err(Failure::Refused(format!(
+                "the loop has finished run {name}: it returned, and no launch of it is waiting"
+            )));
+        }
         if listed.task_id.as_deref() != Some(task_id)
             && let Some((owner, earlier)) = f.task_owner(task_id)
         {
