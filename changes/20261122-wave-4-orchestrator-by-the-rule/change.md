@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [clm-run-keeps-its-own-copy-of-the-test-for-which-files-a-build-may-change, setup-design-paragraph-says-no-variable]
 ---
 

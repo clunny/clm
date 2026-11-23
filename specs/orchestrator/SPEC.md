@@ -2,24 +2,24 @@
 title: Orchestrator
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, check.coverage, context, gate, vcs]
+depends_on: [model, check, check.coverage, vcs]
 paths: ["crates/clm-orchestrator/**"]
 successor: ""
 serves: [capability/build-from-spec, capability/work-concurrently, architecture/component-reconciliation]
 ---
 
 ## Contract
-`clm next` lists the components whose code is ready to be brought up to their spec, one component ID per line, most urgent first, at most as many as the clone has free build places, and nothing when it has none (`build-places`); when it prints nothing only because no place is free, it says so on stderr, naming the places in use and `max_builds`, so a full cap never reads as an empty queue. `clm claim <component>` claims a component by pushing branch `impl/<component>` to `origin` and prints the branch name. `clm claim <component> --fix backlog/<slug>` claims it for a code-only fix of that `bug` item, or for the code-only work of that `deferred` item (`code-fix-resolves-bug`, `deferred-work-resolves-in-code`), even when the component has nothing pending, and switches the checkout to the claimed branch, or refuses before claiming when it couldn't. Both fetch `origin` first and take `--expiry <hours>` (default 4). When they refuse a component, they say why. Both exit 0 on success, 1 when the work isn't possible (with the reason), and 2 when git fails. `clm status` ends with a `claims` section listing claims, component and backlog alike, as of the last fetch. Launching a build from a claim (`clm run`) is `orchestrator.run`; ending a session (`clm wrap-up`) is `orchestrator.checkpoint`; triaging the backlog into unattended drafts (`clm triage`, `clm draft`) is `orchestrator.triage`. Each builds on the queue this component defines and calls `git` for its plumbing. For them the crate exposes, as library calls: `claim` (a claim with its refusal reason), `claim_local` (a component claim that records the local branch `impl/<component>` before it pushes, for `clm run`: `claim-local`), `refusal(component, state)`, `propose_refs`, `claim_refs`, `proposals` (what `clm proposals` prints), `taken_items(root, expiry)` (what holds backlog items, as the Design's *taken* defines, read from `origin` after fetching: each proposed or on-main change with its state, the items it names and its components, and each live bare claim with its item), `queue_from_refs` and `taken_from_refs` (below), the place calls below and `Error`. Changing one of these is a change to this Contract.
+`clm next` lists the components whose code is ready to be brought up to their spec, one component ID per line, most urgent first, at most as many as the clone has free build places, and nothing when it has none (`build-places`); when it prints nothing only because no place is free, it says so on stderr, naming the places in use and `max_builds`, so a full cap never reads as an empty queue. `clm claim <component>` claims a component by pushing branch `impl/<component>` to `origin` and prints the branch name. `clm claim <component> --fix backlog/<slug>` claims it for a code-only fix of that `bug` item, or for the code-only work of that `deferred` item (`code-fix-resolves-bug`, `deferred-work-resolves-in-code`), even when the component has nothing pending, and switches the checkout to the claimed branch, or refuses before claiming when it couldn't. Both fetch `origin` first and take `--expiry <hours>` (default 4). When they refuse a component, they say why. Both exit 0 on success, 1 when the work isn't possible (with the reason) or `origin/main`'s specs don't load, and 2 when git fails or for arguments they can't parse (`commands-in-crate`). The `claims` section `clm status` ends with (`view`) is `claims_section`'s rows: the claims, component and backlog alike, as of the last fetch. Launching a build from a claim (`clm run`) is `orchestrator.run`; ending a session (`clm wrap-up`) is `orchestrator.checkpoint`; triaging the backlog into unattended drafts (`clm triage`, `clm draft`) is `orchestrator.triage`. Each builds on the queue this component defines and calls `git` for its plumbing. For them the crate exposes, as library calls: `claim` (a claim with its refusal reason), `claim_local` (a component claim that records the local branch `impl/<component>` before it pushes, for `clm run`: `claim-local`), `propose_refs`, `claim_refs`, `claims_section` and `claim_state` (`status-claims`), `taken_items(root, expiry)` (what holds backlog items, as the Design's *taken* defines, read from `origin` after fetching: each proposed or on-main change with its state, the items it names and its components, and each live bare claim with its item), `queue_from_refs` and `taken_from_refs` (below), the place calls below, `DEFAULT_EXPIRY_HOURS` (4, the expiry the commands default to and `claims_section` judges by), the types these take and return, and `Error`. Changing one of these is a change to this Contract. Why `clm claim` refuses a component, and the lines `clm proposals` prints, are the commands' own, offered through the commands alone.
 
-**Build places** (`build-places`). A build or a draft holds a *place* on the clone from when `clm run` or `clm draft` starts it until it lands, is finished with `--finish`, or its claim lapses, and the clone has `config`'s `max_builds` of them (default 3). A place is the file `<git common dir>/clm/builds/<name>`, in the clone's git common directory (`git rev-parse --git-common-dir`), which every worktree of the clone shares, a bare repository's included: `<name>` is the component ID for a build and the change ID for a draft, and the file names the branches the place belongs to. It is local state of the clone, never committed, since nothing under the git directory is. A place *counts* unless its branch has landed or its claim has lapsed and it was taken longer ago than the expiry, as the Design defines; one that doesn't count is free to take and is deleted by the next command that takes a place, and by `clm wrap-up`. The cap counts this clone only. Each place holds a *slot*, a number from 1 up that no other place that counts holds, so a build and its checks can key the host resources its tests take, such as a port, on it (`build-slots`, `tests-run-concurrently`); 0 is the slot of whatever runs outside a place, such as the human's own checkout. For `orchestrator.run`, `orchestrator.triage` and `orchestrator.checkpoint` the crate exposes `places(root, expiry)` (every place with its name, kind, branches, slot, the time it was taken and whether it counts, judged on the remote-tracking refs as they are: it doesn't fetch, so its callers fetch first), `take_place(root, place, max_builds, expiry)` (takes a place, or reuses the one of that name when it counts, or says the clone is full with the number held and the cap), `place_slot(root, branch)` (the slot of the place that names the branch, or 0, failing only when the git common directory can't be found), `rename_place(root, from, to)` (renames a place, or says `to` already exists), `free_place(root, name)` (deletes the file, succeeding when there is none) and `free_stale_places(root, expiry)` (under the places lock, reads the places, deletes each one that doesn't count, and returns a `Swept` for every place as judged there: the `Place` and its outcome, kept, freed, or failed with why the file couldn't be deleted).
+**Build places** (`build-places`). A build or a draft holds a *place* on the clone from when `clm run` or `clm draft` starts it until it lands, is finished with `--finish`, or its claim lapses, and the clone has `config`'s `max_builds` of them (default 3). A place is the file `<git common dir>/clm/builds/<name>`, in the clone's git common directory (`git rev-parse --git-common-dir`), which every worktree of the clone shares, a bare repository's included: `<name>` is the component ID for a build and the change ID for a draft, and the file names the branches the place belongs to. It is local state of the clone, never committed, since nothing under the git directory is. A place *counts* unless its branch has landed or its claim has lapsed and it was taken longer ago than the expiry, as the Design defines; one that doesn't count is free to take and is deleted by the next command that takes a place, and by `clm wrap-up`. The cap counts this clone only. Each place holds a *slot*, a number from 1 up that no other place that counts holds, so a build and its checks can key the host resources its tests take, such as a port, on it (`build-slots`, `tests-run-concurrently`); 0 is the slot of whatever runs outside a place, such as the human's own checkout. For `orchestrator.run`, `orchestrator.triage` and `orchestrator.checkpoint` the crate exposes `places(root, expiry)` (every place with its name, kind, branches, slot, the time it was taken and whether it counts, judged on the remote-tracking refs as they are: it doesn't fetch, so its callers fetch first), `take_place(root, name, kind, branches, max_builds, expiry)` (takes the place `name`, of kind build or draft and belonging to `branches`: reuses it when the place of that name counts, takes a new one when fewer than `max_builds` count, and otherwise takes nothing, saying which, with the number held and the cap when it takes nothing), `place_slot(root, branch)` (the slot of the place that names the branch, or 0, failing only when the git common directory can't be found), `rename_place(root, from, to)` (renames a place, or says `to` already exists or `from` doesn't), `free_place(root, name)` (deletes the file, succeeding when there is none) and `free_stale_places(root, expiry)` (under the places lock, reads the places, deletes each one that doesn't count, and returns a `Swept` for every place as judged there: the `Place` and its outcome, kept, freed, or failed with why the file couldn't be deleted). `take_place`, `rename_place` and `free_place` refuse a name that isn't one file name.
 
 The unit of building is the component, not the change (`node-reconciliation`). `specs/` on `main` holds every applied change's text, and a component's code is brought up to all of it at once. A requirement is *current* when a test cites it at its current version, `req:<id>@<version>` (`versioned-markers`, `check.coverage/pending-report`); otherwise it is *pending*: `unbuilt` when nothing cites it, `behind` when only older versions are cited, or `obsolete` when a marker cites a requirement a live change removed. A component is *pending* while it has a pending requirement. A backlog item *blocks* the requirements it names in `blocks` (`requirement-blocks`), and a pending requirement *blocks* the requirements of other components whose `Needs` name it (`requirement-needs`): a blocked requirement stays pending but is left out of the component's work until the item is deleted or the needed requirement is current. A component is ready when it has an unblocked pending requirement. Nothing else orders the work (`needs-alone-order`): `depends_on` says which components' code a component may use, not when it is built, so a requirement that relies on another component's unbuilt work names it in `Needs`; there are no plans, no order between changes and no waits written by hand against time or other changes. A `Needs` is a dependency the spec declares and the markers decide. Priority orders `clm next` (`priority-orders-nodes`).
 
 A proposing session claims a backlog item before designing its fix (`propose-claims`). `clm claim backlog/<slug>` pushes branch `propose/<slug>` to `origin` the way a component claim pushes `impl/*`, with the same expiry and takeover, and prints the branch name. It refuses an item that isn't in `origin/main`'s `backlog/`, or that is already taken: claimed, or named in the `from` or `resolves` of spec work in flight on `origin`. `clm proposals` lists that spec work and the bare claims, each with its components and items, so a session can see what another is already changing. Backlog claims never enter `clm next`.
 
-An `applied` or `implementing` change is *complete* when every requirement its deltas add or modify is current, each counted as the requirement a rename or move took it to and left out when no move reaches one the spec holds, and no marker cites one it removed that the spec doesn't hold (`check.coverage/status-report`). A later change can remove what it added or add back what it removed, and neither keeps it from completing. A change that hasn't applied is never complete, since its modified requirements are still the old text. `clm rebase` archives a complete change on any `impl/*` branch (`archive-on-sync`), and `clm wrap-up` names those still unarchived on `origin/main`, for the build loop to archive (`orchestrator.loop`).
+An `applied` or `implementing` change is *complete* when every requirement its deltas add or modify is current, each counted as the requirement a rename or move took it to and left out when no move reaches one the spec holds, and no marker cites one it removed that the spec doesn't hold (`check.coverage/status-report`). A later change can remove what it added or add back what it removed, and neither keeps it from completing. A change that hasn't applied is never complete, since its modified requirements are still the old text. `clm rebase` archives a complete change (`archive-on-sync`), and `clm wrap-up` names those still unarchived on `origin/main`, for the build loop to archive (`orchestrator.loop`).
 
-`queue_from_refs` and `taken_from_refs` return the queue and what holds backlog items from refs already loaded, without git or a checkout. `queue_from_refs` takes the graph, the markers, the `impl/*` branches with their tip commit times, the current time and the expiry. `taken_from_refs` takes `main`'s graph, the `spec/*` and `autosync/spec/*` refs, each with its tip's `changes/<id>/change.md` text, or, when the tip has none, its `changes/archive/<id>/change.md` text (or none), and the names under that change's `deltas/` (`archived-spec-work`): the caller chooses the file, so `SpecRef` keeps its fields and `taken_from_refs` reads the text the same whichever path it came from, the `propose/*` refs with their tip commit times, the current time and the expiry. `land_priority(root, branch, base, head)` gives `land` the priority a land of `branch` carries, which orders the clone's land queue (`land-priority`, `land/lock-queue`). With its default features disabled, the crate builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
+`queue_from_refs` and `taken_from_refs` return the queue and what holds backlog items from refs already loaded, without git or a checkout. `queue_from_refs` takes the graph, the markers, the `impl/*` branches with their tip commit times and whether each tip is an ancestor of `origin/main`, the current time and the expiry. `taken_from_refs` takes `main`'s graph, the `spec/*` and `autosync/spec/*` refs, each with its tip's `changes/<id>/change.md` text, or, when the tip has none, its `changes/archive/<id>/change.md` text (or none), and the names under that change's `deltas/` (`archived-spec-work`): the caller chooses the file, so `SpecRef` keeps its fields and `taken_from_refs` reads the text the same whichever path it came from, the `propose/*` refs with their tip commit times, the current time and the expiry. `land_priority(root, branch, base, head)` gives `land` the priority a land of `branch` carries, which orders the clone's land queue (`land-priority`, `land/lock-queue`). With its default features disabled, the crate builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
 
 `clm-orchestrator` offers each of `clm next`, `clm claim` and `clm proposals` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
 
@@ -34,44 +34,44 @@ The queue holds every component of the graph. For each component:
 
 `next` and `claim` read the graph and the markers from `origin/main` after fetching, not from the checkout: they extract its tree with a temporary index (`git read-tree` and `git checkout-index` under `GIT_INDEX_FILE`), so every session sees the same state whatever branch it has checked out, and neither the working tree nor the real index is touched. `queue_from_refs` applies the same rules to a graph and markers already loaded from that tree, so `next` is built on it.
 
-A component is claimed while `origin/impl/<component>` exists, its tip was committed within the expiry, and its tip isn't an ancestor of `origin/main` (`merged-claims-released`). A claim whose tip is in `origin/main` is *merged*: its branch has landed, and it is released at once, as a lapsed claim is. A claim is always a new commit on top of `origin/main`, so a claim tip reaches `origin/main` only when its branch lands as a merge. The test is `git merge-base --is-ancestor` on the refs the fetch just updated, so `next` stays a git-only command. A ref `origin/impl/<x>` is read as a claim only when `<x>` holds no `/`, since a component ID never contains `/` (`nested-branches-not-claims`): `build` archives complete changes on `impl/archive/<id>` (`archive-branches`), and that branch never reads as a claim on a component. `clm claim` and `clm run` refuse a component that isn't ready with the reason the queue gives it.
+A component is claimed while `origin/impl/<component>` exists, its tip was committed within the expiry, and its tip isn't an ancestor of `origin/main` (`merged-claims-released`). A claim whose tip is in `origin/main` is *merged*: its branch has landed, and it is released at once, as a lapsed claim is. A claim is always a new commit on top of `origin/main`, so a claim tip reaches `origin/main` only when its branch lands as a merge. The test is `git merge-base --is-ancestor` on the refs the fetch just updated, so `next` stays a git-only command. A ref `origin/impl/<x>` is read as a claim only when `<x>` holds no `/`, since a component ID never contains `/` (`nested-branches-not-claims`): `build` archives complete changes on `impl/archive/<id>` (`archive-branches`), and that branch never reads as a claim on a component.
 
-Claiming makes an empty commit on `origin/main` (`git commit-tree`, so the working tree is untouched) and pushes it with `--force-with-lease`: expecting no branch for a new claim, or the released tip, lapsed or merged, for a takeover. Git's compare-and-swap makes the claim atomic, so of two racing sessions exactly one wins. A rejected push isn't always a lost race, so `clm claim` then reads the branch's tip on `origin` again (`git ls-remote`) and judges it as `claim` says. A tip still unchanged means the push failed for another reason: a lock held by a parallel push from the same repo, or a transient error on the remote, such as a forge's `remote: fatal error in commit_refs` while other sessions push at the same moment. The same commit is pushed again, since the lease still guards the swap; the waits are fixed, with no override. The line saying the failure may be transient and that running the same command again is safe is true because the tip shows nothing was claimed: `clm claim` claims afresh and `clm run` claims or resumes the component as its Design says (`orchestrator.run`). Only that last rejection gets the transient line: when `ls-remote` fails, the push may have gone through, and a rerun would then find the claim and refuse it as `claimed`, so that git failure is reported with git's reasons alone. `clm claim backlog/<slug>`, `--fix` claims and `clm run` share this handling. A failing `ls-remote` is a git failure too. The implementer keeps the claim alive by pushing commits.
+Claiming makes an empty commit on `origin/main` (`git commit-tree`, so the working tree is untouched) and pushes it with `--force-with-lease`: expecting no branch for a new claim, or the released tip, lapsed or merged, for a takeover. Git's compare-and-swap makes the claim atomic, so of two racing sessions exactly one wins. A rejected push isn't always a lost race, so `clm claim` then reads the branch's tip on `origin` again (`git ls-remote`) and judges it as `claim` says. A tip still unchanged means the push failed for another reason: a lock held by a parallel push from the same repo, or a transient error on the remote, such as a forge's `remote: fatal error in commit_refs` while other sessions push at the same moment. The same commit is pushed again, since the lease still guards the swap; the waits are fixed, with no override. Running the same command again after the last such rejection is safe because the tip shows nothing was claimed: `clm claim` claims afresh and `clm run` claims or resumes the component as its Design says (`orchestrator.run`). When `ls-remote` fails, the push may have gone through, and a rerun would then find the claim and refuse it as `claimed`, so `claim` offers no such advice there. A tip that is the claim commit means the push landed though git reported it failed, as when the connection drops after the update, so the remote-tracking ref is set to it by hand: `clm run` makes its local branch from that ref. `clm claim backlog/<slug>`, `--fix` claims and `clm run` share this handling. The implementer keeps the claim alive by pushing commits.
 
 **Places** (`build-places`). Each build compiles into its own worktree's `target/`, which takes many GB, so how many run at once is what bounds the disk; free space can't, since under WSL the filesystem's free space isn't the host's. The directory is `<git common dir>/clm/builds/`, the common directory found through `git` (`git rev-parse --git-common-dir`, made absolute) and created when missing. Every worktree of the clone shares that directory, so a place taken from a linked worktree, where builds and the orchestrating session often run, is seen from every other, it works for a bare repository with linked worktrees, and it needs no lookup of the main worktree. It holds places for the whole git repository, so two CLM repositories in subdirectories of one clone share one cap. A place file is UTF-8 text, one `key value` pair per line: `kind build` or `kind draft`, `taken <RFC 3339 time>`, a `slot <n>` line (`orchestrator/place-slots`) right after it that a file written before slots lacks, and one `branch <name>` line per branch it belongs to: `impl/<component>` for a build; `spec/<id>` then each `propose/<slug>` the draft claimed, in the order claimed, for a draft. `clm draft` takes its place before it claims and before it knows the change ID, under a provisional name unique to that invocation, `draft-<pid>-<first slug given>` with its process ID, which is never reused, and with no `branch` line; it renames it with `rename_place` once it has claimed (`orchestrator.triage`); a draft place with no `branch` line has no claim and hasn't landed, so it counts by its `taken` time alone. A file that can't be read or parsed counts, so a damaged file never lets a clone exceed its cap. `places` doesn't fetch: every command that reads places (`clm run`, `clm draft`, `clm next`, `clm wrap-up`, and the `--finish` commands) fetches first, so the reads are on the remote-tracking refs it just updated:
 - A build's place has *landed* when at least one of `origin/impl/<component>` and the local `impl/<component>` exists and the tip of each that exists is an ancestor of `origin/main` (`clm land` deletes the remote branch, and the local one stays in the build's worktree); a place whose component has neither branch yet, such as one `clm run` has taken but not yet claimed for, hasn't landed. Its claim is *live* while `origin/impl/<component>` is a live claim as above.
 - A draft's place has *landed* when `origin/main`'s tree holds `changes/<id>/` or `changes/archive/<id>/`; its claim is *live* while any `propose/<slug>` it names is a live backlog claim, or `origin/spec/<id>` or `origin/autosync/spec/<id>` exists with a tip committed within the expiry.
 - A place *counts* when it hasn't landed and either its claim is live or it was taken within the expiry. The second arm covers a build that resumes a branch whose claim has lapsed: its place counts from the moment it is taken, before the build's first push renews the claim.
 
-*Taking a place* is done under an exclusive lock on `<git common dir>/clm/builds.lock` (an advisory lock of the operating system, so a killed command releases it), so two commands started at once never both take the last place: under the lock the command reads the places, deletes those that don't count, and then, when a place of its own name counts, reuses it (rewriting `taken` to now), when fewer than `max_builds` count, writes its file, with the smallest slot no counting place holds, through a temporary file and a rename (a reused place with no slot line gets one by the same rule; `place_slot` reads a place's slot without the lock), and otherwise takes nothing. `rename_place`, `free_place` and `free_stale_places` take the same lock, so a draft's provisional place becomes its final one atomically and never overwrites another place. `free_stale_places` is the read-and-delete half of that on its own: no read and delete are ever split across the lock, so a place another command retakes between a read and a delete is never deleted. When it can't delete a file it records why and goes on to the next, while a failure to find the git common directory or take the lock is the call's `Error`; `take_place` shares its read and judgement but fails the call when a delete fails. `free_place` deletes by name without judging, for a command freeing its own place (`--finish`, a refused claim). The command claims after taking the place, outside the lock, and frees a place it newly took when it then claims nothing, so a refused claim never holds a place. `clm next` takes no place: it prints at most `max_builds` minus the places that count, so a session launching all it prints takes them all. The places are this clone's only: two clones on one machine, or a build on another machine, never count against each other. This crate doesn't depend on `config`: `crates/clm` loads `max_builds` and passes it to `clm next`, as it passes settings to the other commands. The place calls read files and git, so they are behind the crate's default features with its git calls, and the `wasm32-unknown-unknown` build has none. Its test starts the racing takers as separate processes, never threads, since an advisory file lock is held per process on some systems; a failed delete is tested, where the platform allows, by making `builds/` read-only, on Unix and not as root.
+*Taking a place* is done under an exclusive lock on `<git common dir>/clm/builds.lock` (an advisory lock of the operating system, so a killed command releases it), so two commands started at once never both take the last place: under the lock the command reads the places, deletes those that don't count, and then, when a place of its own name counts, reuses it (rewriting its file with `taken` now and the kind and branches it is given), when fewer than `max_builds` count, writes its file, with the smallest slot no counting place holds, through a temporary file and a rename (a reused place with no slot line gets one by the same rule; `place_slot` reads a place's slot without the lock), and otherwise takes nothing. `rename_place`, `free_place` and `free_stale_places` take the same lock, so a draft's provisional place becomes its final one atomically and never overwrites another place. `free_stale_places` is the read-and-delete half of that on its own: no read and delete are ever split across the lock, so a place another command retakes between a read and a delete is never deleted. `take_place` shares its read and judgement (`free-stale-places`). `free_place` deletes by name without judging, for a command freeing its own place (`--finish`, a refused claim): a command claims after taking its place, outside the lock, and frees a place it newly took when it then claims nothing (`orchestrator.run/run-takes-place`, `orchestrator.triage/draft-takes-place`). `clm next` takes no place: it prints at most `max_builds` minus the places that count, so a session launching all it prints takes them all. The places are this clone's only: two clones on one machine, or a build on another machine, never count against each other. This crate doesn't depend on `config`: `crates/clm` loads `max_builds` and passes it to `clm next`, as it passes settings to the other commands. The place calls read files and git, so they are behind the crate's default features with its git calls, and the `wasm32-unknown-unknown` build has none.
 
 **A claim recorded locally first** (`claim-local`). `clm run` claims through `claim_local`, so its clone keeps a trace of every claim it may have pushed (`claim-local-before-push`). Once it has made the claim commit, and before the first push, `claim_local` creates the local branch `impl/<component>` at that commit with `git branch`, which refuses a branch that exists, so it never moves one, and sets the branch's `remote` and `merge` settings to `origin` and `refs/heads/impl/<component>`, since the remote-tracking ref `git branch --track` needs doesn't exist until the push. A command interrupted after the push has therefore always left the local branch at the claim, which the next `clm run` resumes (`orchestrator.run`'s `run`); one interrupted before it leaves a local branch whose tip is a claim commit nobody pushed, which the next `clm run` removes. When the claim fails and the tip `ls-remote` reads again isn't the claim commit (a lost race, or a push still rejected after the retries), nothing was claimed, so it deletes the local branch with `git update-ref -d`, expecting the claim commit; when `ls-remote` itself fails, the push may have gone through, so the branch stays for the next `clm run` to judge after its fetch. A refusal before the commit is made (the component isn't ready, or is claimed) writes nothing. `claim` writes no local branch: a plain `clm claim` leaves the clone as it was, and `--fix` sets its branch after the push as below.
 
 **Fix claims** (`code-fix-resolves-bug`). `clm claim <component> --fix backlog/<slug>` claims `impl/<component>` for a fix that changes no spec, which `propose` builds in its own session. A component's state in the queue says whether it has spec to catch up with; a fix has none, so the claim ignores the state, except that a component another session holds is refused as `claimed`, as always. The branch is an ordinary `impl/<component>` claim: the queue reads it as `claimed` while it lives, `clm land` deletes it after the merge, and `clm wrap-up` treats it as a build. A ready component claimed this way waits for the fix to merge before its build. `--fix` takes no other component state into account and is the only way a converged component is claimed.
 
-**A fix claim switches the checkout** (`fix-claims-switch`). The session that claims a fix builds it in the checkout it claimed from, so `clm claim <component> --fix` leaves that checkout on `impl/<component>` at the claim commit, with `origin/impl/<component>` as its upstream, and prints the branch name only once it is there. A plain `clm claim <component>` leaves the checkout alone: `clm run` builds in a worktree of its own (`orchestrator.run`). Before it pushes anything, after the fetch, the item's checks and the refusal of a live claim, in that order, the fix claim checks that the switch can't fail, and otherwise exits 1 without pushing, saying which of these holds and what to do:
-- the checkout has uncommitted changes to tracked files (`git status --porcelain --untracked-files=no` prints something): commit them or set them aside, so a spec edit never rides onto a code branch; untracked files are carried along, as `git switch` does;
-- another worktree has a local `impl/<component>` checked out, naming that worktree's path from `git worktree list` (`clm-git`'s `worktrees`): switch it off the branch or remove it (`git worktree remove <path>`), then claim again; when that path doesn't exist, the remedy is `git worktree prune`. The checkout's own entry is told apart by comparing canonicalized paths with `git rev-parse --show-toplevel`. This is the stale branch a landed build leaves in its worktree, which `clm land` can't delete while it is checked out (`land/land`). The fix claim never moves a branch another worktree has checked out, and never checks out detached, since a detached build has no branch for `clm land` to land;
-- a local `impl/<component>` exists whose tip isn't an ancestor of `origin/main`: it holds commits `main` doesn't, naming the branch, so the session pushes or deletes it first (`git branch -D impl/<component>`). A leftover claim commit from a lapsed claim counts too: it is cheap to delete, and a fix claim is an attended step, so telling an empty claim from work isn't worth a rule here, though `clm run`, which a build launches unattended, has one (`orchestrator.run`'s `run`).
-Otherwise a local `impl/<component>`, if any, holds nothing `main` lacks. After the push the claim sets `impl/<component>` to the claim commit (`git branch -f`) with `origin/impl/<component>` as upstream, then switches to it, so a rejected ref update fails before the working tree moves; when the checkout is already on `impl/<component>`, `git branch -f` refuses the current branch, and `git switch -C` resets it instead. If the switch still fails after the push, as when another worktree checks the branch out in between or an untracked file would be overwritten, the claim stands, and the error gives the command to finish by hand (`git switch -C impl/<component> origin/impl/<component>`), so nothing fails silently.
+**A fix claim switches the checkout** (`fix-claims-switch`). The session that claims a fix builds it in the checkout it claimed from, so `clm claim <component> --fix` leaves that checkout on `impl/<component>` at the claim commit, with `origin/impl/<component>` as its upstream, and prints the branch name only once it is there. A plain `clm claim <component>` leaves the checkout alone: `clm run` builds in a worktree of its own (`orchestrator.run`). Before it pushes anything, after the fetch, the item's checks and the refusal of a live claim, in that order, the fix claim checks that the switch can't fail, and otherwise refuses without pushing (`claim-fix`):
+- the checkout has uncommitted changes to tracked files (`git status --porcelain --untracked-files=no` prints something), so a spec edit never rides onto a code branch; untracked files are carried along, as `git switch` does;
+- another worktree has a local `impl/<component>` checked out, found with `git worktree list` (`clm-git`'s `worktrees`). The checkout's own entry is told apart by comparing canonicalized paths with `git rev-parse --show-toplevel`. This is the stale branch a landed build leaves in its worktree, which `clm land` can't delete while it is checked out (`land/land`). The fix claim never moves a branch another worktree has checked out, and never checks out detached, since a detached build has no branch for `clm land` to land;
+- a local `impl/<component>` exists whose tip isn't an ancestor of `origin/main`: it holds commits `main` doesn't. A leftover claim commit from a lapsed claim counts too: it is cheap to delete, and a fix claim is an attended step, so telling an empty claim from work isn't worth a rule here, though `clm run`, which a build launches unattended, has one (`orchestrator.run`'s `run`).
+Otherwise a local `impl/<component>`, if any, holds nothing `main` lacks. After the push the claim sets `impl/<component>` to the claim commit (`git branch -f`) with `origin/impl/<component>` as upstream, then switches to it, so a rejected ref update fails before the working tree moves; when the checkout is already on `impl/<component>`, `git branch -f` refuses the current branch, and `git switch -C` resets it instead. If the switch still fails after the push, as when another worktree checks the branch out in between or an untracked file would be overwritten, the claim stands, and the switch is finished by hand (`claim-fix`), so nothing fails silently.
 
 **Backlog claims** (`propose-claims`). `clm claim backlog/<slug>` is told apart from a component claim by its first part: a component ID never contains `/`. It fetches, reads `origin/main`'s tree as `next` does, and claims `propose/<slug>` with the same commit, lease and rejection handling as a component claim, so of two racing sessions exactly one wins. The proposing session keeps nothing alive on that branch: once its spec branch names the item, the spec work holds it, however long its PR waits. An item `<slug>` is *taken* when any of these holds:
 - **claimed**: `origin/propose/<slug>` exists and its tip was committed within the expiry;
 - **on main**: a change outside the archive in `origin/main`'s tree lists `<slug>` in its `resolves`;
 - **proposed**: it is named in the `from` or `resolves` of `changes/<id>/change.md` in the tree of `origin/spec/<id>` or `origin/autosync/spec/<id>`, for a change `<id>` that isn't under `changes/` or `changes/archive/` in `origin/main`. Spec work counts whatever its age, since a branch that needs review can wait days for approval. Abandoned work holds its items until its branches are deleted, and `clm proposals` names it so the human can tell. When both refs exist, their items and components are joined. A tip with no `changes/<id>/change.md` is read through `changes/archive/<id>/change.md` and `changes/archive/<id>/deltas/` when it holds them (`archived-spec-work`): `clm rename` applies and archives its change on its own branch (`rename-by-replay`), so a rename branch waiting for review holds its change only there, and its work is as much in flight as any other spec branch's until it lands. Any archived change of the ref's own ID counts, not only one recording `renames`: the archive on an unlanded spec branch is that branch's work whatever made it, and telling renames apart would add a rule that changes nothing today. A ref with neither file is skipped.
 
-*Named in `from`* means `from` is `backlog/<slug>`; `resolves` holds bare slugs. Only those two frontmatter keys are read, and other keys are ignored, so a branch that adds a new frontmatter field still counts. A `change.md` whose frontmatter doesn't parse names no items; `clm proposals` still lists the change with its delta components and prints a warning naming the ref on stderr. Items, and their `components`, are looked up in `origin/main`'s `backlog/`, since the spec branch may already have deleted its `from` item; a name not there adds no components.
+*Named in `from`* means `from` is `backlog/<slug>`; `resolves` holds bare slugs. Only those two frontmatter keys are read, and other keys are ignored, so a branch that adds a new frontmatter field still counts. A `change.md` whose frontmatter doesn't parse names no items, and its change is still listed with its delta components (`proposals`). Items, and their `components`, are looked up in `origin/main`'s `backlog/`, since the spec branch may already have deleted its `from` item; a name not there adds no components.
 
 The session's own change is left out, so it never trips over its own work: when the checkout is on `spec/<id>`, change `<id>` is left out of *proposed*, and the items its working-tree `changes/<id>/change.md` names, or `changes/archive/<id>/change.md` when there is no live one, are left out of *claimed*. A lapsed claim is taken over when nothing else holds the item. It takes `--expiry`.
 
 **`clm proposals [--component <id>]...`** lists each change that holds an item or is proposed, then each claim no such change names (`proposals`). For a change on main, `<components>` are the components it has deltas for, and the items are those of its `resolves` still in `backlog/`; for proposed spec work, `<components>` are those of its `deltas/<component>.md` joined with the `components` of the backlog items it names, so overlap shows before any delta is written; for a claim, they are the item's `components`. *On main* means outside `changes/archive/`. Components are comma-separated and sorted, as in `clm backlog`, and an empty list is `[]`.
 
-`clm status` and `clm view` (`view`) don't fetch, so they stay offline and fast. They read the remote-tracking refs as they were at the last fetch; `clm next` and `clm proposals` are the authoritative views.
+`claim_refs` and `propose_refs` don't fetch, so `clm status` and `clm view` (`view`), which read the claims through them, stay offline and fast: they see the remote-tracking refs as they were at the last fetch; `clm next` and `clm proposals` are the authoritative views.
 
 ## Requirements
 
 ### Requirement: next
-`clm next` SHALL print each component that is `ready` and unclaimed, one component ID per line, sorted by effective priority (`P1` first, `priority-orders-nodes`), then with each component none of whose pending requirements waits (has an entry in its `waits_on`, `check.coverage/pending-report`) before each that has one, then by ID, where a component's state is as in the Design: it is ready when it has a pending requirement that neither a backlog item nor a pending requirement it needs blocks, nor, for an obsolete one, a pending requirement a move took it to (`check.coverage/pending-report`), whatever the state of the components in its `depends_on` (`needs-alone-order`). A claim whose branch tip is older than the expiry, or is an ancestor of `origin/main`, SHALL count as unclaimed. Priority SHALL only order the output: it never makes a component ready or holds one back. It SHALL print at most `max_builds` minus the number of places that count (`places`), the most urgent first, and nothing when that is zero or less; the places SHALL NOT change which components are ready, nor what `clm claim` accepts. When it prints nothing because that is zero or less while at least one component is ready and unclaimed, it SHALL write the one line `no free build place: <held> of max_builds = <cap> in use, <n> ready` to stderr, `<held>` the number of places that count, `<cap>` `max_builds` and `<n>` the number of ready, unclaimed components, and still exit 0, so a caller tells a full cap from an empty queue; with no component ready it SHALL write nothing to stderr, however many places count.
+`clm next` SHALL print each component that is `ready` and unclaimed, one component ID per line, sorted by effective priority (`P1` first, `priority-orders-nodes`), then with each component none of whose pending requirements waits (has an entry in its `waits_on`, `check.coverage/pending-report`) before each that has one, then by ID, where a component's state is as in the Design: it is ready when it has a pending requirement that neither a backlog item nor a pending requirement it needs blocks, nor, for an obsolete one, a pending requirement a move took it to (`check.coverage/pending-report`), whatever the state of the components in its `depends_on` (`needs-alone-order`). It SHALL judge them on `origin/main`'s tree after fetching `origin` (`fetch-retries-race`): the checkout's files and index play no part, and are left as they were. A claim whose branch tip is older than the expiry, or is an ancestor of `origin/main`, SHALL count as unclaimed. Priority SHALL only order the output: it never makes a component ready or holds one back. It SHALL print at most `max_builds` minus the number of places that count (`places`), the most urgent first, and nothing when that is zero or less; the places SHALL NOT change which components are ready, nor what `clm claim` accepts. When it prints nothing because that is zero or less while at least one component is ready and unclaimed, it SHALL write the one line `no free build place: <held> of max_builds = <cap> in use, <n> ready` to stderr, `<held>` the number of places that count, `<cap>` `max_builds` and `<n>` the number of ready, unclaimed components, and still exit 0, so a caller tells a full cap from an empty queue; with no component ready it SHALL write nothing to stderr, however many places count.
 
 #### Scenario: dependency doesn't order
 - GIVEN components `a` and `b`, where `a` depends on `b`, each with a requirement no test cites
@@ -138,7 +138,6 @@ The session's own change is left out, so it never trips over its own work: when 
 - WHEN `clm next` runs
 - THEN it prints nothing to stdout or stderr and exits 0
 
-
 #### Scenario: places shared by worktrees
 - GIVEN ready components `a` and `b`, `max_builds` 2, a place that counts taken from the main worktree, and the current directory a linked worktree of the clone
 - WHEN `clm next` runs
@@ -149,14 +148,16 @@ The session's own change is left out, so it never trips over its own work: when 
 - WHEN `clm next` runs
 - THEN it prints `a.b` and not `a`
 
+#### Scenario: the checkout doesn't count
+- GIVEN components `a`, `b` and `c` ready on `origin/main`, and in the checkout, uncommitted, a test citing `c`'s only requirement `c/s` at its current version and a `specs/a/SPEC.md` that doesn't parse
+- WHEN `clm next` runs
+- THEN it prints `a`, `b` and `c`, and the checkout's files and index are as they were
+
 #### Needs
-- config/max-builds-setting
-- view/blockers-view
-- view/status-report
 - check.coverage/pending-report
 
 ### Requirement: claim
-`clm claim <component>` SHALL push a new commit on `origin/main` to `impl/<component>` atomically, failing if the branch appeared or moved since it was read. It SHALL exit 1 without pushing when the component isn't one `clm next` would print, saying why: the items and requirements that block it, that it is converged, or that it is claimed. When it is converged, it SHALL also say that a small change needing no spec change takes no claim and lands from a branch of its own with `clm land`. It SHALL take over a lapsed claim, and a claim whose tip is an ancestor of `origin/main`. When the push is rejected, it SHALL read the branch's tip on `origin` again. If the tip is the claim commit, it SHALL succeed. If the tip differs from the one it expected (none for a new claim, the released tip for a takeover), it SHALL exit 1 saying someone else claimed the component first. Otherwise it SHALL push the same commit again, at most twice more, waiting 1 second before the first of these and 2 seconds before the second, and judge each rejection the same way, except that a tip still unchanged after the last push SHALL exit 2 with git's reason and a line saying the failure may be transient and to run the same command again, without saying the component was claimed by someone else.
+`clm claim <component>` SHALL push a new commit on `origin/main` to `impl/<component>` atomically, failing if the branch appeared or moved since it was read. It SHALL exit 1 without fetching when `<component>` is empty or holds `/`, other than a `backlog/<slug>` (`backlog-claim`), saying ``` `<component>` isn't a component ID ```. It SHALL exit 1 without pushing when the component isn't `ready` in the queue judged on `origin/main` as `clm next` judges it, whatever the build places, saying why: that `origin/main` has no such component (``no component `<component>` ``), the items and requirements that block it, that it is converged, or that it is claimed. When it is converged, it SHALL also say that a code change for it that needs no spec change takes no claim and lands through `clm land` from a branch of its own, named outside `impl/`, `spec/`, `propose/` and `autosync/` whose code files `gate/own-files` admits, naming `gate/own-files`, and that a `bug` or `deferred` item is claimed with `clm claim <component> --fix backlog/<slug>`. It SHALL take over a lapsed claim, and a claim whose tip is an ancestor of `origin/main`. When the push is rejected, it SHALL read the branch's tip on `origin` again. If the tip is the claim commit, it SHALL succeed. If the tip differs from the one it expected (none for a new claim, the released tip for a takeover), it SHALL exit 1 saying someone else claimed the component first. Otherwise it SHALL push the same commit again, at most twice more, waiting 1 second before the first of these and 2 seconds before the second, and judge each rejection the same way, except that a tip still unchanged after the last push SHALL exit 2 with git's reason and a line saying the failure may be transient and to run the same command again, without saying the component was claimed by someone else. When the tip can't be read again after a rejection, it SHALL exit 2 with git's reasons for the push and for the read, and without that line. On success the remote-tracking ref `origin/impl/<component>` SHALL be at the claim commit, also when the push that put it on `origin` reported a failure.
 
 #### Scenario: race
 - GIVEN two sessions that both see component `b` as ready
@@ -190,8 +191,8 @@ The session's own change is left out, so it never trips over its own work: when 
 
 #### Scenario: why it isn't ready
 - GIVEN component `c` whose only pending requirement `c/x` is in the `blocks` of an existing `backlog/q.md`, and component `d` with every requirement current
-- WHEN `clm claim c` and `clm claim d` run
-- THEN each exits 1, the first naming `backlog/q`, and the second saying `d` is converged and naming `clm land` for a change that needs no spec change
+- WHEN `clm claim c`, `clm claim d`, `clm claim ghost` and `clm claim x/b` run
+- THEN each exits 1 and pushes nothing: the first naming `backlog/q`; the second saying `d` is converged, that a change needing no spec change takes no claim and lands through `clm land` from a branch of its own named outside `impl/`, `spec/`, `propose/` and `autosync/` whose code files `gate/own-files` admits, naming `gate/own-files`, and naming `--fix`; the third saying ``no component `ghost` ``; and the fourth ``` `x/b` isn't a component ID ```
 
 #### Scenario: pending dependency
 - GIVEN component `a` with an uncited requirement, depending on component `b` with an uncited requirement
@@ -203,31 +204,42 @@ The session's own change is left out, so it never trips over its own work: when 
 - WHEN `clm claim a` runs
 - THEN it exits 1 without pushing, saying `a` is blocked by `b/y`
 
-#### Needs
-- view/blockers-view
-- view/status-report
+#### Scenario: tip unreadable after a rejection
+- GIVEN a ready component `b` and a `pre-push` hook in the clone that sets `remote.origin.url` to a path that doesn't exist and exits 1
+- WHEN `clm claim b` runs
+- THEN it exits 2 with a message holding git's reason for the rejected push and for the failed read of the tip, and not `may be transient`
+
+#### Scenario: a push that landed though git reported failure
+- GIVEN a ready component `b` and a `pre-push` hook in the clone that pushes the commit it is given to `impl/b` at `origin`'s URL, deletes the clone's `origin/impl/b` if any, and exits 1
+- WHEN `clm claim b` runs
+- THEN it prints `impl/b` and exits 0, `origin`'s `impl/b` is the claim commit, and the clone's `origin/impl/b` is that commit
+
+#### Scenario: an ID that can't be a component
+- GIVEN a directory that isn't a git repository
+- WHEN `clm claim x/b` and `clm claim ""` run there
+- THEN each exits 1, saying ``` `x/b` isn't a component ID ``` and ``` `` isn't a component ID ```
 
 ### Requirement: status-claims
-`clm status` SHALL end with a `claims` section, laid out as `view`'s `status-report` says: one row per `refs/remotes/origin/impl/<component>` ref, sorted, with the cells `<component>` and `merged` when its tip is an ancestor of `refs/remotes/origin/main`, otherwise `live` when its tip was committed within the default expiry and `lapsed` otherwise, then one row per `refs/remotes/origin/propose/<slug>` ref, sorted, with `backlog/<slug>` and `live` or `lapsed` by the expiry alone, or the single row `none` when there are no such refs or the root isn't a git repository. It SHALL NOT fetch.
+`claim_refs(root)` SHALL return one claim ref per `refs/remotes/origin/impl/<component>` ref, sorted by component, with its tip's commit time and as merged when its tip is an ancestor of `refs/remotes/origin/main`, and `propose_refs(root)` one per `refs/remotes/origin/propose/<slug>` ref, sorted by slug, with its tip's commit time and never merged; each SHALL return none when the root isn't a git repository, and SHALL NOT fetch. `claim_state(ref, now, expiry)` SHALL be `merged` for a merged ref, otherwise `lapsed` when its tip was committed more than `expiry` hours before `now`, and otherwise `live`. `claims_section(component_refs, backlog_refs, now)` SHALL return the rows of the `claims` section `clm status` ends with (`view/status-report`): one per component ref, in the order given, with the cells `<component>` and its `claim_state` at `DEFAULT_EXPIRY_HOURS`, then one per backlog ref, in the order given, with `backlog/<slug>` and its `claim_state`, or the single row `none` when both are empty.
 
 #### Scenario: live and lapsed claims
 - GIVEN remote-tracking refs `origin/impl/b` committed 1 hour ago and `origin/impl/d` committed 5 hours ago
-- WHEN `clm status` runs
+- WHEN `claims_section` is given `claim_refs` and `propose_refs` at the current time
 - THEN its `claims` rows are `b`, `live` then `d`, `lapsed`
 
 #### Scenario: merged claim
 - GIVEN remote-tracking refs `origin/impl/b` committed 1 hour ago, and `origin/main` a merge commit with `origin/impl/b` as its second parent
-- WHEN `clm status` runs
+- WHEN `claims_section` is given `claim_refs` and `propose_refs` at the current time
 - THEN its `claims` row is `b`, `merged`
 
 #### Scenario: backlog claims after node claims
 - GIVEN remote-tracking refs `origin/impl/b` and `origin/propose/q`, both committed 1 hour ago
-- WHEN `clm status` runs
+- WHEN `claims_section` is given `claim_refs` and `propose_refs` at the current time
 - THEN its `claims` rows are `b`, `live` then `backlog/q`, `live`
 
 #### Scenario: no claims
 - GIVEN a repository with no `origin/impl/*` or `origin/propose/*` refs
-- WHEN `clm status` runs
+- WHEN `claims_section` is given `claim_refs` and `propose_refs` at the current time
 - THEN its `claims` section has the single row `none`
 
 #### Serves
@@ -240,9 +252,9 @@ The session's own change is left out, so it never trips over its own work: when 
 - `converged`;
 - `ready`, with its pending requirements (`queue-pending-entries`);
 - `claimed`, with the time its claim lapses;
-- `blocked`, with what blocks its pending requirements, each blocker a backlog item or a pending requirement (`requirement-needs`), and which requirements it blocks. A requirement blocker SHALL carry `components`, serialised under that name: over every requirement of the component that the blocker blocks, the components of the lines `check.coverage`'s `waits` returns for that requirement's line (`check.coverage/wait-lines`) whose `id` is the blocker's ID, each once, sorted by component ID. An item blocker SHALL carry none, and its serialised form SHALL hold no `components` key. So an obsolete requirement that waits on its own ID (`check.coverage/pending-report`) is a blocker whose `components` are the other components that own files citing it.
+- `blocked`, with what blocks its pending requirements, each blocker a backlog item or a pending requirement (`requirement-needs`), and which requirements it blocks. A requirement blocker SHALL carry `components`, serialised under that name: over every requirement of the component that the blocker blocks, the components of the lines `check.coverage/wait-lines` gives for that requirement's line whose `id` is the blocker's ID, each once, sorted by component ID. An item blocker SHALL carry none, and its serialised form SHALL hold no `components` key. So an obsolete requirement that waits on its own ID (`check.coverage/pending-report`) is a blocker whose `components` are the other components that own files citing it.
 
-A component's `depends_on` SHALL NOT affect its state (`needs-alone-order`), and there SHALL be no `waiting` state.
+A component's `depends_on` SHALL NOT affect its state (`needs-alone-order`).
 
 #### Scenario: every state
 - GIVEN components `a` depending on `b`, where `b` is converged and `a` has an uncited requirement, `e` with an uncited requirement and claimed by a branch pushed an hour ago, and `f` whose only pending requirement `f/x` is in the `blocks` of an existing `human-task` backlog item
@@ -267,8 +279,6 @@ A component's `depends_on` SHALL NOT affect its state (`needs-alone-order`), and
 #### Needs
 - check.coverage/pending-report
 - check.coverage/wait-lines
-- view/blockers-view
-- view/status-report
 - model/parse-backlog
 
 ### Requirement: orchestrator-builds-for-wasm
@@ -285,7 +295,7 @@ The `clm-orchestrator` crate SHALL build for `wasm32-unknown-unknown` with its d
 - architecture/web-optional
 
 ### Requirement: backlog-claim
-`clm claim backlog/<slug>` SHALL fetch `origin` and push a new commit on `origin/main` to `propose/<slug>` with the same atomicity, takeover and rejection handling as a task claim, and print the branch name. It SHALL exit 1 without pushing when `backlog/<slug>.md` isn't in `origin/main`'s tree, or when the item is taken as the Design defines, saying what holds it: `claimed by propose/<slug>`, `resolved by <id> on main`, or `proposed in <id>`. It SHALL leave out of *proposed* the change of the `spec/<id>` branch the checkout is on. It SHALL take over a lapsed claim when nothing else holds the item.
+`clm claim backlog/<slug>` SHALL fetch `origin` and push a new commit on `origin/main` to `propose/<slug>` with the same atomicity, takeover and rejection handling as a component claim (`claim`), and print the branch name. It SHALL exit 1 without fetching when `<slug>` is empty or holds `/`, saying ``` `backlog/<slug>` isn't an item ```. It SHALL exit 1 without pushing when `backlog/<slug>.md` isn't in `origin/main`'s tree, or when the item is taken as the Design defines, saying what holds it: `claimed by propose/<slug>`, `resolved by <id> on main`, or `proposed in <id>`. It SHALL leave out of *proposed* the change of the `spec/<id>` branch the checkout is on, and out of *claimed* the items its working-tree `changes/<id>/change.md` names, so the session's own live claim on such an item is taken afresh. It SHALL take over a lapsed claim when nothing else holds the item.
 
 #### Scenario: racing proposers
 - GIVEN `backlog/q.md` in `origin/main` and no `propose/q`
@@ -331,6 +341,16 @@ The `clm-orchestrator` crate SHALL build for `wasm32-unknown-unknown` with its d
 - GIVEN no `backlog/q.md` in `origin/main`
 - WHEN `clm claim backlog/q` runs
 - THEN it exits 1 saying there is no such item, and `origin` has no `propose/q`
+
+#### Scenario: own claim renewed
+- GIVEN the same `origin/spec/20260101-c`, the checkout on `spec/20260101-c`, and `origin/propose/q` the claim `clm claim backlog/q` just pushed from there
+- WHEN `clm claim backlog/q` runs again
+- THEN it exits 0 and `origin/propose/q` is a new claim commit
+
+#### Scenario: a slug that can't be an item
+- GIVEN a directory that isn't a git repository
+- WHEN `clm claim backlog/` and `clm claim backlog/a/b` run there
+- THEN each exits 1, saying ``` `backlog/` isn't an item ``` and ``` `backlog/a/b` isn't an item ```
 
 #### Serves
 - capability/keep-a-backlog
@@ -380,20 +400,8 @@ The `clm-orchestrator` crate SHALL build for `wasm32-unknown-unknown` with its d
 - capability/work-concurrently
 - capability/triage-unattended
 
-### Requirement: git-through-layer
-`clm-orchestrator` SHALL list `clm-git` among its dependencies and SHALL run no `git` or `gh` process itself: every call goes through `clm-git`'s `git`, `gh`, `run` or repo queries (`git-plumbing-layer`), and its own wrapper is gone (`no-dead-code`).
-
-#### Scenario: covered by the scan
-- GIVEN the workspace
-- WHEN a test in `clm-orchestrator` reads `crates/clm-orchestrator/Cargo.toml` and every file under `crates/clm-orchestrator/src`
-- THEN `clm-git` is a dependency and no file holds `Command::new("git")` or `Command::new("gh")`
-
-#### Serves
-- architecture/reuse-first
-- architecture/no-dead-code
-
 ### Requirement: claim-fix
-`clm claim <component> --fix backlog/<slug>` SHALL claim `impl/<component>` as `claim` does, with the same atomicity, takeover and rejection handling, whether the component is ready, waiting, blocked or converged. It SHALL accept an item of kind `bug` or `deferred`, so a branch that does a deferred item's code-only work has the claim it deletes the item from (`deferred-work-resolves-in-code`). It SHALL exit 1 without pushing when the component is claimed, or when `backlog/<slug>.md` isn't in `origin/main`'s tree, is of neither kind, or doesn't list `<component>` in its `components`, saying which. Once claimed, it SHALL switch the checkout to a local `impl/<component>` at the claim commit, tracking `origin/impl/<component>`, before printing the branch name, resetting a local `impl/<component>` whose tip is an ancestor of `origin/main`. After refusing a live claim, it SHALL exit 1 without pushing, saying why, when the checkout has uncommitted changes to tracked files, when another worktree has `impl/<component>` checked out (naming that worktree's path), or when a local `impl/<component>` holds commits `origin/main` doesn't (naming the branch). It SHALL move the local ref before the working tree, so that when the switch fails after the push it leaves the checkout on its branch with its files unchanged, prints nothing on stdout, and exits 2 saying the component is claimed on `origin` but the checkout couldn't switch, with git's reason.
+`clm claim <component> --fix backlog/<slug>` SHALL claim `impl/<component>` as `claim` does, with the same atomicity, takeover and rejection handling, whether the component is ready, waiting, blocked or converged. It SHALL accept an item of kind `bug` or `deferred`, so a branch that does a deferred item's code-only work has the claim it deletes the item from (`deferred-work-resolves-in-code`). It SHALL exit 1 without fetching when `<component>` is empty or holds `/`, saying ``` `<component>` isn't a component ID ```, or when the `--fix` value isn't `backlog/<slug>` with a `<slug>` that is non-empty and holds no `/`, saying ``` `<value>` isn't a backlog item ```; and after fetching, without pushing, when `origin/main` has no such component, saying ``no component `<component>` ``. It SHALL exit 1 without pushing when the component is claimed, or when `backlog/<slug>.md` isn't in `origin/main`'s tree, is of neither kind, or doesn't list `<component>` in its `components`, saying which. Once claimed, it SHALL switch the checkout to a local `impl/<component>` at the claim commit, tracking `origin/impl/<component>`, before printing the branch name, resetting a local `impl/<component>` whose tip is an ancestor of `origin/main`. After refusing a live claim, it SHALL exit 1 without pushing, saying why, when the checkout has uncommitted changes to tracked files, when another worktree has `impl/<component>` checked out (naming that worktree's path), or when a local `impl/<component>` holds commits `origin/main` doesn't (naming the branch), and each SHALL say what to do: commit the changes or set them aside; switch that worktree off the branch or remove it with `git worktree remove <path>`, or, when that path no longer exists, run `git worktree prune`; land the branch or delete it with `git branch -D impl/<component>`. It SHALL move the local ref before the working tree, so that when the switch fails after the push it leaves the checkout on its branch with its files unchanged, prints nothing on stdout, and exits 2 saying the component is claimed on `origin` but the checkout couldn't switch, with git's reason, and naming `git switch -C impl/<component> origin/impl/<component>` to finish by hand.
 
 #### Scenario: converged node
 - GIVEN `origin/main` with converged component `a` and `backlog/x.md` of kind `bug` whose `components` are `[a]`, and a clean checkout on `spec/s`
@@ -440,6 +448,21 @@ The `clm-orchestrator` crate SHALL build for `wasm32-unknown-unknown` with its d
 - WHEN `clm claim a --fix backlog/x` runs
 - THEN it exits 2 printing nothing on stdout, `origin/impl/a` is the claim commit, the checkout is still on `spec/s` with no uncommitted changes, and stderr says `impl/a` is claimed on `origin` but the checkout couldn't switch, with git's reason
 
+#### Scenario: the hand remedy
+- GIVEN the same as "switch fails after the push"
+- WHEN `clm claim a --fix backlog/x` runs
+- THEN its message names `git switch -C impl/a origin/impl/a`
+
+#### Scenario: an ID or item that names nothing
+- GIVEN the same `a` and `x`
+- WHEN `clm claim a/b --fix backlog/x`, `clm claim a --fix x`, `clm claim a --fix backlog/`, `clm claim a --fix backlog/a/x` and `clm claim zz --fix backlog/x` run
+- THEN each exits 1 without pushing: the first saying ``` `a/b` isn't a component ID ```, the next three that their value isn't a backlog item, and the last ``no component `zz` ``
+
+#### Scenario: remedies
+- GIVEN the same `a` and `x`
+- WHEN `clm claim a --fix backlog/x` runs with an uncommitted edit to a tracked file, then with that edit gone and a second worktree at path `w` that has `impl/a` checked out, then with `w`'s directory deleted, and then with no other worktree and a local `impl/a` holding a commit `origin/main` doesn't
+- THEN each exits 1 without pushing, saying in turn to commit the changes or set them aside, `git worktree remove w`, `git worktree prune`, and `git branch -D impl/a`
+
 #### Serves
 - capability/report-defects
 - capability/work-concurrently
@@ -458,11 +481,11 @@ The `clm-orchestrator` crate SHALL build for `wasm32-unknown-unknown` with its d
 - capability/work-concurrently
 
 ### Requirement: nested-branches-not-claims
-`claim_refs`, `queue_from_refs`, `clm next` and `clm status`'s `claims` section SHALL read a ref `origin/impl/<x>` as a claim only when `<x>` contains no `/`: a nested branch such as `origin/impl/archive/<id>` SHALL claim no component, hold no component `claimed` and have no `claims` row.
+`claim_refs`, `queue_from_refs` and `clm next` SHALL read a ref `origin/impl/<x>` as a claim only when `<x>` contains no `/`: a nested branch such as `origin/impl/archive/<id>` SHALL claim no component and hold no component `claimed`, and `claim_refs` SHALL return no ref for it, so it has no row in `claims_section`.
 
 #### Scenario: archive branch beside a claim
 - GIVEN remote-tracking refs `origin/impl/b` and `origin/impl/archive/20261026-x`, both committed 1 hour ago
-- WHEN `clm status` runs
+- WHEN `claims_section` is given `claim_refs` and `propose_refs` at the current time
 - THEN its `claims` rows are `b`, `live` only, and no row names `archive`
 
 #### Scenario: archive branch in the queue
@@ -471,7 +494,7 @@ The `clm-orchestrator` crate SHALL build for `wasm32-unknown-unknown` with its d
 - THEN `b` is `claimed` and `archive` is `ready`
 
 ### Requirement: places
-A place SHALL be the file `<git common dir>/clm/builds/<name>` in the clone's git common directory, whichever worktree of the clone the command runs in, holding `kind`, `taken` and one `branch` line per branch it belongs to. A place SHALL count unless its branch has landed, or its claim isn't live and it was taken longer ago than the expiry, as the Design defines for builds and drafts; a file that can't be read or parsed SHALL count. `places` SHALL NOT fetch. `take_place` SHALL, under an exclusive lock on `<git common dir>/clm/builds.lock`, delete the places that don't count and then reuse the place of the same name when it counts, take a new one when fewer than `max_builds` count, and otherwise take none and report the number held and the cap. `rename_place` SHALL, under the same lock, rename a place and refuse, changing nothing, when a place of the new name exists. `free_place` SHALL delete the place's file and succeed when there is none.
+A place SHALL be the file `<git common dir>/clm/builds/<name>` in the clone's git common directory, whichever worktree of the clone the command runs in, holding `kind`, `taken` and one `branch` line per branch it belongs to. A place SHALL count unless its branch has landed, or its claim isn't live and it was taken longer ago than the expiry, as the Design defines for builds and drafts; a file that can't be read or parsed SHALL count. `places` SHALL NOT fetch, and SHALL return none, creating nothing, when the clone has no places directory. `take_place` SHALL, under an exclusive lock on `<git common dir>/clm/builds.lock`, delete the places that don't count and then reuse the place of the same name when it counts, take a new one when fewer than `max_builds` count, and otherwise take none and report the number held and the cap; when it can't delete a place that doesn't count, it SHALL fail, taking no place. `rename_place` SHALL, under the same lock, rename a place and refuse, changing nothing, when a place of the new name exists or none of the old name does. `free_place` SHALL delete the place's file and succeed when there is none. `take_place`, `rename_place` and `free_place` SHALL refuse, changing nothing, a name that is empty, `.` or `..`, or holds `/` or `\`.
 
 #### Scenario: lapsed and landed places don't count
 - GIVEN places `a`, for `origin/impl/a` committed 5 hours ago and taken 5 hours ago; `b`, whose `impl/b` tips are ancestors of `origin/main`; and `c`, for `origin/impl/c` committed 1 hour ago
@@ -513,38 +536,42 @@ A place SHALL be the file `<git common dir>/clm/builds/<name>` in the clone's gi
 - WHEN `places` is read
 - THEN `z` counts
 
+#### Scenario: no places directory
+- GIVEN a clone whose git common directory holds no `clm/builds/`
+- WHEN `places` is read
+- THEN it returns none, and there is still no `clm/builds/`
+
+#### Scenario: a stale place that can't be deleted
+- GIVEN, on Unix and not as root, a place `a` that doesn't count, a place `c` that counts, and the places directory read-only
+- WHEN `take_place` runs for `d` with `max_builds` 3
+- THEN it fails, and the places directory holds `a` and `c` and no `d`
+
+#### Scenario: rename of a place that isn't there
+- GIVEN a place `20261027-q` and no place `draft-1-q`
+- WHEN `rename_place` runs from `draft-1-q` to `x`
+- THEN it refuses, and the clone's places are `20261027-q` alone
+
+#### Scenario: a name that isn't a file name
+- GIVEN a place `a`
+- WHEN `take_place` and `free_place` run for each of the names ``, `.`, `..`, `a/b` and `a\b`, and `rename_place` from `a` to each of them and from each of them to `b`
+- THEN each refuses, and the clone's places are `a` alone, unchanged
+
 #### Serves
 - capability/build-from-spec
 - architecture/component-reconciliation
 
-### Requirement: shared-plumbing
-With its `git` feature on, `clm-orchestrator` SHALL export `REMOTE` as `clm-git`'s `REMOTE` re-exported, define no constant of its own for the remote's name, and read the time for claims and places from `clm-git`'s `now()`: no file under `crates/clm-orchestrator/src` SHALL hold a string literal that begins `"origin`, nor a function of its own that returns the seconds since the Unix epoch (`shared-plumbing-in-git`). With default features off it SHALL still build for `wasm32-unknown-unknown` (`orchestrator-builds-for-wasm`), without `REMOTE`.
-
-#### Scenario: one remote's name
-- GIVEN the crate with its default features
-- WHEN a test in a target that requires the `git` feature (such as `tests/orchestrator.rs`) compares `clm_orchestrator::REMOTE` with `clm_git::REMOTE`
-- THEN they are equal
-
-#### Scenario: no copy of the remote's name or the clock
-- GIVEN the workspace
-- WHEN a test in `clm-orchestrator` reads every file under `crates/clm-orchestrator/src`
-- THEN no file holds `"origin` or a `fn now(`
-
-#### Serves
-- architecture/reuse-first
-- architecture/no-dead-code
-
-#### Needs
-- vcs/remote-name
-- vcs/unix-now
-
 ### Requirement: taken-from-refs
-`taken_from_refs` SHALL return, for `main`'s graph, the spec refs with their `change.md` texts and delta names, the `propose/*` refs with their tip times, a time and an expiry, exactly what `taken_items` returns for the same `main` tree, branches and time from a checkout that isn't on a spec branch, warnings included, and SHALL read no files and run no git. `taken_items` SHALL compute its result with it.
+`taken_from_refs` SHALL return, for `main`'s graph, the spec refs with their `change.md` texts and delta names, the `propose/*` refs with their tip times, a time and an expiry, exactly what `taken_items` returns for the same `main` tree, branches and time from a checkout that isn't on a spec branch, warnings included, and SHALL read no files and run no git. A spec ref SHALL name change `<id>` only when its name is `spec/<id>` or `autosync/spec/<id>`, alone or after one leading segment such as `origin/`, with `<id>` non-empty and holding no `/`; a ref of any other name, one whose `change.md` text is none, and one whose change `main` holds under `changes/` or `changes/archive/` SHALL add no change and hold no item.
 
 #### Scenario: same as taken_items
 - GIVEN change `20260101-d` on main resolving existing item `r` with a delta for `gate`; ref `spec/20260101-c` with a delta for `check` and `resolves: [q]`, where `q` has `components: [model]`; ref `autosync/spec/20260101-e` whose `change.md` has no readable frontmatter; ref `propose/s` committed 1 hour ago, where `s` has `components: [ci]`; and ref `propose/q` committed 1 hour ago
 - WHEN `taken_from_refs` runs with a 4-hour expiry, and `taken_items` runs with the same expiry at the same time on a repo with that tree and those branches, from a checkout on `main`
 - THEN both return `20260101-c` proposed with items `q` and components `check` and `model`, `20260101-d` on main with item `r` and component `gate`, `20260101-e` proposed with no items, the claim `s` with component `ci` and no claim `q`, and one warning naming `20260101-e`
+
+#### Scenario: refs that hold nothing
+- GIVEN `main` holding `changes/archive/20260101-m/` and `backlog/q.md`; ref `spec/20260101-m` whose `change.md` has `resolves: [q]`; ref `spec/20260101-c` with no `change.md` and a delta for `a`; and refs `origin/spec/foo-spec/bar`, `origin/spec/x/spec/bar` and `origin/myspec/bar`, each with a `change.md` that has `resolves: [q]`
+- WHEN `taken_from_refs` runs with no `propose/*` refs
+- THEN it returns no change, no claim and no warning
 
 #### Serves
 - capability/keep-a-backlog
@@ -617,19 +644,6 @@ The components `queue_from_refs` reports `ready` SHALL be exactly those `clm nex
 #### Needs
 - model/parse-backlog
 
-### Requirement: next-wait
-`clm next` SHALL refuse `--wait` and `--interval` as usage errors, and SHALL hold no code that waits for work: `clm build wait` waits for everything the build loop launches (`orchestrator.loop/build-wait`), and the skill that ran `clm next --wait` runs the loop instead. This is the contract step of moving the wait into the loop (`expand-contract`), so it waits until the skill no longer names `clm next --wait`; while it waits, this pending requirement stands in for a `clm:remove-by 20261112-build-loop-in-clm` marker on the `--wait` code, which `clm pending` keeps in sight until it is built.
-
-#### Scenario: wait refused
-- WHEN `clm next --wait` runs, and then `clm next --interval 5`
-- THEN each exits 2 with usage
-
-#### Serves
-- capability/build-from-spec
-
-#### Needs
-- orchestrator.loop/build-wait
-
 ### Requirement: archived-spec-work
 `clm claim backlog/<slug>`, `clm proposals` and `taken_items` SHALL read a `spec/<id>` or `autosync/spec/<id>` ref whose tip holds no `changes/<id>/change.md` through its `changes/archive/<id>/change.md`, when the tip holds one and change `<id>` is under neither `changes/` nor `changes/archive/` in `origin/main`: its `from` and `resolves` SHALL hold items as a live `change.md`'s do, and the names under `changes/archive/<id>/deltas/` SHALL give its components. When the checkout is on `spec/<id>` and has no working-tree `changes/<id>/change.md`, the items its working-tree `changes/archive/<id>/change.md` names SHALL be left out of *claimed*. A tip holding both files SHALL be read through the live one alone.
 
@@ -658,7 +672,7 @@ The components `queue_from_refs` reports `ready` SHALL be exactly those `clm nex
 - capability/work-concurrently
 
 ### Requirement: says-component
-The messages `clm next`, `clm claim`, `clm proposals` and `clm status`'s `claims` rows print SHALL say component and components, never the old words, as `component-words` defines them: among them ``no component `<id>` ``, ``` `<id>` isn't a component ID ```, and the claim refusals that name a component's state. A test reads the string literals in `crates/clm-orchestrator/src/` and fails naming the file, the line and the word for each old word `component-words` doesn't keep.
+The messages `clm next`, `clm claim`, `clm proposals` and `clm status`'s `claims` rows print SHALL say component and components, never the old words, as `component-words` defines them: among them ``no component `<id>` ``, ``` `<id>` isn't a component ID ```, and the claim refusals that name a component's state.
 
 #### Scenario: claiming an unknown component
 - GIVEN no component `zz`
@@ -669,7 +683,7 @@ The messages `clm next`, `clm claim`, `clm proposals` and `clm status`'s `claims
 - architecture/plain-terms
 
 ### Requirement: priority-orders-components
-A pending requirement's priority SHALL be the highest priority among the changes outside the archive whose deltas add, modify or remove it, or `P5` when there is none. A component's *effective priority* SHALL be the highest of the priorities of its unblocked pending requirements and of the priorities seeded on it: a pending requirement blocked by a wait seeds its priority on the component of each line it waits on, as `check.coverage`'s `waits` gives them (`check.coverage/wait-lines`), never on the component the first part of a waited ID names, and a line waited on that is itself blocked by a wait passes it on to the lines it waits on, a line being followed once, by its component and its ID together, through components of any state, so a `claimed` or `blocked` component in between passes a dependant's priority on. A wait SHALL be each entry of the requirement's `waits_on` (`check.coverage/pending-report`): a requirement its `Needs` names, for an `obsolete` requirement one a move took it to and, on its own component's line, its own ID, standing for its lines on the components that own the other files citing it, and for a capability a rule serving it that holds it back (an `unbuilt` one, or a `behind` one itself blocked), so the rules serving a capability, and the work a changed one waits on, inherit its priority. `depends_on` SHALL carry no priority (`needs-alone-order`). `queue_from_refs` SHALL report each component's effective priority, and `clm next` SHALL sort by it.
+A component's *effective priority* SHALL be the highest of the priorities of its unblocked pending requirements, as `check.coverage/pending-report` gives them, and of the priorities seeded on it: a pending requirement blocked by a wait seeds its priority on the component of each line it waits on, as `check.coverage/wait-lines` gives them, never on the component the first part of a waited ID names, and a line waited on that is itself blocked by a wait passes it on to the lines it waits on, a line being followed once, by its component and its ID together, through components of any state, so a `claimed` or `blocked` component in between passes a dependant's priority on. A wait SHALL be each entry of the requirement's `waits_on` as `check.coverage/pending-report` gives it, so the rules serving a capability, and the work a changed one waits on, inherit its priority. `depends_on` SHALL carry no priority (`needs-alone-order`). `queue_from_refs` SHALL report each component's effective priority, and `clm next` SHALL sort by it.
 
 #### Scenario: urgent work pulls the node it needs forward
 - GIVEN component `a` whose only pending requirement `a/x` comes from a change with `priority: P1` and needs uncited `b/y`, `b/y` from a change with no priority, and a pending component `c` on another part of the graph from a change with `priority: P3`
@@ -709,11 +723,9 @@ A pending requirement's priority SHALL be the highest priority among the changes
 #### Needs
 - check.coverage/pending-report
 - check.coverage/wait-lines
-- view/blockers-view
-- view/status-report
 
 ### Requirement: claim-local
-`claim_local(root, component, expiry)` SHALL claim the component as `claim` does for a component, with the same refusals, atomicity, takeover and rejection handling, except that after making the claim commit and before its first push it SHALL create the local branch `impl/<component>` at that commit, with `origin/impl/<component>` as its upstream, and SHALL return a git error without pushing when it can't, such as when a local `impl/<component>` exists, leaving that branch unchanged. On success the local branch SHALL be at the claim commit, tracking `origin/impl/<component>`. When the claim fails and the branch's tip on `origin`, read again, isn't the claim commit, it SHALL delete the local branch before returning; when that tip can't be read, it SHALL leave the branch. `claim` SHALL create no local branch. The crate SHALL expose no other call that claims a component: `claim_node`, which `claim` calls for a component, SHALL NOT be public.
+`claim_local(root, component, expiry)` SHALL claim the component as `claim` does for a component, with the same refusals, atomicity, takeover and rejection handling, except that after making the claim commit and before its first push it SHALL create the local branch `impl/<component>` at that commit, with `origin/impl/<component>` as its upstream, and SHALL return a git error without pushing when it can't, such as when a local `impl/<component>` exists, leaving that branch unchanged. On success the local branch SHALL be at the claim commit, tracking `origin/impl/<component>`. When the claim fails and the branch's tip on `origin`, read again, isn't the claim commit, it SHALL delete the local branch before returning; when that tip can't be read, it SHALL leave the branch. `claim` SHALL create no local branch.
 
 #### Scenario: branch before the push
 - GIVEN a ready component `b`, no local `impl/b`, and a `pre-push` hook in the clone that records the tip of the local `impl/b`
@@ -746,22 +758,22 @@ A pending requirement's priority SHALL be the highest priority among the changes
 - THEN it exits 0 and the clone has no local `impl/b`
 
 ### Requirement: place-slots
-Each place SHALL hold a slot. When `take_place` takes a new place it SHALL write into its file, after the `taken` line and before the `branch` lines, a line `slot <n>`, `<n>` being the smallest integer from 1 up that no other place that counts holds, chosen under the `builds.lock` it holds; when it reuses a place it SHALL keep that place's slot, or, when the file holds none, write one by the same rule. Drafts' places hold slots as builds' do. `take_place`'s result type SHALL be unchanged. `places` SHALL return each place's slot, or none for a file that holds none or can't be parsed, and a file with no `slot` line SHALL parse as before. `place_slot(root, branch)` SHALL return the slot of the place whose `branch` lines name `branch`, the first such place by name when several do, and 0 when none does or that place holds no slot; it SHALL NOT fetch, take the lock or judge whether the place counts, and SHALL return `Error` only when it can't find the git common directory.
+Each place SHALL hold a slot. When `take_place` takes a new place it SHALL write into its file, after the `taken` line and before the `branch` lines, a line `slot <n>`, `<n>` being the smallest integer from 1 up that no other place that counts holds, chosen under the `builds.lock` it holds; when it reuses a place it SHALL keep that place's slot, or, when the file holds none, write one by the same rule. Drafts' places hold slots as builds' do. `places` SHALL return each place's slot, or none for a file that holds none or can't be parsed, and a file with no `slot` line SHALL parse as before. `place_slot(root, branch)` SHALL return the slot of the place whose `branch` lines name `branch`, the first such place by name when several do, and 0 when none does or that place holds no slot; it SHALL NOT fetch, take the lock or judge whether the place counts, and SHALL return `Error` only when it can't find the git common directory.
 
 #### Scenario: the lowest free slot
 - GIVEN `max_builds` 4, places `a` with slot 1 and `c` with slot 3 that count, and a place `b` with slot 2 that doesn't count
 - WHEN `take_place` runs for `d`
-- THEN it returns slot 2, the file `d` holds `slot 2`, and the clone has no place `b`
+- THEN it takes a new place, the file `d` holds `slot 2` after its `taken` line and before its `branch` lines, `places` gives `d` slot 2, and the clone has no place `b`
 
 #### Scenario: a reused place keeps its slot
 - GIVEN a place `a` with slot 3 that counts
 - WHEN `take_place` runs for `a`
-- THEN it returns slot 3 and the file `a` still holds `slot 3`
+- THEN it reuses `a`, the file `a` still holds `slot 3`, and `places` gives `a` slot 3
 
 #### Scenario: a place written before slots
 - GIVEN a place `a` that counts whose file holds no `slot` line, and a place `b` with slot 1 that counts
 - WHEN `take_place` runs for `a`
-- THEN it returns slot 2 and the file `a` holds `slot 2`
+- THEN it reuses `a`, and the file `a` holds `slot 2`
 
 #### Scenario: the slot of a branch
 - GIVEN a place `x` of kind `build` naming `impl/x` with slot 2
@@ -773,7 +785,7 @@ Each place SHALL hold a slot. When `take_place` takes a new place it SHALL write
 - capability/work-concurrently
 
 ### Requirement: land-priority
-`clm-orchestrator` SHALL offer, with its `git` feature, the library call `land_priority(root, branch, base, head)`, the priority a land of `branch`, whose head is the commit `head`, carries onto the base commit `base`: the highest of the effective priority (`priority-orders-components`) of the component `<component>` when `branch` is `impl/<component>`, as the queue of the graph and markers at `base` gives it, whatever the component's claim; the `priority` of each change whose `changes/<id>/change.md` `head` holds and `base` doesn't, as that file in `head` gives it; and the `priority` of each backlog item `backlog/<slug>.md` that `base` holds and `head` doesn't, as that file in `base` gives it. A change `base` already holds, edited by `head`, gives nothing: its work already counts through the effective priority of the components it touches. A `<component>` the graph at `base` doesn't hold gives nothing. It SHALL be `P5` when none of these gives a priority. It SHALL read only git objects, never a working tree, and fail with the reason when the specs at `base` don't load.
+`clm-orchestrator` SHALL offer, with its `git` feature, the library call `land_priority(root, branch, base, head)`, the priority a land of `branch`, whose head is the commit `head`, carries onto the base commit `base`: the highest of the effective priority (`priority-orders-components`) of the component `<component>` when `branch` is `impl/<component>`, as the queue of the graph and markers at `base` gives it, whatever the component's claim; the `priority` of each change whose `changes/<id>/change.md` `head` holds and `base` doesn't, as that file in `head` gives it; and the `priority` of each backlog item `backlog/<slug>.md` that `base` holds and `head` doesn't, as that file in `base` gives it. A change `base` already holds, edited by `head`, gives nothing: its work already counts through the effective priority of the components it touches. A `<component>` the graph at `base` doesn't hold gives nothing, and so does a `change.md` that `head` adds, or a backlog item that `head` deletes, whose frontmatter doesn't parse. It SHALL be `P5` when none of these gives a priority. It SHALL read only git objects, never a working tree, and fail with the reason when the specs at `base` don't load.
 
 #### Scenario: a build's land
 - GIVEN component `a` pending on `base` with a requirement from a live change with `priority: P2`, and `impl/a`'s head adding tests and no change
@@ -800,8 +812,13 @@ Each place SHALL hold a slot. When `take_place` takes a new place it SHALL write
 - WHEN `land_priority` runs
 - THEN it fails naming the reason
 
+#### Scenario: files that don't parse
+- GIVEN a base holding `backlog/b.md` whose frontmatter doesn't parse, and a head of `spec/x` that deletes it and adds `changes/x/change.md` with no frontmatter
+- WHEN `land_priority` runs for `spec/x`
+- THEN it returns `P5`
+
 ### Requirement: fetch-retries-race
-Every fetch of `origin` that `clm-orchestrator` makes, in `clm next`, `clm claim`, `clm claim backlog/<slug>`, `clm proposals`, `claim_local` and `taken_items`, SHALL go through `clm-git`'s `fetch_retrying` (`vcs/fetch-retries`) with the arguments it fetches with today (`fetch --prune --quiet origin`), so a fetch that lost a race with a build in another worktree of the same clone over a remote-tracking ref goes on. When `fetch_retrying` fails, the command SHALL fail as a failed fetch fails it today, as a git failure (exit 2), with the error's message: git's message from the last fetch for `FetchError::Git`, and `origin can't be reached` for `FetchError::Offline`. No file under `crates/clm-orchestrator/src` SHALL run `git fetch` other than through `fetch_retrying`.
+Every fetch of `origin` that `clm next`, `clm claim`, `clm claim backlog/<slug>`, `clm proposals`, `claim_local` and `taken_items` make SHALL be `git fetch --prune --quiet origin`, run again as `vcs/fetch-retries` runs a fetch, so a fetch that lost a race over a remote-tracking ref with a build in another worktree of the same clone goes on. When it still fails, the command SHALL exit 2, and the call return a git failure, with git's message from the last fetch, or `origin can't be reached` when `origin` can't be reached either.
 
 #### Scenario: a claim whose fetch loses a ref race
 - GIVEN a ready, unclaimed component `b`, and an executable `git` first on `PATH` that, for the first `fetch` naming `origin`, prints `error: cannot lock ref 'refs/remotes/origin/impl/a'` on stderr and exits 1, and runs the real `git` for every other call
@@ -820,17 +837,26 @@ Every fetch of `origin` that `clm-orchestrator` makes, in `clm next`, `clm claim
 - capability/work-concurrently
 
 ### Requirement: commands-in-crate
-`clm-orchestrator` SHALL offer each of `clm next`, `clm claim` and `clm proposals` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `orchestrator`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `orchestrator`'s own files and call `clm-orchestrator` itself, this call where the requirement states what a command prints or how it exits: none runs the `clm` binary (`commands-live-in-their-crates`).
+`clm-orchestrator` SHALL offer each of `clm next`, `clm claim` and `clm proposals` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` loads for it, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. A refusal SHALL be written to the error stream as `clm <command>: <why>`, with status 1; when `origin/main`'s specs don't load, each violation SHALL be written to the output stream as `clm check` writes one, with status 1 and nothing on the error stream; when git fails, `clm <command>: <error>` SHALL be written to the error stream, with status 2; and when the settings `crates/clm` loaded for `clm next` failed, `clm next: settings: <why>` SHALL be, with status 1. `--help` SHALL write the command's help to the output stream and return 0: for `clm next`, the options `--expiry <EXPIRY>`, default 4, and `--root <ROOT>`; for `clm claim`, the argument `<COMPONENT>` and the options `--fix <backlog/<slug>>`, `--expiry <EXPIRY>`, default 4, and `--root <ROOT>`; for `clm proposals`, `--component <COMPONENT>`, which may be given more than once, and `--root <ROOT>`.
 
 #### Scenario: a command called in a test
-- GIVEN a fixture repository, and a test in `orchestrator`'s own files
-- WHEN it calls `clm-orchestrator`'s call with the arguments of `clm next` and two buffers
+- GIVEN a fixture repository
+- WHEN `clm-orchestrator`'s call of `clm next` is called with that command's arguments and two buffers
 - THEN the buffers hold what `clm next` prints to standard output and to standard error there, and the call returns the status `clm next` exits with
 
 #### Scenario: arguments it can't parse
 - GIVEN the same call
-- WHEN a test passes it an option `clm next` doesn't have
-- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on
+- WHEN it is given an option `clm next` doesn't have, then `--wait`, then `--interval 5`
+- THEN each time it returns 2 with the usage error in the error buffer, and the caller's process goes on
+
+#### Scenario: how each command fails
+- GIVEN a fixture repository with a live claim `origin/impl/b`, a second whose `origin/main` holds a `specs/a/SPEC.md` that doesn't parse, and a directory that isn't a git repository
+- WHEN the call of `clm claim b` runs in the first; `clm claim c` in the second; `clm next`, `clm claim a` and `clm proposals` in the directory; and `clm next` in the first with settings that failed to load as `max_builds: bad`
+- THEN the first returns 1 with nothing on the output stream and `clm claim: ` then why on the error stream; the second 1 with a line beginning `specs/a/SPEC.md: ` on the output stream and nothing on the error stream; each in the directory 2 with nothing on the output stream and `clm <command>: ` then git's error on the error stream; and the last 1 with nothing on the output stream and exactly `clm next: settings: max_builds: bad` on the error stream
+
+#### Scenario: help
+- WHEN each of the three calls is given `--help`
+- THEN each returns 0 with nothing on the error stream, and on the output stream `Usage: clm next [OPTIONS]` with `--expiry <EXPIRY>`, `[default: 4]` and `--root <ROOT>`; `Usage: clm claim [OPTIONS] <COMPONENT>` with `--fix <backlog/<slug>>`, `--expiry <EXPIRY>` and `--root <ROOT>`; and `Usage: clm proposals [OPTIONS]` with `--component <COMPONENT>` and `--root <ROOT>`
 
 #### Serves
 - architecture/path-ownership
