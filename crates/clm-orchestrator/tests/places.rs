@@ -238,7 +238,14 @@ fn scenario_a_stale_place_that_cant_be_deleted() {
     let Some(taken) = taken else {
         return;
     };
-    assert!(taken.is_err(), "{taken:?}");
+    // It fails at the place it couldn't delete, before it tries to write one.
+    match taken {
+        Err(Error::Git(why)) => assert!(
+            why.starts_with(&format!("{}:", dir.join("a").display())),
+            "{why}"
+        ),
+        other => panic!("{other:?}"),
+    }
     assert_eq!(files(&dir), ["a", "c"]);
 }
 
