@@ -542,10 +542,17 @@ impl From<Error> for Failure {
     }
 }
 
-/// `git fetch` from [`REMOTE`], run again after a failure as [`fetch_retrying`] runs it; the
-/// last run's error when all fail, with no `git ls-remote`.
+/// `git fetch` from [`REMOTE`], run again after any failure with the waits [`fetch_retrying`]
+/// makes; the last run's error when all fail, with no `git ls-remote`.
 pub fn fetch(root: &Path) -> Result<(), Error> {
-    run_again(root, &["fetch", REMOTE], &FETCH_WAITS, std::thread::sleep).map(drop)
+    run_again(
+        root,
+        &["fetch", REMOTE],
+        &FETCH_WAITS,
+        std::thread::sleep,
+        |_| false,
+    )
+    .map(drop)
 }
 
 /// The waits between a fetch's three runs.
@@ -559,7 +566,8 @@ const WORKTREE_WAITS: [Duration; 2] = [Duration::from_millis(100), Duration::fro
 pub enum FetchError {
     /// The fetch kept failing and `REMOTE` can't be reached either.
     Offline,
-    /// The fetch kept failing though `REMOTE` answers: the last run's error.
+    /// The fetch kept failing though `REMOTE` answers, the last run's error; or `git` couldn't
+    /// be started in the root, an [`Error::Spawn`] whose command names it.
     Git(Error),
 }
 
@@ -585,21 +593,11 @@ pub fn fetch_retrying(root: &Path, args: &[&str]) -> Result<(), FetchError> {
 
 /// [`fetch_retrying`] with its waits made through `wait`, so a test sees them without the
 /// clock.
-fn fetch_waiting(
-    root: &Path,
-    args: &[&str],
-    mut wait: impl FnMut(Duration),
-) -> Result<(), FetchError> {
-    let mut result = git(root, args);
-    for &pause in &FETCH_WAITS {
-        if matches!(result, Ok(_) | Err(Error::Spawn { .. })) {
-            break;
-        }
-        wait(pause);
-        result = git(root, args);
-    }
-    let last = match result {
+fn fetch_waiting(root: &Path, args: &[&str], wait: impl FnMut(Duration)) -> Result<(), FetchError> {
+    let spawn = |e: &Error| matches!(e, Error::Spawn { .. });
+    let last = match run_again(root, args, &FETCH_WAITS, wait, spawn) {
         Ok(_) => return Ok(()),
+        // `root.display()` is lossy only for a path that isn't UTF-8, which CLM doesn't meet.
         Err(Error::Spawn { command, source }) => {
             let command = format!("{command} in {}", root.display());
             return Err(FetchError::Git(Error::Spawn { command, source }));
@@ -613,17 +611,21 @@ fn fetch_waiting(
 }
 
 /// `git <args>` in `root`, run again after a failure once per entry of `waits`, after
-/// `wait`ing that long; the first successful run's output, or the last run's error.
+/// `wait`ing that long, unless `final_error` accepts the failure; the first successful run's
+/// output, or the last run's error.
 fn run_again(
     root: &Path,
     args: &[&str],
     waits: &[Duration],
     mut wait: impl FnMut(Duration),
+    final_error: impl Fn(&Error) -> bool,
 ) -> Result<String, Error> {
     let mut result = git(root, args);
     for &pause in waits {
-        if result.is_ok() {
-            break;
+        match &result {
+            Ok(_) => break,
+            Err(e) if final_error(e) => break,
+            Err(_) => {}
         }
         wait(pause);
         result = git(root, args);
@@ -663,6 +665,7 @@ fn worktrees_waiting(root: &Path, wait: impl FnMut(Duration)) -> Result<Vec<Work
         &["worktree", "list", "--porcelain", "-z"],
         &WORKTREE_WAITS,
         wait,
+        |_| false,
     )?;
     let mut out = Vec::new();
     for field in list.split('\0') {

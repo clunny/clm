@@ -134,7 +134,12 @@ fn a_root_that_doesnt_exist_names_it_at_once() {
     assert!(matches!(err, FetchError::Git(_)), "{err}");
     let shown = err.to_string();
     assert!(shown.starts_with("git fetch origin in "), "{shown}");
-    assert!(shown.contains(missing.to_str().unwrap()), "{shown}");
+    // ENOENT is 2 on Linux and macOS, the systems CLM runs on.
+    let io = std::io::Error::from_raw_os_error(2);
+    assert_eq!(
+        shown,
+        format!("git fetch origin in {}: {io}", missing.display())
+    );
     assert!(!shown.contains("can't be reached"), "{shown}");
 }
 
