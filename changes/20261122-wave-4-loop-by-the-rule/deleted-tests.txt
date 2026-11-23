@@ -1,0 +1,15 @@
+DELETE crates/clm-checkpoint/src/command.rs::a_refusal_is_on_the_error_stream_with_1	clm wrap-up never refuses: every failure is a git failure with exit 2 (orchestrator.checkpoint/checkpoint); the test drives a branch of report no run reaches
+DELETE crates/clm-checkpoint/src/command.rs::violations_are_on_the_output_stream_with_1	clm wrap-up never fails for specs that don't load: main's violations are lines of its report (checkpoint-reports-unsafe-work); the test drives a branch of report no run reaches
+DELETE crates/clm-view/tests/view.rs::scenario_nested_nodes	duplicate: views.rs::scenario_nested_nodes and views.rs::scenario_tree_chart assert the same through spec_view and render
+DELETE crates/clm-view/tests/view.rs::scenario_a_removed_nodes_markers	duplicate: views.rs::scenario_a_removed_nodes_markers asserts the same and the SVG's count
+DELETE crates/clm-view/tests/view.rs::scenario_change_progress	duplicate: views.rs::scenario_change_progress asserts the same and more
+DELETE crates/clm-view/tests/view.rs::scenario_requirement_removed_later	duplicate: views.rs::scenario_requirement_removed_later asserts the same
+DELETE crates/clm-view/tests/view.rs::scenario_order	duplicate: views.rs::scenario_order asserts the same and the JSON order
+DELETE crates/clm-view/tests/view.rs::scenario_chain_weight	duplicate: views.rs::scenario_chain_weight asserts the same and more
+DELETE crates/clm-view/tests/view.rs::scenario_human_first	duplicate: views.rs::scenario_human_first asserts the same and more
+DELETE crates/clm-view/tests/view.rs::scenario_dependency_holds_nothing	duplicate: views.rs::scenario_dependency_holds_nothing asserts the same
+DELETE crates/clm-view/tests/view.rs::scenario_need_reaches_the_needed_requirements_item	duplicate: views.rs::scenario_need_reaches_the_needed_requirements_item asserts the same
+DELETE crates/clm-view/tests/view.rs::scenario_nothing_blocked	duplicate: views.rs::scenario_nothing_blocked and views.rs::scenario_blockers_nothing_blocked_line assert the same
+DELETE crates/clm-view-repo/tests/shared.rs::scenario_no_copy_of_the_remotes_name_or_the_clock	view.repo/shared-plumbing is cut: a scan of clm-view-repo's and clm-view's source text; reads-the-repository states and plumbing.rs proves the comparison with refs/remotes/origin/main
+DELETE crates/clm-replica/tests/host_neutral.rs::manifest_names_no_host_crate	a scan of Cargo.toml's text; replica/host-neutral is proven by the dependency tree (normal and build edges) and the wasm build, and no longer bars the named crates as dev-dependencies
+DELETE crates/clm-coverage/tests/status.rs::scenario_nothing_in_flight	the scenario moved to view/status-report, whose crates/clm-view/tests/status.rs::scenario_nothing_in_flight proves it; the report's text form it read goes (no-dead-code)
