@@ -564,7 +564,13 @@ fn prompt_for(
          (`code-fix-needs-a-written-rule`). An `ARCHITECTURE.md` entry, carried or the \
          project's own, is not such a requirement, since a test never cites an entry \
          (`human-layer-proof`): a bug whose behaviour only an architecture entry states is a \
-         bug no requirement states, unless its work is test plumbing. A `bug` or `deferred` \
+         bug no requirement states, unless its work is test plumbing. Two more cases lie \
+         outside that rule beside test plumbing, and each is fixed by component like a \
+         code-only bug, with `clm claim <component> --fix backlog/<slug>`, a `Resolves:` \
+         trailer and no test: a bug in the fixed text of a prompt or skill, which no \
+         requirement may state (`prompt-text-is-source`), and a code or doc comment that \
+         contradicts a Contract, Design, decision, `ARCHITECTURE.md` or `CAPABILITIES.md`. \
+         A `bug` or `deferred` \
          item whose work is test plumbing only is never a requirement of any component: \
          test plumbing is harness-only work, changing only the plumbing of the capability \
          suite and nothing a capability test observes, or the plumbing of a component's \
@@ -648,9 +654,11 @@ fn prompt_for(
          backlog edits it needs. Removing behaviour needs the human's yes \
          (`removal-needs-a-yes`), and `clm gate` lists each removal it can see as a \
          `gate/cut` line, which makes the branch need review: keep a scenario's name when \
-         you reword or move it, since a renamed one is listed as cut; put both sides of a \
-         moved clause in the change; name each sentence holding `SHALL` that a requirement \
-         loses under `## What the requirements no longer state` in `change.md`; and write \
+         you reword or move it, since a renamed one is listed as cut, and so is a scenario \
+         whose outcome changes under its name; put both sides of a moved clause in the \
+         change; name each sentence holding `SHALL` that a requirement loses, and each \
+         scenario whose outcome changes under its name, under `## What the requirements no \
+         longer state` in `change.md`; and write \
          each test a build is to delete into `changes/<id>/deleted-tests.txt`, one \
          `DELETE <file>::<name>` per line, among them the tests that cite a requirement the \
          change removes from a file another component owns, which `clm check` fails when no \

@@ -285,7 +285,8 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          `spec review`, since the folded changes need review. {GATE} The gate lists each removal it can see as a `gate/cut` line \
          (`removal-needs-a-yes`), which the human reads before approving: where you merge two \
          changes' edits to one requirement, keep every scenario's name, since a renamed one \
-         is listed as cut, add no cut of your own, and bring each change's \
+         is listed as cut, as is a scenario whose outcome changes under its name, add no cut \
+         of your own, and bring each change's \
          `deleted-tests.txt` over as it is. A `human-task` item the \
          fold adds is a burden: declare one for it in the `human_burdens` of the change it \
          concerns. Then the builder check (`blocked-by-backlog`) on the elements where \
