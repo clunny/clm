@@ -2205,9 +2205,23 @@ fn answered_question_is_deleted() {
     item(d, "q", "question");
     resolving(d, &["q"]);
     valid_delta(d);
-    let ops = apply(d, "c").unwrap();
+    let out = apply_printed(d);
     assert!(!d.join("backlog/q.md").exists());
-    assert!(ops.contains(&FileOp::Remove("backlog/q.md".into())));
+    assert_eq!(out.matches("  removed backlog/q.md\n").count(), 1, "{out}");
+}
+
+/// What `clm apply c` prints in `d`, once it has exited 0.
+fn apply_printed(d: &Path) -> String {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let status = clm_apply::apply_command(["c"].iter(), d, &|_| None, &mut out, &mut err);
+    let out = String::from_utf8(out).unwrap();
+    assert_eq!(
+        i32::from(status),
+        0,
+        "{out}{}",
+        String::from_utf8_lossy(&err)
+    );
+    out
 }
 
 #[test]
@@ -2246,11 +2260,8 @@ fn already_deleted_question_is_no_violation() {
     let d = dir.path();
     resolving(d, &["q"]);
     valid_delta(d);
-    let ops = apply(d, "c").unwrap();
-    assert!(
-        !ops.iter()
-            .any(|o| matches!(o, FileOp::Remove(p) if p.starts_with("backlog")))
-    );
+    let out = apply_printed(d);
+    assert!(!out.contains("backlog"), "{out}");
 }
 
 fn promoted(d: &Path, from: &str, resolves: &[&str]) {
