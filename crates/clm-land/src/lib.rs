@@ -35,7 +35,7 @@ pub use check_only::check_only;
 pub use command::{LandArgs, ReconnectArgs, land_command, reconnect_command};
 pub use land::land;
 pub use reconnect::reconnect;
-pub use runner::{CheckEnv, CheckRun, Step, run_check, run_check_as};
+pub use runner::{CheckEnv, CheckRun, Step, run_check_as};
 
 pub use clm_approval::{Env, Output};
 

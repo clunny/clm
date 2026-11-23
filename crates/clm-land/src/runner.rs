@@ -68,19 +68,6 @@ pub fn run_check_as(
     )
 }
 
-/// `run_check_as` under the name `clm land`, the runner's form from before it took a name,
-/// offered while `verify` moves off it (`land/runner-names-its-caller`).
-// clm:remove-by 20261122-the-check-runner-s
-pub fn run_check(
-    command: &str,
-    dir: &Path,
-    selection: Option<&Path>,
-    env: &CheckEnv,
-    log: Option<&Path>,
-) -> Result<CheckRun, Error> {
-    run_check_as(LAND, command, dir, selection, env, log)
-}
-
 /// The name `clm land` and `clm land --check-only` run the check under.
 pub(crate) const LAND: &str = "clm land";
 
@@ -95,9 +82,9 @@ pub(crate) fn places_of(root: &Path) -> Result<PathBuf, Error> {
     Ok(main.join(prefix).join(".clm"))
 }
 
-/// `run_check` with the clone's `places` known, the waiting line and the output said on `err`, taking
-/// the check lock, with a ticket of `rank`, unless it is `None`: a `--check-only` run in a
-/// build place takes none (`land/check-lock`).
+/// `run_check_as` with the clone's `places` known, the waiting line and the output said on
+/// `err`, taking the check lock, with a ticket of `rank`, unless it is `None`: a
+/// `--check-only` run in a build place takes none (`land/check-lock`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_in(
     places: &Path,
