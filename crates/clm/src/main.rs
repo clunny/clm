@@ -1237,16 +1237,17 @@ fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
     let mut shown = 0;
     let mut catching = None;
     let announce = |outcome: &clm_verify::Outcome| {
+        // Only a run whose check passed goes on to the pass, and the window runs to the call's
+        // return, so the outcome line alone says when to start catching. The handlers go in
+        // before the line is printed, so a caller that signals on reading it is caught.
+        if outcome.line.starts_with("verify passed ") {
+            catching = Some(stop_signal::install());
+        }
         println!("{}", outcome.line);
         for note in &outcome.notes {
             eprintln!("clm verify: {note}");
         }
         shown = outcome.notes.len();
-        // Only a run whose check passed goes on to the pass, and the window runs to the call's
-        // return, so the outcome line alone says when to start catching.
-        if outcome.line.starts_with("verify passed ") {
-            catching = Some(stop_signal::install());
-        }
     };
     let call = clm_verify::Call::standard(&stop_signal::STOP);
     let result = clm_verify::verify_with(root, request, &clm_config::process_env, &call, announce);
