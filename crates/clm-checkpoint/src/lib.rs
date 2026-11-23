@@ -11,8 +11,9 @@ use clm_git::git;
 mod command;
 pub use command::{WrapUpArgs, wrap_up_command};
 
+use clm_git::REMOTE;
 use clm_orchestrator::Error;
-use clm_orchestrator::{DEFAULT_EXPIRY_HOURS, REMOTE, SweepOutcome, Swept, queue_from_refs};
+use clm_orchestrator::{DEFAULT_EXPIRY_HOURS, SweepOutcome, Swept, queue_from_refs};
 
 /// What `clm wrap-up` prints, and whether the session can end.
 pub(crate) struct Report {
