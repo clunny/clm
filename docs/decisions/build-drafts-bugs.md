@@ -16,6 +16,6 @@ Refines `backlog-triage`: bug drafts start from `/clm:build` as well as from `/c
 
 Rejected:
 - **Leave review drafts for the next `/clm:triage`.** No ask at the end of a build, but its *Approvals* asks for each one separately, unfolded.
-- **`clm next` prints draft lines beside components.** One deterministic queue, but it changes `orchestrator/next`'s contract, which `orchestrator/next-wait` and `orchestrator/queue-matches-next` rely on. Worth revisiting once this has run for a while.
+- **`clm next` prints draft lines beside components.** One deterministic queue, but it changes `orchestrator/next`'s contract, which `orchestrator/next-wait` (cut by `20261122-wave-4-orchestrator-by-the-rule`) and `orchestrator/queue-matches-next` rely on. Worth revisiting once this has run for a while.
 - **`build` offers the bugs at the end.** Still one question every run, which is what the change removes.
 - **A setting, on by default.** It would add a key and a guide section for a choice `/clm:triage` already gives.

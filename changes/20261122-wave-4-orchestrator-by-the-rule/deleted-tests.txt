@@ -1,0 +1,15 @@
+DELETE crates/clm-orchestrator/tests/git_layer.rs::covered_by_the_scan	orchestrator/git-through-layer is cut: vcs/one-git-layer reads every crate for the processes it starts
+DELETE crates/clm-orchestrator/tests/git_layer.rs::scenario_no_copy_of_the_remote_name_or_the_clock	orchestrator/shared-plumbing is cut: a scan of source for the remote's name and a clock
+DELETE crates/clm-orchestrator/tests/orchestrator.rs::scenario_one_remote_name	orchestrator/shared-plumbing is cut, and the REMOTE re-export it compared with clm-git's goes with it
+DELETE crates/clm-orchestrator/tests/says_component.rs::string_literals_hold_no_old_word	says-component's scan of string literals is cut; the messages stay stated and proven by claiming an unknown component
+DELETE crates/clm-orchestrator/tests/says_component.rs::scanner_spots_old_words	the unit test of the cut scan's word finder
+DELETE crates/clm-orchestrator/tests/orchestrator.rs::scenario_next_wait_wait_refused	orchestrator/next-wait is cut: --wait and --interval are cases of commands-in-crate's "arguments it can't parse", proven through next_command
+DELETE crates/clm-orchestrator/tests/claim_local.rs::scenario_no_other_public_claim_call	claim-local's sentence on what is public is cut: a scan of source; the Contract lists the calls offered
+DELETE crates/clm-run/tests/says_component.rs::string_literals_hold_no_old_word	orchestrator.run/says-component is cut: a scan of the crate's string literals for retired words (wave 1's yes)
+DELETE crates/clm-run/tests/says_component.rs::scanner_spots_old_words_across_lines	the unit test of that scan's scanner, cut with it
+DELETE crates/clm-run/tests/says_component.rs::a_build_prompt_says_component	repeats run.rs::scenario_a_build_prompt_says_component through prompt(), no Contract call
+DELETE crates/clm-run/tests/pin.rs::no_eval_in_the_crate	a scan of src/ for the text plugin/evals; no reserved words shows the behaviour
+DELETE crates/clm-run/tests/prompt.rs::scenario_no_check_command	repeats run.rs::scenario_no_check_command through prompt(), no Contract call
+DELETE crates/clm-run/tests/prompt.rs::scenario_blocked_requirement_left_out	run.rs::scenario_blocked_requirement_left_out and scenario_needing_requirement_left_out assert as much through the command
+DELETE crates/clm-triage/tests/says_component.rs::the_printed_text_says_component	orchestrator.triage/says-component is cut: a scan of the crate's string literals for retired words (wave 1's yes); the prompt values it named are stated by draft and proven through draft_command
+DELETE crates/clm-triage/tests/says_component.rs::the_scanner_reports_old_words_and_spares_ids	the unit test of that scan's scanner, cut with it
