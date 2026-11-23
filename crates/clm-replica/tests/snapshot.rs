@@ -74,7 +74,7 @@ fn fixture_repo_matches_clm() {
             n["status"].as_str().unwrap().to_string(),
             format!("{current}/{}", reqs.len()),
         ];
-        assert!(status.nodes.contains(&row), "{row:?} in\n{status}");
+        assert!(status.nodes.contains(&row), "{row:?} in\n{status:?}");
     }
     let a_row = status.nodes.iter().find(|r| r[0] == "a").unwrap();
     assert_eq!(a_row[2], "1/1");
