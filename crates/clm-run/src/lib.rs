@@ -457,7 +457,7 @@ pub fn prompt(job: &Job) -> String {
              checks run; and end with `git status` showing no change to a tracked file. List \
              each mutant, with the test that failed or the test you added, under `## Review` in \
              the pull request body.\n\n",
-            " a spot-check's runs of a mutant included,",
+            ", a spot-check's runs of a mutant included,",
         )
     };
     // Before any test run, a build prepares its fresh worktree (`prompt-setup`).
@@ -487,7 +487,8 @@ pub fn prompt(job: &Job) -> String {
     let ship = format!(
         "Commit everything, then {sync}. Then {again} confirm \
          `clm gate --base origin/main` prints `code`, or `spec` for a branch that changes no \
-         code file, such as one whose only change deletes a resolved backlog item or is \
+         code file, such as one whose only change deletes a backlog item a live change lists in \
+         `resolves` or is \
          `clm rebase`'s archive move, which lands on checks (`three-routes-onto-main`), and push with \
          `clm branch push`. Write the whole pull request body with `Write` to \
          `{PR_BODY}` (outside git, like the logs) and open the branch's pull request with \
@@ -608,7 +609,7 @@ pub fn prompt(job: &Job) -> String {
          it leaves.\n\n\
          {spot_checks}\
          Your build's slot is {slot}. The project's tests run beside other builds' tests on this \
-         host (`tests-run-concurrently`), so every test command you run by hand,{mutants} runs \
+         host (`tests-run-concurrently`), so every test command you run by hand{mutants} runs \
          with `CLM_SLOT={slot}` set before the \
          command{check_slot}. A test you write binds no fixed port, writes no \
          fixed path outside its checkout and the system's temporary directory, and starts no \
@@ -650,7 +651,9 @@ pub fn prompt(job: &Job) -> String {
          mutation pass found that the requirement's tests notice no change to its code \
          (`verify/files-unproven`): mend each such test so it fails when the code it proves \
          breaks, or say in the resolving commit why the test is sound, and delete the item's \
-         `backlog/<slug>.md` in a commit whose trailer block holds `Resolves: backlog/<slug>`. \
+         `backlog/<slug>.md` in a commit whose trailer block holds `Resolves: backlog/<slug>`, \
+         on a branch that changes your component's files, since only there does the gate take \
+         that deletion as part of a code branch (`code-fix-resolves-bug`). \
          A `question`, `human-task` \
          or `idea` item you can't delete that way goes under `## Backlog` in the pull request body, \
          as any other backlog edit you can't make.\n\n\
@@ -992,24 +995,24 @@ pub fn setup(
         None => Err(std::io::Error::other("lost the command's exit status")),
     }
     .map_err(cant_run)?;
-    if unwritten {
-        return Err(Error::Git(format!(
-            "can't write what `{}` printed",
-            build.setup
-        )));
-    }
-    if status.success() {
-        return Ok(String::new());
-    }
     let how = match (status.code(), signal(&status)) {
-        (Some(code), _) => format!("exit {code}, status {code}"),
-        (None, Some(n)) => format!("killed by signal {n}"),
-        (None, None) => "no exit status".to_string(),
+        _ if status.success() => None,
+        (Some(code), _) => Some(format!("exit {code}, status {code}")),
+        (None, Some(n)) => Some(format!("killed by signal {n}")),
+        (None, None) => Some("no exit status".to_string()),
     };
-    Err(Error::Refused(format!(
-        "setup failed: `{}` ended with {how}",
-        build.setup
-    )))
+    let failed = how
+        .as_ref()
+        .map(|how| format!("setup failed: `{}` ended with {how}", build.setup));
+    match (unwritten, failed) {
+        (true, failed) => Err(Error::Git(format!(
+            "can't write what `{}` printed{}",
+            build.setup,
+            failed.map(|f| format!("; {f}")).unwrap_or_default()
+        ))),
+        (false, Some(failed)) => Err(Error::Refused(failed)),
+        (false, None) => Ok(String::new()),
+    }
 }
 
 /// What `setup` hears from its command: output on stream `0` (stdout) or `1` (stderr), a
@@ -1780,7 +1783,7 @@ fn not_ours_to_change(
         return Ok(HashMap::new());
     }
     let (treeish, tree) = extracted;
-    let scratch = tempfile::TempDir::new().map_err(|e| Error::Refused(format!("temp dir: {e}")))?;
+    let scratch = tempfile::TempDir::new().map_err(|e| Error::Git(format!("temp dir: {e}")))?;
     let index = scratch.path().join("index");
     let with = |env: &[(&str, &std::ffi::OsStr)], args: &[&str], stdin: Option<&[u8]>| {
         let options = clm_git::Options { stdin, env };
