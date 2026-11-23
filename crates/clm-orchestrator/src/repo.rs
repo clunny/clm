@@ -1,5 +1,5 @@
-//! The commands that work on a checkout and its `origin`: `next` and `claim`, the `claims`
-//! rows of `clm status`, and the git helpers the other commands share.
+//! The commands that work on a checkout and its `origin`: `next` and `claim`, the claim
+//! refs `clm status` reads, and the git helpers the other commands share.
 
 use clm_git::{REMOTE, git, now};
 use std::collections::BTreeMap;

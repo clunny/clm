@@ -2,7 +2,7 @@
 //!
 //! The queue ([`queue_from_refs`]) and what holds backlog items ([`taken_from_refs`]) need
 //! neither git nor a checkout. Everything that does (the `next`, `claim` and `proposals`
-//! commands, `taken_items`, and the `claims` rows of `clm status`) sits behind the default
+//! commands, `taken_items`, and the claim refs `clm status` reads) sits behind the default
 //! feature `git`, so with default features off the crate builds for
 //! `wasm32-unknown-unknown` (`orchestrator-builds-for-wasm`).
 

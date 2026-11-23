@@ -14,8 +14,8 @@ use crate::queue::queue_from_refs;
 /// `P5` when none gives one.
 pub fn land_priority(root: &Path, branch: &str, base: &str, head: &str) -> Result<Priority, Error> {
     let tree = clm_git::extract_tree(root, base)?;
-    // A backlog item that doesn't parse gives no priority; only the specs failing to load
-    // fails the call.
+    // A backlog item that doesn't parse gives no priority; any other violation of the
+    // base's model fails the call.
     let (graph, violations) = clm_model::load(tree.path());
     let violations: Vec<_> = violations
         .into_iter()
