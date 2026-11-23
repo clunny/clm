@@ -1533,6 +1533,10 @@ fn scenario_cap_reached() {
     take(&r, "a");
     let stderr = refused(&r, &f, "b", &[("CLM_MAX_BUILDS", Path::new("1"))], 3);
     assert!(stderr.contains("1 of max_builds = 1 in use"), "{stderr}");
+    assert!(
+        !r.work.join(".clm/prompts/b.md").exists(),
+        "no prompt written"
+    );
     assert!(remote_tip(&r, "impl/b").is_none(), "no claim");
     assert!(local_tip(&r, "impl/b").is_none(), "no branch");
     assert_eq!(place_names(&r), ["a"]);
