@@ -307,12 +307,14 @@ fn scenario_status_words() {
     };
     write(d, "specs/a/SPEC.md", &one("active"));
     write(d, "specs/b/SPEC.md", &one("unbuilt"));
+    write(d, "specs/c/SPEC.md", &one("deprecated"));
     let report = checkout_status(d).unwrap();
     assert_eq!(
-        report.nodes[..2],
+        report.nodes[..3],
         [
             vec!["a".to_string(), "active".into(), "0/1".into()],
             vec!["b".to_string(), "unbuilt".into(), "0/1".into()],
+            vec!["c".to_string(), "deprecated".into(), "0/1".into()],
         ]
     );
 }

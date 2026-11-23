@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use clm_model::{Change, ChangeStatus, Graph, Layer, STATUS_TERMS};
+use clm_model::{CHANGE_STATUS_TERMS, Change, ChangeStatus, Graph, Layer, STATUS_TERMS};
 
 use crate::coverage::{Marker, State, cited_entry, report};
 use crate::pending::entries_node;
@@ -25,8 +25,18 @@ pub struct StatusReport {
     pub changes: Vec<(String, Vec<Row>)>,
 }
 
+/// The word CLM writes for `value`, from its term list, which names every value
+/// (`term-lists`).
+fn word<T: PartialEq>(terms: &[(T, &str)], value: &T) -> String {
+    let (_, word) = terms
+        .iter()
+        .find(|(t, _)| t == value)
+        .expect("a term list names every value");
+    (*word).to_string()
+}
+
 fn status_name(status: ChangeStatus) -> String {
-    format!("{status:?}").to_lowercase()
+    word(CHANGE_STATUS_TERMS, &status)
 }
 
 /// The order groups come in; the rest follow, sorted.
@@ -258,11 +268,7 @@ pub fn status_report(graph: &Graph, markers: &[Marker]) -> StatusReport {
             let done = all.iter().filter(|r| current(&r.id)).count();
             vec![
                 node.id.clone(),
-                STATUS_TERMS
-                    .iter()
-                    .find(|(s, _)| *s == node.frontmatter.status)
-                    .map_or("", |(_, word)| word)
-                    .to_string(),
+                word(STATUS_TERMS, &node.frontmatter.status),
                 format!("{done}/{total}"),
             ]
         })
