@@ -3,8 +3,7 @@ use std::process::Command;
 
 #[test]
 fn scenario_wasm_build() {
-    // req:view/view-library@645f94e9
-    // req:view/queue-view@ba511898
+    // req:view/view-library@2bb194e8
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     // A separate target dir, so the build doesn't wait on the outer `cargo test`'s lock.
     let out = Command::new(env!("CARGO"))

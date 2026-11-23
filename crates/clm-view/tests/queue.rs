@@ -16,14 +16,24 @@ fn model() -> QueueView {
     QueueView {
         view: "queue",
         loop_state: Loop::Held { renewed_minutes: 3 },
-        running: vec![Running {
-            name: "build:a".into(),
-            kind: "build".into(),
-            model: "sonnet".into(),
-            round: 1,
-            minutes: 12,
-            taken_over: false,
-        }],
+        running: vec![
+            Running {
+                name: "build:a".into(),
+                kind: "build".into(),
+                model: "sonnet".into(),
+                round: 1,
+                minutes: 12,
+                taken_over: false,
+            },
+            Running {
+                name: "build:c".into(),
+                kind: "build".into(),
+                model: "opus".into(),
+                round: 2,
+                minutes: 61,
+                taken_over: true,
+            },
+        ],
         next: vec![Next {
             name: "build:b".into(),
             kind: "build".into(),
@@ -47,28 +57,44 @@ fn text(m: QueueView, format: Format) -> String {
 
 #[test]
 fn scenario_chart_sections() {
-    // req:view/queue-view@ba511898
+    // req:view/queue-view@c56afc3f
     let out = text(model(), Format::Text);
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines[0], "commit abc1234");
     assert_eq!(lines[1], "loop held, renewed 3m ago");
     assert_eq!(lines[2], "running");
+    // Each entry's name, then its cells, at least two spaces apart.
+    let cells = |line: &str| -> Vec<String> {
+        line.split("  ")
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .map(String::from)
+            .collect()
+    };
     assert!(lines[3].starts_with("  build:a"), "{}", lines[3]);
-    assert!(lines[3].contains("sonnet") && lines[3].contains("12m"));
-    assert_eq!(lines[4], "next up");
-    assert!(lines[5].starts_with("  build:b"), "{}", lines[5]);
-    assert!(lines[5].contains("P2") && lines[5].contains("waits for a place"));
-    assert_eq!(lines[6], "waiting on you");
-    assert!(lines[7].starts_with("  fold:x"), "{}", lines[7]);
-    assert!(lines[7].contains("say \"approve x\""));
-    assert_eq!(lines[8], "waiting on work");
-    assert_eq!(lines[9], "  none");
-    assert_eq!(lines.len(), 10);
+    assert_eq!(cells(lines[3]), ["build:a", "sonnet", "round 1", "12m"]);
+    assert!(lines[4].starts_with("  build:c"), "{}", lines[4]);
+    assert_eq!(
+        cells(lines[4]),
+        ["build:c", "opus", "round 2", "1h", "taken over"]
+    );
+    assert_eq!(lines[5], "next up");
+    assert!(lines[6].starts_with("  build:b"), "{}", lines[6]);
+    assert_eq!(cells(lines[6]), ["build:b", "P2", "waits for a place"]);
+    assert_eq!(lines[7], "waiting on you");
+    assert!(lines[8].starts_with("  fold:x"), "{}", lines[8]);
+    assert_eq!(
+        cells(lines[8]),
+        ["fold:x", "fold batch x", "since 1h", "say \"approve x\""]
+    );
+    assert_eq!(lines[9], "waiting on work");
+    assert_eq!(lines[10], "  none");
+    assert_eq!(lines.len(), 11);
 }
 
 #[test]
 fn scenario_waiting_on_you_highlighted() {
-    // req:view/queue-view@ba511898
+    // req:view/queue-view@c56afc3f
     const AMBER: &str = "\x1b[33m";
     let ansi = text(model(), Format::Ansi);
     let fold = ansi.lines().find(|l| l.contains("fold:x")).unwrap();
@@ -105,15 +131,42 @@ fn scenario_waiting_on_you_highlighted() {
     let heading = ansi.lines().find(|l| l.contains("waiting on you")).unwrap();
     assert!(!heading.contains(AMBER), "{heading:?}");
     assert!(fold.ends_with("\x1b[0m"), "{fold:?}");
-    let mut empty = model();
-    empty.waiting_on_you.clear();
-    let ansi = text(empty, Format::Ansi);
+    assert!(ansi.contains("\x1b[33mtaken over\x1b[0m"), "{ansi:?}");
+    let mut quiet = model();
+    quiet.waiting_on_you.clear();
+    quiet.running[1].taken_over = false;
+    let ansi = text(quiet, Format::Ansi);
     assert!(!ansi.contains(AMBER), "{ansi:?}");
+    // With the loop not held, its line is amber; with the escapes removed, the text chart.
+    let mut not_held = model();
+    not_held.loop_state = Loop::NotHeld;
+    let ansi = text(not_held.clone(), Format::Ansi);
+    assert!(
+        ansi.lines().any(|l| l == "\x1b[33mloop not held\x1b[0m"),
+        "{ansi:?}"
+    );
+    let stripped: String = {
+        let mut out = String::new();
+        let mut chars = ansi.chars();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' {
+                for e in chars.by_ref() {
+                    if e == 'm' {
+                        break;
+                    }
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    };
+    assert_eq!(stripped, text(not_held, Format::Text));
 }
 
 #[test]
 fn scenario_ansi_is_the_text_with_colour() {
-    // req:view/queue-view@ba511898
+    // req:view/queue-view@c56afc3f
     let ansi = text(model(), Format::Ansi);
     let mut plain = String::new();
     let mut chars = ansi.chars();
@@ -134,7 +187,7 @@ fn scenario_ansi_is_the_text_with_colour() {
 
 #[test]
 fn scenario_loop_line_and_empty_sections() {
-    // req:view/queue-view@ba511898
+    // req:view/queue-view@c56afc3f
     let empty = |loop_state| QueueView {
         view: "queue",
         loop_state,
@@ -171,9 +224,10 @@ fn scenario_loop_line_and_empty_sections() {
 
 #[test]
 fn scenario_running_entry_held_by_a_taken_over_session() {
-    // req:view/queue-view@ba511898
+    // req:view/queue-view@c56afc3f
     let mut m = model();
     m.running[0].taken_over = true;
+    m.running.truncate(1);
     m.waiting_on_work.push(WaitingOnWork {
         name: "build:c".into(),
         kind: "build".into(),
@@ -188,7 +242,7 @@ fn scenario_running_entry_held_by_a_taken_over_session() {
 
 #[test]
 fn scenario_json_is_the_model() {
-    // req:view/queue-view@ba511898
+    // req:view/queue-view@c56afc3f
     let out = text(model(), Format::Json);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["view"], "queue");
@@ -202,7 +256,7 @@ fn scenario_json_is_the_model() {
 
 #[test]
 fn scenario_entries_keep_the_models_order_and_show_their_fields() {
-    // req:view/queue-view@ba511898
+    // req:view/queue-view@c56afc3f
     let mut m = model();
     m.running.insert(
         0,
@@ -233,7 +287,7 @@ fn scenario_entries_keep_the_models_order_and_show_their_fields() {
 
 #[test]
 fn scenario_lines_fit_the_width() {
-    // req:view/queue-view@ba511898
+    // req:view/queue-view@c56afc3f
     let out = render(&View::Queue(model()), Format::Text, 20, None);
     assert!(out.lines().all(|l| l.chars().count() <= 20), "{out}");
 }

@@ -476,7 +476,7 @@ fn oversized_marks_the_svg_label_and_outline() {
 
 #[test]
 fn scenario_claimed_node() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["p", "q"])),
@@ -500,7 +500,7 @@ fn scenario_claimed_node() {
 
 #[test]
 fn hours_are_rounded_to_the_nearest() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["p"])),
@@ -513,11 +513,30 @@ fn hours_are_rounded_to_the_nearest() {
     let v = json(&flight_view(&g, &[], &refs, NOW, EXPIRY));
     assert_eq!(v["nodes"][0]["claim"]["pushed_hours_ago"], 1);
     assert_eq!(v["nodes"][0]["claim"]["lapses_in_hours"], 3);
+    // A half rounds up.
+    let refs = [clm_orchestrator::ClaimRef {
+        node: "a".into(),
+        tip_time: NOW - 1800,
+        merged: false,
+    }];
+    let v = json(&flight_view(&g, &[], &refs, NOW, EXPIRY));
+    assert_eq!(v["nodes"][0]["claim"]["pushed_hours_ago"], 1);
+    assert_eq!(v["nodes"][0]["claim"]["lapses_in_hours"], 4);
+    // A push after the current time was 0 hours ago.
+    let refs = [clm_orchestrator::ClaimRef {
+        node: "a".into(),
+        tip_time: NOW + 60,
+        merged: false,
+    }];
+    let v = json(&flight_view(&g, &[], &refs, NOW, EXPIRY));
+    assert_eq!(v["nodes"][0]["state"], "claimed", "{v:#}");
+    assert_eq!(v["nodes"][0]["claim"]["pushed_hours_ago"], 0);
+    assert_eq!(v["nodes"][0]["claim"]["lapses_in_hours"], 4);
 }
 
 #[test]
 fn scenario_change_progress() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x", "y"])),
@@ -541,7 +560,7 @@ fn scenario_change_progress() {
 
 #[test]
 fn a_complete_change_and_a_marker_citing_a_removed_requirement() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -571,7 +590,7 @@ fn a_complete_change_and_a_marker_citing_a_removed_requirement() {
 
 #[test]
 fn each_change_is_exactly_its_change_progress() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -608,7 +627,7 @@ fn each_change_is_exactly_its_change_progress() {
 
 #[test]
 fn scenario_requirement_removed_later() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -627,7 +646,7 @@ fn scenario_requirement_removed_later() {
 
 #[test]
 fn an_implementing_change_leaves_out_a_requirement_a_later_change_removed() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -654,7 +673,7 @@ fn an_implementing_change_leaves_out_a_requirement_a_later_change_removed() {
 
 #[test]
 fn an_unapplied_change_counts_requirements_the_spec_does_not_hold_yet() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -669,7 +688,7 @@ fn an_unapplied_change_counts_requirements_the_spec_does_not_hold_yet() {
 
 #[test]
 fn a_change_lists_no_marker_for_a_removed_requirement_the_spec_still_holds() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -688,7 +707,7 @@ fn a_change_lists_no_marker_for_a_removed_requirement_the_spec_still_holds() {
 
 #[test]
 fn flight_leaves_out_done_changes_and_the_archive() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -729,7 +748,7 @@ fn ordered() -> clm_model::Graph {
 
 #[test]
 fn scenario_order() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = ordered();
     let out = text(&View::Flight(flight_view(&g, &[], &[], NOW, EXPIRY)));
     let pos = |s: &str| out.find(s).unwrap_or_else(|| panic!("no {s} in {out}"));
@@ -743,7 +762,7 @@ fn scenario_order() {
 
 #[test]
 fn changes_in_a_group_sort_by_priority_then_id() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x", "y", "z"])),
@@ -766,18 +785,30 @@ fn changes_in_a_group_sort_by_priority_then_id() {
 
 #[test]
 fn flight_chart_names_every_state_and_the_claim() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     // req:view/view-command@c4a4df22
-    // req:view/says-component@f1f9079e
+    let twelve: Vec<String> = (0..12).map(|i| format!("s{i:02}")).collect();
+    let twelve: Vec<&str> = twelve.iter().map(String::as_str).collect();
+    let d = specd("", &twelve).replace(
+        "depends_on: []\n",
+        "depends_on: []\npaths: [\"src/d/**\"]\n",
+    );
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["p"])),
         ("specs/b/SPEC.md", &needs(&[("q", &["a/p"])])),
         ("specs/c/SPEC.md", &specd("", &["r"])),
-        ("specs/d/SPEC.md", &specd("", &["s"])),
+        ("specs/d/SPEC.md", &d),
         ("backlog/q.md", &item("question", "c/r")),
+        ("changes/e/change.md", &change("applied", "")),
+        (
+            "changes/e/deltas/n.md",
+            "---\ncomponent: n\n---\n## REMOVED Requirements\n### Requirement: x\n",
+        ),
     ]);
-    let view = View::Flight(flight_view(&g, &[], &[claim("a", 1)], NOW, EXPIRY));
+    // `n/x` is held by no component, and a test in a file `d` owns still cites it.
+    let markers = [cite_in("n/x", "src/d/t.rs", 3)];
+    let view = View::Flight(flight_view(&g, &markers, &[claim("a", 1)], NOW, EXPIRY));
     let out = text(&view);
     let line = |id: &str| {
         out.lines()
@@ -795,10 +826,29 @@ fn flight_chart_names_every_state_and_the_claim() {
         line("c").contains("blocked") && line("c").contains("backlog/q"),
         "{out}"
     );
+    assert!(line("b").contains("by a/p"), "{out}");
+    assert!(line("c").contains("by backlog/q"), "{out}");
     assert!(line("d").contains("ready"), "{out}");
-    assert!(out.starts_with("flight"), "{out}");
-    assert!(out.contains("4 components pending"), "{out}");
-    assert!(out.contains("1 claimed"), "{out}");
+    // Ten cells, then `…`, then the count: twelve unbuilt and the obsolete marker.
+    let bar: String = line("d")
+        .chars()
+        .skip_while(|c| !"▓░✕".contains(*c))
+        .take_while(|c| *c != ' ')
+        .collect();
+    assert_eq!(bar.chars().count(), 11, "{bar:?} in {out}");
+    assert!(bar.ends_with('…'), "{bar:?} in {out}");
+    assert!(line("d").contains("… 13 pending"), "{out}");
+    let first = out.lines().next().unwrap();
+    assert!(first.starts_with("flight"), "{out}");
+    assert!(
+        first.contains("4 components pending (1 claimed, 1 ready, 2 blocked)"),
+        "{out}"
+    );
+    let e = out
+        .lines()
+        .find(|l| l.starts_with("    e "))
+        .unwrap_or_else(|| panic!("no e in {out}"));
+    assert!(e.contains("1 obsolete"), "{out}");
     assert!(!out.contains('\u{1b}'), "{out}");
 }
 
@@ -817,7 +867,7 @@ fn node_and_change_lines(out: &str) -> (Vec<&str>, Vec<&str>) {
 
 #[test]
 fn scenario_node_lines() {
-    // req:view/flight-component-lines@ace29367
+    // req:view/flight-component-lines@92827b9d
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -851,7 +901,7 @@ fn scenario_node_lines() {
 
 #[test]
 fn scenario_long_id() {
-    // req:view/flight-component-lines@ace29367
+    // req:view/flight-component-lines@92827b9d
     let long = "a".repeat(60);
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -873,7 +923,7 @@ fn scenario_long_id() {
 
 #[test]
 fn scenario_nothing_pending() {
-    // req:view/flight-component-lines@ace29367
+    // req:view/flight-component-lines@92827b9d
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1559,7 +1609,7 @@ fn svg_draws_the_bar_and_outlines_a_pending_node_in_its_state() {
 
 #[test]
 fn the_flight_bar_writes_each_pending_state_as_its_own_symbol() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     // req:view/view-command@c4a4df22
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),

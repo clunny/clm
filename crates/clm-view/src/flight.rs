@@ -243,7 +243,7 @@ pub(crate) fn by_state(counts: &BTreeMap<String, usize>) -> String {
 }
 
 /// The chart: a totals line, the pending nodes, then the live changes by group. The node
-/// lines' shape is pinned (`flight-node-lines`): under `components`, exactly one line per pending
+/// lines' shape is pinned (`flight-component-lines`): under `components`, exactly one line per pending
 /// component starting `  <id> ` (or `  none`), then `changes`; the `clm-panel` plugin finds a
 /// node's line by that prefix.
 pub(crate) fn chart(view: &FlightView) -> Vec<Line> {
