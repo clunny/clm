@@ -19,6 +19,56 @@ base: { contract: "1e029fbceb2fa76d" }
 
 ## MODIFIED Requirements
 
+### Requirement: resulting-graph <!-- base: ded55ba9cead51d0 -->
+Once every delta of the change applies, whatever the change's status, validation SHALL check the spec graph the change would leave, the one `resulting` returns for it (`resulting-graph-call`): each component the change writes parsed from its new `SPEC.md` text as loading parses it (`model/graph-check`), with the keys live changes declare (`declared-frontmatter-keys`), at the path it is written to and with no assets, which no rule across components reads; each component it removes gone; each backlog item `clm apply` deletes with the change gone; every other component and backlog item, and the changes and decisions, as they are. It SHALL run the model's graph check on the current graph, with every item, and on that graph with the backlog's `workaround` items left out (the graph `resulting` returns keeps those the change doesn't resolve, `answered-questions`), and the component parser on the current text of each existing component the change writes. A flag's `requirement` holds the version a build built (`model/parse-backlog`), which only the current graph gives: a flag on a requirement the change rewrites or removes stays valid while the change is pending (`workaround-flags`). Each violation of the resulting graph, from the parser or the graph check, that the current graph doesn't have (the same path, rule and message) SHALL be a violation under `apply/resulting-graph`, with the model's path and the message ``change `<id>` would leave: <model rule>: <model message>``; nothing SHALL be written. Violations the current graph already has are not reported again, so `clm check`, which validates every `proposed` or `approved` change against a graph that may have violations of its own, reports each once. A violation whose message the change alters, such as a dependency cycle it lengthens, counts as new.
+
+#### Scenario: required node depends on a node made optional
+- GIVEN component `a`, component `b` with `depends_on: [a]`, and change `x` whose delta for `a` sets `optional: true` in its `## MODIFIED Frontmatter`, with the correct base
+- WHEN `clm apply x` runs
+- THEN it exits 1 naming `apply/resulting-graph`, `model/optional-nodes`, `b` and `a`, and nothing is written
+
+#### Scenario: dependant left behind
+- GIVEN component `a`, component `b` with `depends_on: [a]`, and change `x` whose only delta is a valid removal of `a`
+- WHEN `clm apply x` runs
+- THEN it exits 1 naming `apply/resulting-graph`, `model/dependency-dag`, `b` and `a`, and `specs/a/SPEC.md` still exists
+
+#### Scenario: backlog blocks a removed requirement
+- GIVEN component `a` with requirements `x` and `y`, a backlog item whose `blocks` names `a/y`, and change `c` whose delta for `a` removes `y` with its base
+- WHEN `clm apply c` runs
+- THEN it exits 1 naming `apply/resulting-graph`, `model/parse-backlog` and `a/y`, and nothing is written
+
+#### Scenario: answered question blocks a removed requirement
+- GIVEN component `a` with requirements `x` and `y`, `backlog/q.md` with `kind: question` and `blocks: [a/y]`, and a proposed change `c` whose `resolves` is `[q]` and whose delta for `a` removes `y` with its base
+- WHEN `clm check` runs, then `clm apply c`
+- THEN `clm check` reports nothing under `apply/resulting-graph`, and `clm apply c` exits 0, removes `a/y` and deletes `backlog/q.md`
+
+#### Scenario: resolved bug blocks a removed requirement
+- GIVEN component `a` with requirements `x` and `y`, `backlog/b.md` with `kind: bug` and `blocks: [a/y]`, and change `c` whose `resolves` is `[b]` and whose delta for `a` removes `y` with its base
+- WHEN `clm apply c` runs
+- THEN it exits 1 naming `apply/resulting-graph`, `model/parse-backlog` and `a/y`, and `backlog/b.md` still exists
+
+#### Scenario: answered question already blocks no requirement
+- GIVEN component `a` with requirement `x`, `backlog/q.md` with `kind: question` and `blocks: [a/gone]`, naming no requirement, and change `c` whose `resolves` is `[q]` with a valid delta that modifies `x`
+- WHEN `clm apply c` runs
+- THEN it exits 0, `backlog/q.md` no longer exists, and the graph then loads with no violation
+
+#### Scenario: violation already present
+- GIVEN component `b` with `depends_on: [gone]`, naming no component, and a proposed change `x` whose valid delta modifies `a`'s Design
+- WHEN `clm check` runs
+- THEN it reports `b`'s `depends_on` once, under `model/dependency-dag`, and nothing under `apply/resulting-graph`
+
+#### Scenario: workaround flag on a rewritten requirement
+- GIVEN component `a` whose requirement `x` is at version `3fa2c9d1`, `backlog/workaround-a-x-1.md` with `kind: workaround` and `requirement: a/x@3fa2c9d1`, and a proposed change `c` whose delta for `a` modifies `x`'s text with its base
+- WHEN `clm check` runs, then `clm apply c`, then `clm check` again
+- THEN the first `clm check` reports nothing, `clm apply c` exits 0 and writes `x`'s new text, and the second `clm check` reports `backlog/workaround-a-x-1.md` under `model/parse-backlog` with `x`'s new version
+
+#### Needs
+- model/graph-check
+
+#### Serves
+- capability/catch-drift
+- architecture/deterministic-enforcement
+
 ### Requirement: answered-questions <!-- base: baab55dd671a06ea -->
 `clm apply` SHALL delete `backlog/<slug>.md` for each `<slug>` the change's `resolves` names whose item has `kind: question` or `kind: workaround`, among the files it removes. The spec it applies answers a question, so the requirements the item `blocks` are released when the spec branch lands (`requirement-blocks`), not when the change is archived; and it settles a flag, so a flag on a requirement the change rewrites or removes, whose version `model/parse-backlog` would no longer accept once the change is applied, leaves with it, and the build of the new text starts with no flag counted against it (`workaround-flags`). It SHALL delete no item of another kind, and a `resolves` entry naming no item in `backlog/` SHALL delete nothing and be no violation. Each deleted item SHALL be among the files it prints as removed (`change-status`), as `removed backlog/<slug>.md`.
 
