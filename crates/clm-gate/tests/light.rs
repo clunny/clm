@@ -352,7 +352,7 @@ fn scenario_what_a_spec_part_would_need() {
     assert_eq!(parts(&outcome(d)), (Kind::Light, false, false));
 }
 
-// req:gate/rules-version@ad92df64
+// req:gate/rules-version@c811ad2f
 #[test]
 fn scenario_a_light_branch_under_each_version() {
     let dir = repo(Some("[]"), false);
@@ -366,7 +366,9 @@ fn scenario_a_light_branch_under_each_version() {
     let rules: Vec<&str> = old.violations.iter().map(|v| v.rule).collect();
     assert_eq!(rules, ["gate/classify"]);
     assert!(!old.violations[0].message.contains("light"), "{old:?}");
-    let now = clm_gate::evaluate_by(d, "main", &s, false, clm_gate::RULES).unwrap();
-    assert_eq!((now.kind, now.review), (Kind::Light, false));
-    assert!(now.violations.is_empty(), "{now:?}");
+    for version in [7, clm_gate::RULES] {
+        let now = clm_gate::evaluate_by(d, "main", &s, false, version).unwrap();
+        assert_eq!((now.kind, now.review), (Kind::Light, false), "{version}");
+        assert!(now.violations.is_empty(), "{now:?}");
+    }
 }
