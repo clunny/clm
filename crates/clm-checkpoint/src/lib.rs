@@ -66,6 +66,8 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Failed> {
             done,
             why: match e {
                 Error::Git(why) | Error::Refused(why) => why,
+                // No call wrap-up makes loads specs and fails for them: `origin/main`'s
+                // violations are lines of its report. Kept whole should one ever do.
                 Error::Spec(violations) => violations
                     .iter()
                     .map(clm_check::format)
@@ -407,11 +409,7 @@ fn verify(
 /// `place <path>: <reason>` for the human. Neither line makes the checkpoint incomplete; a
 /// sweep that fails is a git failure.
 fn free_places(root: &Path) -> Result<Vec<String>, Error> {
-    let swept =
-        clm_orchestrator::free_stale_places(root, DEFAULT_EXPIRY_HOURS).map_err(|e| match e {
-            Error::Refused(why) => Error::Git(why),
-            e => e,
-        })?;
+    let swept = clm_orchestrator::free_stale_places(root, DEFAULT_EXPIRY_HOURS)?;
     Ok(swept
         .into_iter()
         .filter_map(|Swept { place, outcome }| {
@@ -517,6 +515,7 @@ fn delete_on_origin<'a>(
     // branch that went or moved after it told the push what it held. Any other line git
     // flags is a failure.
     let mut stale = BTreeSet::new();
+    let mut unknown = false;
     for line in stderr.lines().filter(|l| l.trim_start().starts_with('!')) {
         let rest = line.trim_start().trim_start_matches('!').trim_start();
         let branch = ["[rejected]", "[remote rejected]"]
@@ -529,34 +528,41 @@ fn delete_on_origin<'a>(
             Some(b) if gone.iter().any(|(g, _)| g.as_str() == b) => {
                 stale.insert(b.to_string());
             }
-            // What the push did isn't known, so it claims to have deleted nothing.
-            _ => return (Vec::new(), failed()),
+            _ => unknown = true,
         }
     }
-    if stale.is_empty() {
-        return (Vec::new(), failed());
-    }
-    // Every branch git didn't flag, the push deleted.
+    // What `origin` holds now. The push isn't atomic, so a branch git didn't flag that
+    // `origin` no longer has is one it deleted, whatever failed after; when `origin` can't be
+    // read, the push claims to have deleted nothing.
+    let mut args = vec!["ls-remote".to_string(), REMOTE.into()];
+    args.extend(gone.iter().map(|(b, _)| format!("refs/heads/{b}")));
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let now: BTreeMap<String, String> = match git(root, &args) {
+        Ok(now) => now
+            .lines()
+            .filter_map(|l| {
+                let (sha, name) = l.split_once(char::is_whitespace)?;
+                let name = name.trim().strip_prefix("refs/heads/")?;
+                Some((name.to_string(), sha.to_string()))
+            })
+            .collect(),
+        Err(e) => return (Vec::new(), Err(e.into())),
+    };
     let deleted: Vec<&String> = gone
         .iter()
         .map(|(b, _)| *b)
-        .filter(|b| !stale.contains(b.as_str()))
+        .filter(|b| !stale.contains(b.as_str()) && !now.contains_key(b.as_str()))
         .collect();
-    for (b, tip) in gone.iter().filter(|(b, _)| stale.contains(b.as_str())) {
-        let now = match git(root, &["ls-remote", REMOTE, &format!("refs/heads/{b}")]) {
-            Ok(now) => now,
-            Err(e) => return (deleted, Err(e.into())),
-        };
-        // Still at the tip judged: the refusal is git's. Gone, or moved on: nothing of ours
-        // to delete, and nothing to say.
-        let ref_name = format!("refs/heads/{b}");
-        let at_tip = now.lines().any(|l| {
-            let mut f = l.split_whitespace();
-            f.next() == Some(tip.as_str()) && f.next() == Some(ref_name.as_str())
-        });
-        if at_tip {
-            return (deleted, failed());
-        }
+    if unknown || stale.is_empty() {
+        return (deleted, failed());
+    }
+    // A refused branch still at the tip judged: the refusal is git's. Gone, or moved on:
+    // nothing of ours to delete, and nothing to say.
+    if gone
+        .iter()
+        .any(|(b, tip)| stale.contains(b.as_str()) && now.get(b.as_str()) == Some(*tip))
+    {
+        return (deleted, failed());
     }
     (deleted, Ok(()))
 }

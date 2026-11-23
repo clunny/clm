@@ -125,36 +125,20 @@ fn scenario_arguments_it_cant_parse() {
 #[test]
 fn scenario_help() {
     // req:orchestrator.checkpoint/commands-in-crate@e7afbb10
+    // The help `clm wrap-up --help` prints, line for line.
+    let help = "Remove merged work, report work that isn't safe on origin, and say whether the \
+                session can end\n\
+                \n\
+                Usage: clm wrap-up [OPTIONS]\n\
+                \n\
+                Options:\n      \
+                --root <ROOT>  Repository root, or any worktree of it (default: the CLM \
+                repository holding the current directory)\n  \
+                -h, --help         Print help\n";
     let dir = TempDir::new().unwrap();
     for flag in ["--help", "-h"] {
         let (code, out, err) = call(&[flag], dir.path(), &|_| None);
-        let lines: Vec<&str> = out.lines().collect();
-        assert_eq!(
-            lines.get(..3),
-            Some(
-                &[
-                    "Remove merged work, report work that isn't safe on origin, and say \
-                     whether the session can end",
-                    "",
-                    "Usage: clm wrap-up [OPTIONS]",
-                ][..]
-            ),
-            "{flag}: {out}"
-        );
-        // The option `clm wrap-up --help` lists, with its own help.
-        assert!(
-            lines
-                .iter()
-                .any(|l| l.trim_start().starts_with("--root <ROOT>")
-                    && l.contains("Repository root, or any worktree of it")),
-            "{flag}: {out}"
-        );
-        assert!(
-            lines
-                .iter()
-                .any(|l| l.trim_start().starts_with("-h, --help")),
-            "{out}"
-        );
+        assert_eq!(out, help, "{flag}");
         assert_eq!(err, "", "{flag}");
         assert_eq!(code, 0, "{flag}");
     }
@@ -986,6 +970,8 @@ fn violations_on_main_are_reported() {
     // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@b8ec860c
     // "main's specs don't load": nothing is judged complete or done on that graph.
     let r = repo();
+    // Change `x` is complete on the graph as it loads (see "complete change").
+    cite(&r.work, "all.rs", &["a/p", "a/q", "b/r", "c/s"]);
     write(&r.work, "specs/d/SPEC.md", "no frontmatter\n");
     push_main(&r.work, "break main");
     // A claim whose `backlog/q.md` isn't in `origin/main`: done, on a graph that loads.
@@ -1353,7 +1339,10 @@ fn scenario_main_checkout_that_cant_reach_main() {
     let (code, out) = checkpoint(&r.work);
     assert_eq!(git(&r.work, &["branch", "--show-current"]).trim(), "spec/y");
     assert!(exists(&r.work, "refs/heads/spec/y"), "{out}");
-    assert!(!out.lines().any(|l| l == "removed spec/y"), "{out}");
+    // No line about it: only `origin`'s landed `spec/y` is removed.
+    let named: Vec<&str> = out.lines().filter(|l| l.contains("spec/y")).collect();
+    assert_eq!(named, ["removed origin/spec/y"], "{out}");
+    assert!(out.ends_with("wrap-up ok\n"), "{out}");
     assert_eq!(code, Some(0), "{out}");
 
     // (b) nothing else holds `main`, and the local `main` has a commit `origin/main` lacks:

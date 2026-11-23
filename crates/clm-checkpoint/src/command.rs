@@ -37,9 +37,9 @@ struct WrapUpLine {
 /// `clm wrap-up` with `args`, the strings the command line gives after the command's name, in
 /// `root` unless `--root` overrides it. Writes what the command prints to `out` and `err` and
 /// returns its exit status: 0 with `wrap-up ok`, 1 with `wrap-up incomplete`, 2 when git, the
-/// ledger's audit or the sweep of the places failed, or for arguments it can't parse. Checkpoint reads no variable
-/// of its own: `git`, which it runs, inherits the process's environment, so `_env` is the
-/// lookup every command's call takes.
+/// ledger's audit or the sweep of the places failed, or for arguments it can't parse.
+/// Checkpoint reads no variable of its own: `git`, which it runs, inherits the process's
+/// environment, so `_env` is the lookup every command's call takes.
 pub fn wrap_up_command<I, T>(
     args: I,
     root: &Path,
