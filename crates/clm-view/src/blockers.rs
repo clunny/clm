@@ -52,29 +52,70 @@ enum Target {
     Cycle(String),
 }
 
+/// A pending line by its node and ID.
+type Key<'a> = (&'a str, &'a str);
+
+fn key(line: &Pending) -> Key<'_> {
+    (line.node.as_str(), line.id.as_str())
+}
+
+/// The lines that form cycles of needs, a violation the library still takes, each with the
+/// cycle's name: the first, in byte order, of the nodes of the lines that reach one another
+/// through the waits `waits` gives, so overlapping cycles are one.
+fn cycles(lines: &[Pending]) -> BTreeMap<Key<'_>, String> {
+    let index: BTreeMap<Key, usize> = lines.iter().enumerate().map(|(i, l)| (key(l), i)).collect();
+    let next: Vec<Vec<usize>> = lines
+        .iter()
+        .map(|l| {
+            waits(lines, l)
+                .into_iter()
+                .filter_map(|w| index.get(&key(w)).copied())
+                .collect()
+        })
+        .collect();
+    // The lines each line reaches through one wait or more.
+    let reach: Vec<BTreeSet<usize>> = (0..lines.len())
+        .map(|i| {
+            let mut seen = BTreeSet::new();
+            let mut stack = next[i].clone();
+            while let Some(j) = stack.pop() {
+                if seen.insert(j) {
+                    stack.extend(&next[j]);
+                }
+            }
+            seen
+        })
+        .collect();
+    let mut out = BTreeMap::new();
+    for i in (0..lines.len()).filter(|i| reach[*i].contains(i)) {
+        let name = reach[i]
+            .iter()
+            .filter(|j| reach[**j].contains(&i))
+            .map(|j| lines[*j].node.as_str())
+            .min()
+            .unwrap_or(lines[i].node.as_str());
+        out.insert(key(&lines[i]), name.to_string());
+    }
+    out
+}
+
 /// Where the release of pending line `line`, which a node waits on, will come from
-/// (`requirement-needs`, `check.coverage/wait-lines`): its node when nothing blocks it, else
-/// each of its blockers in turn, its items and what the lines `waits` gives for it reach. A
-/// wait is followed to the line it names, never by the requirement's ID alone, which an
-/// obsolete requirement's several lines share. `path` holds the lines on this walk, by node
-/// and ID: a wait that comes back to one of them is a cycle of needs, which the model reports
-/// as a violation, and its target is the cycle. `seen` holds every line already walked, so a
-/// line another branch reached is walked once, its targets already in `out`.
+/// (`requirement-needs`, `check.coverage/wait-lines`): its node when nothing blocks it, its
+/// cycle when it is on a cycle of needs (`cycles`), else each of its blockers in turn, its
+/// items and what the lines `waits` gives for it reach. A wait is followed to the line it
+/// names, never by the requirement's ID alone, which an obsolete requirement's several lines
+/// share. `seen` holds the lines already walked, so a line two branches reach is walked once,
+/// its targets already in `out`.
 fn need_targets<'a>(
     line: &'a Pending,
     lines: &'a [Pending],
-    path: &mut Vec<(&'a str, &'a str)>,
-    seen: &mut BTreeSet<(&'a str, &'a str)>,
+    cycles: &BTreeMap<Key<'a>, String>,
+    seen: &mut BTreeSet<Key<'a>>,
     out: &mut BTreeSet<Target>,
 ) {
-    let here = (line.node.as_str(), line.id.as_str());
-    if let Some(at) = path.iter().position(|p| *p == here) {
-        let first = path[at..]
-            .iter()
-            .map(|(node, _)| *node)
-            .min()
-            .unwrap_or(here.0);
-        out.insert(Target::Cycle(first.to_string()));
+    let here = key(line);
+    if let Some(name) = cycles.get(&here) {
+        out.insert(Target::Cycle(name.clone()));
         return;
     }
     if !seen.insert(here) {
@@ -89,11 +130,9 @@ fn need_targets<'a>(
             .iter()
             .map(|slug| Target::Item(format!("backlog/{slug}"))),
     );
-    path.push(here);
     for next in waits(lines, line) {
-        need_targets(next, lines, path, seen, out);
+        need_targets(next, lines, cycles, seen, out);
     }
-    path.pop();
 }
 
 /// The `blockers` view; its arguments are [`crate::flight_view`]'s.
@@ -106,6 +145,7 @@ pub fn blockers_view(
 ) -> BlockersView {
     let queue = queue_from_refs(graph, markers, refs, now, expiry_hours);
     let lines = pending(graph, markers);
+    let cycles = cycles(&lines);
     let states: BTreeMap<&str, &State> = queue
         .nodes
         .iter()
@@ -131,13 +171,7 @@ pub fn blockers_view(
                                 .filter(|p| p.node == n.node && p.waits_on.iter().any(|w| w == id))
                             {
                                 for line in waits(&lines, own).into_iter().filter(|p| p.id == *id) {
-                                    need_targets(
-                                        line,
-                                        &lines,
-                                        &mut Vec::new(),
-                                        &mut seen,
-                                        &mut targets,
-                                    );
+                                    need_targets(line, &lines, &cycles, &mut seen, &mut targets);
                                 }
                             }
                         }
@@ -150,9 +184,10 @@ pub fn blockers_view(
         })
         .collect();
 
-    // Root (as named) -> held node -> path from the root's side.
-    let mut roots: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
-    let mut root_kind: BTreeMap<String, (String, String, bool)> = BTreeMap::new();
+    // Root -> held node -> path from the root's side. A root is keyed by what it is, so a
+    // cycle named by a node that is also a root for its other lines is a root of its own.
+    let mut roots: BTreeMap<Target, BTreeMap<String, Vec<String>>> = BTreeMap::new();
+    let mut root_kind: BTreeMap<Target, (String, String, bool)> = BTreeMap::new();
     for &start in edges.keys() {
         // Breadth-first along the waits, so the first path to a root is the shortest.
         let mut queue_: VecDeque<(Target, Vec<String>)> = VecDeque::new();
@@ -178,13 +213,15 @@ pub fn blockers_view(
                 // A cycle holds up every node whose chain reaches it but the one it is
                 // named by.
                 Target::Cycle(id) if id == start => {}
-                Target::Cycle(id) => {
-                    root_kind
-                        .entry(id.clone())
-                        .or_insert(("node".into(), "blocked".into(), false));
+                Target::Cycle(_) => {
+                    root_kind.entry(here.clone()).or_insert((
+                        "node".into(),
+                        "blocked".into(),
+                        false,
+                    ));
                     let via: Vec<String> = path.iter().rev().cloned().collect();
                     roots
-                        .entry(id.clone())
+                        .entry(here.clone())
                         .or_default()
                         .entry(start.to_string())
                         .or_insert(via);
@@ -198,11 +235,11 @@ pub fn blockers_view(
                         None => "unknown",
                     };
                     root_kind
-                        .entry(id.clone())
+                        .entry(here.clone())
                         .or_insert(("node".into(), state.into(), false));
                     let via: Vec<String> = path.iter().rev().cloned().collect();
                     roots
-                        .entry(id.clone())
+                        .entry(here.clone())
                         .or_default()
                         .entry(start.to_string())
                         .or_insert(via);
@@ -213,14 +250,14 @@ pub fn blockers_view(
                         .and_then(|slug| graph.backlog.get(slug))
                         .map(|b| b.frontmatter.kind);
                     let human = matches!(kind, Some(BacklogKind::Question | BacklogKind::Human));
-                    root_kind.entry(item.clone()).or_insert((
+                    root_kind.entry(here.clone()).or_insert((
                         "backlog".into(),
                         kind.map_or_else(|| "missing".to_string(), |k| k.to_string()),
                         human,
                     ));
                     let via: Vec<String> = path.iter().rev().cloned().collect();
                     roots
-                        .entry(item.clone())
+                        .entry(here.clone())
                         .or_default()
                         .entry(start.to_string())
                         .or_insert(via);
@@ -231,8 +268,9 @@ pub fn blockers_view(
 
     let mut out: Vec<Root> = roots
         .into_iter()
-        .map(|(root, held)| {
-            let (kind, state, waits_on_human) = root_kind[&root].clone();
+        .map(|(target, held)| {
+            let (kind, state, waits_on_human) = root_kind[&target].clone();
+            let (Target::Node(root) | Target::Item(root) | Target::Cycle(root)) = target;
             let mut holds: Vec<Held> = held
                 .into_iter()
                 .map(|(node, via)| Held { node, via })

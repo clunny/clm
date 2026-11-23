@@ -162,6 +162,13 @@ fn scenario_waiting_on_you_highlighted() {
         out
     };
     assert_eq!(stripped, text(not_held, Format::Text));
+    for (mode, line) in [(Stop::Drain, "drain"), (Stop::Now, "now")] {
+        let mut stopping = model();
+        stopping.loop_state = Loop::Stop { mode };
+        let ansi = text(stopping, Format::Ansi);
+        let want = format!("\x1b[33mstop requested: {line}\x1b[0m");
+        assert!(ansi.lines().any(|l| l == want), "{ansi:?}");
+    }
 }
 
 #[test]

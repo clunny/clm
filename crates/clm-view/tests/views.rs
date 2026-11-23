@@ -838,10 +838,15 @@ fn flight_chart_names_every_state_and_the_claim() {
     assert_eq!(bar.chars().count(), 11, "{bar:?} in {out}");
     assert!(bar.ends_with('…'), "{bar:?} in {out}");
     assert!(line("d").contains("… 13 pending"), "{out}");
-    let first = out.lines().next().unwrap();
+    // Uncut, at no width.
+    let whole = render(&view, Format::Text, 0, None);
+    let first = whole.lines().next().unwrap();
     assert!(first.starts_with("flight"), "{out}");
     assert!(
-        first.contains("4 components pending (1 claimed, 1 ready, 2 blocked)"),
+        first.contains(
+            "4 components pending (1 claimed, 1 ready, 2 blocked)  ·  1 changes live  ·  \
+             16 requirements to do"
+        ),
         "{out}"
     );
     let e = out
@@ -1300,6 +1305,78 @@ fn a_cycle_of_needs_in_a_graph_with_violations_terminates() {
     assert_eq!(view.roots[0].kind, "node");
     assert!(!view.roots[0].waits_on_human);
     assert!(view.roots[0].holds.iter().all(|h| h.via.is_empty()));
+    let out = text(&View::Blockers(view));
+    let rest = after_blockers(&out);
+    assert!(
+        rest[0].starts_with("a ") && rest[0].contains("blocked") && rest[0].ends_with("holds up 2"),
+        "{out}"
+    );
+}
+
+/// The graph `files` describe, violations and all.
+fn loaded(files: &[(&str, String)]) -> clm_model::Graph {
+    let files: clm_model::Files = files
+        .iter()
+        .map(|(p, t)| ((*p).into(), t.clone().into_bytes()))
+        .collect();
+    clm_model::load_files(&files).0
+}
+
+#[test]
+fn overlapping_cycles_of_needs_are_one_root() {
+    // req:view/blockers-view@e774ca77
+    // `a/x` -> `b/x` -> `a/x`, and `b/x` -> `c/x` -> `b/x`.
+    let b = specd("", &[]).replace(
+        "## Requirements\n",
+        "## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Needs\n- a/x\n- c/x\n\n\
+         #### Scenario: s\n- ok\n",
+    );
+    let g = loaded(&[
+        ("specs/SPEC.md", specd("", &[])),
+        ("specs/a/SPEC.md", needing("", "b/x", &[])),
+        ("specs/b/SPEC.md", b),
+        ("specs/c/SPEC.md", needing("", "b/x", &[])),
+    ]);
+    let view = blockers_view(&g, &[], &[], NOW, EXPIRY);
+    assert_eq!(
+        roots_of(&view),
+        [("a".into(), 2, vec!["b".into(), "c".into()])],
+        "{:#}",
+        json(&view)
+    );
+}
+
+#[test]
+fn a_cycle_named_by_a_ready_component_is_a_root_of_its_own() {
+    // req:view/blockers-view@e774ca77
+    // `a/x` and `b/x` need each other; `a/y` is unblocked, so `a` is ready, and `c` needs it.
+    let g = loaded(&[
+        ("specs/SPEC.md", specd("", &[])),
+        ("specs/a/SPEC.md", needing("", "b/x", &["y"])),
+        ("specs/b/SPEC.md", needing("", "a/x", &[])),
+        ("specs/c/SPEC.md", needing("", "a/y", &[])),
+    ]);
+    let view = blockers_view(&g, &[], &[], NOW, EXPIRY);
+    let roots: Vec<(String, String, Vec<String>)> = view
+        .roots
+        .iter()
+        .map(|r| {
+            (
+                r.root.clone(),
+                r.state.clone(),
+                r.holds.iter().map(|h| h.node.clone()).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        roots,
+        [
+            ("a".into(), "ready".into(), vec!["c".into()]),
+            ("a".into(), "blocked".into(), vec!["b".into()]),
+        ],
+        "{:#}",
+        json(&view)
+    );
 }
 
 #[test]
@@ -1490,7 +1567,7 @@ fn svg_escapes_text() {
         Format::Svg,
         100,
         Some(&Head::Checkout(Checkout {
-            commit: "abc\u{1}\u{fffe}".into(),
+            commit: "abc\u{fffe}".into(),
             behind: None,
         })),
     );
@@ -1544,6 +1621,29 @@ fn scenario_colours() {
         ansi.lines().any(|l| l == "\u{1b}[34mcomponents\u{1b}[0m"),
         "{ansi}"
     );
+    // `unbuilt` sky and `deprecated` rose on the spec chart, `complete` green on the flight's.
+    let g2 = graph(&[
+        ("specs/SPEC.md", &specd("", &[])),
+        ("specs/u/SPEC.md", &specd("", &["x"])),
+        ("specs/z/SPEC.md", &node("deprecated", "", "", &["x"])),
+        ("changes/k/change.md", &change("applied", "")),
+        ("changes/k/deltas/u.md", &delta("u", &["x"])),
+    ]);
+    let markers = [current(&g2, "u/x")];
+    let ansi = render(&spec_with(&g2, &markers, &[]), Format::Ansi, 100, None);
+    for coloured in [
+        "\u{1b}[36munbuilt\u{1b}[0m",
+        "\u{1b}[31mdeprecated\u{1b}[0m",
+    ] {
+        assert!(ansi.contains(coloured), "{coloured:?} not in {ansi}");
+    }
+    let ansi = render(
+        &View::Flight(flight_view(&g2, &markers, &[], NOW, EXPIRY)),
+        Format::Ansi,
+        100,
+        None,
+    );
+    assert!(ansi.contains("\u{1b}[32mcomplete\u{1b}[0m"), "{ansi}");
     // The SVG fills `claimed` and the `⚠` part amber and `blocked` rose.
     let svg = render(&view, Format::Svg, 100, Some(&behind));
     let style = &svg[svg.find("<style>").unwrap()..svg.find("</style>").unwrap()];

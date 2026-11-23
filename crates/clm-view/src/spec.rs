@@ -130,8 +130,8 @@ fn status_word(status: Status) -> String {
     STATUS_TERMS
         .iter()
         .find(|(s, _)| *s == status)
-        .map_or("", |(_, w)| w)
-        .to_string()
+        .map(|(_, w)| w.to_string())
+        .expect("STATUS_TERMS lists every status")
 }
 
 /// The `spec` view of `graph` with the markers of its code. `oversized` is the size
