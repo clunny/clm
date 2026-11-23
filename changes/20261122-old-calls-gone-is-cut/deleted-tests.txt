@@ -1,0 +1,1 @@
+DELETE crates/clm-approval/tests/old_calls_gone.rs::the_old_calls_are_gone	land.approval/old-calls-gone is cut: it states only that two calls the Contract no longer offers are gone
