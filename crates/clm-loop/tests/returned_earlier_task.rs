@@ -35,7 +35,7 @@ fn a_late_context_stop_of_a_landed_build() {
         !actions.iter().any(|l| l.contains("build:a")),
         "{actions:?}"
     );
-    assert_eq!(fx.ran("run --finish a"), 0);
+    assert_eq!(fx.finishes("a"), 0);
     let a = fx.file().run("build:a").unwrap().clone();
     assert_eq!(a.state, RunState::Running);
     assert_eq!(a.task_id.as_deref(), Some("t-2"));
@@ -99,7 +99,7 @@ fn a_late_work_stop_before_the_new_run_is_launched() {
     let a = fx.file().run("build:a").unwrap().clone();
     assert_eq!(a.state, RunState::Planned);
     assert!(a.stops.is_empty(), "{:?}", a.stops);
-    assert_eq!(fx.ran("run --finish a"), 0);
+    assert_eq!(fx.finishes("a"), 0);
 }
 
 #[test]
@@ -211,7 +211,7 @@ fn whatever_the_cause() {
             "{cause}: {actions:?}"
         );
     }
-    assert_eq!(fx.ran("run --finish a"), 0);
+    assert_eq!(fx.finishes("a"), 0);
     let file = fx.file();
     assert!(!file.conditions.disk);
     assert_eq!(file.conditions.limit_until, None);

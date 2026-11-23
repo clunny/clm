@@ -96,6 +96,8 @@ fn orphan(fx: &Fixture, name: &str, kind: Kind) {
 #[test]
 fn a_refused_relaunch() {
     // req:orchestrator.loop/loop-start@7540e54b
+    // req:orchestrator.loop/return-rules@374e0702: the finish of a planned run whose `clm run`
+    // refused passes no `--returned`, which `ran`'s exact match proves.
     let fx = Fixture::new();
     orphan(&fx, "build:a", Kind::Build);
     fx.set("run-exit-a", "1");
