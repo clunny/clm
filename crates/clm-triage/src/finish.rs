@@ -8,9 +8,10 @@
 use std::env;
 use std::path::Path;
 
+use clm_git::REMOTE;
 use clm_git::git;
 use clm_model::parse_change_frontmatter;
-use clm_orchestrator::{PlaceFile, REMOTE, free_place, places};
+use clm_orchestrator::{PlaceFile, free_place, places};
 
 use crate::{Error, fetch_origin};
 

@@ -7,9 +7,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use clm_git::REMOTE;
 use clm_git::git;
 use clm_model::{ChangeStatus, parse_change_frontmatter, split_frontmatter};
-use clm_orchestrator::REMOTE;
 
 use crate::draft::prompts_dir;
 use crate::{Error, GATE, PR_BODY, fetch_origin};

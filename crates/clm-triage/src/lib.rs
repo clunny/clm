@@ -18,12 +18,13 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use clm_git::REMOTE;
 use clm_git::git;
 use clm_model::{
     BacklogItem, BacklogKind, ChangeStatus, Graph, Priority, parse_change_frontmatter,
 };
 pub use clm_orchestrator::Error;
-use clm_orchestrator::{Holding, REMOTE, taken_items};
+use clm_orchestrator::{Holding, taken_items};
 
 pub use command::{
     DraftArgs, DraftSettings, Env, IntakeArgs, TriageArgs, draft_command, intake_command,
@@ -262,11 +263,8 @@ fn designed(root: &Path, id: &str) -> bool {
 /// Fetches `origin` as `clm draft`, `--finish` and `--fold` do, trying again over a ref
 /// race with a build in another worktree (`draft-fetch-retries-race`).
 pub(crate) fn fetch_origin(root: &Path) -> Result<(), Error> {
-    clm_git::fetch_retrying(
-        root,
-        &["fetch", "--prune", "--quiet", clm_orchestrator::REMOTE],
-    )
-    .map_err(|e| Error::Git(e.to_string()))
+    clm_git::fetch_retrying(root, &["fetch", "--prune", "--quiet", REMOTE])
+        .map_err(|e| Error::Git(e.to_string()))
 }
 
 /// The graph of `origin/main`'s tree as of the last fetch, as `clm next` reads it.
