@@ -78,7 +78,7 @@ fn cite(root: &Path, file: &str, ids: &[&str]) {
 
 #[test]
 fn invalid_graph_prints_violations() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = base();
     // Valid, `clm status` exits 0.
     status(dir.path());

@@ -49,7 +49,7 @@ fn repo() -> TempDir {
 
 #[test]
 fn violations_and_unknown_nodes_exit_1() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = repo();
     let d = dir.path();
     let (code, out) = clm_pending(d, Some("nope"));
@@ -67,7 +67,7 @@ fn violations_and_unknown_nodes_exit_1() {
 
 #[test]
 fn scenario_removed_node_from_the_cli() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = repo();
     let d = dir.path();
     write(

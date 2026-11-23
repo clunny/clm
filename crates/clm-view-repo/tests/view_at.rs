@@ -419,6 +419,7 @@ fn pending_no_such_commit() {
 #[test]
 fn pending_names_its_commit_beside_violations_and_narrows_alike() {
     // req:view.repo/pending-names-its-commit@3e612c59
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     let head = git(d, &["rev-parse", "HEAD"])[..7].to_string();

@@ -290,7 +290,7 @@ fn scenario_checkout_current() {
 
 #[test]
 fn scenario_width() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = TempDir::new().unwrap();
     let long = "n".repeat(60);
     write(dir.path(), "specs/SPEC.md", ROOT);
@@ -331,7 +331,7 @@ fn scenario_width() {
 
 #[test]
 fn scenario_unknown_view() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = two_nodes();
     let stderr = |out: &Output| String::from_utf8(out.stderr.clone()).unwrap();
     let out = clm(dir.path(), &["view", "everything"]);
@@ -348,15 +348,22 @@ fn scenario_unknown_view() {
     let out = clm(dir.path(), &["view", "queue", "--format", "svg"]);
     assert_eq!(out.status.code(), Some(2));
     assert!(stderr(&out).contains("svg"), "{}", stderr(&out));
-    let out = clm(dir.path(), &["view", "spec", "--width", "0"]);
-    assert_eq!(out.status.code(), Some(2));
-    assert!(stderr(&out).contains("--width"), "{}", stderr(&out));
-    assert!(out.stdout.is_empty(), "{out:?}");
+    for width in ["0", "70000"] {
+        let out = clm(dir.path(), &["view", "spec", "--width", width]);
+        assert_eq!(out.status.code(), Some(2), "--width {width}");
+        assert!(stderr(&out).contains("--width"), "{}", stderr(&out));
+        assert!(out.stdout.is_empty(), "{out:?}");
+    }
+    // Both ends of the range are taken.
+    for width in ["1", "65535"] {
+        let out = clm(dir.path(), &["view", "spec", "--width", width]);
+        assert_eq!(out.status.code(), Some(0), "--width {width}: {out:?}");
+    }
 }
 
 #[test]
 fn violations_exit_1() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = two_nodes();
     write(dir.path(), "specs/c/SPEC.md", "---\ntitle: C\n---\n");
     let out = clm(dir.path(), &["view", "spec"]);
@@ -371,7 +378,7 @@ fn violations_exit_1() {
 
 #[test]
 fn scenario_claimed_node_and_command_matches_library() {
-    // req:view.repo/arguments-and-exit@b12cc5de
+    // req:view.repo/arguments-and-exit@c4b91292
     let dir = two_nodes();
     init(dir.path());
     claim_ref(dir.path(), "a", 1);
