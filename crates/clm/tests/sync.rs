@@ -189,55 +189,6 @@ fn files_reconsider_item(clm_toml: &str) -> bool {
         .any(|l| l == "filed backlog/reconsider-a-x.md")
 }
 #[test]
-fn scenario_a_skipped_proposals_warning_names_the_command_as_run() {
-    // No marker: `clm/rebase-warnings-prefixed` is removed and its scenario moved to
-    // `sync/warnings-name-the-command`; kept until `sync`'s crate proves it
-    // (backlog/the-root-keeps-a-test-of-sync-s-skipped-proposal-warning.md).
-    {
-        let name = "rebase";
-        let (dir, work) = node_a("");
-        let ledger = dir.path().join("ledger");
-        fs::create_dir_all(&ledger).unwrap();
-        git(dir.path(), &["init", "-q", ledger.to_str().unwrap()]);
-        git(&ledger, &["config", "user.name", "l"]);
-        git(&ledger, &["config", "user.email", "l@l"]);
-        let record = serde_json::json!({
-            "id": "p9",
-            "kind": "proposed",
-            "writer": "alice/web",
-            "at": "2026-10-28T10:00:00.000Z",
-            "slug": "Not Kebab",
-            "title": "Bad",
-            "body": "x",
-            "nodes": ["a"],
-        });
-        write(&ledger, "records.jsonl", &format!("{record}\n"));
-        commit(&ledger, "records");
-        let origin = dir.path().join("origin");
-        git(
-            &ledger,
-            &[
-                "push",
-                "-q",
-                origin.to_str().unwrap(),
-                "HEAD:refs/heads/clm/ledger/alice/web",
-            ],
-        );
-
-        let out = clm(&work, &[name]);
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        let line = stderr
-            .lines()
-            .find(|l| l.contains("skipped proposal"))
-            .unwrap_or_else(|| panic!("no warning under {name}: {out:?}"));
-        assert!(
-            line.starts_with(&format!("clm {name}: skipped proposal ")) && line.contains("p9"),
-            "{line}"
-        );
-    }
-}
-
-#[test]
 fn scenario_rebase_by_its_new_name() {
     // req:clm/renamed-commands@164ad075
     {
