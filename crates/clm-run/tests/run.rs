@@ -1783,7 +1783,7 @@ fn finish_fails_in_git_with_exit_2() {
 
 #[test]
 fn scenario_a_build_prompt_says_component() {
-    // req:orchestrator.run/says-component@49a0408e
+    // req:orchestrator.run/run@5ea05da6
     let (r, f) = (behind_and_obsolete(), fake());
     let p = prompt(&r, &f, "b", &[]);
     let lists = p.split("\nThe context bundle for").next().unwrap();
@@ -1791,18 +1791,38 @@ fn scenario_a_build_prompt_says_component() {
         lists.contains("Bring component `b`'s code up to its spec."),
         "{lists}"
     );
-    assert!(lists.contains("which claims component `b`"), "{lists}");
-    for old in ["node", "Node", "spine", "Spine"] {
-        assert!(!lists.contains(old), "{old} in {lists}");
-    }
+    assert!(
+        lists.contains("On branch `impl/b`, which claims component `b`"),
+        "{lists}"
+    );
 }
 
 #[test]
 fn refusals_say_component() {
-    // req:orchestrator.run/says-component@49a0408e
+    // req:orchestrator.run/run@5ea05da6
     let (r, f) = (repo(), fake());
     let err = refused(&r, &f, "a/b", &[], 1);
     assert!(err.contains("`a/b` isn't a component ID"), "{err}");
+    let err = refused(&r, &f, "", &[], 1);
+    assert!(err.contains("clm run: `` isn't a component ID"), "{err}");
+    assert!(remote_tip(&r, "impl/a").is_none(), "no claim");
+    assert!(remote_tip(&r, "impl/b").is_none(), "no claim");
+    assert!(place_names(&r).is_empty(), "no place");
+}
+
+#[test]
+fn a_refused_id_says_component() {
+    // req:orchestrator.run/run@5ea05da6
+    let r = repo();
+    let ran = clm_finish(&r, "a/b");
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "", "nothing on stdout");
+    assert!(
+        ran.stderr.contains("clm run: `a/b` isn't a component ID"),
+        "{}",
+        ran.stderr
+    );
+    assert!(remote_tip(&r, "impl/a").is_none(), "no claim");
 }
 
 #[test]

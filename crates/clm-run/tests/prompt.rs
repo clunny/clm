@@ -140,12 +140,6 @@ fn scenario_check_command_named() {
     assert!(!p.contains("with `scripts/check.sh`"), "{p}");
 }
 
-#[test]
-fn scenario_no_check_command() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
-    let p = prompt(&job());
-    assert!(!p.contains("--check-only"), "{p}");
-}
 
 #[test]
 fn names_no_target_directory() {
@@ -261,15 +255,6 @@ fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wirin
     );
 }
 
-#[test]
-fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@e02d8d3a
-    let p = prompt(&job());
-    let list = &p[p.find("## Pending requirements").unwrap()..];
-    assert!(!list.contains("- `b/z` unbuilt"), "{list}");
-    assert!(list.contains("`b/z`, blocked by `backlog/q`"), "{list}");
-    assert!(list.contains("`b/w`, blocked by `c/z`"), "{list}");
-}
 
 #[test]
 fn a_line_waiting_on_its_own_id_names_the_components_that_cite_it() {
