@@ -339,15 +339,21 @@ fn plan(
 }
 
 /// The backlog items `clm apply` deletes with the change, each once: the questions it
-/// resolves (`answered-questions`) and the item it was promoted from, unless that is a
-/// human-task, which only the human deletes (`promoted-item`).
+/// answers and the workaround flags it settles, among those it resolves
+/// (`answered-questions`), and the item it was promoted from, unless that is a human-task,
+/// which only the human deletes (`promoted-item`).
 fn deleted_items<'a>(graph: &'a Graph, change: &Change) -> Vec<&'a BacklogItem> {
     let answered = change
         .frontmatter
         .resolves
         .iter()
         .filter_map(|slug| graph.backlog.get(slug))
-        .filter(|item| item.frontmatter.kind == BacklogKind::Question);
+        .filter(|item| {
+            matches!(
+                item.frontmatter.kind,
+                BacklogKind::Question | BacklogKind::Friction
+            )
+        });
     let promoted = change
         .frontmatter
         .from
@@ -468,8 +474,9 @@ fn before_and_after(
 
 /// `resulting-graph-call`: the spec graph the change would leave, or `None` when a delta
 /// of it can't be applied, whatever its status: each written node parsed from its new
-/// text at its path, left out when the parser yields none; each removed node gone; the
-/// rest as in `graph`. Writes nothing.
+/// text at its path, left out when the parser yields none; each removed node gone; each
+/// backlog item `clm apply` deletes with the change gone; the rest as in `graph`. Writes
+/// nothing.
 pub fn resulting(graph: &Graph, change: &Change) -> Option<Graph> {
     let Writes {
         specs, violations, ..

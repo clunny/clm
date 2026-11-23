@@ -228,7 +228,7 @@ fn apply_names_a_change_that_doesnt_exist() {
 
 #[test]
 fn apply_prints_an_answered_question_it_removes() {
-    // req:apply/answered-questions@baab55dd req:apply/promoted-item@6800843d
+    // req:apply/answered-questions@cd9f0f36 req:apply/promoted-item@6800843d
     let dir = change_repo("---\ncomponent: clm\n---\n");
     let d = dir.path();
     write(
