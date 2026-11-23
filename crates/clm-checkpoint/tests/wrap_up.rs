@@ -1060,7 +1060,7 @@ fn racing_git(always: bool) -> TempDir {
 
 #[test]
 fn scenario_a_wrap_up_whose_fetch_loses_a_ref_race() {
-    // req:orchestrator.checkpoint/wrap-up-fetch-retries-race@e4a57cf6
+    // req:orchestrator.checkpoint/wrap-up-fetch-retries-race@81f39502
     let r = repo();
     let bin = racing_git(false);
     let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
@@ -1074,13 +1074,45 @@ fn scenario_a_wrap_up_whose_fetch_loses_a_ref_race() {
 
 #[test]
 fn scenario_a_wrap_up_whose_fetch_keeps_failing() {
-    // req:orchestrator.checkpoint/wrap-up-fetch-retries-race@e4a57cf6
+    // req:orchestrator.checkpoint/wrap-up-fetch-retries-race@81f39502
     let r = repo();
     let bin = racing_git(true);
     let (code, out, err) = wrap_up(&r.work, Some(bin.path()));
     assert!(err.starts_with("clm wrap-up: "), "{err}");
     assert!(err.contains("cannot lock ref"), "{err}");
-    assert!(!out.contains("wrap-up ok"), "{out}");
+    assert_eq!(err.lines().count(), 1, "{err}");
+    // Nothing removed or deleted, and no `wrap-up ok`.
+    assert_eq!(out, "", "{err}");
+    assert_eq!(code, 2, "{out}{err}");
+}
+
+#[test]
+fn scenario_a_wrap_up_that_cant_reach_origin() {
+    // req:orchestrator.checkpoint/wrap-up-fetch-retries-race@81f39502
+    let r = repo();
+    merged_without_a_record(&r);
+    // A place the sweep would free, its branch having landed.
+    let branch = ["impl/c".to_string()];
+    clm_orchestrator::take_place(
+        &r.work,
+        "c",
+        clm_orchestrator::PlaceKind::Build,
+        &branch,
+        3,
+        4,
+    )
+    .unwrap();
+    let keep = TempDir::new().unwrap();
+    let gone = keep.path().join("gone");
+    git(
+        &r.work,
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    );
+    let (code, out, err) = wrap_up(&r.work, None);
+    assert_eq!(err, "clm wrap-up: origin can't be reached\n", "{out}");
+    assert_eq!(out, "", "{err}");
+    assert!(exists(&r.work, "refs/heads/impl/c"), "{out}{err}");
+    assert!(builds(&r.work).join("c").exists(), "{out}{err}");
     assert_eq!(code, 2, "{out}{err}");
 }
 
