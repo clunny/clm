@@ -80,7 +80,7 @@ fn landed_for(f: &Fixture) -> Vec<(String, String, Option<u64>, Option<String>)>
 
 #[test]
 fn lands_taken_together_pushed_and_not_recorded() {
-    // req:land/unrecorded-land-finished@3c6b2dbc
+    // req:land/unrecorded-land-finished@326c171a
     let f = Fixture::new("");
     for n in ["a", "b", "c"] {
         f.branch(&format!("impl/{n}"), &[(&format!("{n}.txt"), "x\n")]);
@@ -106,7 +106,7 @@ fn lands_taken_together_pushed_and_not_recorded() {
 
 #[test]
 fn a_land_alone_pushed_and_not_recorded() {
-    // req:land/unrecorded-land-finished@3c6b2dbc
+    // req:land/unrecorded-land-finished@326c171a
     let f = Fixture::new("");
     f.branch("impl/a", &[("a.txt", "x\n")]);
     let (commits, _) = pushed(&f, &["impl/a"]);
@@ -121,7 +121,7 @@ fn a_land_alone_pushed_and_not_recorded() {
 
 #[test]
 fn a_light_land_pushed_and_not_recorded() {
-    // req:land/unrecorded-land-finished@3c6b2dbc
+    // req:land/unrecorded-land-finished@326c171a
     // Finished, it is recorded as its own land would have recorded it: light.
     let f = Fixture::new("");
     f.write("gate-out", "light\n");
@@ -149,7 +149,7 @@ fn a_light_land_pushed_and_not_recorded() {
 
 #[test]
 fn the_land_that_pushed_is_still_running() {
-    // req:land/unrecorded-land-finished@3c6b2dbc
+    // req:land/unrecorded-land-finished@326c171a
     let f = Fixture::new("");
     for n in ["a", "b"] {
         f.branch(&format!("impl/{n}"), &[(&format!("{n}.txt"), "x\n")]);
@@ -184,7 +184,7 @@ fn the_land_that_pushed_is_still_running() {
 
 #[test]
 fn a_merge_no_land_made() {
-    // req:land/unrecorded-land-finished@3c6b2dbc
+    // req:land/unrecorded-land-finished@326c171a
     let f = Fixture::new("");
     f.branch("impl/a", &[("a.txt", "x\n")]);
     let (commits, _) = pushed(&f, &["impl/a"]);
@@ -199,7 +199,7 @@ fn a_merge_no_land_made() {
 
 #[test]
 fn an_unapproved_branch_pushed_by_hand() {
-    // req:land/unrecorded-land-finished@3c6b2dbc
+    // req:land/unrecorded-land-finished@326c171a
     let f = Fixture::new("");
     f.branch("impl/a", &[("a.txt", "x\n")]);
     let (commits, _) = pushed(&f, &["impl/a"]);
@@ -211,4 +211,71 @@ fn an_unapproved_branch_pushed_by_hand() {
     assert!(why.contains("ledger/unrecorded-land"), "{why}");
     assert_eq!(f.remote("main"), main);
     assert!(landed_for(&f).is_empty());
+}
+
+#[test]
+fn the_land_that_pushed_is_still_appending() {
+    // req:land/unrecorded-land-finished@326c171a
+    // The land that pushed holds its push turn until its records are appended: finishing waits
+    // for the turn as well as the land lock, and appends nothing meanwhile.
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a.txt", "x\n")]);
+    let (commits, _) = pushed(&f, &["impl/a"]);
+    f.mark_checked(&commits[0]);
+    std::fs::create_dir_all(f.work().join(".clm")).unwrap();
+    let held = std::fs::File::create(f.work().join(".clm/push.lock")).unwrap();
+    held.lock().unwrap();
+    let env = f.env(&[]);
+    std::thread::scope(|s| {
+        let land = s.spawn(|| clm_land::land(&f.work(), Some("impl/a"), &env));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !std::fs::read_dir(f.work().join(".clm/push.queue"))
+            .map(|d| {
+                d.filter_map(Result::ok)
+                    .any(|e| e.file_name().to_string_lossy().contains("-ordinary-"))
+            })
+            .unwrap_or(false)
+        {
+            assert!(Instant::now() < deadline, "it never queued for the turn");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(landed_for(&f).is_empty());
+        drop(held);
+        let out = land.join().unwrap().unwrap();
+        assert_eq!(out.lines[0], format!("landed {} code", commits[0]));
+    });
+    assert_eq!(landed_for(&f).len(), 1);
+}
+
+#[test]
+fn pushed_and_not_recorded_while_it_waited_for_the_lock() {
+    // req:land/unrecorded-land-finished@326c171a
+    // Found once the land holds the land lock: finishing takes no second land lock, and lands.
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a.txt", "x\n")]);
+    std::fs::create_dir_all(f.work().join(".clm")).unwrap();
+    let held = std::fs::File::create(f.work().join(".clm/land.lock")).unwrap();
+    held.lock().unwrap();
+    let env = f.env(&[]);
+    let (out, commits) = std::thread::scope(|s| {
+        let land = s.spawn(|| clm_land::land(&f.work(), Some("impl/a"), &env));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !std::fs::read_dir(f.work().join(".clm/land.queue"))
+            .map(|d| {
+                d.filter_map(Result::ok)
+                    .any(|e| e.file_name().to_string_lossy().contains("-ordinary-"))
+            })
+            .unwrap_or(false)
+        {
+            assert!(Instant::now() < deadline, "it never queued");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let (commits, _) = pushed(&f, &["impl/a"]);
+        f.mark_checked(&commits[0]);
+        drop(held);
+        (land.join().unwrap().unwrap(), commits)
+    });
+    assert_eq!(out.lines[0], format!("landed {} code", commits[0]));
+    assert_eq!(landed_for(&f).len(), 1);
 }

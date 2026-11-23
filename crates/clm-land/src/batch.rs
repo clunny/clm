@@ -369,6 +369,11 @@ impl Batch<'_, '_, '_> {
             head,
             origin: on_origin,
         } = repo.approval.branch_head(&w.branch, true)?;
+        // A head the commit it would merge onto holds waits for its own turn, which lands
+        // nothing (`land/already-on-main`).
+        if clm_git::is_ancestor(&repo.root, &head, tip)? {
+            return Err(Error::Refused("already on main".into()));
+        }
         let notes = crate::judge::judge_head(repo, &w.branch, base, &head, fold)?;
         let tree = unconflicted_tree(repo, tip, &head)?
             .ok_or_else(|| Error::Refused("the branch conflicts with main".into()))?;
@@ -688,13 +693,15 @@ impl Batch<'_, '_, '_> {
             ..
         } = kept;
         let (finals, dir) = (&finals, &dir);
-        drop(turn);
         self.pushed = true;
+        let appended = repo.append_landed(entries, ctx.branch)?;
+        // Held until the records are appended, so a land that takes the turn next finds them
+        // (`land/push-turn`).
+        drop(turn);
         let mut warnings = Vec::new();
         if let Some(land) = repo.settings.land.value.as_ref() {
             crate::cap::apply(ctx.target, land.cap_gb(), &mut warnings);
         }
-        let appended = repo.append_landed(entries, ctx.branch)?;
         if let Some(last) = appended.last()
             && !last.pushed
         {
@@ -908,46 +915,10 @@ fn write_selection(repo: &Repo, part: &Part) -> Result<Selection, Error> {
     Ok(Selection { _dir: dir, path })
 }
 
-/// The landed record of `branch`'s head on `main`'s first-parent chain that a land taken
-/// together wrote, when the land that waited for it finds it (`land/batched-lands`).
+/// The land of a branch's head that `main`'s first-parent chain holds and a `landed` record of
+/// the branch names, as a land taken together or another land left it
+/// (`land/already-on-main`).
 pub(crate) struct Found {
     pub(crate) commit: String,
     pub(crate) verdict: Verdict,
-}
-
-/// The `landed` record of a land of `branch` at `head` that is on `main` now: its merge commit
-/// has `head` as its second parent and `origin/main` holds it.
-pub(crate) fn landed_record(
-    repo: &Repo,
-    fold: &Fold,
-    branch: &str,
-    head: &str,
-) -> Result<Option<Found>, Error> {
-    for record in fold.lands.values().flatten() {
-        let Body::Landed {
-            commit,
-            branch: landed,
-            kind,
-            review,
-            light,
-            ..
-        } = &record.body
-        else {
-            continue;
-        };
-        if landed != branch {
-            continue;
-        }
-        let Ok(second) = repo.git(&["rev-parse", &format!("{commit}^2")]) else {
-            continue;
-        };
-        if second == head && clm_git::is_ancestor(&repo.root, commit, repo.base()).unwrap_or(false)
-        {
-            return Ok(Some(Found {
-                commit: commit.clone(),
-                verdict: Verdict::of_record(*kind, *review, *light),
-            }));
-        }
-    }
-    Ok(None)
 }
