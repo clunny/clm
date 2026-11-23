@@ -74,7 +74,7 @@ fn build(node: &str) -> Vec<String> {
 
 #[test]
 fn scenario_lapsed_and_landed_places_dont_count() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     push_claim(&r.work, "a", 5);
     push_claim(&r.work, "b", 1);
@@ -101,7 +101,7 @@ fn scenario_lapsed_and_landed_places_dont_count() {
 
 #[test]
 fn a_local_branch_alone_that_isnt_on_main_hasnt_landed() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     git(&r.work, &["commit", "-q", "--allow-empty", "-m", "work"]);
     git(&r.work, &["branch", "impl/a"]);
@@ -113,7 +113,7 @@ fn a_local_branch_alone_that_isnt_on_main_hasnt_landed() {
 
 #[test]
 fn a_build_lands_only_when_each_tip_is_on_main() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     push_claim(&r.work, "a", 1);
     merge_claim(&r.work, "a");
@@ -126,7 +126,7 @@ fn a_build_lands_only_when_each_tip_is_on_main() {
 
 #[test]
 fn scenario_taken_before_the_claim() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     write_place(&r.work, "a", "build", 0, &["impl/a"]);
     assert_eq!(counting(&r.work), ["a"]);
@@ -137,7 +137,7 @@ fn scenario_taken_before_the_claim() {
 
 #[test]
 fn scenario_full() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     assert_eq!(
         take_place(&r.work, "a", PlaceKind::Build, &build("a"), 2, 4).unwrap(),
@@ -164,8 +164,8 @@ fn scenario_full() {
 
 #[test]
 fn taking_writes_the_file_and_reuse_rewrites_taken() {
-    // req:orchestrator/places@39abce44
-    // req:orchestrator/place-slots@e7802b3b
+    // req:orchestrator/places@15caf59a
+    // req:orchestrator/place-slots@89c41981
     let r = repo();
     write_place(&r.work, "a", "build", 3, &["impl/a"]);
     assert_eq!(
@@ -189,7 +189,7 @@ fn taking_writes_the_file_and_reuse_rewrites_taken() {
 
 #[test]
 fn taking_deletes_the_places_that_dont_count() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     write_place(&r.work, "old", "build", 5, &["impl/old"]);
     write(&builds(&r.work), "z", "not a place");
@@ -202,12 +202,51 @@ fn taking_deletes_the_places_that_dont_count() {
 
 #[test]
 fn a_place_name_is_one_file_name() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
+    // Scenario "a name that isn't a file name".
     let r = repo();
-    for bad in ["", "a/b", "..", "."] {
-        let res = take_place(&r.work, bad, PlaceKind::Build, &[], 3, 4);
-        assert!(matches!(res, Err(Error::Refused(_))), "{bad:?}: {res:?}");
+    take_place(&r.work, "a", PlaceKind::Build, &build("a"), 3, 4).unwrap();
+    let before = fs::read(builds(&r.work).join("a")).unwrap();
+    let refused = |res: Result<(), Error>, what: &str| {
+        assert!(matches!(res, Err(Error::Refused(_))), "{what}: {res:?}");
+    };
+    for bad in ["", "a/b", "..", ".", "a\\b"] {
+        let res = take_place(&r.work, bad, PlaceKind::Build, &[], 3, 4).map(drop);
+        refused(res, &format!("take {bad:?}"));
+        refused(free_place(&r.work, bad), &format!("free {bad:?}"));
+        refused(rename_place(&r.work, "a", bad), &format!("a to {bad:?}"));
+        refused(rename_place(&r.work, bad, "b"), &format!("{bad:?} to b"));
     }
+    assert_eq!(files(&builds(&r.work)), ["a"]);
+    assert_eq!(fs::read(builds(&r.work).join("a")).unwrap(), before);
+}
+
+#[cfg(unix)]
+#[test]
+fn scenario_a_stale_place_that_cant_be_deleted() {
+    // req:orchestrator/places@15caf59a
+    use std::os::unix::fs::PermissionsExt;
+    let r = repo();
+    write_place(&r.work, "a", "build", 5, &["impl/a"]);
+    write_place(&r.work, "c", "build", 0, &["impl/c"]);
+    let dir = builds(&r.work);
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+    // Root deletes from a read-only directory: nothing to test there.
+    let writable = fs::write(dir.join("probe"), "").is_ok();
+    let taken = (!writable).then(|| take_place(&r.work, "d", PlaceKind::Build, &build("d"), 3, 4));
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+    let Some(taken) = taken else {
+        return;
+    };
+    // It fails at the place it couldn't delete, before it tries to write one.
+    match taken {
+        Err(Error::Git(why)) => assert!(
+            why.starts_with(&format!("{}:", dir.join("a").display())),
+            "{why}"
+        ),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(files(&dir), ["a", "c"]);
 }
 
 /// Run as a subprocess by `scenario_racing_takers`: takes place `CLM_TAKER` in
@@ -240,7 +279,7 @@ fn place_taker() {
 
 #[test]
 fn scenario_racing_takers() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     let exe = std::env::current_exe().unwrap();
     let start = std::time::SystemTime::now()
@@ -276,7 +315,7 @@ fn scenario_racing_takers() {
 
 #[test]
 fn scenario_rename_onto_an_existing_place() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     write_place(&r.work, "draft-1-q", "draft", 0, &[]);
     write_place(&r.work, "20261027-q", "draft", 0, &["spec/20261027-q"]);
@@ -297,20 +336,27 @@ fn scenario_rename_onto_an_existing_place() {
 
 #[test]
 fn rename_moves_the_place() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     write_place(&r.work, "draft-1-q", "draft", 0, &[]);
     rename_place(&r.work, "draft-1-q", "20261027-q").unwrap();
     assert_eq!(files(&builds(&r.work)), ["20261027-q"]);
-    assert!(matches!(
-        rename_place(&r.work, "draft-1-q", "x"),
-        Err(Error::Refused(_))
-    ));
+    // Scenario "rename of a place that isn't there".
+    let before = fs::read(builds(&r.work).join("20261027-q")).unwrap();
+    match rename_place(&r.work, "draft-1-q", "x") {
+        Err(Error::Refused(why)) => assert!(why.contains("no place `draft-1-q`"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(files(&builds(&r.work)), ["20261027-q"]);
+    assert_eq!(
+        fs::read(builds(&r.work).join("20261027-q")).unwrap(),
+        before
+    );
 }
 
 #[test]
 fn free_deletes_and_succeeds_when_missing() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     free_place(&r.work, "a").unwrap();
     take_place(&r.work, "a", PlaceKind::Build, &build("a"), 3, 4).unwrap();
@@ -321,7 +367,7 @@ fn free_deletes_and_succeeds_when_missing() {
 
 #[test]
 fn scenario_places_in_a_bare_repository() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     let tmp = TempDir::new().unwrap();
     let bare = tmp.path().join("bare.git");
@@ -356,7 +402,7 @@ fn scenario_places_in_a_bare_repository() {
 
 #[test]
 fn scenario_draft_place() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     push_propose(&r.work, "q", 5);
     push_branch(&r.work, "spec/20261027-x", 1);
@@ -379,7 +425,7 @@ fn scenario_draft_place() {
 
 #[test]
 fn a_draft_place_lives_on_its_propose_claim_or_autosync_branch() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     write_place(&r.work, "d1", "draft", 5, &["spec/d1", "propose/q"]);
     assert!(counting(&r.work).is_empty(), "no claim and taken long ago");
@@ -399,7 +445,7 @@ fn a_draft_place_lives_on_its_propose_claim_or_autosync_branch() {
 
 #[test]
 fn a_provisional_draft_place_counts_by_its_time() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     write_place(&r.work, "draft-1-q", "draft", 0, &[]);
     assert_eq!(counting(&r.work), ["draft-1-q"]);
@@ -409,7 +455,7 @@ fn a_provisional_draft_place_counts_by_its_time() {
 
 #[test]
 fn scenario_damaged_file() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     write(&builds(&r.work), "z", "not a place");
     write(&builds(&r.work), "y", "kind build\n");
@@ -428,7 +474,7 @@ fn scenario_damaged_file() {
 
 #[test]
 fn no_places_directory_is_no_places() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     assert!(places(&r.work, 4).unwrap().is_empty());
     assert!(!builds(&r.work).exists(), "reading creates nothing");
@@ -436,7 +482,7 @@ fn no_places_directory_is_no_places() {
 
 #[test]
 fn places_doesnt_fetch() {
-    // req:orchestrator/places@39abce44
+    // req:orchestrator/places@15caf59a
     let r = repo();
     write_place(&r.work, "a", "build", 5, &["impl/a"]);
     // Pushed from elsewhere, so the clone's tracking ref doesn't know it yet.
@@ -654,7 +700,7 @@ fn slot_of(work: &Path, name: &str) -> Option<u64> {
 
 #[test]
 fn scenario_the_lowest_free_slot() {
-    // req:orchestrator/place-slots@e7802b3b
+    // req:orchestrator/place-slots@89c41981
     let r = repo();
     write_slotted(&r.work, "a", 0, Some(1), &["impl/a"]);
     write_slotted(&r.work, "b", 5, Some(2), &["impl/b"]);
@@ -674,7 +720,7 @@ fn scenario_the_lowest_free_slot() {
 
 #[test]
 fn scenario_a_reused_place_keeps_its_slot() {
-    // req:orchestrator/place-slots@e7802b3b
+    // req:orchestrator/place-slots@89c41981
     let r = repo();
     write_slotted(&r.work, "a", 0, Some(3), &["impl/a"]);
     assert_eq!(
@@ -688,7 +734,7 @@ fn scenario_a_reused_place_keeps_its_slot() {
 
 #[test]
 fn scenario_a_place_written_before_slots() {
-    // req:orchestrator/place-slots@e7802b3b
+    // req:orchestrator/place-slots@89c41981
     let r = repo();
     write_slotted(&r.work, "a", 0, None, &["impl/a"]);
     write_slotted(&r.work, "b", 0, Some(1), &["impl/b"]);
@@ -707,7 +753,7 @@ fn scenario_a_place_written_before_slots() {
 
 #[test]
 fn drafts_hold_slots_and_a_damaged_file_holds_none() {
-    // req:orchestrator/place-slots@e7802b3b
+    // req:orchestrator/place-slots@89c41981
     let r = repo();
     write(&builds(&r.work), "z", "not a place");
     assert_eq!(
@@ -720,7 +766,7 @@ fn drafts_hold_slots_and_a_damaged_file_holds_none() {
 
 #[test]
 fn scenario_the_slot_of_a_branch() {
-    // req:orchestrator/place-slots@e7802b3b
+    // req:orchestrator/place-slots@89c41981
     let r = repo();
     write_slotted(&r.work, "x", 0, Some(2), &["impl/x"]);
     assert_eq!(place_slot(&r.work, "impl/x").unwrap(), 2);
@@ -729,7 +775,7 @@ fn scenario_the_slot_of_a_branch() {
 
 #[test]
 fn a_slot_is_read_without_judging_the_place() {
-    // req:orchestrator/place-slots@e7802b3b
+    // req:orchestrator/place-slots@89c41981
     let r = repo();
     // A place that doesn't count still names its slot, and the first by name wins.
     write_slotted(&r.work, "m", 9, Some(5), &["impl/x"]);

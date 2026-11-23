@@ -1,7 +1,7 @@
-//! The commands that work on a checkout and its `origin`: `next` and `claim`, the `claims`
-//! rows of `clm status`, and the git helpers the other commands share.
+//! The commands that work on a checkout and its `origin`: `next` and `claim`, the claim
+//! refs `clm status` reads, and the git helpers the other commands share.
 
-use clm_git::{git, now};
+use clm_git::{REMOTE, git, now};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -9,8 +9,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clm_coverage::Marker;
 use clm_model::{BacklogKind, Graph};
 
-use crate::queue::{ClaimRef, Queue, State, claim_state, claims_section, queue_from_refs};
-use crate::{Error, REMOTE};
+use crate::Error;
+use crate::queue::{ClaimRef, Queue, State, claim_state, queue_from_refs};
 
 pub(crate) const BRANCH_PREFIX: &str = "impl/";
 pub(crate) const PROPOSE_PREFIX: &str = "propose/";
@@ -82,7 +82,7 @@ pub fn claim(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Error
 }
 
 /// Why a node in `state` can't be claimed, or `None` when it can.
-pub fn refusal(node: &str, state: Option<&State>) -> Option<String> {
+pub(crate) fn refusal(node: &str, state: Option<&State>) -> Option<String> {
     let quoted = |items: &[String]| {
         items
             .iter()
@@ -94,8 +94,11 @@ pub fn refusal(node: &str, state: Option<&State>) -> Option<String> {
         None => format!("no component `{node}`"),
         Some(State::Ready { .. }) => return None,
         Some(State::Converged) => format!(
-            "`{node}` is converged: nothing is pending. A small change that needs no spec change \
-             takes no claim: land it from a branch of its own with `clm land`"
+            "`{node}` is converged: nothing is pending. A code change for it that needs no spec \
+             change takes no claim: land it with `clm land` from a branch of its own, named \
+             outside `impl/`, `spec/`, `propose/` and `autosync/`, whose code files \
+             `gate/own-files` admits; for a `bug` or `deferred` item, claim it with \
+             `clm claim {node} --fix backlog/<slug>`"
         ),
         Some(State::Blocked { by }) => format!(
             "`{node}` is blocked by {}",
@@ -465,11 +468,6 @@ pub fn propose_refs(root: &Path) -> Vec<ClaimRef> {
         .collect()
 }
 
-/// [`claims_section`] for the refs at `root` as of the last fetch. Never fetches.
-pub fn status_claims(root: &Path) -> Vec<Vec<String>> {
-    claims_section(&claim_refs(root), &propose_refs(root), now())
-}
-
 pub(crate) fn load(root: &Path) -> Result<Graph, Error> {
     let (graph, violations) = clm_model::load(root);
     if violations.is_empty() {
@@ -570,4 +568,15 @@ pub(crate) fn claims(root: &Path, prefix: &str) -> Result<BTreeMap<String, Claim
             Some((name, Claim { sha, time, merged }))
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::refusal;
+
+    #[test]
+    fn unknown_component_refusal() {
+        // req:orchestrator/says-component@30a7cfd4
+        assert_eq!(refusal("zz", None).as_deref(), Some("no component `zz`"));
+    }
 }

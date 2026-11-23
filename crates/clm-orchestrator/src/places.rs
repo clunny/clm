@@ -10,9 +10,9 @@ use std::fs::{self, File};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use clm_git::git;
+use clm_git::{REMOTE, git};
 
-use crate::{Error, REMOTE, lapsed};
+use crate::{Error, lapsed};
 use clm_git::now;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn file_round_trips() {
-        // req:orchestrator/place-slots@e7802b3b
+        // req:orchestrator/place-slots@89c41981
         let f = PlaceFile {
             kind: PlaceKind::Draft,
             taken: 1_793_059_200,

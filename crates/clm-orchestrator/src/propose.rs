@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use clm_git::{git, now};
+use clm_git::{REMOTE, git, now};
 use clm_model::Graph;
 
 use crate::queue::ClaimRef;
@@ -13,16 +13,16 @@ use crate::repo::{
     Claim, PROPOSE_PREFIX, claims, current_branch, extract_main, fetch, load, push_new_claim,
 };
 use crate::taken::{Holding, SpecRef, Taken, change_id, named, taken_from_refs};
-use crate::{DEFAULT_EXPIRY_HOURS, Error, REMOTE, lapsed};
+use crate::{DEFAULT_EXPIRY_HOURS, Error, lapsed};
 
 const SPEC_PREFIX: &str = "spec/";
 const AUTOSYNC_PREFIX: &str = "autosync/spec/";
 
 /// What `clm proposals` prints: its lines, and the warnings for stderr.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct Proposals {
-    pub lines: Vec<String>,
-    pub warnings: Vec<String>,
+pub(crate) struct Proposals {
+    pub(crate) lines: Vec<String>,
+    pub(crate) warnings: Vec<String>,
 }
 
 /// Everything that can hold a backlog item, read from `origin` after fetching.
@@ -190,7 +190,7 @@ pub fn taken_items(root: &Path, expiry_hours: u64) -> Result<Taken, Error> {
 
 /// `clm proposals [--node <id>]...`: [`taken_items`] at the default expiry, one line each,
 /// keeping only the lines whose nodes include one of `nodes` when any are given.
-pub fn proposals(root: &Path, nodes: &[String]) -> Result<Proposals, Error> {
+pub(crate) fn proposals(root: &Path, nodes: &[String]) -> Result<Proposals, Error> {
     let taken = taken_items(root, DEFAULT_EXPIRY_HOURS)?;
     let list = |set: &BTreeSet<String>| set.iter().cloned().collect::<Vec<_>>().join(",");
     let keep = |n: &BTreeSet<String>| nodes.is_empty() || nodes.iter().any(|w| n.contains(w));

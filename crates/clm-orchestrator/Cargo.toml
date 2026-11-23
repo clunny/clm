@@ -45,6 +45,5 @@ serde_yaml.workspace = true
 tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
-toml.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

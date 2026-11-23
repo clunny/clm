@@ -91,7 +91,7 @@ fn change_repo(delta: &str) -> TempDir {
 
 #[test]
 fn scenario_a_command_called_in_a_test() {
-    // req:orchestrator/commands-in-crate@29a80e82
+    // req:orchestrator/commands-in-crate@0a904d2e
     let r = repo();
     push_claim(&r.work, "b", 1);
     let (code, out, err) = next(&r.work, &[], DEFAULT_CAP);
@@ -125,7 +125,7 @@ fn scenario_a_command_called_in_a_test() {
 
 #[test]
 fn specs_that_dont_load_are_violations_on_stdout() {
-    // req:orchestrator/commands-in-crate@29a80e82
+    // req:orchestrator/commands-in-crate@0a904d2e
     let r = repo();
     write(&r.work, "specs/a/SPEC.md", "garbage");
     push_main(&r.work, "break a");
@@ -137,12 +137,18 @@ fn specs_that_dont_load_are_violations_on_stdout() {
 
 #[test]
 fn scenario_arguments_it_cant_parse() {
-    // req:orchestrator/commands-in-crate@29a80e82
+    // req:orchestrator/commands-in-crate@0a904d2e
     let dir = TempDir::new().unwrap();
     let (code, out, err) = next(dir.path(), &["--no-such-option"], DEFAULT_CAP);
     assert_eq!((code, out.as_str()), (Some(2), ""));
     assert!(err.contains("--no-such-option"), "{err}");
     assert!(err.contains("Usage: clm next"), "{err}");
+    // `clm next` waits for nothing: `--wait` and `--interval` are options it doesn't have.
+    for args in [&["--wait"][..], &["--interval", "5"][..]] {
+        let (code, out, err) = next(dir.path(), args, DEFAULT_CAP);
+        assert_eq!((code, out.as_str()), (Some(2), ""), "{args:?}");
+        assert!(err.contains("Usage: clm next"), "{args:?}: {err}");
+    }
     let (code, _, err) = claim(dir.path(), &[]);
     assert_eq!(code, Some(2));
     assert!(err.contains("Usage: clm claim"), "{err}");
@@ -153,9 +159,10 @@ fn scenario_arguments_it_cant_parse() {
 
 #[test]
 fn orchestrator_commands_exit_2_when_git_fails() {
-    // req:orchestrator/next@cc111fbd req:orchestrator/claim@026fab7a
-    // req:orchestrator/backlog-claim@50959cb7 req:orchestrator/proposals@ba5ce6a8
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/next@69655c89 req:orchestrator/claim@e4eac3f1
+    // req:orchestrator/backlog-claim@2f1843ca req:orchestrator/proposals@ba5ce6a8
+    // req:orchestrator/claim-fix@ddf650ed req:orchestrator/fetch-retries-race@8e7000b9
+    // req:orchestrator/commands-in-crate@0a904d2e
     let dir = change_repo("---\ncomponent: clm\n---\n");
     // Not a git repository, so there's no `origin` to fetch.
     assert_eq!(clm(dir.path(), &["next"]).0, Some(2));
@@ -168,7 +175,7 @@ fn orchestrator_commands_exit_2_when_git_fails() {
 
 #[test]
 fn git_failures_and_help_on_their_streams() {
-    // req:orchestrator/commands-in-crate@29a80e82
+    // req:orchestrator/commands-in-crate@0a904d2e
     let dir = TempDir::new().unwrap();
     for (command, (code, out, err)) in [
         ("next", next(dir.path(), &[], DEFAULT_CAP)),
@@ -178,9 +185,46 @@ fn git_failures_and_help_on_their_streams() {
         assert_eq!((code, out.as_str()), (Some(2), ""), "{command}: {err}");
         assert!(err.starts_with(&format!("clm {command}: ")), "{err}");
     }
-    let (code, out, err) = claim(dir.path(), &["--help"]);
-    assert_eq!((code, err.as_str()), (Some(0), ""));
-    assert!(out.contains("Usage: clm claim"), "{out}");
+    // Scenario "help".
+    for (command, (code, out, err), wanted) in [
+        (
+            "next",
+            next(dir.path(), &["--help"], DEFAULT_CAP),
+            &[
+                "Usage: clm next [OPTIONS]",
+                "--expiry <EXPIRY>",
+                "[default: 4]",
+                "--root <ROOT>",
+            ][..],
+        ),
+        (
+            "claim",
+            claim(dir.path(), &["--help"]),
+            &[
+                "Usage: clm claim [OPTIONS] <COMPONENT>",
+                "<COMPONENT>",
+                "--fix <backlog/<slug>>",
+                "--expiry <EXPIRY>",
+                "[default: 4]",
+                "--root <ROOT>",
+            ][..],
+        ),
+        (
+            "proposals",
+            proposals(dir.path(), &["--help"]),
+            &[
+                "Usage: clm proposals [OPTIONS]",
+                "--component <COMPONENT>",
+                "(repeatable)",
+                "--root <ROOT>",
+            ][..],
+        ),
+    ] {
+        assert_eq!((code, err.as_str()), (Some(0), ""), "{command}");
+        for w in wanted {
+            assert!(out.contains(w), "{command}: {w}: {out}");
+        }
+    }
 }
 
 /// `clm <command> <args>` run in `dir`: the call given `dir` as the root `crates/clm` finds
@@ -197,7 +241,7 @@ fn clm_in(dir: &Path, args: &[&str]) -> Output {
 
 #[test]
 fn scenario_claim_prints_the_branch_then_is_refused() {
-    // req:orchestrator/backlog-claim@50959cb7
+    // req:orchestrator/backlog-claim@2f1843ca
     let r = repo();
     write(&r.work, "backlog/q.md", &item("c"));
     push_main(&r.work, "q");
@@ -213,7 +257,7 @@ fn scenario_claim_prints_the_branch_then_is_refused() {
 
 #[test]
 fn claim_fix_prints_the_branch_then_is_refused() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = repo();
     cite(&r.work, "b.rs", &["b/r"]);
     write(
@@ -252,7 +296,7 @@ fn next_with(dir: &Path, max_builds: &str) -> Output {
 
 #[test]
 fn next_is_capped_by_the_max_builds_setting() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = repo();
     let (code, out, err) = next_with(&r.work, "3");
     assert_eq!((code, out.as_str()), (Some(0), "a\nb\nc\n"), "{err}");
@@ -330,7 +374,7 @@ fn proposals_lines_filter_and_warning_through_the_call() {
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_ready() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = repo();
     write(
         &r.work,

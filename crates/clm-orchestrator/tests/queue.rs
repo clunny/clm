@@ -71,7 +71,7 @@ fn same_as_next() -> Graph {
 
 #[test]
 fn scenario_same_as_next() {
-    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@cc111fbd
+    // req:orchestrator/queue-from-refs@31254d34 req:orchestrator/next@69655c89
     let g = same_as_next();
     let q = queue(&g, &[current(&g, "b/x")], &[claim("e", 1)]);
     assert_eq!(state(&q, "b"), &State::Converged);
@@ -220,7 +220,7 @@ fn a_change_whose_addition_a_later_change_removed_completes() {
 
 #[test]
 fn lapsed_and_merged_claims_are_released() {
-    // req:orchestrator/next@cc111fbd req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/next@69655c89 req:orchestrator/queue-from-refs@31254d34
     let g = graph(&[
         ROOT,
         ("specs/b/SPEC.md", &node("", &["x"])),
@@ -236,7 +236,7 @@ fn lapsed_and_merged_claims_are_released() {
 
 #[test]
 fn nested_refs_claim_no_node() {
-    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/nested-branches-not-claims@a7ec57b2
+    // req:orchestrator/queue-from-refs@31254d34 req:orchestrator/nested-branches-not-claims@f920166b
     let g = graph(&[ROOT, ("specs/b/SPEC.md", &node("", &["x"]))]);
     let q = queue(&g, &[], &[claim("x/b", 1), claim("b/x", 1)]);
     assert_eq!(q.next(), ["b"]);
@@ -244,7 +244,7 @@ fn nested_refs_claim_no_node() {
 
 #[test]
 fn scenario_archive_branch_in_the_queue() {
-    // req:orchestrator/nested-branches-not-claims@a7ec57b2
+    // req:orchestrator/nested-branches-not-claims@f920166b
     let g = graph(&[
         ROOT,
         ("specs/archive/SPEC.md", &node("", &["x"])),
@@ -257,7 +257,7 @@ fn scenario_archive_branch_in_the_queue() {
 
 #[test]
 fn scenario_behind_requirement() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let g = graph(&[ROOT, ("specs/b/SPEC.md", &node("", &["x"]))]);
     let q = queue(&g, &[marker("b/x", Some("11111111"), 1)], &[]);
     assert_eq!(q.next(), ["b"]);
@@ -265,7 +265,7 @@ fn scenario_behind_requirement() {
 
 #[test]
 fn scenario_dependency_doesnt_order() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &node("b", &["x"])),
@@ -306,7 +306,7 @@ fn with_changes(nodes: &[(&str, &str)], changes: Vec<Vec<(String, String)>>) -> 
 
 #[test]
 fn scenario_higher_priority_first() {
-    // req:orchestrator/next@cc111fbd req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/next@69655c89 req:orchestrator/priority-orders-components@4445310c
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("", &["x"])),
@@ -325,7 +325,7 @@ fn scenario_higher_priority_first() {
 
 #[test]
 fn scenario_urgent_work_pulls_the_node_it_needs_forward() {
-    // req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/priority-orders-components@4445310c
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -345,7 +345,7 @@ fn scenario_urgent_work_pulls_the_node_it_needs_forward() {
 
 #[test]
 fn scenario_passes_through_a_claimed_node() {
-    // req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/priority-orders-components@4445310c
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("", &["x"])),
@@ -373,7 +373,7 @@ fn scenario_passes_through_a_claimed_node() {
 
 #[test]
 fn scenario_dependency_lends_no_priority() {
-    // req:orchestrator/priority-orders-components@147ea0bf req:orchestrator/next@cc111fbd
+    // req:orchestrator/priority-orders-components@4445310c req:orchestrator/next@69655c89
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("b", &["x"])),
@@ -393,7 +393,7 @@ fn scenario_dependency_lends_no_priority() {
 
 #[test]
 fn scenario_capability_pulls_its_serving_rules_forward() {
-    // req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/priority-orders-components@4445310c
     let capability_node = "---\ntitle: Capabilities\nstatus: active\nowners: []\npaths: [\"tests/capabilities/**\"]\n---\n\n## Contract\nThe tests.\n\n## Design\nThe harness.\n";
     let capabilities =
         "## Capabilities\n\n### Capability: c\nOne can.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
@@ -424,7 +424,7 @@ fn scenario_capability_pulls_its_serving_rules_forward() {
 
 #[test]
 fn scenario_capability_pulls_a_changed_serving_rules_needs_forward() {
-    // req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/priority-orders-components@4445310c
     let capability_node = "---\ntitle: Capabilities\nstatus: active\nowners: []\npaths: [\"tests/capabilities/**\"]\n---\n\n## Contract\nThe tests.\n\n## Design\nThe harness.\n";
     let capabilities =
         "## Capabilities\n\n### Capability: c\nOne can.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
@@ -463,7 +463,7 @@ fn scenario_capability_pulls_a_changed_serving_rules_needs_forward() {
 
 #[test]
 fn scenario_blocked_requirement_does_not_lend_its_priority() {
-    // req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/priority-orders-components@4445310c
     let mut files = vec![
         ("specs/b/SPEC.md".to_string(), node("", &["x", "y"])),
         ("specs/c/SPEC.md".to_string(), node("", &["x"])),
@@ -486,7 +486,7 @@ fn scenario_blocked_requirement_does_not_lend_its_priority() {
 
 #[test]
 fn priority_never_makes_a_node_ready() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -502,7 +502,7 @@ fn priority_never_makes_a_node_ready() {
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_ready() {
-    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@cc111fbd
+    // req:orchestrator/queue-from-refs@31254d34 req:orchestrator/next@69655c89
     let g = graph(&[
         ROOT,
         (
@@ -521,7 +521,7 @@ fn a_node_that_writes_a_protected_path_is_ready() {
 
 #[test]
 fn nodes_serialise_with_a_state_tag() {
-    // req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/queue-from-refs@31254d34
     let g = same_as_next();
     let q = queue(&g, &[current(&g, "b/x")], &[claim("e", 1)]);
     let json = serde_json::to_value(&q.nodes).unwrap();
@@ -544,7 +544,7 @@ fn nodes_serialise_with_a_state_tag() {
 
 #[test]
 fn priority_reaches_no_node_it_doesnt_need() {
-    // req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/priority-orders-components@4445310c
     // `a` (P1) depends on `b`, whose only pending requirement is blocked by an item, and on
     // `c`, which is converged: it needs neither, so neither is pulled forward.
     let mut files = vec![
@@ -570,7 +570,7 @@ fn priority_reaches_no_node_it_doesnt_need() {
 
 #[test]
 fn a_need_blocked_requirements_path_does_not_count() {
-    // req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/queue-from-refs@31254d34
     let g = graph(&[
         ROOT,
         (
@@ -591,7 +591,7 @@ fn a_need_blocked_requirements_path_does_not_count() {
 
 #[test]
 fn a_needed_requirement_blocked_by_an_item_still_blocks() {
-    // req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/queue-from-refs@31254d34
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -620,7 +620,7 @@ fn needing(deps: &str, needs: &str, more: &[&str]) -> String {
 
 #[test]
 fn scenario_blocked_by_a_need() {
-    // req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/queue-from-refs@31254d34
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -653,7 +653,7 @@ fn scenario_blocked_by_a_need() {
 
 #[test]
 fn scenario_needed_requirement_first_then_current() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -665,7 +665,7 @@ fn scenario_needed_requirement_first_then_current() {
 
 #[test]
 fn scenario_need_against_the_node_graph() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &["w"])),
@@ -686,7 +686,7 @@ fn scenario_need_against_the_node_graph() {
 
 #[test]
 fn scenario_a_component_that_waits_comes_last_at_equal_priority() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     // Every requirement comes from a change with no priority.
     let g = with_changes(
         &[
@@ -706,7 +706,7 @@ fn scenario_a_component_that_waits_comes_last_at_equal_priority() {
 
 #[test]
 fn a_requirement_blocked_by_an_item_alone_does_not_wait() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     // `a/x` is blocked by `backlog/h` and has no `waits_on`, so `a` keeps its place by ID.
     let g = graph(&[
         ROOT,
@@ -722,7 +722,7 @@ fn a_requirement_blocked_by_an_item_alone_does_not_wait() {
 
 #[test]
 fn a_component_that_waits_still_sorts_by_priority_first() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     // `a` waits on `c/y`, but its unblocked `a/w` carries P2, so it comes before `b` and
     // `c` at no priority; `a/x`, which waits, has no priority to lend `c`.
     let g = with_changes(
@@ -738,7 +738,7 @@ fn a_component_that_waits_still_sorts_by_priority_first() {
 
 #[test]
 fn scenario_blocked_node_holds_nothing_up() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -750,7 +750,7 @@ fn scenario_blocked_node_holds_nothing_up() {
 
 #[test]
 fn scenario_need_pulls_priority() {
-    // req:orchestrator/priority-orders-components@147ea0bf req:orchestrator/next@cc111fbd
+    // req:orchestrator/priority-orders-components@4445310c req:orchestrator/next@69655c89
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -769,7 +769,7 @@ fn scenario_need_pulls_priority() {
 
 #[test]
 fn a_need_blocked_by_an_item_too_still_seeds_and_lists_both() {
-    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/queue-from-refs@31254d34 req:orchestrator/priority-orders-components@4445310c
     // `a/x` is blocked by `backlog/q` and needs `b/y`, which needs `d/z`, so the seeded
     // priority passes on along the needs.
     let b = node_with("", "", &[("y", "It SHALL.\n\n#### Needs\n- d/z")]);
@@ -803,7 +803,7 @@ fn a_need_blocked_by_an_item_too_still_seeds_and_lists_both() {
 
 #[test]
 fn scenario_split_in_flight() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &node("", &["w"])),
@@ -893,7 +893,7 @@ fn removed_gone(priority: &str, owned: &[(&str, &[&str])], more: &[(&str, &str)]
 
 #[test]
 fn scenario_an_obsolete_requirement_waiting_on_its_other_lines() {
-    // req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/queue-from-refs@31254d34
     let g = removed_gone("", &[("b", &[]), ("c", &[]), ("d", &[])], &[]);
     let markers = [
         marker_in("b", "b/gone"),
@@ -927,7 +927,7 @@ fn scenario_an_obsolete_requirement_waiting_on_its_other_lines() {
 
 #[test]
 fn scenario_an_item_blocker_names_no_components() {
-    // req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/queue-from-refs@31254d34
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &node("", &["x"])),
@@ -954,7 +954,7 @@ fn scenario_an_item_blocker_names_no_components() {
 
 #[test]
 fn scenario_an_obsolete_requirement_pulls_the_owner_of_its_other_markers_forward() {
-    // req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/priority-orders-components@4445310c
     let mut more: Vec<(String, String)> = vec![
         (
             "backlog/q.md".into(),
@@ -975,7 +975,7 @@ fn scenario_an_obsolete_requirement_pulls_the_owner_of_its_other_markers_forward
 
 #[test]
 fn a_requirement_blocker_names_only_its_own_lines_once() {
-    // req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/queue-from-refs@31254d34
     // `a/x` waits on `b/y` and `c/z`, `a/w` on `b/y` too: each blocker names the components
     // of its own ID's lines only, each once, over every requirement it blocks.
     let a = node_with(
@@ -1017,7 +1017,7 @@ fn a_requirement_blocker_names_only_its_own_lines_once() {
 
 #[test]
 fn an_obsolete_requirement_seeds_every_component_of_its_other_lines() {
-    // req:orchestrator/priority-orders-components@147ea0bf
+    // req:orchestrator/priority-orders-components@4445310c
     // `b/gone`'s line on `b` waits on its lines on `c` and `d`, both of one ID: each is
     // followed, by its component and ID together, so both are seeded.
     let mut more: Vec<(String, String)> = vec![(

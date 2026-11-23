@@ -30,7 +30,7 @@ fn x_priority(p: &str) -> String {
 
 #[test]
 fn scenario_a_builds_land() {
-    // req:orchestrator/land-priority@5393b0de
+    // req:orchestrator/land-priority@2e3a4438
     let r = repo();
     write(&r.work, "changes/x/change.md", &x_priority("P2"));
     push_main(&r.work, "x is P2");
@@ -43,7 +43,7 @@ fn scenario_a_builds_land() {
 
 #[test]
 fn scenario_a_spec_branch() {
-    // req:orchestrator/land-priority@5393b0de
+    // req:orchestrator/land-priority@2e3a4438
     let r = repo();
     let (base, head) = branch(
         &r.work,
@@ -61,7 +61,7 @@ fn scenario_a_spec_branch() {
 
 #[test]
 fn scenario_a_fix_that_resolves_an_item() {
-    // req:orchestrator/land-priority@5393b0de
+    // req:orchestrator/land-priority@2e3a4438
     let r = repo();
     cite(&r.work, "a.rs", &["a/p", "a/q"]);
     write(
@@ -79,7 +79,7 @@ fn scenario_a_fix_that_resolves_an_item() {
 
 #[test]
 fn scenario_nothing_to_give_priority() {
-    // req:orchestrator/land-priority@5393b0de
+    // req:orchestrator/land-priority@2e3a4438
     let r = repo();
     let (base, head) = branch(&r.work, "fix-typo", &[("docs/guide/index.md", Some("x\n"))]);
     assert_eq!(
@@ -90,7 +90,7 @@ fn scenario_nothing_to_give_priority() {
 
 #[test]
 fn an_edited_change_and_an_unknown_component_give_nothing() {
-    // req:orchestrator/land-priority@5393b0de
+    // req:orchestrator/land-priority@2e3a4438
     let r = repo();
     let (base, head) = branch(
         &r.work,
@@ -105,7 +105,7 @@ fn an_edited_change_and_an_unknown_component_give_nothing() {
 
 #[test]
 fn reads_git_objects_not_the_working_tree() {
-    // req:orchestrator/land-priority@5393b0de
+    // req:orchestrator/land-priority@2e3a4438
     let r = repo();
     write(&r.work, "changes/x/change.md", &x_priority("P2"));
     push_main(&r.work, "x is P2");
@@ -124,7 +124,7 @@ fn reads_git_objects_not_the_working_tree() {
 
 #[test]
 fn scenario_specs_that_dont_load() {
-    // req:orchestrator/land-priority@5393b0de
+    // req:orchestrator/land-priority@2e3a4438
     let r = repo();
     write(&r.work, "specs/SPEC.md", "not a spec\n");
     push_main(&r.work, "broken");
@@ -133,4 +133,24 @@ fn scenario_specs_that_dont_load() {
         Err(Error::Spec(v)) => assert!(!v.is_empty()),
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn scenario_files_that_dont_parse() {
+    // req:orchestrator/land-priority@2e3a4438
+    let r = repo();
+    write(&r.work, "backlog/b.md", "---\ntitle: [unclosed\n---\n");
+    push_main(&r.work, "b doesn't parse");
+    let (base, head) = branch(
+        &r.work,
+        "spec/x",
+        &[
+            ("backlog/b.md", None),
+            ("changes/x/change.md", Some("# x\n\nNo frontmatter.\n")),
+        ],
+    );
+    assert_eq!(
+        land_priority(&r.work, "spec/x", &base, &head).unwrap(),
+        Priority::P5
+    );
 }

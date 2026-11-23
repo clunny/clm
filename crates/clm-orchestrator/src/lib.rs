@@ -2,7 +2,7 @@
 //!
 //! The queue ([`queue_from_refs`]) and what holds backlog items ([`taken_from_refs`]) need
 //! neither git nor a checkout. Everything that does (the `next`, `claim` and `proposals`
-//! commands, `taken_items`, and the `claims` rows of `clm status`) sits behind the default
+//! commands, `taken_items`, and the claim refs `clm status` reads) sits behind the default
 //! feature `git`, so with default features off the crate builds for
 //! `wasm32-unknown-unknown` (`orchestrator-builds-for-wasm`).
 
@@ -31,21 +31,18 @@ pub use places::{
     place_slot, places, rename_place, take_place,
 };
 #[cfg(feature = "git")]
-pub use propose::{Proposals, proposals, taken_items};
+pub use propose::taken_items;
 pub use queue::{
     Block, ClaimRef, Node, Queue, Requirement, State, claim_state, claims_section, queue_from_refs,
 };
 #[cfg(feature = "git")]
 pub use repo::{
     Claim, NextLook, claim, claim_fix, claim_local, claim_refs, next, next_look, propose_refs,
-    refusal, status_claims,
 };
 pub use taken::{BareClaim, Holding, HoldingChange, SpecRef, Taken, taken_from_refs};
 
 use clm_model::Violation;
 
-#[cfg(feature = "git")]
-pub use clm_git::REMOTE;
 pub const DEFAULT_EXPIRY_HOURS: u64 = 4;
 
 #[derive(Debug)]

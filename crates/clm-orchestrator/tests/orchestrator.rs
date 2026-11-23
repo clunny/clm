@@ -5,14 +5,20 @@ mod common;
 use std::fs;
 
 use clm_orchestrator::{
-    Error, PlaceKind, Placed, State, claim, claim_fix, claim_refs, next, next_look,
-    queue_from_refs, status_claims, take_place,
+    Error, PlaceKind, Placed, State, claim, claim_fix, claim_refs, claims_section, next, next_look,
+    propose_refs, queue_from_refs, take_place,
 };
 use common::*;
 
 /// `clm next` with room for every node, so the places never cut the list short.
 fn ready(r: &Repo) -> Vec<String> {
     next(&r.work, 4, 9).unwrap()
+}
+
+/// The `claims` section `clm status` ends with, as `claims_section` gives it for the refs at
+/// `root` now.
+fn claims_rows(root: &std::path::Path) -> Vec<Vec<String>> {
+    claims_section(&claim_refs(root), &propose_refs(root), clm_git::now())
 }
 
 fn refused(res: Result<String, Error>) -> String {
@@ -24,23 +30,22 @@ fn refused(res: Result<String, Error>) -> String {
 
 #[test]
 fn scenario_claiming_an_unknown_component() {
-    // req:orchestrator/says-component@4aae7d81
+    // req:orchestrator/says-component@30a7cfd4
     let r = repo();
     let why = refused(claim(&r.work, "zz", 4));
     assert!(why.contains("no component `zz`"), "{why}");
     let why = refused(claim(&r.work, "a/b", 4));
     assert!(why.contains("isn't a component ID"), "{why}");
-}
-
-#[test]
-fn scenario_one_remote_name() {
-    // req:orchestrator/shared-plumbing@aeadf0f1
-    assert_eq!(clm_orchestrator::REMOTE, clm_git::REMOTE);
+    let (code, out, err) = claim_line(&r.work, &["zz"]);
+    assert_eq!(
+        (code, out.as_str(), err.as_str()),
+        (1, "", "clm claim: no component `zz`\n")
+    );
 }
 
 #[test]
 fn scenario_dependency_doesnt_order_then_converged() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = repo();
     // `a` depends on `b`; `c` is on its own. Nothing is cited yet.
     assert_eq!(ready(&r), ["a", "b", "c"]);
@@ -51,20 +56,31 @@ fn scenario_dependency_doesnt_order_then_converged() {
 
 #[test]
 fn next_reads_origin_main_not_the_checkout() {
-    // req:orchestrator/next@cc111fbd
+    // Scenario "the checkout doesn't count".
+    // req:orchestrator/next@69655c89
     let r = repo();
     cite(&r.work, "c.rs", &["c/s"]);
     write(&r.work, "specs/a/SPEC.md", "garbage");
+    let status = git(&r.work, &["status", "--porcelain"]);
+    let index = git(&r.work, &["ls-files", "--stage"]);
+    let cited = fs::read_to_string(r.work.join("src/c.rs")).unwrap();
     assert_eq!(
         ready(&r),
         ["a", "b", "c"],
         "the checkout's edits don't count"
     );
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), status);
+    assert_eq!(git(&r.work, &["ls-files", "--stage"]), index);
+    assert_eq!(fs::read_to_string(r.work.join("src/c.rs")).unwrap(), cited);
+    assert_eq!(
+        fs::read_to_string(r.work.join("specs/a/SPEC.md")).unwrap(),
+        "garbage"
+    );
 }
 
 #[test]
 fn scenario_live_and_lapsed_claims() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = repo();
     push_claim(&r.work, "b", 1);
     push_claim(&r.work, "c", 5);
@@ -74,7 +90,7 @@ fn scenario_live_and_lapsed_claims() {
 
 #[test]
 fn scenario_merged_claim() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = repo();
     push_claim(&r.work, "b", 1);
     merge_claim(&r.work, "b");
@@ -96,7 +112,7 @@ fn hold(root: &std::path::Path, node: &str) {
 
 #[test]
 fn scenario_capped_by_places() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = repo();
     write(&r.work, "specs/d/SPEC.md", &node("", &["t"]));
     write(&r.work, "specs/e/SPEC.md", &node("", &["u"]));
@@ -110,7 +126,7 @@ fn scenario_capped_by_places() {
 
 #[test]
 fn scenario_a_component_that_waits_comes_last_at_equal_priority() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = repo();
     // Only the scenario's `a`, `b` and `c`, with no `depends_on`, every requirement from
     // change `x`, which sets no priority.
@@ -136,7 +152,7 @@ fn scenario_a_component_that_waits_comes_last_at_equal_priority() {
 
 #[test]
 fn scenario_no_place_free() {
-    // req:orchestrator/next@cc111fbd req:orchestrator/claim@026fab7a
+    // req:orchestrator/next@69655c89 req:orchestrator/claim@e4eac3f1
     let r = repo();
     hold(&r.work, "z");
     assert_eq!(next(&r.work, 4, 1).unwrap(), Vec::<String>::new());
@@ -159,7 +175,7 @@ fn scenario_no_place_free() {
 
 #[test]
 fn scenario_full_cap_empty_queue() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = converged();
     hold(&r.work, "z");
     let look = next_look(&r.work, 4, 1).unwrap();
@@ -169,7 +185,7 @@ fn scenario_full_cap_empty_queue() {
 
 #[test]
 fn scenario_same_as_next_on_a_repo() {
-    // req:orchestrator/queue-matches-next@b56edb27 req:orchestrator/next@cc111fbd
+    // req:orchestrator/queue-matches-next@b56edb27 req:orchestrator/next@69655c89
     // The tree of `queue.rs`'s *same as next*: `a` depends on `b`, `c` on `d`, `b` is
     // converged, `e` claimed an hour ago, and `backlog/h.md` blocks `f/x`.
     let r = repo();
@@ -217,7 +233,7 @@ fn scenario_same_as_next_on_a_repo() {
 
 #[test]
 fn scenario_places_shared_by_worktrees() {
-    // req:orchestrator/next@cc111fbd
+    // req:orchestrator/next@69655c89
     let r = repo();
     hold(&r.work, "z");
     let tmp = tempfile::TempDir::new().unwrap();
@@ -237,28 +253,28 @@ fn scenario_places_shared_by_worktrees() {
 
 #[test]
 fn nested_branches_claim_no_node() {
-    // req:orchestrator/next@cc111fbd req:orchestrator/status-claims@726cb7c5
-    // req:orchestrator/nested-branches-not-claims@a7ec57b2
+    // req:orchestrator/next@69655c89 req:orchestrator/status-claims@a57eb4f0
+    // req:orchestrator/nested-branches-not-claims@f920166b
     let r = repo();
     push_claim(&r.work, "b/x", 1);
     assert_eq!(ready(&r), ["a", "b", "c"]);
-    assert_eq!(status_claims(&r.work), [["none"]]);
+    assert_eq!(claims_rows(&r.work), [["none"]]);
     assert!(clm_orchestrator::claim_refs(&r.work).is_empty());
 }
 
 #[test]
 fn scenario_archive_branch_beside_a_claim() {
-    // req:orchestrator/nested-branches-not-claims@a7ec57b2
+    // req:orchestrator/nested-branches-not-claims@f920166b
     let r = repo();
     push_claim(&r.work, "b", 1);
     push_claim(&r.work, "archive/20261026-x", 1);
-    assert_eq!(status_claims(&r.work), [["b", "live"]]);
+    assert_eq!(claims_rows(&r.work), [["b", "live"]]);
     assert_eq!(ready(&r), ["a", "c"]);
 }
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_listed_and_claimed() {
-    // req:orchestrator/next@cc111fbd req:orchestrator/claim@026fab7a
+    // req:orchestrator/next@69655c89 req:orchestrator/claim@e4eac3f1
     let r = repo();
     write(
         &r.work,
@@ -278,7 +294,7 @@ fn a_node_that_writes_a_protected_path_is_listed_and_claimed() {
 
 #[test]
 fn claim_pushes_a_fresh_commit_on_main() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     assert_eq!(claim(&r.work, "b", 4).unwrap(), "impl/b");
     let tip = remote_tip(&r, "impl/b").unwrap();
@@ -292,7 +308,7 @@ fn claim_pushes_a_fresh_commit_on_main() {
 
 #[test]
 fn scenario_already_claimed() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     let sha = push_claim(&r.work, "b", 1);
     assert!(refused(claim(&r.work, "b", 4)).contains("claimed"));
@@ -301,7 +317,7 @@ fn scenario_already_claimed() {
 
 #[test]
 fn scenario_why_it_isnt_ready() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     write(
         &r.work,
@@ -320,14 +336,25 @@ fn scenario_why_it_isnt_ready() {
     assert!(converged.contains("takes no claim"), "{converged}");
     assert!(converged.contains("branch of its own"), "{converged}");
     assert!(converged.contains("clm land"), "{converged}");
-    assert!(refused(claim(&r.work, "ghost", 4)).contains("no component"));
-    assert!(refused(claim(&r.work, "x/b", 4)).contains("isn't a component"));
+    for route in [
+        "impl/",
+        "spec/",
+        "propose/",
+        "autosync/",
+        "gate/own-files",
+        "--fix",
+    ] {
+        assert!(converged.contains(route), "{route}: {converged}");
+    }
+    assert!(!converged.contains("light"), "{converged}");
+    assert!(refused(claim(&r.work, "ghost", 4)).contains("no component `ghost`"));
+    assert!(refused(claim(&r.work, "x/b", 4)).contains("`x/b` isn't a component ID"));
     assert_eq!(git(&r.origin, &["for-each-ref"]), refs, "nothing pushed");
 }
 
 #[test]
 fn scenario_pending_dependency() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     // `a` depends on `b`, and both have uncited requirements.
     assert_eq!(claim(&r.work, "a", 4).unwrap(), "impl/a");
@@ -336,7 +363,7 @@ fn scenario_pending_dependency() {
 
 #[test]
 fn scenario_blocked_by_a_need() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     // `c/s` needs `b/r`, which nothing cites.
     write(
@@ -353,7 +380,7 @@ fn scenario_blocked_by_a_need() {
 
 #[test]
 fn scenario_takeover() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     let old = push_claim(&r.work, "b", 5);
     assert_eq!(claim(&r.work, "b", 4).unwrap(), "impl/b");
@@ -367,7 +394,7 @@ fn scenario_takeover() {
 
 #[test]
 fn scenario_merged_takeover() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     push_claim(&r.work, "b", 1);
     merge_claim(&r.work, "b");
@@ -379,28 +406,113 @@ fn scenario_merged_takeover() {
 
 #[test]
 fn claim_that_lands_though_the_push_is_rejected_succeeds_and_tracks_the_claim() {
-    // req:orchestrator/claim@026fab7a
+    // Scenario "a push that landed though git reported failure".
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
-    // The hook lets the update through and then fails, as a flaky remote would.
-    pre_receive(&r, "exit 1\n");
-    // `pre-receive` failing rejects the push, so make the hook accept and `update` reject
-    // after the ref moved: emulate with a post-receive that reports failure instead.
-    fs::remove_file(r.origin.join("hooks/pre-receive")).unwrap();
-    write_exec(
-        &r.origin.join("hooks/post-receive"),
-        "#!/bin/sh\necho 'post-receive broke' >&2\nexit 1\n",
+    // The hook pushes the commit it is given itself, drops the tracking ref, and fails the
+    // push it was asked about, as a connection dropped after the update would.
+    clone_hook(
+        &r,
+        "pre-push",
+        "while read lref lsha rref rsha; do\n\
+         git push --no-verify -q \"$2\" \"$lsha:$rref\" || exit 3\n\
+         done\n\
+         git update-ref -d refs/remotes/origin/impl/b 2>/dev/null\n\
+         exit 1\n",
     );
-    assert_eq!(claim(&r.work, "b", 4).unwrap(), "impl/b");
+    assert_eq!(
+        claim_line(&r.work, &["b"]),
+        (0, "impl/b\n".into(), String::new())
+    );
     let tip = remote_tip(&r, "impl/b").unwrap();
     assert_eq!(
         git(&r.work, &["rev-parse", "refs/remotes/origin/impl/b"]).trim(),
         tip
     );
+    let main = git(&r.origin, &["rev-parse", "main"]);
+    assert_eq!(git(&r.origin, &["rev-parse", &format!("{tip}^")]), main);
+}
+
+/// `clm claim` with `args` through its call, in `root`: its status, stdout and stderr.
+fn claim_line(root: &std::path::Path, args: &[&str]) -> (u8, String, String) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code =
+        clm_orchestrator::claim_command(args.iter().copied(), root, &|_| None, &mut out, &mut err);
+    (
+        code,
+        String::from_utf8(out).unwrap(),
+        String::from_utf8(err).unwrap(),
+    )
+}
+
+/// Installs the clone's `hook` with `body`.
+fn clone_hook(r: &Repo, hook: &str, body: &str) {
+    write_exec(
+        &r.work.join(format!(".git/hooks/{hook}")),
+        &format!("#!/bin/sh\n{body}"),
+    );
+}
+
+#[test]
+fn scenario_tip_unreadable_after_a_rejection() {
+    // req:orchestrator/claim@e4eac3f1
+    let r = repo();
+    clone_hook(
+        &r,
+        "pre-push",
+        "git config remote.origin.url /nonexistent/origin\nexit 1\n",
+    );
+    let (code, out, err) = claim_line(&r.work, &["b"]);
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert!(err.starts_with("clm claim: "), "{err}");
+    assert!(err.contains("git push:"), "{err}");
+    assert!(
+        err.contains("failed to push"),
+        "git's reason for the push: {err}"
+    );
+    assert!(
+        err.contains("/nonexistent/origin"),
+        "the read's reason: {err}"
+    );
+    assert!(!err.contains("may be transient"), "{err}");
+}
+
+#[test]
+fn scenario_an_id_that_cant_be_a_component() {
+    // req:orchestrator/claim@e4eac3f1
+    let dir = tempfile::tempdir().unwrap();
+    for (id, why) in [
+        ("x/b", "clm claim: `x/b` isn't a component ID\n"),
+        ("", "clm claim: `` isn't a component ID\n"),
+    ] {
+        assert_eq!(
+            claim_line(dir.path(), &[id]),
+            (1, String::new(), why.to_string()),
+            "{id:?}"
+        );
+    }
+}
+
+#[test]
+fn scenario_a_slug_that_cant_be_an_item() {
+    // req:orchestrator/backlog-claim@2f1843ca
+    let dir = tempfile::tempdir().unwrap();
+    for id in ["backlog/", "backlog/a/b"] {
+        assert_eq!(
+            claim_line(dir.path(), &[id]),
+            (
+                1,
+                String::new(),
+                format!("clm claim: `{id}` isn't an item\n")
+            ),
+            "{id:?}"
+        );
+    }
 }
 
 #[test]
 fn scenario_rejected_for_another_reason() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     pre_receive(&r, "echo 'declined by test' >&2\nexit 1\n");
     // Each hook run is seen on this process's monotonic clock: a hook's wall clock can jump.
@@ -432,7 +544,7 @@ fn scenario_rejected_for_another_reason() {
 
 #[test]
 fn scenario_rejected_twice() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     pre_receive(
         &r,
@@ -456,7 +568,7 @@ fn scenario_rejected_twice() {
 
 #[test]
 fn claim_rejected_while_the_tip_moved_is_lost_without_retrying() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     // The rejection coincides with another session's claim landing. Hooks may not move refs
     // from git's quarantine, so this one steps outside it.
@@ -471,7 +583,7 @@ fn claim_rejected_while_the_tip_moved_is_lost_without_retrying() {
 
 #[test]
 fn scenario_race() {
-    // req:orchestrator/claim@026fab7a
+    // req:orchestrator/claim@e4eac3f1
     let r = repo();
     let other = r.work.with_file_name("other");
     git(
@@ -508,38 +620,35 @@ fn scenario_race() {
 
 #[test]
 fn scenario_status_claims_live_lapsed_and_merged() {
-    // req:orchestrator/status-claims@726cb7c5
+    // req:orchestrator/status-claims@a57eb4f0
     let r = repo();
     push_claim(&r.work, "b", 1);
     push_claim(&r.work, "c", 5);
     let before = git(&r.origin, &["for-each-ref"]);
     git(&r.work, &["fetch", "-q", "origin"]);
-    assert_eq!(status_claims(&r.work), [["b", "live"], ["c", "lapsed"]]);
+    assert_eq!(claims_rows(&r.work), [["b", "live"], ["c", "lapsed"]]);
     merge_claim(&r.work, "b");
-    assert_eq!(status_claims(&r.work), [["b", "merged"], ["c", "lapsed"]]);
+    assert_eq!(claims_rows(&r.work), [["b", "merged"], ["c", "lapsed"]]);
     // It never fetches: a claim on `origin` the last fetch didn't see doesn't show.
     push_claim(&r.work, "a", 0);
     git(&r.work, &["update-ref", "-d", "refs/remotes/origin/impl/a"]);
-    assert_eq!(status_claims(&r.work).len(), 2);
+    assert_eq!(claims_rows(&r.work).len(), 2);
     assert_ne!(git(&r.origin, &["for-each-ref"]), before);
 }
 
 #[test]
 fn scenario_backlog_claims_after_node_claims() {
-    // req:orchestrator/status-claims@726cb7c5
+    // req:orchestrator/status-claims@a57eb4f0
     let r = repo();
     push_claim(&r.work, "b", 1);
     push_propose(&r.work, "q", 1);
     git(&r.work, &["fetch", "-q", "origin"]);
-    assert_eq!(
-        status_claims(&r.work),
-        [["b", "live"], ["backlog/q", "live"]]
-    );
+    assert_eq!(claims_rows(&r.work), [["b", "live"], ["backlog/q", "live"]]);
 }
 
 #[test]
 fn backlog_claims_live_and_lapsed_by_the_expiry_after_node_claims() {
-    // req:orchestrator/status-claims@726cb7c5
+    // req:orchestrator/status-claims@a57eb4f0
     let r = repo();
     push_claim(&r.work, "b", 1);
     push_claim(&r.work, "c", 5);
@@ -547,7 +656,7 @@ fn backlog_claims_live_and_lapsed_by_the_expiry_after_node_claims() {
     push_propose(&r.work, "q", 1);
     git(&r.work, &["fetch", "-q", "origin"]);
     assert_eq!(
-        status_claims(&r.work),
+        claims_rows(&r.work),
         [
             ["b", "live"],
             ["c", "lapsed"],
@@ -559,11 +668,11 @@ fn backlog_claims_live_and_lapsed_by_the_expiry_after_node_claims() {
 
 #[test]
 fn scenario_no_claims() {
-    // req:orchestrator/status-claims@726cb7c5
+    // req:orchestrator/status-claims@a57eb4f0
     let r = repo();
-    assert_eq!(status_claims(&r.work), [["none"]]);
+    assert_eq!(claims_rows(&r.work), [["none"]]);
     let dir = tempfile::TempDir::new().unwrap();
-    assert_eq!(status_claims(dir.path()), [["none"]]);
+    assert_eq!(claims_rows(dir.path()), [["none"]]);
 }
 
 /// A backlog item of `kind` naming `nodes` (comma-separated).
@@ -603,7 +712,7 @@ fn on_the_claim(r: &Repo) {
 
 #[test]
 fn scenario_fix_on_a_converged_node() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = fixable();
     assert!(refused(claim(&r.work, "b", 4)).contains("converged"));
     assert_eq!(on(&r.work), "spec/s");
@@ -621,7 +730,7 @@ fn scenario_fix_on_a_converged_node() {
 
 #[test]
 fn scenario_fix_for_a_deferred_item() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = repo();
     cite(&r.work, "b.rs", &["b/r"]);
     write(&r.work, "backlog/k.md", &kind_item("deferred", "b"));
@@ -633,7 +742,7 @@ fn scenario_fix_for_a_deferred_item() {
 
 #[test]
 fn scenario_fix_on_a_claimed_node() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = repo();
     write(&r.work, "backlog/x.md", &kind_item("bug", "b"));
     push_main(&r.work, "bug x");
@@ -645,7 +754,7 @@ fn scenario_fix_on_a_claimed_node() {
 
 #[test]
 fn scenario_stale_local_branch_reset() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = fixable();
     git(&r.work, &["branch", "impl/b", "origin/main~1"]);
     assert_eq!(claim_fix(&r.work, "b", "backlog/x", 4).unwrap(), "impl/b");
@@ -654,7 +763,7 @@ fn scenario_stale_local_branch_reset() {
 
 #[test]
 fn fix_claim_from_a_merged_fix_branch_checked_out_resets_it() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = fixable();
     assert_eq!(claim_fix(&r.work, "b", "backlog/x", 4).unwrap(), "impl/b");
     merge_claim(&r.work, "b");
@@ -667,7 +776,7 @@ fn fix_claim_from_a_merged_fix_branch_checked_out_resets_it() {
 
 #[test]
 fn scenario_branch_held_by_another_worktree() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = fixable();
     let dir = tempfile::TempDir::new().unwrap();
     let w = dir.path().join("w");
@@ -685,7 +794,7 @@ fn scenario_branch_held_by_another_worktree() {
 
 #[test]
 fn scenario_unmerged_local_commits() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = fixable();
     let tree = git(&r.work, &["rev-parse", "origin/main^{tree}"]);
     let main = git(&r.work, &["rev-parse", "origin/main"]);
@@ -703,7 +812,7 @@ fn scenario_unmerged_local_commits() {
 
 #[test]
 fn scenario_uncommitted_changes() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = fixable();
     write(&r.work, "ARCHITECTURE.md", "# Edited\n");
     let why = refused(claim_fix(&r.work, "b", "backlog/x", 4));
@@ -723,7 +832,7 @@ fn scenario_uncommitted_changes() {
 
 #[test]
 fn scenario_switch_fails_after_the_push() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = fixable();
     // `spec/s`'s tree differs from the claim's, so a switch that moved the files before the
     // ref would leave them changed.
@@ -769,7 +878,7 @@ fn scenario_switch_fails_after_the_push() {
 
 #[test]
 fn scenario_item_not_a_bug_on_the_node() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = repo();
     write(&r.work, "backlog/y.md", &kind_item("idea", "b"));
     write(&r.work, "backlog/z.md", &kind_item("bug", "c"));
@@ -798,11 +907,68 @@ fn scenario_item_not_a_bug_on_the_node() {
     assert!(refused(claim_fix(&r.work, "ghost", "backlog/z", 4)).contains("no component"));
     assert!(refused(claim_fix(&r.work, "x/b", "backlog/z", 4)).contains("isn't a component"));
     assert_eq!(git(&r.origin, &["for-each-ref"]), refs, "nothing pushed");
+    // Neither the ID nor the `--fix` value needs a fetch to refuse: outside a repository they
+    // exit 1, not 2.
+    let dir = tempfile::tempdir().unwrap();
+    for (args, why) in [
+        (
+            ["a/b", "--fix", "backlog/x"],
+            "clm claim: `a/b` isn't a component ID\n",
+        ),
+        (["a", "--fix", "x"], "clm claim: `x` isn't a backlog item\n"),
+        (
+            ["a", "--fix", "backlog/"],
+            "clm claim: `backlog/` isn't a backlog item\n",
+        ),
+        (
+            ["a", "--fix", "backlog/a/x"],
+            "clm claim: `backlog/a/x` isn't a backlog item\n",
+        ),
+    ] {
+        assert_eq!(
+            claim_line(dir.path(), &args),
+            (1, String::new(), why.to_string()),
+            "{args:?}"
+        );
+    }
+}
+
+#[test]
+fn scenario_remedies() {
+    // req:orchestrator/claim-fix@ddf650ed
+    let r = fixable();
+    let refused_with = |what: &str| {
+        let why = refused(claim_fix(&r.work, "b", "backlog/x", 4));
+        assert!(why.contains(what), "{what}: {why}");
+        assert_eq!(remote_tip(&r, "impl/b"), None, "nothing pushed");
+    };
+    write(&r.work, "ARCHITECTURE.md", "# Edited\n");
+    refused_with("commit them or set them aside");
+    git(&r.work, &["checkout", "-q", "--", "ARCHITECTURE.md"]);
+    let dir = tempfile::TempDir::new().unwrap();
+    let w = dir.path().join("w");
+    git(
+        &r.work,
+        &["worktree", "add", "-q", w.to_str().unwrap(), "-b", "impl/b"],
+    );
+    let canonical = fs::canonicalize(&w).unwrap();
+    refused_with(&format!("`git worktree remove {}`", canonical.display()));
+    fs::remove_dir_all(&w).unwrap();
+    refused_with("`git worktree prune`");
+    git(&r.work, &["worktree", "prune"]);
+    let tree = git(&r.work, &["rev-parse", "origin/main^{tree}"]);
+    let main = git(&r.work, &["rev-parse", "origin/main"]);
+    let work = git(
+        &r.work,
+        &["commit-tree", tree.trim(), "-p", main.trim(), "-m", "work"],
+    );
+    git(&r.work, &["branch", "-f", "impl/b", work.trim()]);
+    refused_with("`git branch -D impl/b`");
 }
 
 #[test]
 fn fix_takes_over_a_released_claim() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = repo();
     // `a`'s old claim lapsed, and `c`'s merged.
     write(&r.work, "backlog/x.md", &kind_item("bug", "a, c"));
@@ -817,7 +983,7 @@ fn fix_takes_over_a_released_claim() {
 
 #[test]
 fn fix_claims_a_blocked_node_and_reads_items_from_origin_main() {
-    // req:orchestrator/claim-fix@5a3c119e
+    // req:orchestrator/claim-fix@ddf650ed
     let r = repo();
     // `c`'s only pending requirement is blocked by `q`.
     write(
@@ -842,23 +1008,4 @@ fn converged() -> Repo {
     push_main(&r.work, "cite all");
     assert!(ready(&r).is_empty());
     r
-}
-
-#[test]
-fn scenario_next_wait_wait_refused() {
-    // req:orchestrator/next-wait@e9450c03
-    for args in [vec!["next", "--wait"], vec!["next", "--interval", "5"]] {
-        let out = std::process::Command::new(env!("CARGO"))
-            .args(["run", "-q", "-p", "clm", "--"])
-            .args(&args)
-            .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .output()
-            .unwrap();
-        assert_eq!(out.status.code(), Some(2), "{args:?}");
-        assert!(
-            String::from_utf8_lossy(&out.stderr).contains("Usage"),
-            "{args:?}: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-    }
 }
