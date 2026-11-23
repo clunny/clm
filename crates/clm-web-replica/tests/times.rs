@@ -17,7 +17,8 @@ const FOURTEEN_UTC: u64 = TEN_UTC + 4 * 3600;
 
 /// The fake GitHub, but its refs listing gives each commit time `iso(TEN_UTC)` as its
 /// committer two hours east wrote it.
-struct East<'a>(&'a Fake);
+/// It counts the listings it rewrote, so the test knows an offset reached the object.
+struct East<'a>(&'a Fake, std::cell::Cell<usize>);
 
 impl GitHub for East<'_> {
     async fn send(&self, req: GhRequest) -> GhResponse {
@@ -26,11 +27,12 @@ impl GitHub for East<'_> {
             .as_deref()
             .is_some_and(|b| b.contains("query Refs"));
         let mut res = self.0.send(req).await;
-        if refs {
-            res.body = res.body.replace(
-                &format!("\"committedDate\":\"{}\"", iso(TEN_UTC)),
-                "\"committedDate\":\"2026-10-01T12:00:00+02:00\"",
-            );
+        let utc = format!("\"committedDate\":\"{}\"", iso(TEN_UTC));
+        if refs && res.body.contains(&utc) {
+            res.body = res
+                .body
+                .replace(&utc, "\"committedDate\":\"2026-10-01T12:00:00+02:00\"");
+            self.1.set(self.1.get() + 1);
         }
         res
     }
@@ -113,7 +115,7 @@ fn a_commit_made_two_hours_east() {
     // A resync listing `impl/b`, which the replica doesn't hold, committed at 12:00 two hours
     // east.
     let fake = fake_with("111", repo_files(&[]));
-    let east = East(&fake);
+    let east = East(&fake, Default::default());
     let (mut object, mem, slot) = built(&fake);
     fake.now.set(fake.now.get() + 60);
     block_on(object.view(&east, "implementation", false));
@@ -139,4 +141,5 @@ fn a_commit_made_two_hours_east() {
         }
     }
     assert!(resynced, "the resync applied `impl/b`");
+    assert!(east.1.get() > 0, "the refs listing gave the offset");
 }
