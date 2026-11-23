@@ -43,8 +43,12 @@ test.describe('phone', () => {
     await page.goto('/app/#/o/a');
     const yes = page.locator('button.answer[data-answer=yes]');
     await expect(yes).toBeVisible();
-    await yes.scrollIntoViewIfNeeded();
-    await expect(yes).toBeInViewport({ ratio: 1 });
+    // Home is drawn again as the reviews, capabilities and architecture arrive, and a scroll
+    // that overlaps a redraw finds its button detached, so scroll and measure in a retrying block.
+    await expect(async () => {
+      await yes.scrollIntoViewIfNeeded({ timeout: 2_000 });
+      await expect(yes).toBeInViewport({ ratio: 1, timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
     const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
     expect(fits).toBe(true);
     await yes.tap();
