@@ -207,7 +207,8 @@ impl<'a> Ctx<'a> {
 
 /// What the caller gives the mutation pass (`mutation-pass`): the file it reads available
 /// memory from, the length of a minute and of the grace between `SIGTERM` and `SIGKILL`, and a
-/// stop request the pass watches while its command runs.
+/// stop request the pass watches while its command runs and that keeps the filing from
+/// starting what it hasn't started yet (`files-unproven`).
 pub struct Call<'a> {
     pub memory: &'a Path,
     pub minute: Duration,
@@ -266,7 +267,7 @@ pub fn verify_with(
         && ctx.verify.mode == clm_config::VerifyMode::Local
         && ctx.verify.mutate.is_some()
     {
-        outcome.notes.extend(file::file(&ctx));
+        outcome.notes.extend(file::file(&ctx, call.stop));
     }
     Ok(outcome)
 }

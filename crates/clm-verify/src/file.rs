@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use clm_ledger::Body;
 
@@ -23,9 +24,13 @@ struct Candidate {
 }
 
 /// Files what is still to file and returns the notes for stderr; a failure is a note, never
-/// an error, and changes nothing about the verification.
-pub(crate) fn file(ctx: &Ctx) -> Vec<String> {
-    match try_file(ctx) {
+/// an error, and changes nothing about the verification. Once an entry to file is found, `stop`
+/// is judged before each step that writes and commits, pushes or lands, and a step not yet
+/// started then isn't, the note being `unproven: not filed: stopped`. Its `git` commands and
+/// its land run in the caller's process group, so a Ctrl-C at a terminal ends the one running,
+/// which fails its step.
+pub(crate) fn file(ctx: &Ctx, stop: &AtomicBool) -> Vec<String> {
+    match try_file(ctx, stop) {
         Ok(None) => Vec::new(),
         Ok(Some((items, requirements))) => {
             vec![format!(
@@ -36,7 +41,7 @@ pub(crate) fn file(ctx: &Ctx) -> Vec<String> {
     }
 }
 
-fn try_file(ctx: &Ctx) -> Result<Option<(usize, usize)>, Error> {
+fn try_file(ctx: &Ctx, stop: &AtomicBool) -> Result<Option<(usize, usize)>, Error> {
     // The ledger as it is now, which holds the record the pass just appended.
     let state = State::load(ctx)?;
     let candidates = candidates(ctx, &state)?;
@@ -46,7 +51,7 @@ fn try_file(ctx: &Ctx) -> Result<Option<(usize, usize)>, Error> {
     let scratch = scratch(ctx)?;
     let top = scratch.path().join("tree");
     let branch = format!("unproven/{}", ctx.short(&ctx.base)?);
-    let done = attempt(ctx, &candidates, &branch, &top);
+    let done = attempt(ctx, &candidates, &branch, &top, stop);
     // Whether or not it landed, nothing is left behind.
     let _ = clm_git::remove_worktree(&ctx.root, &top);
     let _ = ctx.git(&["worktree", "prune"]);
@@ -106,45 +111,62 @@ fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
     Ok(out)
 }
 
+/// Fails with `stopped` when the call's stop request is set (`files-unproven`).
+fn go_on(stop: &AtomicBool) -> Result<(), Error> {
+    if stop.load(Ordering::SeqCst) {
+        return Err(Error::Refused("stopped".to_string()));
+    }
+    Ok(())
+}
+
 /// Writes the items in a worktree of `origin/main` on `branch`, pushes it and lands it, and
-/// returns how many items and requirements it filed, or none when no entry is current.
+/// returns how many items and requirements it filed, or none when no entry is current. `stop`
+/// is judged once an entry is found, before each of those steps.
 fn attempt(
     ctx: &Ctx,
     candidates: &[Candidate],
     branch: &str,
     top: &Path,
+    stop: &AtomicBool,
 ) -> Result<Option<(usize, usize)>, Error> {
     let at = top.to_string_lossy();
     ctx.git(&["worktree", "add", "--quiet", "-B", branch, &at, &ctx.base])?;
     let dir = top.join(&ctx.prefix);
     let (graph, _) = clm_model::load(&dir);
+    // Each candidate's entries still at their current version, found before anything is
+    // written.
+    let filed: Vec<(&Candidate, Vec<&String>)> = candidates
+        .iter()
+        .map(|c| {
+            let current: Vec<&String> = c
+                .entries
+                .iter()
+                .filter(|e| {
+                    e.split_once('@').is_some_and(|(id, version)| {
+                        graph
+                            .requirement(id)
+                            .is_some_and(|r| r.version() == version)
+                    })
+                })
+                .collect();
+            (c, current)
+        })
+        .filter(|(_, current)| !current.is_empty())
+        .collect();
+    if filed.is_empty() {
+        return Ok(None);
+    }
+    go_on(stop)?;
     let cites = cites(&dir, &graph)?;
     let (mut items, mut requirements) = (0, 0);
-    for c in candidates {
-        let current: Vec<&String> = c
-            .entries
-            .iter()
-            .filter(|e| {
-                e.split_once('@').is_some_and(|(id, version)| {
-                    graph
-                        .requirement(id)
-                        .is_some_and(|r| r.version() == version)
-                })
-            })
-            .collect();
-        if current.is_empty() {
-            continue;
-        }
+    for (c, current) in &filed {
         let item = top.join(&c.path);
         if let Some(parent) = item.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(&item, text(ctx, c, &current, &cites)?)?;
+        fs::write(&item, text(ctx, c, current, &cites)?)?;
         items += 1;
         requirements += current.len();
-    }
-    if items == 0 {
-        return Ok(None);
     }
     clm_git::git(top, &["add", "--all"])?;
     clm_git::git(
@@ -156,6 +178,7 @@ fn attempt(
             "File the requirements the mutation pass found unproven",
         ],
     )?;
+    go_on(stop)?;
     ctx.git(&[
         "push",
         "--quiet",
@@ -165,6 +188,7 @@ fn attempt(
     ])?;
     // The branch is committed and pushed: the worktree has done its work.
     clm_git::remove_worktree(&ctx.root, top)?;
+    go_on(stop)?;
     clm_land::land(&ctx.root, Some(branch), ctx.env)?;
     Ok(Some((items, requirements)))
 }
