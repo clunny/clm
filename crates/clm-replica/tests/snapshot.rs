@@ -168,7 +168,7 @@ fn a_complete_change_reports_complete() {
     let status = clm_check::status(dir.path()).unwrap();
     assert_eq!(snap["changes"][0]["complete"], true);
     assert_eq!(snap["changes"][0]["current"], 2);
-    assert!(status.changes[0].1[0][1].starts_with("2/2"), "{status}");
+    assert!(status.changes[0].1[0][1].starts_with("2/2"), "{status:?}");
 }
 
 // ---- sizes ----
