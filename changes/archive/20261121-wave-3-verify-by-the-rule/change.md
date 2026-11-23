@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [reconsider-clm-verify-command, workaround-clm-verify-command-1, clm-verify-can-t-tell-its-caller-when-the-mutation-pass-runs, a-release-locks-a-migration-whose-requirement-is-still-pending]
 ---
 
