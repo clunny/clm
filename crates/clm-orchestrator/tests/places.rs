@@ -203,11 +203,43 @@ fn taking_deletes_the_places_that_dont_count() {
 #[test]
 fn a_place_name_is_one_file_name() {
     // req:orchestrator/places@39abce44
+    // Scenario "a name that isn't a file name".
     let r = repo();
-    for bad in ["", "a/b", "..", "."] {
-        let res = take_place(&r.work, bad, PlaceKind::Build, &[], 3, 4);
-        assert!(matches!(res, Err(Error::Refused(_))), "{bad:?}: {res:?}");
+    take_place(&r.work, "a", PlaceKind::Build, &build("a"), 3, 4).unwrap();
+    let before = fs::read(builds(&r.work).join("a")).unwrap();
+    let refused = |res: Result<(), Error>, what: &str| {
+        assert!(matches!(res, Err(Error::Refused(_))), "{what}: {res:?}");
+    };
+    for bad in ["", "a/b", "..", ".", "a\\b"] {
+        let res = take_place(&r.work, bad, PlaceKind::Build, &[], 3, 4).map(drop);
+        refused(res, &format!("take {bad:?}"));
+        refused(free_place(&r.work, bad), &format!("free {bad:?}"));
+        refused(rename_place(&r.work, "a", bad), &format!("a to {bad:?}"));
+        refused(rename_place(&r.work, bad, "b"), &format!("{bad:?} to b"));
     }
+    assert_eq!(files(&builds(&r.work)), ["a"]);
+    assert_eq!(fs::read(builds(&r.work).join("a")).unwrap(), before);
+}
+
+#[cfg(unix)]
+#[test]
+fn scenario_a_stale_place_that_cant_be_deleted() {
+    // req:orchestrator/places@39abce44
+    use std::os::unix::fs::PermissionsExt;
+    let r = repo();
+    write_place(&r.work, "a", "build", 5, &["impl/a"]);
+    write_place(&r.work, "c", "build", 0, &["impl/c"]);
+    let dir = builds(&r.work);
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+    // Root deletes from a read-only directory: nothing to test there.
+    let writable = fs::write(dir.join("probe"), "").is_ok();
+    let taken = (!writable).then(|| take_place(&r.work, "d", PlaceKind::Build, &build("d"), 3, 4));
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+    let Some(taken) = taken else {
+        return;
+    };
+    assert!(taken.is_err(), "{taken:?}");
+    assert_eq!(files(&dir), ["a", "c"]);
 }
 
 /// Run as a subprocess by `scenario_racing_takers`: takes place `CLM_TAKER` in
@@ -302,10 +334,17 @@ fn rename_moves_the_place() {
     write_place(&r.work, "draft-1-q", "draft", 0, &[]);
     rename_place(&r.work, "draft-1-q", "20261027-q").unwrap();
     assert_eq!(files(&builds(&r.work)), ["20261027-q"]);
+    // Scenario "rename of a place that isn't there".
+    let before = fs::read(builds(&r.work).join("20261027-q")).unwrap();
     assert!(matches!(
         rename_place(&r.work, "draft-1-q", "x"),
         Err(Error::Refused(_))
     ));
+    assert_eq!(files(&builds(&r.work)), ["20261027-q"]);
+    assert_eq!(
+        fs::read(builds(&r.work).join("20261027-q")).unwrap(),
+        before
+    );
 }
 
 #[test]

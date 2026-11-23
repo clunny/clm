@@ -7,7 +7,6 @@ use clm_model::{ARCHIVE_DIR, Priority, parse_backlog_item, parse_change_frontmat
 
 use crate::Error;
 use crate::queue::queue_from_refs;
-use crate::repo::load;
 
 /// The priority a land of `branch`, whose head is `head`, carries onto `base`: the highest
 /// of its component's effective priority at `base` when `branch` is `impl/<component>`,
@@ -15,7 +14,16 @@ use crate::repo::load;
 /// `P5` when none gives one.
 pub fn land_priority(root: &Path, branch: &str, base: &str, head: &str) -> Result<Priority, Error> {
     let tree = clm_git::extract_tree(root, base)?;
-    let graph = load(tree.path())?;
+    // A backlog item that doesn't parse gives no priority; only the specs failing to load
+    // fails the call.
+    let (graph, violations) = clm_model::load(tree.path());
+    let violations: Vec<_> = violations
+        .into_iter()
+        .filter(|v| !v.path.starts_with("backlog"))
+        .collect();
+    if !violations.is_empty() {
+        return Err(Error::Spec(violations));
+    }
     let markers = clm_coverage::scan(tree.path()).req;
     let mut found = Vec::new();
     if let Some(component) = branch.strip_prefix(crate::repo::BRANCH_PREFIX) {

@@ -134,3 +134,23 @@ fn scenario_specs_that_dont_load() {
         other => panic!("{other:?}"),
     }
 }
+
+#[test]
+fn scenario_files_that_dont_parse() {
+    // req:orchestrator/land-priority@5393b0de
+    let r = repo();
+    write(&r.work, "backlog/b.md", "---\ntitle: [unclosed\n---\n");
+    push_main(&r.work, "b doesn't parse");
+    let (base, head) = branch(
+        &r.work,
+        "spec/x",
+        &[
+            ("backlog/b.md", None),
+            ("changes/x/change.md", Some("# x\n\nNo frontmatter.\n")),
+        ],
+    );
+    assert_eq!(
+        land_priority(&r.work, "spec/x", &base, &head).unwrap(),
+        Priority::P5
+    );
+}
