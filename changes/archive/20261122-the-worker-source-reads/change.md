@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-worker-source-reads-times-and-picks-files-by-its-own-copies-of-the-replica-s-rules]
 ---
 
