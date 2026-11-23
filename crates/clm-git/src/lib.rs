@@ -575,17 +575,36 @@ impl fmt::Display for FetchError {
 impl std::error::Error for FetchError {}
 
 /// `git <args>` (a fetch naming [`REMOTE`]) in `root`, run again after a failure, at most twice
-/// more, after 1 and then 2 seconds. When the last run fails, [`FetchError::Offline`] if
-/// `git ls-remote` of `REMOTE` fails too, else [`FetchError::Git`] with the last run's error.
+/// more, after 1 and then 2 seconds. A run `git` can't be started for ends it at once, as
+/// [`FetchError::Git`] holding an [`Error::Spawn`] that names `root`. When the last run fails,
+/// [`FetchError::Offline`] if `git ls-remote` of `REMOTE` fails too, else [`FetchError::Git`]
+/// with the last run's error.
 pub fn fetch_retrying(root: &Path, args: &[&str]) -> Result<(), FetchError> {
     fetch_waiting(root, args, std::thread::sleep)
 }
 
 /// [`fetch_retrying`] with its waits made through `wait`, so a test sees them without the
 /// clock.
-fn fetch_waiting(root: &Path, args: &[&str], wait: impl FnMut(Duration)) -> Result<(), FetchError> {
-    let Err(last) = run_again(root, args, &FETCH_WAITS, wait) else {
-        return Ok(());
+fn fetch_waiting(
+    root: &Path,
+    args: &[&str],
+    mut wait: impl FnMut(Duration),
+) -> Result<(), FetchError> {
+    let mut result = git(root, args);
+    for &pause in &FETCH_WAITS {
+        if matches!(result, Ok(_) | Err(Error::Spawn { .. })) {
+            break;
+        }
+        wait(pause);
+        result = git(root, args);
+    }
+    let last = match result {
+        Ok(_) => return Ok(()),
+        Err(Error::Spawn { command, source }) => {
+            let command = format!("{command} in {}", root.display());
+            return Err(FetchError::Git(Error::Spawn { command, source }));
+        }
+        Err(last) => last,
     };
     match git(root, &["ls-remote", "--quiet", REMOTE, "refs/heads/main"]) {
         Err(_) => Err(FetchError::Offline),
@@ -912,7 +931,7 @@ mod tests {
 
     #[test]
     fn a_failing_fetch_waits_1_then_2_seconds() {
-        // req:vcs/fetch-retries@2629af1f
+        // req:vcs/fetch-retries@f4f74e93
         let dir = tempfile::tempdir().unwrap();
         git(dir.path(), &["init", "-q"]).unwrap();
         let missing = dir.path().join("missing");
@@ -925,6 +944,23 @@ mod tests {
         let err = fetch_waiting(dir.path(), &["fetch", REMOTE], |d| waits.push(d)).unwrap_err();
         assert!(matches!(err, FetchError::Offline), "{err}");
         assert_eq!(waits, [Duration::from_secs(1), Duration::from_secs(2)]);
+    }
+
+    #[test]
+    fn a_root_git_cant_start_in_ends_the_fetch_at_once() {
+        // req:vcs/fetch-retries@f4f74e93
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("file");
+        std::fs::write(&file, "").unwrap();
+        for root in [dir.path().join("missing"), file] {
+            let mut waits = Vec::new();
+            let err = fetch_waiting(&root, &["fetch", REMOTE], |d| waits.push(d)).unwrap_err();
+            assert!(waits.is_empty(), "{root:?}: {waits:?}");
+            let FetchError::Git(Error::Spawn { command, .. }) = &err else {
+                panic!("{root:?}: {err}");
+            };
+            assert_eq!(*command, format!("git fetch origin in {}", root.display()));
+        }
     }
 
     #[test]

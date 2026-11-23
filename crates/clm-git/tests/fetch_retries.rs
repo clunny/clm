@@ -66,7 +66,7 @@ fn calls(clone: &Path, what: &str) -> usize {
 
 #[test]
 fn a_fetch_that_loses_a_ref_race_goes_on() {
-    // req:vcs/fetch-retries@2629af1f
+    // req:vcs/fetch-retries@f4f74e93
     let (_dir, clone) = clone_with("once");
     let start = Instant::now();
     fetch_retrying(&clone, &["fetch", REMOTE]).unwrap();
@@ -78,7 +78,7 @@ fn a_fetch_that_loses_a_ref_race_goes_on() {
 
 #[test]
 fn a_fetch_that_keeps_failing_with_origin_reachable_is_a_git_error() {
-    // req:vcs/fetch-retries@2629af1f
+    // req:vcs/fetch-retries@f4f74e93
     let (_dir, clone) = clone_with("always");
     let start = Instant::now();
     let err = fetch_retrying(&clone, &["fetch", REMOTE]).unwrap_err();
@@ -91,7 +91,7 @@ fn a_fetch_that_keeps_failing_with_origin_reachable_is_a_git_error() {
 
 #[test]
 fn an_unreachable_origin_is_offline() {
-    // req:vcs/fetch-retries@2629af1f
+    // req:vcs/fetch-retries@f4f74e93
     let (dir, clone) = clone_with("");
     sh(
         &clone,
@@ -108,7 +108,7 @@ fn an_unreachable_origin_is_offline() {
 
 #[test]
 fn what_being_offline_says() {
-    // req:vcs/fetch-retries@2629af1f
+    // req:vcs/fetch-retries@f4f74e93
     let (dir, clone) = clone_with("");
     sh(
         &clone,
@@ -121,6 +121,21 @@ fn what_being_offline_says() {
     );
     let err = fetch_retrying(&clone, &["fetch", REMOTE]).unwrap_err();
     assert_eq!(err.to_string(), "origin can't be reached");
+}
+
+#[test]
+fn a_root_that_doesnt_exist_names_it_at_once() {
+    // req:vcs/fetch-retries@f4f74e93
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("x");
+    let start = Instant::now();
+    let err = fetch_retrying(&missing, &["fetch", REMOTE]).unwrap_err();
+    assert!(start.elapsed() < Duration::from_secs(1));
+    assert!(matches!(err, FetchError::Git(_)), "{err}");
+    let shown = err.to_string();
+    assert!(shown.starts_with("git fetch origin in "), "{shown}");
+    assert!(shown.contains(missing.to_str().unwrap()), "{shown}");
+    assert!(!shown.contains("can't be reached"), "{shown}");
 }
 
 /// A branch `b` on the bare origin that the clone hasn't fetched.
