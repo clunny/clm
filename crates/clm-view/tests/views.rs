@@ -194,6 +194,7 @@ fn bar_gives_every_state_a_cell_and_ties_to_current_first() {
 #[test]
 fn scenario_queue_states_on_the_chart() {
     // req:view/spec-view@249ab038
+    // req:view/view-command@c4a4df22
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -766,7 +767,7 @@ fn changes_in_a_group_sort_by_priority_then_id() {
 #[test]
 fn flight_chart_names_every_state_and_the_claim() {
     // req:view/flight-view@d01ad49e
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     // req:view/says-component@f1f9079e
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -1265,7 +1266,7 @@ fn a_need_blocked_by_an_item_and_a_need_reaches_both() {
 
 #[test]
 fn ansi_adds_colour_and_nothing_else() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let view = spec_with(&g, &markers, &[claim("check.drift", 1)]);
     let plain = render(&view, Format::Text, 100, None);
@@ -1277,7 +1278,7 @@ fn ansi_adds_colour_and_nothing_else() {
 
 #[test]
 fn lines_are_cut_to_the_width_in_text_and_ansi() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let long = "a".repeat(60);
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -1302,7 +1303,7 @@ fn lines_are_cut_to_the_width_in_text_and_ansi() {
 
 #[test]
 fn json_is_the_model_with_the_view_named() {
-    // req:view/view-library@645f94e9
+    // req:view/view-library@2bb194e8
     let g = ordered();
     let model = flight_view(&g, &[], &[], NOW, EXPIRY);
     let out = render(&View::Flight(model.clone()), Format::Json, 100, None);
@@ -1313,7 +1314,7 @@ fn json_is_the_model_with_the_view_named() {
 
 #[test]
 fn a_merged_ref_is_not_a_claim() {
-    // req:view/view-library@645f94e9
+    // req:view/view-library@2bb194e8
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1333,7 +1334,7 @@ fn a_merged_ref_is_not_a_claim() {
 
 #[test]
 fn svg_is_a_document_with_the_nodes_and_their_edges() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let out = render(&spec_chart(&g, &markers), Format::Svg, 100, None);
     assert!(out.starts_with("<svg"), "{out}");
@@ -1356,14 +1357,124 @@ fn svg_is_a_document_with_the_nodes_and_their_edges() {
 
 #[test]
 fn svg_escapes_text() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &node("specd", "", "\"<o&o>\"", &["x"])),
     ]);
     let out = render(&spec_chart(&g, &[]), Format::Svg, 100, None);
-    assert!(out.contains("&lt;o&amp;o&gt;"), "{out}");
-    assert!(!out.contains("<o&o>"), "{out}");
+    let doc = roxmltree::Document::parse(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+    assert_eq!(doc.root_element().tag_name().name(), "svg");
+    assert!(
+        doc.descendants()
+            .filter_map(|n| n.text())
+            .any(|t| t.contains("<o&o>")),
+        "{out}"
+    );
+    // A character XML 1.0 forbids, here in a title, still leaves a document that parses.
+    let g = graph(&[
+        ("specs/SPEC.md", &specd("", &[])),
+        (
+            "specs/a/SPEC.md",
+            &specd("", &["x"]).replace("title: T", "title: \"T\\x01\""),
+        ),
+    ]);
+    assert!(g.nodes["a"].frontmatter.title.contains('\u{1}'));
+    let out = render(&spec_chart(&g, &[]), Format::Svg, 100, None);
+    roxmltree::Document::parse(&out).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    // Nor does one in the text the SVG draws: an owner and the checkout's line.
+    let mut model = spec_view(&g, &[], None);
+    for n in &mut model.nodes {
+        n.owners.push("o\u{1}\u{b}".into());
+    }
+    let out = render(
+        &View::Spec(model, Default::default()),
+        Format::Svg,
+        100,
+        Some(&Head::Checkout(Checkout {
+            commit: "abc\u{1}".into(),
+            behind: None,
+        })),
+    );
+    roxmltree::Document::parse(&out).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    let flight = View::Flight(flight_view(&g, &[], &[], NOW, EXPIRY));
+    let out = render(
+        &flight,
+        Format::Svg,
+        100,
+        Some(&Head::Checkout(Checkout {
+            commit: "abc\u{1}\u{fffe}".into(),
+            behind: None,
+        })),
+    );
+    roxmltree::Document::parse(&out).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+}
+
+#[test]
+fn scenario_no_width() {
+    // req:view/view-command@c4a4df22
+    let long = "a".repeat(60);
+    let g = graph(&[
+        ("specs/SPEC.md", &specd("", &[])),
+        (&format!("specs/{long}/SPEC.md"), &specd("", &["x"])),
+    ]);
+    let view = spec_chart(&g, &[]);
+    for format in [Format::Text, Format::Ansi] {
+        let out = strip_ansi(&render(&view, format, 0, None));
+        assert!(
+            out.lines().any(|l| l.contains(&format!("{long} "))),
+            "{out}"
+        );
+        assert!(!out.contains('…'), "{out}");
+    }
+}
+
+#[test]
+fn scenario_colours() {
+    // req:view/view-command@c4a4df22
+    let g = graph(&[
+        ("specs/SPEC.md", &specd("", &[])),
+        ("specs/a/SPEC.md", &node("active", "", "", &["x"])),
+        ("specs/b/SPEC.md", &specd("", &["x"])),
+        ("specs/c/SPEC.md", &specd("", &["x"])),
+        ("backlog/q.md", &item("question", "b/x")),
+    ]);
+    let view = spec_with(&g, &[], &[claim("a", 1)]);
+    let behind = head(Some(3));
+    let ansi = render(&view, Format::Ansi, 100, Some(&behind));
+    for coloured in [
+        "\u{1b}[33mclaimed\u{1b}[0m",
+        "\u{1b}[33m⚠ 3 behind origin/main\u{1b}[0m",
+        "\u{1b}[31mblocked\u{1b}[0m",
+        "\u{1b}[36mready\u{1b}[0m",
+        "\u{1b}[32mactive\u{1b}[0m",
+    ] {
+        assert!(ansi.contains(coloured), "{coloured:?} not in {ansi}");
+    }
+    let flight = View::Flight(flight_view(&g, &[], &[claim("a", 1)], NOW, EXPIRY));
+    let ansi = render(&flight, Format::Ansi, 100, None);
+    assert!(
+        ansi.lines().any(|l| l == "\u{1b}[34mcomponents\u{1b}[0m"),
+        "{ansi}"
+    );
+    // The SVG fills `claimed` and the `⚠` part amber and `blocked` rose.
+    let svg = render(&view, Format::Svg, 100, Some(&behind));
+    let style = &svg[svg.find("<style>").unwrap()..svg.find("</style>").unwrap()];
+    let fill = |class: &str| {
+        let at = style
+            .find(&format!(".{class}{{fill:"))
+            .unwrap_or_else(|| panic!("no fill for {class} in {style}"));
+        &style[at + class.len() + 7..at + class.len() + 14]
+    };
+    assert_eq!(fill("amber"), "#b7791f");
+    assert_eq!(fill("rose"), "#dc3558");
+    for drawn in [
+        "<tspan class=\"amber\">claimed</tspan>",
+        "<tspan class=\"amber\">⚠ 3 behind origin/main</tspan>",
+        "<tspan class=\"rose\">blocked</tspan>",
+    ] {
+        assert!(svg.contains(drawn), "{drawn} not in {svg}");
+    }
 }
 
 #[test]
@@ -1412,7 +1523,7 @@ fn svg_draws_the_bar_and_outlines_a_pending_node_in_its_state() {
 #[test]
 fn the_flight_bar_writes_each_pending_state_as_its_own_symbol() {
     // req:view/flight-view@d01ad49e
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x", "y"])),
@@ -1461,7 +1572,7 @@ fn at(ago: Option<u64>, branch: Option<&str>) -> Head {
 
 #[test]
 fn the_commit_line_heads_every_chart_at_a_commit() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let view = View::Flight(flight_view(&g, &markers, &[], NOW, EXPIRY));
     let first = |head: Head| {
@@ -1487,6 +1598,17 @@ fn the_commit_line_heads_every_chart_at_a_commit() {
         first(at(None, None)),
         "origin/main abc1234 · checkout detached"
     );
+    // A fetch later than the time it is measured to is `0m` ago.
+    assert_eq!(
+        first(Head::At(At {
+            rev: "origin/main".into(),
+            commit: "abc1234".into(),
+            fetched: Some(NOW + 10),
+            branch: None,
+            now: NOW,
+        })),
+        "origin/main abc1234 · fetched 0m ago · checkout detached"
+    );
     let head = at(Some(200), Some("impl/a"));
     let ansi = render(&view, Format::Ansi, 100, Some(&head));
     assert!(!ansi.lines().next().unwrap().contains('⚠'), "{ansi}");
@@ -1510,7 +1632,7 @@ fn the_commit_line_heads_every_chart_at_a_commit() {
 
 #[test]
 fn the_checkout_line_heads_every_chart() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let views = [
         spec_chart(&g, &markers),
@@ -1556,7 +1678,7 @@ fn the_checkout_line_heads_every_chart() {
 
 #[test]
 fn the_spec_svg_puts_the_checkout_above_the_boxes() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let view = spec_chart(&g, &markers);
     let svg = render(&view, Format::Svg, 100, Some(&head(Some(1))));
@@ -1579,8 +1701,8 @@ fn the_spec_svg_puts_the_checkout_above_the_boxes() {
 
 #[test]
 fn the_json_carries_the_checkout_beside_the_model() {
-    // req:view/view-library@645f94e9
-    // req:view/view-command@9fec4d39
+    // req:view/view-library@2bb194e8
+    // req:view/view-command@c4a4df22
     let g = ordered();
     let model = flight_view(&g, &[], &[], NOW, EXPIRY);
     let view = View::Flight(model.clone());
@@ -1604,7 +1726,7 @@ fn the_json_carries_the_checkout_beside_the_model() {
 
 #[test]
 fn scenario_checkout_behind_on_the_chart() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let flight = View::Flight(flight_view(&g, &markers, &[], NOW, EXPIRY));
     let behind = head(Some(3));
@@ -1626,7 +1748,7 @@ fn scenario_checkout_behind_on_the_chart() {
 
 #[test]
 fn scenario_the_model_carries_no_checkout() {
-    // req:view/view-library@645f94e9
+    // req:view/view-library@2bb194e8
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
