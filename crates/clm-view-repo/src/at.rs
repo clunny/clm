@@ -36,8 +36,8 @@ struct Tree {
     prefix: String,
 }
 
-/// Whether git judges a blob binary: a NUL in its first 8000 bytes. A binary file counts
-/// toward no size and holds no marker, as `clm size` and the working tree's scan judge it.
+/// Whether git judges a blob binary: a NUL in its first 8000 bytes. A binary file holds no
+/// marker (`view-at-rev`) and counts toward no size, as `clm size` judges it.
 fn binary(bytes: &[u8]) -> bool {
     bytes[..bytes.len().min(BINARY_PROBE)].contains(&0)
 }

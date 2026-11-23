@@ -230,6 +230,8 @@ fn scenario_no_such_commit() {
     for args in [
         &["view", "spec", "--at=--all"][..],
         &["pending", "--at=--all"][..],
+        &["view", "spec", "--at", "--all"][..],
+        &["pending", "--at", "--all"][..],
     ] {
         let out = clm(dir.path(), args);
         assert_eq!(out.status.code(), Some(1), "{args:?}: {out:?}");
@@ -256,6 +258,7 @@ fn a_commit_it_cant_read() {
         assert!(out.stdout.is_empty(), "{args:?}: {out:?}");
         let err = stderr(&out);
         assert!(err.contains("`HEAD`"), "{args:?}: {err}");
+        assert!(err.contains("not a git repository"), "{args:?}: {err}");
     }
     // A partial clone whose `origin/main` blobs were never fetched: refused, fetching none.
     let origin = ahead_of_the_checkout();
@@ -284,7 +287,10 @@ fn a_commit_it_cant_read() {
     let out = clm(&clone, &["view", "spec", "--at", "origin/main"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
-    assert!(stderr(&out).contains("`origin/main`"), "{}", stderr(&out));
+    // Named, and why: the blob git couldn't read without fetching.
+    let err = stderr(&out);
+    assert!(err.starts_with("`origin/main`: "), "{err}");
+    assert!(err.contains("cat-file"), "{err}");
     assert_eq!(objects(), before);
 }
 
@@ -321,6 +327,9 @@ fn at_a_commit_sizes_by_its_own_settings() {
     // A commit whose `clm.toml` doesn't parse: sized by nothing, said on stderr.
     git(d, &["switch", "-q", "--detach", "origin/main"]);
     write(d, "clm.toml", "[component_size\n");
+    // `a`'s spec over the default budget: nothing marks it, not even the defaults.
+    let big = format!("{}\n{}\n", node("", &["x"]), "word ".repeat(20000));
+    write(d, "specs/a/SPEC.md", &big);
     git(d, &["add", "-A"]);
     git(d, &["commit", "-qm", "broken budgets"]);
     git(d, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
