@@ -564,7 +564,13 @@ fn prompt_for(
          (`code-fix-needs-a-written-rule`). An `ARCHITECTURE.md` entry, carried or the \
          project's own, is not such a requirement, since a test never cites an entry \
          (`human-layer-proof`): a bug whose behaviour only an architecture entry states is a \
-         bug no requirement states, unless its work is test plumbing. A `bug` or `deferred` \
+         bug no requirement states, unless its work is test plumbing. Two more cases lie \
+         outside that rule beside test plumbing, and each is fixed by component like a \
+         code-only bug, with `clm claim <component> --fix backlog/<slug>`, a `Resolves:` \
+         trailer and no test: a bug in the fixed text of a prompt or skill, which no \
+         requirement may state (`prompt-text-is-source`), and a code or doc comment that \
+         contradicts a Contract, Design, decision, `ARCHITECTURE.md` or `CAPABILITIES.md`. \
+         A `bug` or `deferred` \
          item whose work is test plumbing only is never a requirement of any component: \
          test plumbing is harness-only work, changing only the plumbing of the capability \
          suite and nothing a capability test observes, or the plumbing of a component's \
