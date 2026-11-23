@@ -1,8 +1,8 @@
-//! `clm verify`'s stop by hand (`verify-command`): from its `verify passed ` line until
-//! `clm-verify`'s call returns, the mutation pass and the filing of what it found together,
-//! `SIGINT` and `SIGTERM` set the call's stop request instead of ending the process, and the
-//! first of them decides the exit status once the call returns. At any other time they end it
-//! as they would any process.
+//! `clm verify`'s stop by hand (`verify-command`): from its outcome line, whatever it says,
+//! until `clm-verify`'s call returns, the mutation pass, the clearing of the verify tree and
+//! the filing of what the pass found together, `SIGINT` and `SIGTERM` set the call's stop
+//! request instead of ending the process, and the first of them decides the exit status once
+//! the call returns. At any other time they end it as they would any process.
 
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 

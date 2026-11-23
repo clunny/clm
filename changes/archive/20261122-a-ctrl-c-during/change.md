@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-ctrl-c-during-clm-verify-s-filing-after-a-run-that-didn-t-pass]
 ---
 

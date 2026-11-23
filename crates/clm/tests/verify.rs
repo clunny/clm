@@ -81,7 +81,7 @@ fn verify_as_writer(dir: &Path, args: &[&str]) -> (Option<i32>, String, String) 
     )
 }
 
-// req:clm/verify-command@31b600dd
+// req:clm/verify-command@5314b4c8
 #[test]
 fn each_flag_reaches_its_own_mode() {
     let dir = verifying();
@@ -109,7 +109,7 @@ fn each_flag_reaches_its_own_mode() {
     assert!(err.contains("nothing to bisect"), "{err}");
 }
 
-// req:clm/verify-command@31b600dd
+// req:clm/verify-command@5314b4c8
 #[test]
 fn a_fresh_project_is_off_from_a_subdirectory() {
     let dir = initialised();
@@ -118,7 +118,7 @@ fn a_fresh_project_is_off_from_a_subdirectory() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), OFF);
 }
 
-// req:clm/verify-command@31b600dd
+// req:clm/verify-command@5314b4c8
 #[test]
 fn a_subdirectory_reads_the_project_settings() {
     let dir = verifying();
@@ -129,7 +129,7 @@ fn a_subdirectory_reads_the_project_settings() {
     );
 }
 
-// req:clm/verify-command@31b600dd
+// req:clm/verify-command@5314b4c8
 #[test]
 fn help_lists_the_command() {
     let dir = initialised();
@@ -258,7 +258,7 @@ fn spawn_verify(dir: &Path) -> std::process::Child {
         .unwrap()
 }
 
-// req:clm/verify-command@31b600dd
+// req:clm/verify-command@5314b4c8
 #[test]
 fn stopped_by_hand() {
     let marks = TempDir::new().unwrap();
@@ -314,7 +314,121 @@ fn stopped_by_hand() {
     }
 }
 
-// req:clm/verify-command@31b600dd
+/// A set-up repository in `local` mode whose component `a` holds requirement `one`, cited by a
+/// test, landed on `origin/main` with a `[verify]` that sets `mutate` and no trigger, and a
+/// `[land] check` that writes `landing` in `marks`, sleeps two seconds and passes. A passing
+/// `verified` record for `origin/main`'s head means no trigger holds, and a `mutated` record
+/// for it names `a/one` at its current version as `unproven`, so `clm verify --due` files it.
+fn filing_after_not_due(marks: &Path) -> TempDir {
+    let dir = initialised();
+    let root = dir.path();
+    git(root, &["config", "user.name", "t"]);
+    git(root, &["config", "user.email", "t@e"]);
+    std::fs::create_dir_all(root.join("specs/a")).unwrap();
+    std::fs::write(
+        root.join("specs/a/SPEC.md"),
+        "---\ntitle: A\nstatus: active\nowners: []\npaths: [\"crates/a/**\"]\n---\n\n\
+         ## Contract\nc\n\n## Design\nd\n\n## Requirements\n\n\
+         ### Requirement: one\nIt SHALL do one.\n\n#### Scenario: s\n- GIVEN a\n- WHEN b\n- THEN c\n",
+    )
+    .unwrap();
+    let hashes = clm(root, &["hashes", "a"]);
+    let hashes = String::from_utf8_lossy(&hashes.stdout).into_owned();
+    let version = hashes
+        .lines()
+        .find_map(|l| l.strip_prefix("requirement:one "))
+        .unwrap_or_else(|| panic!("{hashes}"))[..8]
+        .to_string();
+    std::fs::create_dir_all(root.join("crates/a/tests")).unwrap();
+    std::fs::write(root.join("crates/a/src.rs"), "1\n").unwrap();
+    std::fs::write(
+        root.join("crates/a/tests/one.rs"),
+        format!("#[test]\nfn proves_one() {{\n    // {MARK}one@{version}\n}}\n"),
+    )
+    .unwrap();
+    let toml = root.join("clm.toml");
+    // `clm init` wrote a `[land]` table: its `check` line is replaced.
+    let text = std::fs::read_to_string(&toml).unwrap();
+    let (before, after) = text.split_once("\n[land]\n").expect("a [land] table");
+    let (_, after) = after.split_once('\n').expect("its check line");
+    let text = format!(
+        "{before}\n[land]\ncheck = \": > '{}'; sleep 2; exit 0\"\n{after}\n\
+         [verify]\ncheck = \"true\"\nmode = \"local\"\ntriggers = []\nmutate = \"true\"\n",
+        marks.join("landing").display()
+    );
+    std::fs::write(&toml, text).unwrap();
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "a"]);
+    git(root, &["push", "-q", "origin", "main"]);
+    let head = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "origin/main"])
+            .current_dir(root)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
+    let env = |key: &str| (key == "CLM_WRITER").then(|| "t".to_string());
+    let verified = clm_ledger::Body::Verified {
+        commit: head.clone(),
+        passed: true,
+        since: None,
+        lands: vec![head.clone()],
+        culprit: None,
+        components: vec![],
+        mode: clm_ledger::VerifyMode::Local,
+        run: None,
+    };
+    clm_ledger::append(root, verified, &env).unwrap();
+    let mutated =
+        clm_ledger::Body::mutated(head, None, vec![], vec![format!("a/one@{version}")], vec![]);
+    clm_ledger::append(root, mutated, &env).unwrap();
+    dir
+}
+
+// req:clm/verify-command@5314b4c8
+#[test]
+fn stopped_while_it_files_after_a_run_that_was_not_due() {
+    let marks = TempDir::new().unwrap();
+    let dir = filing_after_not_due(marks.path());
+    let child = spawn_verify(dir.path());
+    if !wait_for(&marks.path().join("landing")) {
+        kill(child.id(), "-KILL");
+        let out = child.wait_with_output().unwrap();
+        panic!(
+            "the filing's land never ran its check: {}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    // To `clm verify` alone, so the land's check runs on to its end.
+    kill(child.id(), "-TERM");
+    let out = child.wait_with_output().unwrap();
+    let (stdout, stderr) = (
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(stdout.starts_with("verify not-due"), "{stdout}{stderr}");
+    assert!(
+        stderr.contains("unproven: filed 1 items for 1 requirements"),
+        "{stderr}"
+    );
+    assert_eq!(out.status.code(), Some(143), "{stdout}{stderr}");
+    let branches = Command::new("git")
+        .args(["ls-remote", "--heads", "origin", "unproven/*"])
+        .current_dir(dir.path())
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(branches.status.success(), "{branches:?}");
+    assert_eq!(String::from_utf8_lossy(&branches.stdout), "");
+}
+
+// req:clm/verify-command@5314b4c8
 #[test]
 fn a_signal_before_the_pass_ends_it_as_any_process() {
     use std::os::unix::process::ExitStatusExt;
