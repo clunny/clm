@@ -1,9 +1,8 @@
 //! `clm status`'s `components` and `changes` sections (`status-report`). `view` lays them out.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::fmt;
 
-use clm_model::{Change, ChangeStatus, Graph, Layer};
+use clm_model::{CHANGE_STATUS_TERMS, Change, ChangeStatus, Graph, Layer, STATUS_TERMS};
 
 use crate::coverage::{Marker, State, cited_entry, report};
 use crate::pending::entries_node;
@@ -26,33 +25,18 @@ pub struct StatusReport {
     pub changes: Vec<(String, Vec<Row>)>,
 }
 
-impl fmt::Display for StatusReport {
-    /// Each section's name, then its rows indented two spaces, or four under a group's
-    /// name, itself indented two; cells separated by two spaces; `none` for no rows.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "components")?;
-        if self.nodes.is_empty() {
-            writeln!(f, "  none")?;
-        }
-        for row in &self.nodes {
-            writeln!(f, "  {}", row.join("  "))?;
-        }
-        writeln!(f, "changes")?;
-        if self.changes.is_empty() {
-            writeln!(f, "  none")?;
-        }
-        for (status, rows) in &self.changes {
-            writeln!(f, "  {status}")?;
-            for row in rows {
-                writeln!(f, "    {}", row.join("  "))?;
-            }
-        }
-        Ok(())
-    }
+/// The word CLM writes for `value`, from its term list, which names every value
+/// (`term-lists`).
+fn word<T: PartialEq>(terms: &[(T, &str)], value: &T) -> String {
+    let (_, word) = terms
+        .iter()
+        .find(|(t, _)| t == value)
+        .expect("a term list names every value");
+    (*word).to_string()
 }
 
 fn status_name(status: ChangeStatus) -> String {
-    format!("{status:?}").to_lowercase()
+    word(CHANGE_STATUS_TERMS, &status)
 }
 
 /// The order groups come in; the rest follow, sorted.
@@ -284,7 +268,7 @@ pub fn status_report(graph: &Graph, markers: &[Marker]) -> StatusReport {
             let done = all.iter().filter(|r| current(&r.id)).count();
             vec![
                 node.id.clone(),
-                format!("{:?}", node.frontmatter.status).to_lowercase(),
+                word(STATUS_TERMS, &node.frontmatter.status),
                 format!("{done}/{total}"),
             ]
         })

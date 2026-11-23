@@ -98,7 +98,7 @@ fn checkout_status(root: &Path) -> Result<clm_coverage::StatusReport, Vec<clm_mo
 
 #[test]
 fn scenario_one_pending_change() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -113,7 +113,7 @@ fn scenario_one_pending_change() {
 
 #[test]
 fn a_requirement_cited_only_at_an_old_version_is_not_current() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -129,7 +129,7 @@ fn a_requirement_cited_only_at_an_old_version_is_not_current() {
 
 #[test]
 fn rows_within_a_group_are_sorted_by_id() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     change(d, "20260102-b", "applied", &["y"]);
@@ -142,7 +142,7 @@ fn rows_within_a_group_are_sorted_by_id() {
 
 #[test]
 fn scenario_complete_change() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -158,7 +158,7 @@ fn scenario_complete_change() {
 
 #[test]
 fn scenario_requirement_removed_later() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     write(
@@ -180,7 +180,7 @@ fn scenario_requirement_removed_later() {
 
 #[test]
 fn scenario_requirement_added_back_later() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &[]);
@@ -195,7 +195,7 @@ fn scenario_requirement_added_back_later() {
 
 #[test]
 fn a_requirement_added_back_cited_at_an_old_version_does_not_hold_the_change_back() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &[]);
@@ -211,7 +211,7 @@ fn a_requirement_added_back_cited_at_an_old_version_does_not_hold_the_change_bac
 
 #[test]
 fn scenario_unapplied_change() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     for status in ["proposed", "approved"] {
@@ -227,7 +227,7 @@ fn scenario_unapplied_change() {
 
 #[test]
 fn scenario_removed_requirement_still_cited() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x"]);
@@ -245,7 +245,7 @@ fn scenario_removed_requirement_still_cited() {
 
 #[test]
 fn an_unapplied_change_is_never_complete() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     for status in ["proposed", "approved"] {
@@ -273,7 +273,7 @@ fn an_unapplied_change_is_never_complete() {
 
 #[test]
 fn scenario_groups_in_order() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-a", "applied", &["x"]);
@@ -295,22 +295,33 @@ fn scenario_groups_in_order() {
 }
 
 #[test]
-fn scenario_nothing_in_flight() {
-    // req:check.coverage/status-report@3f658f05
-    let dir = repo();
-    let report = checkout_status(dir.path()).unwrap();
-    assert!(report.changes.is_empty());
-    let text = report.to_string();
-    assert!(text.ends_with("changes\n  none\n"), "{text}");
-    assert!(
-        text.starts_with("components\n  a  active  0/2\n  clm  active  0/0\n"),
-        "{text}"
+fn scenario_status_words() {
+    // req:check.coverage/status-report@8aad5594
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    let one = |status: &str| {
+        format!(
+            "---\ntitle: N\nstatus: {status}\nowners: []\n---\n\n## Requirements\n\n### Requirement: x\nX.\n\n#### Scenario: s\n- ok\n"
+        )
+    };
+    write(d, "specs/a/SPEC.md", &one("active"));
+    write(d, "specs/b/SPEC.md", &one("unbuilt"));
+    write(d, "specs/c/SPEC.md", &one("deprecated"));
+    let report = checkout_status(d).unwrap();
+    assert_eq!(
+        report.nodes[..3],
+        [
+            vec!["a".to_string(), "active".into(), "0/1".into()],
+            vec!["b".to_string(), "unbuilt".into(), "0/1".into()],
+            vec!["c".to_string(), "deprecated".into(), "0/1".into()],
+        ]
     );
 }
 
 #[test]
 fn status_from_files_matches_checkout() {
-    // req:check.coverage/status-report@3f658f05
+    // req:check.coverage/status-report@8aad5594
     let dir = repo();
     let d = dir.path();
     cite_x(d);
