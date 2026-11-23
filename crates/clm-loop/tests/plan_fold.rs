@@ -100,8 +100,8 @@ fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
     let again = step(&fx.options()).unwrap();
     line(&again, "run land:b ");
 
-    // The land reports gate/approval: back in the human's queue.
-    returned(
+    // The land reports gate/approval: back in the human's queue, with nothing said.
+    let refused = returned(
         &fx.options(),
         "land:b",
         None,
@@ -110,6 +110,10 @@ fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
         None,
     )
     .unwrap();
+    assert!(
+        !refused.iter().any(|l| l.starts_with("say ")),
+        "{refused:?}"
+    );
     assert_eq!(stored_plan(&fx.work).unwrap().waiting_on_you.len(), 1);
     assert!(!fx.file().batches[0].approved);
 

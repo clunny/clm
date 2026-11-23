@@ -62,7 +62,6 @@ fn escalated() {
     fx.change_run("build:a", |r| {
         r.state = RunState::Running;
         r.task_id = Some("t-3".to_string());
-        r.escalated = None;
     });
     returned(
         &fx.options(),
@@ -73,6 +72,10 @@ fn escalated() {
         None,
     )
     .unwrap();
+    // It escalated (no rebuild into round 3), counted as filed, with no land of its own.
+    let a = fx.file().run("build:a").unwrap().clone();
+    assert_eq!((a.state, a.round), (RunState::Returned, 2));
+    assert!(fx.file().escalations.is_empty());
     assert_eq!(fx.ran("land loop/a-stops-on-work"), 1, "{:?}", fx.calls());
     assert!(fx.loop_branches().is_empty());
 }
@@ -138,6 +141,22 @@ fn an_escalated_draft_leaves_its_item_undrafted() {
     let actions = step(&fx.options()).unwrap();
     assert!(
         !actions.iter().any(|l| l.starts_with("launch draft:")),
+        "{actions:?}"
+    );
+}
+
+#[test]
+fn an_item_of_another_kind_holds_nothing_back() {
+    // req:orchestrator.loop/repeated-stops-escalate@b9d0e306
+    let fx = Fixture::new();
+    fx.land_file(
+        "backlog/a-stops-on-windows.md",
+        "---\ntitle: a stops on windows\nkind: human-task\ncomponents: [a]\n---\nx\n",
+    );
+    fx.set("next", "a\n");
+    let actions = step(&fx.options()).unwrap();
+    assert!(
+        actions.iter().any(|l| l.starts_with("launch build:a ")),
         "{actions:?}"
     );
 }

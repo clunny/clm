@@ -91,9 +91,6 @@ pub struct Run {
     /// Each stop, `<cause>: <result>`, for an escalation's body.
     #[serde(default)]
     pub log: Vec<String>,
-    /// The slug of the question item the loop filed for the run.
-    #[serde(default)]
-    pub escalated: Option<String>,
     /// An orphan whose branch moved lately, held by a session taken over.
     #[serde(default)]
     pub hold: Option<Hold>,
@@ -403,8 +400,12 @@ pub fn read(root: &Path) -> Option<LoopFile> {
 /// none when the clone has no loop file or `root` is in no git repository. It locks, fetches
 /// and writes nothing, and leaves the file where it is (`plan-snapshot`).
 pub fn try_read(root: &Path) -> Result<Option<LoopFile>, String> {
-    let Ok(dir) = dir_path(root) else {
-        return Ok(None);
+    let dir = match dir_path(root) {
+        Ok(dir) => dir,
+        // In no git repository: no directory from `root` up holds `.git`. Any other failure,
+        // such as git refusing a repository it doesn't trust, is said.
+        Err(_) if !root.ancestors().any(|d| d.join(".git").exists()) => return Ok(None),
+        Err(e) => return Err(e.to_string()),
     };
     let path = dir.join("loop");
     let bytes = match fs::read(&path) {

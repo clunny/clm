@@ -219,7 +219,9 @@ fn escalated(s: &Snapshot, name: &str) -> bool {
         return false;
     };
     let prefix = format!("{component}-stops-on-");
-    s.backlog.iter().any(|b| b.slug.starts_with(&prefix))
+    s.backlog
+        .iter()
+        .any(|b| b.kind == "question" && b.slug.starts_with(&prefix))
         || s.file
             .escalations
             .iter()

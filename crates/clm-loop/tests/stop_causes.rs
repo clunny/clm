@@ -82,10 +82,19 @@ fn a_full_disk_cleared() {
     let after = cleared(&fx.options(), "disk").unwrap();
     line(&after, "resume build:a t-1 ");
     assert!(cleared(&fx.options(), "the moon").is_err());
+    // Refused before any fetch, changing nothing: an `origin` that can't be reached is no matter.
+    let gone = fx.tmp.path().join("gone.git");
+    clm_git::git(
+        &fx.work,
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    )
+    .unwrap();
+    let before = fs::read(fx.loop_dir().join("loop")).unwrap();
     assert!(matches!(
         cleared(&fx.options(), "the-moon"),
         Err(Failure::Refused(_))
     ));
+    assert_eq!(fs::read(fx.loop_dir().join("loop")).unwrap(), before);
 }
 
 #[test]
