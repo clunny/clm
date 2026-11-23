@@ -284,8 +284,16 @@ fn scenario_checkout_current() {
     let bare = two_nodes();
     let text = stdout(&clm(bare.path(), &["view", "spec"]));
     assert!(!text.contains("commit "), "{text}");
-    let v = json(&clm(bare.path(), &["view", "spec", "--format", "json"]));
+    let out = clm(bare.path(), &["view", "spec", "--format", "json"]);
+    let v = json(&out);
     assert_eq!(v.get("checkout"), None, "{v:#}");
+    // Nor can the sizes be measured there: said on stderr, and no component marked.
+    let err = String::from_utf8(out.stderr.clone()).unwrap();
+    assert!(err.starts_with("size not checked: "), "{err}");
+    assert_eq!(out.status.code(), Some(0));
+    for node in v["nodes"].as_array().unwrap() {
+        assert_ne!(node["oversized"], true, "{node:#}");
+    }
 }
 
 #[test]

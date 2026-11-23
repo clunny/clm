@@ -285,19 +285,20 @@ fn scenario_an_output_it_cant_write() {
     // req:view.repo/commands-in-crate@ec1f97fe
     let dir = fixture();
     let root = dir.path().to_str().unwrap();
-    // With an output it can write, each returns 0 and says nothing on the error stream, so
-    // the 1s below come from the failed writes alone.
+    // With an output it can write, each returns 0, and the error stream is the same either
+    // way, so the 1s below come from the failed writes alone.
     for (name, args) in [
         ("status", &["--root", root][..]),
         ("view", &["--help"][..]),
+        ("view", &["spec", "--root", root][..]),
         ("pending", &["--help"][..]),
+        ("pending", &["--root", root][..]),
     ] {
-        assert_eq!(
-            call(name, args, &mut Vec::new()),
-            (0, String::new()),
-            "{name}"
-        );
+        let mut out = Vec::new();
+        let (code, err) = call(name, args, &mut out);
+        assert_eq!(code, 0, "{name} {args:?}: {err}");
+        assert!(!out.is_empty(), "{name} {args:?}");
         // The caller's process goes on after each.
-        assert_eq!(call(name, args, &mut Broken), (1, String::new()), "{name}");
+        assert_eq!(call(name, args, &mut Broken), (1, err), "{name} {args:?}");
     }
 }
