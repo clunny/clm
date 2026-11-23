@@ -15,7 +15,7 @@ fn git(root: &Path, args: &[&str]) -> String {
 
 #[test]
 fn the_command_compares_the_checkout_with_the_remotes_main() {
-    // req:view.repo/shared-plumbing@c3db052e
+    // req:view.repo/reads-the-repository@dd91d681
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     for (path, text) in [
