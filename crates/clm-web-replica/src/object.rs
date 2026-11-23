@@ -1160,23 +1160,7 @@ fn is_read_ref(branch: &str) -> bool {
         })
 }
 
-/// A push's head commit time in Unix seconds, from its RFC 3339 timestamp with an offset.
+/// A push's head commit time: the instant its RFC 3339 timestamp names, offset counted.
 fn commit_time(body: &Value) -> Option<u64> {
-    let ts = body["head_commit"]["timestamp"].as_str()?;
-    let utc = unix_time(&format!("{}Z", ts.get(..19)?))?;
-    let rest = ts.get(19..)?;
-    let sign = rest.chars().next()?;
-    if sign != '+' && sign != '-' {
-        return Some(utc);
-    }
-    let (h, m) = (
-        rest.get(1..3)?.parse::<u64>().ok()?,
-        rest.get(4..6)?.parse::<u64>().ok()?,
-    );
-    let offset = h * 3600 + m * 60;
-    Some(if sign == '+' {
-        utc.checked_sub(offset)?
-    } else {
-        utc + offset
-    })
+    unix_time(body["head_commit"]["timestamp"].as_str()?)
 }
