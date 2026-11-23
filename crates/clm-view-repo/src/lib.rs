@@ -196,9 +196,11 @@ pub fn view(
 /// `clm view queue --format <format> --width <width> [--at <rev>]` (`view-queue`): the plan
 /// the build loop's last step stored, with its runs as the loop file holds them now, never
 /// fetching and writing no file; the checkout line is the only thing `source` changes. With
-/// no plan, a loop that isn't held, whose next section is the queue's ready components in
-/// priority order, read from `source`. A stored plan's time and `origin/main` commit go on
-/// `err`, which the plan's model has no place for.
+/// no plan, the queue's ready components in priority order, read from `source`, each with a
+/// reason saying why no plan is shown: no loop file, a loop file with no plan yet (the loop
+/// line then as the file stands), or a loop file that can't be read (a loop not held, and
+/// why on `err`). A stored plan's time and `origin/main` commit go on `err`, which the
+/// plan's model has no place for.
 pub fn queue(
     root: &Path,
     format: Format,
@@ -207,19 +209,24 @@ pub fn queue(
     err: &mut dyn Write,
 ) -> Result<String, Error> {
     let (graph, markers, _, head) = read_source(root, source, err)?;
-    let (now, file) = (clm_git::now(), clm_loop::read(root));
-    let view = if let Some(plan) = clm_loop::stored_plan(root) {
-        if let Some(stored) = file.as_ref().and_then(|f| f.plan.as_ref()) {
-            let minutes = now.saturating_sub(stored.at) / 60;
-            let _ = writeln!(err, "plan computed {minutes}m ago at {}", stored.main);
+    let now = clm_git::now();
+    let (file, reason) = match clm_loop::try_read(root) {
+        Ok(Some(file)) => (Some(file), "no plan stored yet"),
+        Ok(None) => (None, "no loop has run on this clone"),
+        Err(why) => {
+            let _ = writeln!(err, "loop file not read: {why}");
+            (None, "loop file not read")
         }
+    };
+    let stored = file
+        .as_ref()
+        .and_then(|f| f.plan.as_ref())
+        .and_then(|stored| Some((stored, clm_loop::stored_plan(root)?)));
+    let view = if let Some((stored, plan)) = stored {
+        let minutes = now.saturating_sub(stored.at) / 60;
+        let _ = writeln!(err, "plan computed {minutes}m ago at {}", stored.main);
         plan
     } else {
-        let reason = if file.is_some() {
-            "no plan stored yet"
-        } else {
-            "no loop has run on this clone"
-        };
         let refs = clm_orchestrator::claim_refs(root);
         let queue =
             clm_orchestrator::queue_from_refs(&graph, &markers, &refs, now, DEFAULT_EXPIRY_HOURS);

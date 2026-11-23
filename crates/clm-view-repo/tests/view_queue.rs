@@ -97,6 +97,8 @@ fn write_loop(d: &Path) {
         "stop": null,
         "plan": {"main": "abc", "at": now, "next": [
             {"name": "build:b", "kind": "build", "priority": "P2", "reason": "waits for a place"}
+        ], "humans": [
+            {"name": "fold:x", "kind": "fold", "what": "approve fold x", "since": now, "action": "clm approve spec/x"}
         ]},
     });
     fs::create_dir_all(d.join(".git/clm")).unwrap();
@@ -105,7 +107,7 @@ fn write_loop(d: &Path) {
 
 #[test]
 fn no_loop_yet() {
-    // req:view.repo/view-queue@7aa0fdff
+    // req:view.repo/view-queue@fb12ea6c
     let dir = ready_a();
     let d = dir.path();
     let before = state(d);
@@ -119,17 +121,137 @@ fn no_loop_yet() {
     assert!(text.contains("loop not held"), "{text}");
     let after_next = text.split("next up").nth(1).unwrap();
     assert!(after_next.contains("build:a"), "{text}");
-    assert!(text.contains("no loop has run on this clone"), "{text}");
+    assert!(
+        after_next.contains("no loop has run on this clone"),
+        "{text}"
+    );
     assert!(!loop_file(d).exists());
     // Reading the loop's file may make its directory, but no file goes in it.
     let files = fs::read_dir(d.join(".git/clm")).map_or(0, Iterator::count);
     assert_eq!(files, 0, "no file is written");
     assert_eq!(state(d), before);
+
+    // The same specs in a directory that is no git repository.
+    let bare = TempDir::new().unwrap();
+    let b = bare.path();
+    for rel in ["specs/SPEC.md", "specs/a/SPEC.md"] {
+        write(b, rel, &fs::read_to_string(d.join(rel)).unwrap());
+    }
+    let out = clm(b, &["view", "queue"]);
+    let text = stdout(&out);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(text.contains("loop not held"), "{text}");
+    let after_next = text.split("next up").nth(1).unwrap();
+    assert!(after_next.contains("build:a"), "{text}");
+    assert!(
+        after_next.contains("no loop has run on this clone"),
+        "{text}"
+    );
+    let mut files: Vec<_> = walk(b);
+    files.sort();
+    assert_eq!(
+        files,
+        ["specs/SPEC.md", "specs/a/SPEC.md"],
+        "no file is written"
+    );
+}
+
+/// Every file under `dir`, relative to it.
+fn walk(dir: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                stack.push(p);
+            } else {
+                out.push(p.strip_prefix(dir).unwrap().to_string_lossy().into_owned());
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn a_loop_with_no_plan_yet() {
+    // req:view.repo/view-queue@fb12ea6c
+    let dir = ready_a();
+    let d = dir.path();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let mut file = serde_json::json!({
+        "version": 1,
+        "lease": now,
+        "started_main": "abc",
+        "session_model": "opus",
+        "runs": [],
+        "drafted": [],
+        "review": [],
+        "batches": [],
+        "red_verifies": [],
+        "escalations": [],
+        "conditions": {"disk": false, "limit_until": null},
+        "stop": null,
+        "plan": null,
+    });
+    fs::create_dir_all(d.join(".git/clm")).unwrap();
+    let run = |file: &[u8]| {
+        fs::write(loop_file(d), file).unwrap();
+        let out = clm(d, &["view", "queue"]);
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        assert_eq!(
+            fs::read(loop_file(d)).unwrap(),
+            file,
+            "the file is unchanged"
+        );
+        let text = stdout(&out);
+        let after_next = text.split("next up").nth(1).unwrap().to_string();
+        assert!(after_next.contains("build:a"), "{text}");
+        (
+            text,
+            after_next,
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    };
+
+    // Held, no plan.
+    let (text, next, err) = run(file.to_string().as_bytes());
+    assert!(text.contains("loop held, renewed 0m ago"), "{text}");
+    assert!(next.contains("no plan stored yet"), "{text}");
+    assert!(!text.contains("loop not held"), "{text}");
+    for section in ["running", "waiting on you", "waiting on work"] {
+        assert!(text.contains(&format!("\n{section}\n  none\n")), "{text}");
+    }
+    assert_eq!(err, "");
+
+    // A drain stop requested.
+    file["stop"] = serde_json::json!("drain");
+    let (text, next, _) = run(file.to_string().as_bytes());
+    assert!(text.contains("stop requested: drain"), "{text}");
+    assert!(
+        !text.contains("loop held"),
+        "a stop shows over a live lease: {text}"
+    );
+    assert!(next.contains("no plan stored yet"), "{text}");
+    file["stop"] = serde_json::json!("now");
+    let (text, next, _) = run(file.to_string().as_bytes());
+    assert!(text.contains("stop requested: now"), "{text}");
+    assert!(next.contains("no plan stored yet"), "{text}");
+
+    // A loop file that isn't JSON.
+    let (text, next, err) = run(b"not json \xff");
+    assert!(text.contains("loop not held"), "{text}");
+    assert!(next.contains("loop file not read"), "{text}");
+    assert!(!next.contains("no loop has run"), "{text}");
+    assert!(err.starts_with("loop file not read: "), "{err}");
 }
 
 #[test]
 fn no_loop_yet_at_a_commit_reads_that_commit() {
-    // req:view.repo/view-queue@7aa0fdff
+    // req:view.repo/view-queue@fb12ea6c
     let dir = ready_a();
     let d = dir.path();
     // `origin/main` gains a commit that builds `a`, so only the working tree lists it.
@@ -156,7 +278,7 @@ fn no_loop_yet_at_a_commit_reads_that_commit() {
 
 #[test]
 fn the_plans_time_and_commit_go_to_the_error_buffer() {
-    // req:view.repo/commands-in-crate@ec1f97fe
+    // req:view.repo/view-queue@fb12ea6c
     let dir = ready_a();
     let d = dir.path();
     write_loop(d);
@@ -171,7 +293,7 @@ fn the_plans_time_and_commit_go_to_the_error_buffer() {
 
 #[test]
 fn the_loops_plan() {
-    // req:view.repo/view-queue@7aa0fdff
+    // req:view.repo/view-queue@fb12ea6c
     let dir = ready_a();
     let d = dir.path();
     write_loop(d);
@@ -203,13 +325,14 @@ fn the_loops_plan() {
         .map(|e| e.name.as_str())
         .collect();
     assert_eq!(names, expected);
+    assert_eq!(names, ["fold:x"]);
     assert_eq!(fs::read(loop_file(d)).unwrap(), loop_before);
     assert_eq!(state(d), before);
 }
 
 #[test]
 fn at_changes_only_the_checkout_line_of_a_stored_plan() {
-    // req:view.repo/view-queue@7aa0fdff
+    // req:view.repo/view-queue@fb12ea6c
     let dir = ready_a();
     let d = dir.path();
     write_loop(d);
@@ -224,7 +347,7 @@ fn at_changes_only_the_checkout_line_of_a_stored_plan() {
 
 #[test]
 fn the_queue_has_no_svg_form_and_a_missing_commit_is_named() {
-    // req:view.repo/view-queue@7aa0fdff
+    // req:view.repo/view-queue@fb12ea6c
     let dir = ready_a();
     let d = dir.path();
     let svg = clm(d, &["view", "queue", "--format", "svg"]);

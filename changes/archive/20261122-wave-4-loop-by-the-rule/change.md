@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-worktree-the-finish-keeps-for-a-held-lock-is-told-to-no-one, the-build-loop-has-no-way-to-hand-its-runs-the-human-s-notes-for]
 ---
 
