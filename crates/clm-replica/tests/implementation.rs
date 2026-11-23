@@ -376,29 +376,47 @@ fn blocked_by_a_need_on_a_claimed_component() {
     }];
     let flight = clm_view::flight_view(&graph, &[], &refs, now, 4);
     assert_eq!(imp["flight"], serde_json::to_value(flight).unwrap());
+    let blockers = clm_view::blockers_view(&graph, &[], &refs, now, 4);
+    assert_eq!(imp["blockers"], serde_json::to_value(blockers).unwrap());
 }
 
 #[test]
 fn an_incomplete_index_gives_the_models_nothing_cited() {
     // req:replica/implementation-models@7362f595
     let mut f = clm_repo();
+    // `b`'s requirement needs `a/p`, so whether `t.rs`'s citation counts shows in both
+    // `flight` (is `b` blocked?) and `blockers` (is `a` a root?).
+    f.insert(
+        "specs/b/SPEC.md".into(),
+        node("a", &["q"], "specd")
+            .replacen("#### Scenario", "#### Needs\n- a/p\n\n#### Scenario", 1)
+            .into_bytes(),
+    );
     let version = version_of(&f, "a/p");
     f.insert("t.rs".into(), cites("a/p", &version).into_bytes());
     let now = at(12, 0);
-    let pending_on = |imp: &Value, id: &str| {
+    let state_of = |imp: &Value, id: &str| {
         imp["flight"]["nodes"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|n| n["node"] == id)
+            .find(|n| n["node"] == id)
+            .map(|n| n["state"].clone())
     };
-    // Every file scanned: `t.rs`'s marker counts, so `a` has nothing pending.
+    // Every file scanned: `t.rs`'s marker counts, so `a` has nothing pending and `b` is ready.
     let whole = ready(&f, "111", now);
     let complete = view(&whole, "implementation");
+    assert_eq!(complete["sha"], "111");
+    assert_eq!(complete["now"], now);
+    assert_eq!(complete["expiry_hours"], 4);
     assert_eq!(complete["coverage"], json!({"state": "complete"}));
-    assert!(!pending_on(&complete, "a"), "{}", complete["flight"]);
-    // The same replica with a second source file, `u.rs`, still to scan.
+    assert_eq!(state_of(&complete, "a"), None, "{}", complete["flight"]);
+    assert_eq!(state_of(&complete, "b"), Some(json!("ready")));
+    assert_eq!(complete["blockers"]["roots"], json!([]));
+    // The same replica with a second source file, `u.rs`, still to scan, and `impl/a`
+    // claimed an hour ago: the models still get the claim, the time and the expiry.
     let mut r = scratch(&f, "111");
+    branch_ref(&mut r, "impl/a", "sa", now - 3600, None);
     let mut with_u = f.clone();
     with_u.insert("u.rs".into(), b"fn u() {}\n".to_vec());
     r.apply(tree("111", &with_u));
@@ -410,11 +428,23 @@ fn an_incomplete_index_gives_the_models_nothing_cited() {
     let dir = tempfile::tempdir().unwrap();
     write_checkout(dir.path(), &with_u);
     let (graph, _) = clm_model::load(dir.path());
-    let flight = clm_view::flight_view(&graph, &[], &[], now, 4);
+    let refs = [clm_view::ClaimRef {
+        node: "a".into(),
+        tip_time: now - 3600,
+        merged: false,
+    }];
+    let flight = clm_view::flight_view(&graph, &[], &refs, now, 4);
     assert_eq!(imp["flight"], serde_json::to_value(flight).unwrap());
-    let blockers = clm_view::blockers_view(&graph, &[], &[], now, 4);
+    let blockers = clm_view::blockers_view(&graph, &[], &refs, now, 4);
     assert_eq!(imp["blockers"], serde_json::to_value(blockers).unwrap());
-    assert!(pending_on(&imp, "a"), "{}", imp["flight"]);
+    assert_eq!(
+        state_of(&imp, "a"),
+        Some(json!("claimed")),
+        "{}",
+        imp["flight"]
+    );
+    assert_eq!(state_of(&imp, "b"), Some(json!("blocked")));
+    assert_eq!(imp["blockers"]["roots"][0]["root"], "a");
 }
 
 fn proposed(id: &str, writer: &str, h: u64, m: u64, slug: &str) -> String {
