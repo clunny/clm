@@ -39,7 +39,7 @@ fn groups(lines: &[String]) -> Vec<&str> {
 
 #[test]
 fn scenario_groups_by_kind_and_components() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         ("a", "kind: bug\ncomponents: [check]\n"),
         ("b", "kind: bug\ncomponents: [check]\n"),
@@ -61,7 +61,7 @@ fn scenario_groups_by_kind_and_components() {
 
 #[test]
 fn scenario_budget_cuts_a_group() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let mut items: Vec<(String, String)> = ["a", "b", "c", "d", "e", "f", "h"]
         .iter()
         .map(|s| {
@@ -88,7 +88,7 @@ fn scenario_budget_cuts_a_group() {
 
 #[test]
 fn scenario_releases_and_order() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         (
             "q",
@@ -116,7 +116,7 @@ fn scenario_releases_and_order() {
 
 #[test]
 fn ideas_sort_by_releases_before_slug() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         ("a", "kind: idea\ncomponents: [check]\n"),
         ("b", "kind: idea\ncomponents: [gate]\nblocks: [gate/x]\n"),
@@ -126,7 +126,7 @@ fn ideas_sort_by_releases_before_slug() {
 
 #[test]
 fn open_sorts_before_main() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[("x", "kind: bug\n"), ("y", "kind: bug\n")]);
     write(
         &r.work,
@@ -151,7 +151,7 @@ fn open_sorts_before_main() {
 
 #[test]
 fn scenario_open_and_taken_work() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         ("q", "kind: idea\ncomponents: [model]\nblocks: [model/z]\n"),
         ("t", "kind: bug\n"),
@@ -181,7 +181,7 @@ fn scenario_open_and_taken_work() {
 
 #[test]
 fn held_by_change_and_claim_stays_on_the_open_line() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[("q", "kind: human-task\ncomponents: [model]\npriority: P3\n")]);
     let id = "20260101-c";
     push_files(
@@ -198,7 +198,7 @@ fn held_by_change_and_claim_stays_on_the_open_line() {
 
 #[test]
 fn a_change_naming_no_backlog_item_has_no_line() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[]);
     let id = "20260101-c";
     push_files(
@@ -214,7 +214,7 @@ fn a_change_naming_no_backlog_item_has_no_line() {
 
 #[test]
 fn a_lapsed_claim_holds_nothing() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[("t", "kind: bug\n")]);
     push_propose(&r.work, "t", 5);
     assert_eq!(lines(&r), ["group bug: [] P5 0 t"]);
@@ -222,7 +222,7 @@ fn a_lapsed_claim_holds_nothing() {
 
 #[test]
 fn several_components_key_one_group_whatever_their_order() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         ("a", "kind: bug\ncomponents: [model, check]\n"),
         ("b", "kind: bug\ncomponents: [check, model]\n"),
@@ -232,7 +232,7 @@ fn several_components_key_one_group_whatever_their_order() {
 
 #[test]
 fn a_change_on_main_holds_its_items() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         ("q", "kind: idea\ncomponents: [model]\n"),
         ("u", "kind: bug\n"),
@@ -257,7 +257,7 @@ fn a_change_on_main_holds_its_items() {
 
 #[test]
 fn scenario_designed_and_on_main() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         ("x", "kind: bug\n"),
         ("y", "kind: bug\n"),
@@ -299,7 +299,7 @@ fn scenario_designed_and_on_main() {
 
 #[test]
 fn a_change_only_on_autosync_is_read_from_there() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[("x", "kind: bug\n"), ("z", "kind: bug\n")]);
     for (id, status, item) in [
         ("20260101-a", "applied", "x"),
@@ -322,7 +322,7 @@ fn a_change_only_on_autosync_is_read_from_there() {
 
 #[test]
 fn the_spec_branch_status_wins_over_autosync() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[("x", "kind: bug\n")]);
     let id = "20260101-a";
     push_files(
@@ -347,7 +347,7 @@ fn the_spec_branch_status_wins_over_autosync() {
 
 #[test]
 fn scenario_deferred_and_workaround_come_last() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         ("u", "kind: bug\n"),
         ("i", "kind: idea\n"),
@@ -463,7 +463,7 @@ fn an_archived_change_only_on_autosync_is_read_from_there() {
 
 #[test]
 fn a_failing_fetch_is_a_git_failure() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[("u", "kind: bug\n")]);
     std::fs::remove_dir_all(&r.origin).unwrap();
     match triage(&r.work, 4) {
@@ -474,7 +474,7 @@ fn a_failing_fetch_is_a_git_failure() {
 
 #[test]
 fn scenario_an_unproven_item_is_no_draft() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let r = with_items(&[
         (
             "u",

@@ -36,7 +36,7 @@ pub(crate) fn finish_in(
 ) -> Result<String, Error> {
     let root = &root
         .canonicalize()
-        .map_err(|e| Error::Refused(format!("{}: {e}", root.display())))?;
+        .map_err(|e| Error::Git(format!("{}: {e}", root.display())))?;
     if change.is_empty() || change.contains('/') {
         return Err(Error::Refused(format!("`{change}` isn't a change ID")));
     }

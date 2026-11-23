@@ -172,7 +172,7 @@ fn local_branches(r: &Repo) -> String {
 
 #[test]
 fn scenario_items_claimed_and_prompt_written() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     let before = local_branches(&r);
     let worktrees = git(&r.work, &["worktree", "list", "--porcelain"]);
@@ -286,7 +286,7 @@ fn scenario_items_claimed_and_prompt_written() {
 
 #[test]
 fn a_p5_draft_sets_no_priority() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["b"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -297,7 +297,7 @@ fn a_p5_draft_sets_no_priority() {
 
 #[test]
 fn scenario_one_item_refused() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["a", "b"]);
@@ -317,7 +317,7 @@ fn scenario_one_item_refused() {
 
 #[test]
 fn scenario_nothing_claimed() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["b"]);
@@ -328,7 +328,7 @@ fn scenario_nothing_claimed() {
 
 #[test]
 fn an_unknown_item_is_left() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["nope", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -337,7 +337,7 @@ fn an_unknown_item_is_left() {
 
 #[test]
 fn a_slug_given_twice_is_claimed_once() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["a", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -349,7 +349,7 @@ fn a_slug_given_twice_is_claimed_once() {
 
 #[test]
 fn scenario_cap_reached() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let (r, f) = (with_items(), fake());
     let placed =
         clm_orchestrator::take_place(&r.work, "x", clm_orchestrator::PlaceKind::Build, &[], 3, 4)
@@ -368,7 +368,7 @@ fn scenario_cap_reached() {
 
 #[test]
 fn scenario_nothing_claimed_frees_the_place() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["b"]);
@@ -420,7 +420,7 @@ fn draft_worktree(r: &Repo, id: &str, name: &str) -> PathBuf {
 
 #[test]
 fn scenario_landed_draft_tidied() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-x";
     let wt = draft_worktree(&r, id, "agent-2");
@@ -449,7 +449,7 @@ fn scenario_landed_draft_tidied() {
 
 #[test]
 fn an_archived_draft_has_landed_and_a_dirty_worktree_stays() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-z";
     let wt = draft_worktree(&r, id, "agent-3");
@@ -473,7 +473,7 @@ fn an_archived_draft_has_landed_and_a_dirty_worktree_stays() {
 
 #[test]
 fn scenario_folded_drafts_branches_deleted() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-f";
     let wt = draft_worktree(&r, id, "agent-5");
@@ -514,7 +514,7 @@ fn scenario_folded_drafts_branches_deleted() {
 
 #[test]
 fn a_kept_worktree_keeps_its_branch() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-k";
     let wt = draft_worktree(&r, id, "agent-6");
@@ -540,7 +540,7 @@ fn a_kept_worktree_keeps_its_branch() {
 
 #[test]
 fn a_local_branch_with_unpushed_commits_is_kept() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-u";
     let wt = draft_worktree(&r, id, "agent-7");
@@ -613,7 +613,7 @@ fn local_branch(r: &Repo, branch: &str) -> String {
 
 #[test]
 fn scenario_landed_fold_tidied() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-a-fold";
     let branch = format!("spec/{id}");
@@ -636,7 +636,7 @@ fn scenario_landed_fold_tidied() {
 
 #[test]
 fn scenario_fold_not_landed() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let (b, c) = ("spec/20261027-b-fold", "spec/20261027-c-fold");
     let wt_b = fold_worktree(&r, b, "agent-9");
@@ -656,7 +656,7 @@ fn scenario_fold_not_landed() {
 
 #[test]
 fn scenario_landed_fold_with_uncommitted_work() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-d-fold";
     let branch = format!("spec/{id}");
@@ -682,7 +682,7 @@ fn scenario_landed_fold_with_uncommitted_work() {
 
 #[test]
 fn a_landed_fold_branch_on_origin_is_deleted_only_when_in_main() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-e-fold";
     let branch = format!("spec/{id}");
@@ -698,7 +698,7 @@ fn a_landed_fold_branch_on_origin_is_deleted_only_when_in_main() {
 
 #[test]
 fn scenario_draft_waiting_for_review() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-y";
     let wt = draft_worktree(&r, id, "agent-4");
@@ -718,7 +718,7 @@ fn scenario_draft_waiting_for_review() {
 
 #[test]
 fn finishing_a_draft_with_no_place_exits_0() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let ran = clm_finish(&r, "20261027-none");
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -745,7 +745,7 @@ fn place_taken(r: &Repo, id: &str, hours: u64, branches: &[&str]) {
 
 #[test]
 fn scenario_worktree_left_behind_by_its_moved_branch() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-m";
     let wt = draft_worktree(&r, id, "agent-m");
@@ -788,7 +788,7 @@ fn scenario_worktree_left_behind_by_its_moved_branch() {
 
 #[test]
 fn scenario_staged_work_not_in_history_kept() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-n";
     let wt = draft_worktree(&r, id, "agent-n");
@@ -812,7 +812,7 @@ fn scenario_staged_work_not_in_history_kept() {
 
 #[test]
 fn scenario_landed_drafts_claims_released() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-r";
     place_taken(
@@ -840,7 +840,7 @@ fn scenario_landed_drafts_claims_released() {
 
 #[test]
 fn scenario_moved_items_claim_kept_while_the_change_waits() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-w";
     place_taken(
@@ -872,7 +872,7 @@ fn scenario_moved_items_claim_kept_while_the_change_waits() {
 
 #[test]
 fn scenario_another_sessions_later_claim_kept() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-s";
     place_taken(&r, id, 6, &[&format!("spec/{id}"), "propose/a"]);
@@ -886,7 +886,7 @@ fn scenario_another_sessions_later_claim_kept() {
 
 #[test]
 fn scenario_no_place_no_release() {
-    // req:orchestrator.triage/draft-finish@dbfa74f2
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
     let r = with_items();
     let id = "20261027-q";
     push_propose(&r.work, "a", 1);
@@ -904,7 +904,7 @@ fn scenario_no_place_no_release() {
 
 #[test]
 fn clm_triage_prints_the_lines_and_exits_0() {
-    // req:orchestrator.triage/triage@756e5c04
+    // req:orchestrator.triage/triage@37e6d0f3
     let triage = |root: &std::path::Path| {
         let root = root.display().to_string();
         let (mut out, mut err) = (Vec::new(), Vec::new());
@@ -999,7 +999,7 @@ fn prompt_of(r: &Repo, ran: &Ran) -> String {
 
 #[test]
 fn scenario_launcher() {
-    // req:orchestrator.triage/draft-prompt-file@d84d9985
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
     let r = repo();
     write(
         &r.work,
@@ -1028,7 +1028,7 @@ fn scenario_launcher() {
 
 #[test]
 fn scenario_earlier_prompt_replaced() {
-    // req:orchestrator.triage/draft-prompt-file@d84d9985
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
     let (r, f) = (with_items(), fake());
     let id = format!("{}-a", today());
     write(
@@ -1044,7 +1044,7 @@ fn scenario_earlier_prompt_replaced() {
 
 #[test]
 fn scenario_no_prompts_directory() {
-    // req:orchestrator.triage/draft-prompt-file@d84d9985
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
     let (r, f) = (with_items(), fake());
     write(&r.work, ".clm/prompts", "a file\n");
     let ran = clm_draft(&r, &f, &["a"]);
@@ -1057,7 +1057,7 @@ fn scenario_no_prompts_directory() {
 
 #[test]
 fn a_prompt_that_cant_be_written_frees_the_place() {
-    // req:orchestrator.triage/draft-prompt-file@d84d9985
+    // req:orchestrator.triage/draft-prompt-file@ccbdde76
     let (r, f) = (with_items(), fake());
     // A directory where the file goes, for either date the run may see.
     let dates = [today(), today()];
@@ -1073,7 +1073,7 @@ fn a_prompt_that_cant_be_written_frees_the_place() {
 
 #[test]
 fn clm_draft_passes_the_declared_setup_into_the_prompt() {
-    // req:orchestrator.triage/draft-prompt-setup@45e6b734
+    // req:orchestrator.triage/draft-prompt-setup@6fda252a
     let r = with_items();
     let ran = clm_draft(&r, &fake(), &["b"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -1091,7 +1091,7 @@ fn clm_draft_passes_the_declared_setup_into_the_prompt() {
 
 #[test]
 fn scenario_a_draft_that_pushed() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let id = "20261112-x";
     push_files(
@@ -1118,7 +1118,7 @@ fn scenario_a_draft_that_pushed() {
 
 #[test]
 fn resume_reuses_the_drafts_own_place_when_the_cap_is_full() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let id = "20261112-v";
     push_files(
@@ -1144,7 +1144,7 @@ fn resume_reuses_the_drafts_own_place_when_the_cap_is_full() {
 
 #[test]
 fn resume_takes_the_newer_of_the_two_spec_branches() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let id = "20261112-w";
     let path = format!("changes/{id}/change.md");
@@ -1162,7 +1162,7 @@ fn resume_takes_the_newer_of_the_two_spec_branches() {
 
 #[test]
 fn scenario_nothing_pushed() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let ran = clm_draft_env(&r, &fake(), &["--resume", "20261112-y"], &[]);
     assert_eq!(ran.code, Some(1), "{}", ran.stderr);
@@ -1176,7 +1176,7 @@ fn scenario_nothing_pushed() {
 
 #[test]
 fn resume_with_no_free_place_takes_nothing() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with_items();
     let id = "20261112-z";
     push_files(

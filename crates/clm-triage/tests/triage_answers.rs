@@ -50,7 +50,7 @@ fn answered(id: &str, writer: &str, item: &str, answer: &str, at: &str) -> Strin
 
 #[test]
 fn scenario_answered_in_the_web_app() {
-    // req:orchestrator.triage/triage-web-answers@267e75ce
+    // req:orchestrator.triage/triage-web-answers@3b829c4e
     let r = with_items(&[("q", "question"), ("h", "human-task"), ("i", "idea")]);
     push_ledger(
         &r,
@@ -87,14 +87,14 @@ fn scenario_answered_in_the_web_app() {
 
 #[test]
 fn no_answers_leave_the_lines_unchanged() {
-    // req:orchestrator.triage/triage-web-answers@267e75ce
+    // req:orchestrator.triage/triage-web-answers@3b829c4e
     let r = with_items(&[("q", "question")]);
     assert_eq!(triage(&r.work, 4).unwrap().lines, ["human q [model] P5 0"]);
 }
 
 #[test]
 fn an_answer_stays_on_one_line() {
-    // req:orchestrator.triage/triage-web-answers@267e75ce
+    // req:orchestrator.triage/triage-web-answers@3b829c4e
     let r = with_items(&[("q", "question")]);
     push_ledger(
         &r,

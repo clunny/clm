@@ -57,7 +57,7 @@ fn place_file(r: &Repo, name: &str) -> String {
 
 #[test]
 fn the_date_is_the_given_clock_in_the_given_time_zone() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let r = with(&["a"]);
     assert_eq!(id(&r, &["a"]), "20261027-a");
     let r = with(&["a"]);
@@ -79,7 +79,7 @@ fn the_date_is_the_given_clock_in_the_given_time_zone() {
 
 #[test]
 fn scenario_id_taken() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let r = with(&["long-item-slug-with-many-words"]);
     let dir = "changes/archive/20261027-long-item-slug-with";
     write(&r.work, &format!("{dir}/change.md"), &change("applied"));
@@ -92,7 +92,7 @@ fn scenario_id_taken() {
 
 #[test]
 fn a_change_on_main_holds_its_id() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let r = with(&["q"]);
     write(&r.work, "changes/20261027-q/change.md", &change("proposed"));
     push_main(&r.work, "proposed");
@@ -101,7 +101,7 @@ fn a_change_on_main_holds_its_id() {
 
 #[test]
 fn branches_on_origin_hold_their_ids() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let r = with(&["q"]);
     push_branch(&r.work, "spec/20261027-q", 0);
     push_branch(&r.work, "autosync/spec/20261027-q-2", 0);
@@ -111,7 +111,7 @@ fn branches_on_origin_hold_their_ids() {
 
 #[test]
 fn a_local_spec_branch_holds_its_id() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let r = with(&["q"]);
     git(&r.work, &["branch", "spec/20261027-q", "origin/main"]);
     assert_eq!(id(&r, &["q"]), "20261027-q-2");
@@ -119,7 +119,7 @@ fn a_local_spec_branch_holds_its_id() {
 
 #[test]
 fn the_first_claimed_slug_names_the_change() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let r = with(&["a", "b"]);
     push_propose(&r.work, "a", 1);
     assert_eq!(id(&r, &["a", "b"]), "20261027-b");
@@ -127,7 +127,7 @@ fn the_first_claimed_slug_names_the_change() {
 
 #[test]
 fn scenario_place_named_by_the_change() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let r = with(&["a", "b"]);
     let id = id(&r, &["a", "b"]);
     assert_eq!(place_names(&r), std::slice::from_ref(&id));
@@ -146,7 +146,7 @@ fn scenario_place_named_by_the_change() {
 
 #[test]
 fn scenario_nothing_claimed_frees_the_place() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let r = with(&["b"]);
     push_propose(&r.work, "b", 1);
     let d = draft(&r.work, &["b".to_string()], None, None, 3, 4, &clock("UTC")).unwrap();
@@ -156,7 +156,7 @@ fn scenario_nothing_claimed_frees_the_place() {
 
 #[test]
 fn scenario_id_held_by_a_place() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let r = with(&["q"]);
     let placed = take_place(&r.work, "20261027-q", PlaceKind::Draft, &[], 3, 4).unwrap();
     assert_eq!(placed, Placed::New);
@@ -168,7 +168,7 @@ fn scenario_id_held_by_a_place() {
 
 #[test]
 fn scenario_refused_draft_frees_only_its_own_place() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let r = with(&["b"]);
     push_propose(&r.work, "b", 1);
     take_place(&r.work, "draft-1-b", PlaceKind::Draft, &[], 3, 4).unwrap();
@@ -179,7 +179,7 @@ fn scenario_refused_draft_frees_only_its_own_place() {
 
 #[test]
 fn a_full_clone_claims_nothing() {
-    // req:orchestrator.triage/draft-takes-place@2865c8cd
+    // req:orchestrator.triage/draft-takes-place@96636fd2
     let r = with(&["a"]);
     take_place(&r.work, "x", PlaceKind::Build, &[], 1, 4).unwrap();
     match draft(&r.work, &["a".to_string()], None, None, 1, 4, &clock("UTC")) {
@@ -229,7 +229,7 @@ fn paragraph<'a>(p: &'a str, needle: &str) -> &'a str {
 
 #[test]
 fn scenario_items_claimed_and_prompt_written() {
-    // req:orchestrator.triage/draft@66686cf9
+    // req:orchestrator.triage/draft@938d1a0c
     let r = with_items(&[
         (
             "a",
@@ -504,7 +504,7 @@ fn prompt_with_setup(r: &Repo, setup: Option<&str>) -> String {
 
 #[test]
 fn scenario_setup_declared() {
-    // req:orchestrator.triage/draft-prompt-setup@45e6b734
+    // req:orchestrator.triage/draft-prompt-setup@6fda252a
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = prompt_with_setup(&r, Some("scripts/setup.sh"));
     let para = paragraph(&p, "code-fix-needs-a-written-rule");
@@ -526,7 +526,7 @@ fn scenario_setup_declared() {
 
 #[test]
 fn scenario_nothing_declared() {
-    // req:orchestrator.triage/draft-prompt-setup@45e6b734
+    // req:orchestrator.triage/draft-prompt-setup@6fda252a
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = prompt_with_setup(&r, None);
     assert!(!p.contains("clm setup"), "{p}");
@@ -534,7 +534,7 @@ fn scenario_nothing_declared() {
 
 #[test]
 fn resume_command_works_beside_the_first_sessions_local_branch() {
-    // req:orchestrator.triage/draft-resume@e71d0780
+    // req:orchestrator.triage/draft-resume@38d12444
     let r = with(&["a"]);
     let id = "20261112-z";
     push_files(

@@ -77,22 +77,49 @@ pub struct DraftSettings {
     pub max_builds: u64,
 }
 
+/// `commands-in-crate`'s descriptions, which each call's help starts with.
+const TRIAGE_ABOUT: &str = "Group the untaken backlog items into units of design work, beside \
+    the spec work on origin and the items waiting on the human, most urgent first";
+const INTAKE_ABOUT: &str = "Match the host's open issues and dependency alerts and the red \
+    verify results on main to the backlog, and list the open pull requests from forks";
+const DRAFT_ABOUT: &str = "Claim backlog items and write the prompt for a session that designs \
+    one change from them unattended, printing a launcher that names it, holding one of the \
+    clone's build places";
+
 #[derive(Parser)]
-#[command(name = "clm triage", bin_name = "clm triage", no_binary_name = true)]
+#[command(
+    name = "clm triage",
+    bin_name = "clm triage",
+    no_binary_name = true,
+    about = TRIAGE_ABOUT,
+    long_about = None
+)]
 struct TriageLine {
     #[command(flatten)]
     args: TriageArgs,
 }
 
 #[derive(Parser)]
-#[command(name = "clm intake", bin_name = "clm intake", no_binary_name = true)]
+#[command(
+    name = "clm intake",
+    bin_name = "clm intake",
+    no_binary_name = true,
+    about = INTAKE_ABOUT,
+    long_about = None
+)]
 struct IntakeLine {
     #[command(flatten)]
     args: IntakeArgs,
 }
 
 #[derive(Parser)]
-#[command(name = "clm draft", bin_name = "clm draft", no_binary_name = true)]
+#[command(
+    name = "clm draft",
+    bin_name = "clm draft",
+    no_binary_name = true,
+    about = DRAFT_ABOUT,
+    long_about = None
+)]
 struct DraftLine {
     #[command(flatten)]
     args: DraftArgs,
@@ -136,7 +163,7 @@ where
 }
 
 /// `clm intake`, as [`triage_command`] takes its arguments, with the host adapter
-/// `crates/clm` made from the `host` setting, or why the settings didn't load (exit 2).
+/// `crates/clm` made from the `host` setting, or why it couldn't be made (exit 1).
 pub fn intake_command<I, T>(
     args: I,
     root: &Path,
@@ -165,7 +192,7 @@ where
             out,
             err,
         ),
-        Err(e) => writeln!(err, "clm intake: {e}").map(|()| 2),
+        Err(e) => writeln!(err, "clm intake: {e}").map(|()| 1),
     };
     written.unwrap_or(2)
 }
@@ -292,8 +319,9 @@ where
 }
 
 /// Writes a result and gives its exit status: the text on `out` and 0; a refusal as
-/// `clm <command>: <why>` on `err` and 1; the specs' violations on `out`, one line each
-/// (`model/violation-line`), and 1; git's failure as `clm <command>: <error>` on `err` and 2.
+/// `clm <command>: <why>` on `err` and 1; the specs' violations, one line each
+/// (`model/violation-line`), on `err` for `clm draft` and on `out` otherwise, and 1
+/// (`draft-prompt-file`, `commands-in-crate`); git's failure as `clm <command>: <error>` on `err` and 2.
 fn report(
     command: &str,
     result: Result<String, Error>,
@@ -305,8 +333,9 @@ fn report(
         Ok(text) => writeln!(out, "{text}").map(|()| 0),
         Err(Error::Refused(why)) => writeln!(err, "clm {command}: {why}").map(|()| 1),
         Err(Error::Spec(violations)) => {
+            let to: &mut dyn Write = if command == "draft" { err } else { out };
             for v in &violations {
-                writeln!(out, "{v}")?;
+                writeln!(to, "{v}")?;
             }
             Ok(1)
         }

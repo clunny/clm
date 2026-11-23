@@ -53,7 +53,7 @@ fn origin_holds_claim(r: &Repo) -> bool {
 
 #[test]
 fn draft_fetches_through_fetch_retrying() {
-    // req:orchestrator.triage/draft-fetch-retries-race@84e46d8b
+    // req:orchestrator.triage/draft-fetch-retries-race@6d61d984
     let bin = tempfile::tempdir().unwrap();
     let fake = bin.path().join("git");
     fs::write(&fake, FAKE).unwrap();
