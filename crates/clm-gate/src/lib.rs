@@ -97,9 +97,9 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
 /// needs review (`rules-version`): 1 before `cuts` made a branch need review, 2 before a
 /// changed outcome did, 3 before a sentence holding a placement phrase and not the word
 /// `test` counted as stating, 4 before paths were read relative to the CLM root, 5 before a
-/// placement phrase matched across a line break, 6 before the light route, and 7 adds the
-/// light route.
-pub const RULES: u32 = 7;
+/// placement phrase matched across a line break, 6 before the light route, 7 before a
+/// shortened merge did, and 8 adds the shortened merge.
+pub const RULES: u32 = 8;
 
 /// `evaluate_at` as the gate decided under the rules of version `rules` (`rules-version`):
 /// the reading of paths and the review, and with it `gate/approval`, depend on the version.
@@ -415,9 +415,12 @@ impl SpecPart<'_> {
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
         let read = read_cuts(at, entries, rules, violations)?;
         let cut = read.listed;
-        // Under versions 2 to 5 a shortened requirement is counted as that version counted
-        // its sentences, `shortened_then`, rather than by today's cut; version 1 counts none.
-        let counted_before_v6 = |c: &Cut| !matches!(c, Cut::Shortened { .. });
+        // Under versions 1 to 7 a shortened merge makes no branch need review. Under versions
+        // 2 to 5 a shortened requirement is counted as that version counted its sentences,
+        // `shortened_then`, rather than by today's cut; version 1 counts none.
+        let counted_before_v8 = |c: &Cut| !matches!(c, Cut::Merged { .. });
+        let counted_before_v6 =
+            |c: &Cut| counted_before_v8(c) && !matches!(c, Cut::Shortened { .. });
         let added = added_exemptions(at, entries)?;
         // Read from the two graphs, or from the text when they don't load, under every
         // version, so the versions differ only by the cuts.
@@ -448,6 +451,8 @@ impl SpecPart<'_> {
             None if rules < 6 => {
                 by_paths() || widened || shortened_then || cut.iter().any(counted_before_v6)
             }
+            // Versions 6 and 7, before a shortened merge needed review.
+            None if rules < 8 => by_paths() || widened || cut.iter().any(counted_before_v8),
             // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
             None => by_paths() || widened || !cut.is_empty(),
         };

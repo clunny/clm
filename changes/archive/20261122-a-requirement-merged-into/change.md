@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-requirement-merged-into-another-lists-none-of-the-sentences-it]
 ---
 

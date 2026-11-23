@@ -58,8 +58,8 @@ fn rules(out: &clm_gate::Outcome) -> Vec<&str> {
 
 #[test]
 fn scenario_a_removal_under_each_version() {
-    // req:gate/rules-version@ad92df64
-    assert_eq!(RULES, 7);
+    // req:gate/rules-version@c811ad2f
+    assert_eq!(RULES, 8);
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &format!("{HEAD}{Y}"));
@@ -85,7 +85,7 @@ fn scenario_a_removal_under_each_version() {
 
 #[test]
 fn scenario_a_changed_outcome_under_each_version() {
-    // req:gate/rules-version@ad92df64
+    // req:gate/rules-version@c811ad2f
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     let first = |then: &str| {
@@ -138,7 +138,7 @@ fn scenario_a_changed_outcome_under_each_version() {
 
 #[test]
 fn scenario_a_sentence_of_behaviour_that_holds_a_phrase_under_each_version() {
-    // req:gate/rules-version@ad92df64
+    // req:gate/rules-version@c811ad2f
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     let a = |statement: &str| {
@@ -212,7 +212,7 @@ fn scenario_a_sentence_of_behaviour_that_holds_a_phrase_under_each_version() {
 
 #[test]
 fn scenario_a_placement_phrase_across_a_line_under_each_version() {
-    // req:gate/rules-version@ad92df64
+    // req:gate/rules-version@c811ad2f
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     let a = |statement: &str| {
@@ -275,7 +275,7 @@ fn scenario_a_placement_phrase_across_a_line_under_each_version() {
 
 #[test]
 fn scenario_a_subdirectory_root_under_each_version() {
-    // req:gate/rules-version@ad92df64
+    // req:gate/rules-version@c811ad2f
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     git(top, &["init", "-q", "-b", "main"]);
@@ -297,7 +297,7 @@ fn scenario_a_subdirectory_root_under_each_version() {
 
 #[test]
 fn specs_that_dont_load_need_no_review_under_version_1() {
-    // req:gate/rules-version@ad92df64
+    // req:gate/rules-version@c811ad2f
     let dir = repo();
     let d = dir.path();
     // a requirement with no scenario doesn't load
@@ -332,8 +332,36 @@ fn specs_that_dont_load_need_no_review_under_version_1() {
 }
 
 #[test]
+fn scenario_a_merge_that_loses_a_sentence_under_each_version() {
+    // req:gate/rules-version@c811ad2f
+    let dir = repo();
+    let d = dir.path();
+    // a/x's one scenario `s` moves to a/y, which keeps only its own sentence
+    let y =
+        "\n### Requirement: y\nY SHALL hold.\n\n#### Scenario: t\n- ok\n\n#### Scenario: s\n- ok\n";
+    write(d, "specs/a/SPEC.md", &format!("{HEAD}{y}"));
+    commit(d, "merge a/x into a/y");
+    let s = git(d, &["rev-parse", "HEAD"]);
+    for version in 1..=RULES {
+        let out = evaluate_by(d, "main", &s, false, version).unwrap();
+        let review = version == RULES;
+        assert_eq!((out.kind, out.review), (Kind::Spec, review), "{version}");
+        let approval: &[&str] = if review { &["gate/approval"] } else { &[] };
+        assert_eq!(rules(&out), approval, "{version}");
+        let lines: Vec<String> = out.cuts.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            lines,
+            [
+                "specs/a/SPEC.md: gate/cut: a/x merged into a/y state 1 sentences where they stated 2"
+            ],
+            "{version}"
+        );
+    }
+}
+
+#[test]
 fn scenario_the_same_verdict_under_both() {
-    // req:gate/rules-version@ad92df64
+    // req:gate/rules-version@c811ad2f
     let dir = repo();
     let d = dir.path();
     write(d, "ARCHITECTURE.md", "invariants\n");
@@ -347,7 +375,7 @@ fn scenario_the_same_verdict_under_both() {
 
 #[test]
 fn scenario_a_version_this_gate_doesnt_know() {
-    // req:gate/rules-version@ad92df64
+    // req:gate/rules-version@c811ad2f
     let dir = repo();
     let d = dir.path();
     for version in [RULES + 1, 0] {

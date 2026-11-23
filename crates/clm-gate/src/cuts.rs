@@ -3,7 +3,7 @@
 //! exemptions it adds or widens (`needs-review-of`). Pure functions, so the gate and the
 //! `web` Worker give one answer: they run no process and build for `wasm32-unknown-unknown`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -38,6 +38,16 @@ pub enum Cut {
         now: usize,
         was: usize,
     },
+    /// A merge whose requirements, `merged` gone from the head and `into` held there, state
+    /// fewer sentences in all at the head (`now`) than at the base (`was`); `spec` is the
+    /// first merged requirement's.
+    Merged {
+        spec: PathBuf,
+        merged: Vec<String>,
+        into: Vec<String>,
+        now: usize,
+        was: usize,
+    },
     /// A test a change's `deleted-tests.txt` gains a line to delete.
     Test {
         list: String,
@@ -68,6 +78,19 @@ impl fmt::Display for Cut {
                 f,
                 "{}: gate/cut: {id} states {now} sentences where it stated {was}",
                 spec.display()
+            ),
+            Cut::Merged {
+                spec,
+                merged,
+                into,
+                now,
+                was,
+            } => write!(
+                f,
+                "{}: gate/cut: {} merged into {} state {now} sentences where they stated {was}",
+                spec.display(),
+                merged.join(", "),
+                into.join(", ")
             ),
             Cut::Test { list, file, name } => {
                 write!(f, "{list}: gate/cut: test {file}::{name} is to be deleted")
@@ -335,7 +358,8 @@ fn requirements(graph: &Graph) -> BTreeMap<&str, (&Path, &Requirement)> {
 /// What a branch cuts, from the spec graphs at its merge base and its head and the lists of
 /// tests its changes declare: gone requirements, then gone scenarios, then changed outcomes,
 /// then shortened requirements, each by requirement ID and a scenario by its place at the
-/// base, then the tests the lists add, by list path and then in the list's order (`cuts`).
+/// base, then shortened merges by their first merged requirement, then the tests the lists
+/// add, by list path and then in the list's order (`cuts`).
 pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
     type Outlines = BTreeMap<String, (String, Vec<(String, String)>)>;
     let (was, now) = (requirements(base), requirements(head));
@@ -352,32 +376,40 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
     };
 
     // Each scenario of the head that a gone scenario may move to: under a requirement that
-    // held no scenario of its name at the base.
-    let mut receivers: BTreeMap<&str, usize> = BTreeMap::new();
+    // held no scenario of its name at the base, by requirement ID and then place.
+    let mut receivers: BTreeMap<&str, VecDeque<&str>> = BTreeMap::new();
     for (id, (_, scenarios)) in &now_outline {
         for (name, _) in scenarios {
             if !held(&was_outline, id, name) {
-                *receivers.entry(name.as_str()).or_default() += 1;
+                receivers.entry(name.as_str()).or_default().push_back(id);
             }
         }
     }
 
-    // Every gone scenario, by requirement ID and place, takes one receiver of its name.
+    // Every gone scenario, by requirement ID and place, takes the first receiver of its name
+    // left; the receiver's requirement took it.
     let mut unmoved: BTreeSet<(&str, usize)> = BTreeSet::new();
+    let mut took: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for (id, (_, scenarios)) in &was_outline {
         for (place, (name, _)) in scenarios.iter().enumerate() {
             // Still held where it was: a requirement gone from the head holds none.
             if held(&now_outline, id, name) {
                 continue;
             }
-            match receivers.get_mut(name.as_str()).filter(|n| **n > 0) {
-                Some(n) => *n -= 1,
+            match receivers
+                .get_mut(name.as_str())
+                .and_then(VecDeque::pop_front)
+            {
+                Some(taker) => {
+                    took.entry(id.as_str()).or_default().insert(taker);
+                }
                 None => {
                     unmoved.insert((id.as_str(), place));
                 }
             }
         }
     }
+    let unmoved_in: BTreeSet<&str> = unmoved.iter().map(|&(id, _)| id).collect();
 
     let mut gone = Vec::new();
     let mut scenarios = Vec::new();
@@ -387,7 +419,7 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
         let (statement, was_scenarios) = &was_outline[*id];
         let Some((now_spec, _)) = now.get(id) else {
             // The model refuses a requirement with no scenario, so one always has some.
-            if unmoved.iter().any(|(u, _)| u == id) {
+            if unmoved_in.contains(id) {
                 gone.push(Cut::Requirement {
                     spec: spec.to_path_buf(),
                     id: id.to_string(),
@@ -438,6 +470,26 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
         }
     }
 
+    let stated = |outline: &Outlines, id: &str| {
+        outline
+            .get(id)
+            .map_or(0, |(statement, _)| stating_sentences(statement).len())
+    };
+    let merges = merges(&was, &now, &unmoved_in, &took)
+        .into_iter()
+        .filter_map(|(merged, into)| {
+            let all = || merged.iter().chain(&into);
+            let was_n: usize = all().map(|id| stated(&was_outline, id)).sum();
+            let now_n: usize = all().map(|id| stated(&now_outline, id)).sum();
+            (now_n < was_n).then(|| Cut::Merged {
+                spec: was[merged[0].as_str()].0.to_path_buf(),
+                merged,
+                into,
+                now: now_n,
+                was: was_n,
+            })
+        });
+
     let mut lists: Vec<&TestList> = lists.iter().collect();
     lists.sort_by_key(|l| l.path);
     let tests = lists.into_iter().flat_map(|list| {
@@ -452,8 +504,58 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
         .chain(scenarios)
         .chain(outcomes)
         .chain(shortened)
+        .chain(merges)
         .chain(tests)
         .collect()
+}
+
+/// Every merge, as its merged requirements and the head's requirements it holds, each in ID
+/// order, the merges ordered by their first merged requirement. A merged requirement is one
+/// the base holds and the head doesn't, none of whose scenarios stayed unmoved; a merge is the
+/// smallest set holding a merged requirement, each requirement that took one of the scenarios
+/// of a merged requirement it holds, and each merged requirement whose scenario a requirement
+/// it holds took (`cuts`).
+fn merges(
+    was: &BTreeMap<&str, (&Path, &Requirement)>,
+    now: &BTreeMap<&str, (&Path, &Requirement)>,
+    unmoved_in: &BTreeSet<&str>,
+    took: &BTreeMap<&str, BTreeSet<&str>>,
+) -> Vec<(Vec<String>, Vec<String>)> {
+    let merged: Vec<&str> = was
+        .keys()
+        .copied()
+        .filter(|id| !now.contains_key(id) && !unmoved_in.contains(id))
+        .collect();
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut out = Vec::new();
+    for &first in &merged {
+        if seen.contains(first) {
+            continue;
+        }
+        // Walk from `first` across merged requirements and the requirements that took from
+        // them until the set closes.
+        let (mut from, mut into): (BTreeSet<&str>, BTreeSet<&str>) = Default::default();
+        let mut todo = vec![first];
+        while let Some(m) = todo.pop() {
+            if !from.insert(m) {
+                continue;
+            }
+            for &taker in took.get(m).into_iter().flatten() {
+                if into.insert(taker) {
+                    todo.extend(
+                        merged
+                            .iter()
+                            .copied()
+                            .filter(|other| took.get(other).is_some_and(|t| t.contains(taker))),
+                    );
+                }
+            }
+        }
+        seen.extend(&from);
+        let owned = |s: BTreeSet<&str>| s.into_iter().map(str::to_string).collect();
+        out.push((owned(from), owned(into)));
+    }
+    out
 }
 
 /// Whether a requirement both graphs hold states fewer sentences at the head than at the
