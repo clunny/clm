@@ -22,7 +22,7 @@ fn loop_bytes(fx: &Fixture) -> Vec<u8> {
 
 #[test]
 fn a_landed_builds_task_reported_for_its_successor() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -60,7 +60,7 @@ fn a_landed_builds_task_reported_for_its_successor() {
 
 #[test]
 fn a_rebuilt_runs_old_task() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.session("opus");
     fx.add_run(run(
@@ -90,7 +90,7 @@ fn a_rebuilt_runs_old_task() {
 
 #[test]
 fn a_relaunched_orphans_old_task() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -112,7 +112,7 @@ fn a_relaunched_orphans_old_task() {
 
 #[test]
 fn another_runs_task() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:b",
@@ -137,7 +137,7 @@ fn another_runs_task() {
 
 #[test]
 fn the_runs_own_task_reported_again() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -155,7 +155,7 @@ fn the_runs_own_task_reported_again() {
 
 #[test]
 fn an_earlier_loop_file_loads_unchanged() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -178,7 +178,7 @@ fn an_earlier_loop_file_loads_unchanged() {
 
 #[test]
 fn an_earlier_loop_files_tasks_kept_with_a_run_are_kept_under_its_name() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -203,7 +203,7 @@ fn an_earlier_loop_files_tasks_kept_with_a_run_are_kept_under_its_name() {
 
 #[test]
 fn an_earlier_task_of_a_command_run() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     let mut verify = run("verify", Kind::Build, "", RunState::Planned, None);
     verify.kind = None;
@@ -220,7 +220,7 @@ fn an_earlier_task_of_a_command_run() {
 
 #[test]
 fn a_task_kept_for_an_earlier_run_of_another_name() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:b",
@@ -246,7 +246,7 @@ fn a_task_kept_for_an_earlier_run_of_another_name() {
 
 #[test]
 fn a_task_reported_over_another_keeps_the_other() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -263,7 +263,7 @@ fn a_task_reported_over_another_keeps_the_other() {
 
 #[test]
 fn a_landed_build_dropped_by_a_new_session() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     let mut a = run(
         "build:a",
@@ -293,7 +293,7 @@ fn a_landed_build_dropped_by_a_new_session() {
 
 #[test]
 fn a_released_builds_task() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -315,7 +315,7 @@ fn a_released_builds_task() {
 
 #[test]
 fn a_refused_relaunchs_task() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -342,7 +342,7 @@ fn a_refused_relaunchs_task() {
 
 #[test]
 fn every_path_that_clears_replaces_or_removes_a_run_keeps_its_task() {
-    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@f96b474b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",

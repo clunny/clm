@@ -137,7 +137,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn the_clm_it_started_from_was_deleted() {
-        // req:orchestrator.loop/runs-the-clm-now-at-its-path@1471695a
+        // req:orchestrator.loop/runs-the-clm-now-at-its-path@97592436
         let tmp = tempfile::tempdir().unwrap();
         let gone = deleted(&tmp.path().join("clm"));
         assert_eq!(resolve(&gone), PathBuf::from("/proc/self/exe"));
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn a_path_that_names_a_file() {
-        // req:orchestrator.loop/runs-the-clm-now-at-its-path@1471695a
+        // req:orchestrator.loop/runs-the-clm-now-at-its-path@97592436
         let tmp = tempfile::tempdir().unwrap();
         let plain = tmp.path().join("clm");
         fs::write(&plain, "").unwrap();

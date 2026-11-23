@@ -12,7 +12,7 @@ use common::Fixture;
 
 #[test]
 fn the_clm_it_started_from_was_replaced() {
-    // req:orchestrator.loop/runs-the-clm-now-at-its-path@1471695a
+    // req:orchestrator.loop/runs-the-clm-now-at-its-path@97592436
     let fx = Fixture::new();
     fx.set("next", "a\n");
     let deleted = PathBuf::from(format!("{} (deleted)", fx.fake.join("clm").display()));
@@ -36,7 +36,7 @@ fn the_clm_it_started_from_was_replaced() {
 
 #[test]
 fn a_failed_start_names_the_resolved_path() {
-    // req:orchestrator.loop/runs-the-clm-now-at-its-path@1471695a
+    // req:orchestrator.loop/runs-the-clm-now-at-its-path@97592436
     let fx = Fixture::new();
     // A file that exists but can't be run, behind a replaced process's path.
     let blocked = fx.fake.join("blocked");
