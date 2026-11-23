@@ -59,7 +59,7 @@ fn prompt_file_that_cant_be_written_exits_1_naming_it() {
 
 #[test]
 fn scenario_check_command_named() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
+    // req:orchestrator.run/prompt-check-command@c1defe4a
     let (r, f) = (repo(), fake());
     write(
         &r.work,
@@ -101,7 +101,7 @@ fn scenario_prompt_names_setup_only_when_declared() {
 
 #[test]
 fn scenario_no_check_command() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
+    // req:orchestrator.run/prompt-check-command@c1defe4a
     let (r, f) = (repo(), fake());
     write(&r.work, "clm.toml", "host = \"none\"\n");
     let p = prompt(&r, &f, "b", &[]);
@@ -110,7 +110,7 @@ fn scenario_no_check_command() {
 
 #[test]
 fn scenario_unreadable_settings() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
+    // req:orchestrator.run/prompt-check-command@c1defe4a
     let (r, f) = (repo(), fake());
     write(&r.work, "clm.toml", "[land\ncheck = \n");
     let stderr = refused(&r, &f, "b", &[], 1);
@@ -120,7 +120,7 @@ fn scenario_unreadable_settings() {
 
 #[test]
 fn scenario_no_target_directory() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
+    // req:orchestrator.run/prompt-check-command@c1defe4a
     for target in [None, Some("/elsewhere")] {
         let (r, f) = (repo(), fake());
         let linked = r.work.parent().unwrap().join("linked");
@@ -1460,6 +1460,7 @@ fn scenario_dirty_leftover() {
 #[test]
 fn scenario_landed_leftover_in_use() {
     // req:orchestrator.run/run@5ea05da6
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     let (wt, old) = landed_leftover(&r, &f);
     let path = wt.to_str().unwrap();
@@ -1525,7 +1526,7 @@ fn take(r: &Repo, node: &str) {
 
 #[test]
 fn scenario_cap_reached() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "a", 0);
     git(&r.work, &["fetch", "-q", "origin"]);
@@ -1542,7 +1543,7 @@ fn scenario_cap_reached() {
 
 #[test]
 fn scenario_place_taken() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     prompt(&r, &f, "b", &[]);
     let file = fs::read_to_string(r.work.join(".git/clm/builds/b")).unwrap();
@@ -1553,7 +1554,7 @@ fn scenario_place_taken() {
 
 #[test]
 fn scenario_resume_keeps_its_place() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     let one = [("CLM_MAX_BUILDS", Path::new("1"))];
     resumable(&r, &f);
@@ -1567,7 +1568,7 @@ fn scenario_resume_keeps_its_place() {
 
 #[test]
 fn scenario_refused_claim_frees_the_place() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "b", 1);
     refused(&r, &f, "b", &[], 1);
@@ -1576,7 +1577,7 @@ fn scenario_refused_claim_frees_the_place() {
 
 #[test]
 fn a_run_that_fails_after_claiming_frees_its_new_place() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     fs::create_dir_all(r.work.join(".clm/prompts/b.md")).unwrap();
     refused(&r, &f, "b", &[], 1);
@@ -1585,7 +1586,7 @@ fn a_run_that_fails_after_claiming_frees_its_new_place() {
 
 #[test]
 fn a_refused_resume_keeps_its_reused_place() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     resumable(&r, &f);
     // Someone takes over the claim, so the resume is refused after the place is reused.
@@ -1597,7 +1598,7 @@ fn a_refused_resume_keeps_its_reused_place() {
 
 #[test]
 fn scenario_landed_leftover_gone_before_the_place() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "a", 0);
     git(&r.work, &["fetch", "-q", "origin"]);
@@ -1615,7 +1616,7 @@ fn scenario_landed_leftover_gone_before_the_place() {
 
 #[test]
 fn landed_leftover_worktree_gone_before_the_place() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     let (r, f) = (repo(), fake());
     let (wt, _) = landed_leftover(&r, &f);
     clm_orchestrator::free_place(&r.work, "b").unwrap();
@@ -1629,7 +1630,7 @@ fn landed_leftover_worktree_gone_before_the_place() {
 
 #[test]
 fn dirty_worktree_takes_no_place() {
-    // req:orchestrator.run/run-takes-place@2c1f76ba
+    // req:orchestrator.run/run-takes-place@3233c5fb
     for landed in [true, false] {
         let (r, f) = (repo(), fake());
         let wt = if landed {
@@ -1652,7 +1653,7 @@ fn dirty_worktree_takes_no_place() {
 
 #[test]
 fn scenario_landed_build_tidied() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let out = finished(&r, "b");
@@ -1676,7 +1677,7 @@ fn chmod(path: &Path, mode: u32) {
 #[cfg(unix)]
 #[test]
 fn scenario_unwritable_directory_removed() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let exclude = r.work.join(".git/info/exclude");
@@ -1709,7 +1710,7 @@ fn scenario_unwritable_directory_removed() {
 
 #[test]
 fn scenario_stopped_build_kept() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = resumable(&r, &f);
     let pushed = remote_tip(&r, "impl/b");
@@ -1727,7 +1728,7 @@ fn scenario_stopped_build_kept() {
 
 #[test]
 fn scenario_dirty_worktree_kept() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     fs::write(wt.join("notes.txt"), "mine\n").unwrap();
@@ -1743,7 +1744,7 @@ fn scenario_dirty_worktree_kept() {
 
 #[test]
 fn scenario_a_running_builds_worktree_kept() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let reason = hold_lock(&r, &wt);
@@ -1768,7 +1769,7 @@ fn scenario_a_running_builds_worktree_kept() {
 
 #[test]
 fn scenario_a_returned_builds_worktree_removed() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     hold_lock(&r, &wt);
@@ -1792,7 +1793,7 @@ fn scenario_a_returned_builds_worktree_removed() {
 
 #[test]
 fn finish_returned_still_keeps_a_dirty_worktree() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     hold_lock(&r, &wt);
@@ -1806,7 +1807,7 @@ fn finish_returned_still_keeps_a_dirty_worktree() {
 
 #[test]
 fn scenario_returned_without_finish() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let refused = clm_run_with(&r.work, &r.work, &f, &["b", "--returned"], &[]);
     assert_eq!(refused.code, Some(2), "{}", refused.stderr);
@@ -1830,7 +1831,7 @@ fn hold_lock(r: &Repo, wt: &Path) -> String {
 
 #[test]
 fn finish_says_uncommitted_changes_for_a_dirty_worktree_whose_lock_is_held() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     hold_lock(&r, &wt);
@@ -1844,7 +1845,7 @@ fn finish_says_uncommitted_changes_for_a_dirty_worktree_whose_lock_is_held() {
 
 #[test]
 fn scenario_checkout_outside_the_worktrees_directory() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     prompt(&r, &f, "b", &[]);
     let other = r.work.parent().unwrap().join("other");
@@ -1860,7 +1861,7 @@ fn scenario_checkout_outside_the_worktrees_directory() {
 
 #[test]
 fn finish_prints_landed_with_no_worktree() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     git(&r.work, &["worktree", "unlock", wt.to_str().unwrap()]);
@@ -1871,7 +1872,7 @@ fn finish_prints_landed_with_no_worktree() {
 
 #[test]
 fn scenario_nothing_to_finish() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let r = repo();
     let out = finished(&r, "b");
     assert!(!out.contains("freed"), "{out}");
@@ -1880,7 +1881,7 @@ fn scenario_nothing_to_finish() {
 
 #[test]
 fn finish_from_a_linked_worktree_looks_under_the_main_one() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let session = r.work.parent().unwrap().join("session");
@@ -1896,7 +1897,7 @@ fn finish_from_a_linked_worktree_looks_under_the_main_one() {
 
 #[test]
 fn finish_never_removes_the_worktree_it_runs_in() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let ran = clm_finish_in(&r, &wt, "b");
@@ -1906,8 +1907,55 @@ fn finish_never_removes_the_worktree_it_runs_in() {
 }
 
 #[test]
+fn scenario_finished_from_inside_the_builds_worktree() {
+    // req:orchestrator.run/run-finish@efe0dbf8
+    let (r, f) = (repo(), fake());
+    let wt = landed_build(&r, &f);
+    let env: std::collections::HashMap<String, String> = [(
+        "XDG_CONFIG_HOME".to_string(),
+        r.work.join(".no-config").display().to_string(),
+    )]
+    .into();
+    let line = ["--finish", "b", "--root", r.work.to_str().unwrap()];
+    let ran = ran_with(
+        |env, out, err| clm_run::run_command(line, Path::new("."), &wt, env, out, err),
+        &env,
+    );
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    assert!(wt.exists(), "the worktree it runs in stays");
+    assert!(!ran.stdout.contains("removed"), "{}", ran.stdout);
+}
+
+#[test]
+fn scenario_a_worktree_whose_directory_is_gone() {
+    // req:orchestrator.run/run-finish@efe0dbf8
+    let (r, f) = (repo(), fake());
+    let wt = landed_build(&r, &f);
+    fs::remove_dir_all(&wt).unwrap();
+    assert!(
+        git(&r.work, &["worktree", "list", "--porcelain"]).contains(&wt.display().to_string()),
+        "git still lists it"
+    );
+    let out = finished(&r, "b");
+    assert!(out.lines().any(|l| l == "landed impl/b"), "{out}");
+    assert!(!out.contains(&wt.display().to_string()), "{out}");
+}
+
+#[test]
+fn scenario_review_model_with_finish() {
+    // req:orchestrator.run/run-finish@efe0dbf8
+    let (r, f) = (repo(), fake());
+    take(&r, "b");
+    let args = ["--finish", "b", "--review-model", "opus"];
+    let ran = clm_run_with(&r.work, &r.work, &f, &args, &[]);
+    assert_eq!(ran.code, Some(2), "{}", ran.stderr);
+    assert!(ran.stderr.contains("--review-model"), "{}", ran.stderr);
+    assert_eq!(place_names(&r), ["b"], "the place stays");
+}
+
+#[test]
 fn finish_keeps_a_branch_landed_only_locally() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     // `origin/impl/b` gets a commit `origin/main` lacks, so not every tip has landed.
@@ -1933,7 +1981,7 @@ fn finish_keeps_a_branch_landed_only_locally() {
 
 #[test]
 fn finish_fails_in_git_with_exit_2() {
-    // req:orchestrator.run/run-finish@17d6dafb
+    // req:orchestrator.run/run-finish@efe0dbf8
     let r = repo();
     git(&r.work, &["remote", "set-url", "origin", "/no/such/origin"]);
     assert_eq!(clm_finish(&r, "b").code, Some(2));
@@ -1985,7 +2033,7 @@ fn a_refused_id_says_component() {
 
 #[test]
 fn scenario_prompt_slot() {
-    // req:orchestrator.run/prompt-slot@7c75a139
+    // req:orchestrator.run/prompt-slot@ae658078
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "a", 0);
     git(&r.work, &["fetch", "-q", "origin"]);

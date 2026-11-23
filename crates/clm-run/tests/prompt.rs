@@ -125,7 +125,7 @@ fn scenario_prompt_workaround() {
 
 #[test]
 fn scenario_check_command_named() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
+    // req:orchestrator.run/prompt-check-command@c1defe4a
     let mut j = job();
     j.check = Some("scripts/check.sh".into());
     let p = prompt(&j);
@@ -143,7 +143,7 @@ fn scenario_check_command_named() {
 
 #[test]
 fn names_no_target_directory() {
-    // req:orchestrator.run/prompt-check-command@8a568bf6
+    // req:orchestrator.run/prompt-check-command@c1defe4a
     let mut j = job();
     j.check = Some("scripts/check.sh".into());
     for p in [prompt(&j), prompt(&job())] {
@@ -318,7 +318,7 @@ fn scenario_other_component_has_no_capability_wait() {
 
 #[test]
 fn scenario_prompt_slot() {
-    // req:orchestrator.run/prompt-slot@7c75a139
+    // req:orchestrator.run/prompt-slot@ae658078
     for resumed in [false, true] {
         let mut j = job();
         j.resumed = resumed;

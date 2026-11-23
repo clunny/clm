@@ -21,7 +21,7 @@ fn files(dir: &Path) -> Vec<PathBuf> {
 
 #[test]
 fn one_pin() {
-    // req:orchestrator.run/pin-file@a682a3d8
+    // req:orchestrator.run/pin-file@3d9c5f84
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let pin = fs::read_to_string(crate_dir.join("superpowers.pin")).unwrap();
     let line = pin.strip_suffix('\n').unwrap_or(&pin);
