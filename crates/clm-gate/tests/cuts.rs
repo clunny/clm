@@ -781,9 +781,11 @@ fn a_requirement_that_took_scenarios_and_lost_a_sentence() {
 fn a_merge_holds_every_requirement_its_takers_took_from() {
     // req:gate/cuts@b4d769db
     // a/x gives one scenario to b/p and one to b/q, and a/y one to b/q: one merge of the
-    // four, stating 2 on each side. a/v gives its one to b/u: a merge of its own, which
-    // loses a sentence. a/w, one of whose scenarios didn't move, is gone and in no merge,
-    // though b/r took the other.
+    // four, stating 2 at the base and 1 at the head (counted apart, a/x into b/p and b/q
+    // would keep its 1, and a/y into b/q would lose it). a/v gives its one to b/u: a merge
+    // of its own, which loses a sentence and is listed first, by its first merged
+    // requirement. a/w, one of whose scenarios didn't move, is gone and in no merge, though
+    // b/r took the other. The tests a list adds follow the merges.
     let base = graph(&[
         (
             "a",
@@ -806,17 +808,24 @@ fn a_merge_holds_every_requirement_its_takers_took_from() {
             format!(
                 "{}{}{}{}",
                 requirement("p", LIST, &["x1"]),
-                requirement("q", LIST, &["x2", "y1"]),
+                requirement("q", "It is quick.", &["x2", "y1"]),
                 requirement("r", "It is quick.", &["w1"]),
                 requirement("u", LIST, &["u1", "v1"]),
             ),
         ),
     ]);
+    let list = TestList {
+        path: "changes/c/deleted-tests.txt",
+        head: "DELETE tests/t.rs::two\n",
+        base: None,
+    };
     assert_eq!(
-        lines(&cuts(&base, &head, &[])),
+        lines(&cuts(&base, &head, &[list])),
         [
             "specs/a/SPEC.md: gate/cut: requirement a/w is gone",
             "specs/a/SPEC.md: gate/cut: a/v merged into b/u state 1 sentences where they stated 2",
+            "specs/a/SPEC.md: gate/cut: a/x, a/y merged into b/p, b/q state 1 sentences where they stated 2",
+            "changes/c/deleted-tests.txt: gate/cut: test tests/t.rs::two is to be deleted",
         ]
     );
     // With both of a/x's scenarios under b/p, a/x and a/y share no taker: two merges, each

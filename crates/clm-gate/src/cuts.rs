@@ -409,6 +409,7 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
             }
         }
     }
+    let unmoved_in: BTreeSet<&str> = unmoved.iter().map(|&(id, _)| id).collect();
 
     let mut gone = Vec::new();
     let mut scenarios = Vec::new();
@@ -418,7 +419,7 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
         let (statement, was_scenarios) = &was_outline[*id];
         let Some((now_spec, _)) = now.get(id) else {
             // The model refuses a requirement with no scenario, so one always has some.
-            if unmoved.iter().any(|(u, _)| u == id) {
+            if unmoved_in.contains(id) {
                 gone.push(Cut::Requirement {
                     spec: spec.to_path_buf(),
                     id: id.to_string(),
@@ -474,7 +475,7 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
             .get(id)
             .map_or(0, |(statement, _)| stating_sentences(statement).len())
     };
-    let merges = merges(&was, &now, &unmoved, &took)
+    let merges = merges(&was, &now, &unmoved_in, &took)
         .into_iter()
         .filter_map(|(merged, into)| {
             let all = || merged.iter().chain(&into);
@@ -517,13 +518,13 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
 fn merges(
     was: &BTreeMap<&str, (&Path, &Requirement)>,
     now: &BTreeMap<&str, (&Path, &Requirement)>,
-    unmoved: &BTreeSet<(&str, usize)>,
+    unmoved_in: &BTreeSet<&str>,
     took: &BTreeMap<&str, BTreeSet<&str>>,
 ) -> Vec<(Vec<String>, Vec<String>)> {
     let merged: Vec<&str> = was
         .keys()
         .copied()
-        .filter(|id| !now.contains_key(id) && !unmoved.iter().any(|(u, _)| u == id))
+        .filter(|id| !now.contains_key(id) && !unmoved_in.contains(id))
         .collect();
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     let mut out = Vec::new();
