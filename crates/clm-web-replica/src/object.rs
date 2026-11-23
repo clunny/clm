@@ -252,7 +252,15 @@ impl<S: Store, A: Alarm> Object<S, A> {
             .or(body["sender"]["login"].as_str())
             .unwrap_or_default()
             .to_string();
-        let at = commit_time(body).unwrap_or(now);
+        let at = commit_time(body).unwrap_or_else(|| {
+            if let Some(ts) = body["head_commit"]["timestamp"].as_str() {
+                p.log(&format!(
+                    "replica {}: unreadable commit time {ts}",
+                    self.name
+                ));
+            }
+            now
+        });
         if let Some(d) = body["repository"]["default_branch"].as_str() {
             self.meta.default_branch = Some(d.into());
         }
