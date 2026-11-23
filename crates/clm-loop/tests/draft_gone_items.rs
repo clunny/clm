@@ -44,7 +44,7 @@ fn draft(id: &str, items: &[&str], state: RunState, task: Option<&str>) -> clm_l
 
 #[test]
 fn a_printed_draft_whose_only_item_a_build_resolved() {
-    // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
+    // req:orchestrator.loop/draft-of-gone-items-dropped@76c2169b
     // req:orchestrator.loop/return-rules@3c0219a4: the `kept` line of a draft's finish is said.
     let fx = Fixture::new();
     fx.land_file("backlog/b.md", "---\nkind: bug\n---\nb\n");
@@ -92,7 +92,7 @@ fn a_printed_draft_whose_only_item_a_build_resolved() {
 
 #[test]
 fn one_item_still_open() {
-    // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
+    // req:orchestrator.loop/draft-of-gone-items-dropped@76c2169b
     let fx = Fixture::new();
     fx.land_file("backlog/b.md", "---\nkind: bug\n---\nb\n");
     fx.land_file("backlog/c.md", "---\nkind: bug\n---\nc\n");
@@ -108,7 +108,7 @@ fn one_item_still_open() {
 
 #[test]
 fn an_orphan_with_a_pushed_spec_branch() {
-    // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
+    // req:orchestrator.loop/draft-of-gone-items-dropped@76c2169b
     let fx = Fixture::new();
     fx.add_run(draft("20261119-x", &["b"], RunState::Running, Some("t-1")));
     push_spec(&fx, "20261119-x");
@@ -121,7 +121,7 @@ fn an_orphan_with_a_pushed_spec_branch() {
 
 #[test]
 fn a_spec_branch_deleted_on_origin_since_the_fetch_saw_it() {
-    // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
+    // req:orchestrator.loop/draft-of-gone-items-dropped@76c2169b
     let fx = Fixture::new();
     fx.add_run(draft("20261119-x", &["b"], RunState::Planned, None));
     push_spec(&fx, "20261119-x");
@@ -151,7 +151,7 @@ fn a_spec_branch_deleted_on_origin_since_the_fetch_saw_it() {
 
 #[test]
 fn an_orphan_with_nothing_pushed_is_dropped() {
-    // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
+    // req:orchestrator.loop/draft-of-gone-items-dropped@76c2169b
     let fx = Fixture::new();
     fx.add_run(draft("20261119-x", &["b"], RunState::Running, Some("t-1")));
     fx.set_lease(20);
@@ -173,7 +173,7 @@ fn an_orphan_with_nothing_pushed_is_dropped() {
 
 #[test]
 fn drafts_kept_as_before() {
-    // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
+    // req:orchestrator.loop/draft-of-gone-items-dropped@76c2169b
     let fx = Fixture::new();
     // A running and a stopped draft with a live session, and a planned draft that names no item.
     fx.add_run(draft("r", &["b"], RunState::Running, Some("t-1")));
