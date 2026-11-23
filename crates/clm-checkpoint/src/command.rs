@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
-use crate::{Error, Report};
+use crate::{Failed, Report};
 
 /// The arguments of `clm wrap-up`, as the command-line parser reads them.
 #[derive(clap::Args, Debug)]
@@ -18,9 +18,17 @@ pub struct WrapUpArgs {
     pub root: Option<PathBuf>,
 }
 
-/// The command line `wrap_up_command` parses: the command's own arguments, without its name.
+// The command line `wrap_up_command` parses: the command's own arguments, without its name.
+// Its help is the binary's `clm wrap-up --help`, so the description is the command's, and
+// this comment stays out of it.
 #[derive(Parser)]
-#[command(name = "clm wrap-up", bin_name = "clm wrap-up", no_binary_name = true)]
+#[command(
+    name = "clm wrap-up",
+    bin_name = "clm wrap-up",
+    no_binary_name = true,
+    about = "Remove merged work, report work that isn't safe on origin, and say whether the \
+             session can end"
+)]
 struct WrapUpLine {
     #[command(flatten)]
     args: WrapUpArgs,
@@ -28,8 +36,8 @@ struct WrapUpLine {
 
 /// `clm wrap-up` with `args`, the strings the command line gives after the command's name, in
 /// `root` unless `--root` overrides it. Writes what the command prints to `out` and `err` and
-/// returns its exit status: 0 with `wrap-up ok`, 1 with `wrap-up incomplete` or when it
-/// refused, 2 when git failed or for arguments it can't parse. Checkpoint reads no variable
+/// returns its exit status: 0 with `wrap-up ok`, 1 with `wrap-up incomplete`, 2 when git, the
+/// ledger's audit or the sweep of the places failed, or for arguments it can't parse. Checkpoint reads no variable
 /// of its own: `git`, which it runs, inherits the process's environment, so `_env` is the
 /// lookup every command's call takes.
 pub fn wrap_up_command<I, T>(
@@ -57,8 +65,13 @@ where
     report(crate::checkpoint(root), out, err).unwrap_or(2)
 }
 
-/// Writes the outcome as `clm wrap-up` prints it, and gives its exit status.
-fn report(done: Result<Report, Error>, out: &mut dyn Write, err: &mut dyn Write) -> io::Result<u8> {
+/// Writes the outcome as `clm wrap-up` prints it, and gives its exit status. A failure prints
+/// what was done before it on the output stream, then why on the error stream (`checkpoint`).
+fn report(
+    done: Result<Report, Failed>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> io::Result<u8> {
     match done {
         Ok(report) => {
             for line in &report.lines {
@@ -66,52 +79,11 @@ fn report(done: Result<Report, Error>, out: &mut dyn Write, err: &mut dyn Write)
             }
             Ok(if report.ok { 0 } else { 1 })
         }
-        Err(Error::Refused(why)) => writeln!(err, "clm wrap-up: {why}").map(|()| 1),
-        Err(Error::Spec(violations)) => {
-            for v in &violations {
-                writeln!(out, "{}", clm_check::format(v))?;
+        Err(Failed { done, why }) => {
+            for line in &done {
+                writeln!(out, "{line}")?;
             }
-            Ok(1)
+            writeln!(err, "clm wrap-up: {why}").map(|()| 2)
         }
-        Err(Error::Git(why)) => writeln!(err, "clm wrap-up: {why}").map(|()| 2),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// What `report` wrote to its two streams, and the status it gave.
-    fn written(done: Result<Report, Error>) -> (String, String, u8) {
-        let (mut out, mut err) = (Vec::new(), Vec::new());
-        let code = report(done, &mut out, &mut err).unwrap();
-        (
-            String::from_utf8(out).unwrap(),
-            String::from_utf8(err).unwrap(),
-            code,
-        )
-    }
-
-    #[test]
-    fn a_refusal_is_on_the_error_stream_with_1() {
-        // req:orchestrator.checkpoint/commands-in-crate@4746da3a
-        let (out, err, code) = written(Err(Error::Refused("no".into())));
-        assert_eq!(
-            (out.as_str(), err.as_str(), code),
-            ("", "clm wrap-up: no\n", 1)
-        );
-    }
-
-    #[test]
-    fn violations_are_on_the_output_stream_with_1() {
-        // req:orchestrator.checkpoint/commands-in-crate@4746da3a
-        let v = clm_model::Violation {
-            path: "specs/SPEC.md".into(),
-            rule: "model/x",
-            message: "bad".into(),
-        };
-        let line = format!("{}\n", clm_check::format(&v));
-        let (out, err, code) = written(Err(Error::Spec(vec![v])));
-        assert_eq!((out.as_str(), err.as_str(), code), (line.as_str(), "", 1));
     }
 }

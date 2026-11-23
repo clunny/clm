@@ -21,6 +21,13 @@ pub(crate) struct Report {
     ok: bool,
 }
 
+/// A wrap-up that failed, as git, the ledger's audit or the sweep of the places failed: the
+/// lines of what it had done before (`freed`, `place`, `removed` and `left`), and why.
+pub(crate) struct Failed {
+    pub(crate) done: Vec<String>,
+    pub(crate) why: String,
+}
+
 /// The branch families CLM's flow makes.
 const FLOW: &[&str] = &["spec/", BUILD];
 const BUILD: &str = "impl/";
@@ -46,8 +53,32 @@ const HOLDS_MARK: &[&str] = &["ledger/understated-land", "ledger/unrated-land"];
 const UNRECORDED: &str = "ledger/unrecorded-land";
 
 /// Runs the checkpoint for the repository holding `root`, from its main checkout. The report
-/// ends with `wrap-up ok` or `wrap-up incomplete` (`checkpoint`).
-pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
+/// ends with `wrap-up ok` or `wrap-up incomplete` (`checkpoint`). A failure keeps the lines of
+/// what was done before it, so a person keeps the record of what was deleted.
+pub(crate) fn checkpoint(root: &Path) -> Result<Report, Failed> {
+    let mut done = Vec::new();
+    match run(root, &mut done) {
+        Ok((report, ok)) => {
+            done.extend(report);
+            Ok(Report { lines: done, ok })
+        }
+        Err(e) => Err(Failed {
+            done,
+            why: match e {
+                Error::Git(why) | Error::Refused(why) => why,
+                Error::Spec(violations) => violations
+                    .iter()
+                    .map(clm_check::format)
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            },
+        }),
+    }
+}
+
+/// The checkpoint, pushing to `done` each line of what it does as it does it, and returning
+/// the report's other lines, `wrap-up ok` or `wrap-up incomplete` last, and whether it is ok.
+fn run(root: &Path, done: &mut Vec<String>) -> Result<(Vec<String>, bool), Error> {
     let common = git(
         root,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -65,7 +96,7 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
     fetch(root)?;
     // The places that no longer count, judged before step 1 deletes a landed build's
     // branches: with them gone, its place would count by its `taken` time instead.
-    let mut lines = free_places(root)?;
+    done.extend(free_places(root)?);
     let main = format!("{REMOTE}/main");
     let landed = Landed::read(root, &main)?;
     let worktrees = worktrees(root)?;
@@ -85,14 +116,14 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
             continue;
         };
         checked_out.insert(b.to_string());
-        let done = if is_flow(b) {
+        let landed_here = if is_flow(b) {
             landed_local.contains(b)
         } else {
             i == 0
                 && b.starts_with(AGENT_BRANCH)
                 && clm_git::is_ancestor(root, &format!("refs/heads/{b}"), &main)?
         };
-        if !done || !wt.path.exists() || !clean(&wt.path)? {
+        if !landed_here || !wt.path.exists() || !clean(&wt.path)? {
             continue;
         }
         if i == 0 {
@@ -113,11 +144,11 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
             && !wt.held
         {
             match clm_git::remove_worktree(root, &wt.path) {
-                Ok(()) => lines.push(format!("removed {}", wt.path.display())),
+                Ok(()) => done.push(format!("removed {}", wt.path.display())),
                 Err(e) => {
                     // The landed branch stays for the next wrap-up, and nothing of this
                     // directory is judged: git may no longer know it as a worktree.
-                    lines.push(format!(
+                    done.push(format!(
                         "left {}: {}; delete the directory by hand, then run git worktree prune",
                         wt.path.display(),
                         e.to_string().replace('\n', " ").trim()
@@ -130,7 +161,7 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
             continue;
         }
         git(root, &["branch", "-q", "-D", b])?;
-        lines.push(format!("removed {b}"));
+        done.push(format!("removed {b}"));
         local.remove(b);
     }
     let plain: Vec<String> = local
@@ -140,7 +171,7 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
         .collect();
     for b in plain {
         git(root, &["branch", "-q", "-D", &b])?;
-        lines.push(format!("removed {b}"));
+        done.push(format!("removed {b}"));
         local.remove(&b);
     }
     // The branches Claude Code made for builds, left behind once each switched to its
@@ -158,7 +189,7 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
             && clm_git::is_ancestor(root, &format!("refs/heads/{b}"), &main)?
         {
             git(root, &["branch", "-q", "-D", b])?;
-            lines.push(format!("removed {b}"));
+            done.push(format!("removed {b}"));
         }
     }
 
@@ -219,9 +250,9 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
         })
         .collect();
     if !gone.is_empty() {
-        for b in delete_on_origin(root, &gone)? {
-            lines.push(format!("removed {REMOTE}/{b}"));
-        }
+        let (deleted, failed) = delete_on_origin(root, &gone);
+        done.extend(deleted.iter().map(|b| format!("removed {REMOTE}/{b}")));
+        failed?;
     }
 
     // 3. Work that isn't safe on `origin`. Only the session's own makes the checkpoint
@@ -300,7 +331,7 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
     // 5 (second half). The complete changes on `origin/main`, for `implement` to archive
     // (`archive-on-sync`), and the violations.
     let ok = unsafe_work.is_empty() && violations.is_empty();
-    lines.extend(unsafe_work);
+    let mut lines = unsafe_work;
     lines.extend(elsewhere);
     lines.extend(open);
     lines.extend(complete.iter().map(|id| format!("complete {id}")));
@@ -313,7 +344,7 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
     };
     git(root, &["update-ref", REVIEW_MARK, &next])?;
     lines.push(format!("wrap-up {}", if ok { "ok" } else { "incomplete" }));
-    Ok(Report { lines, ok })
+    Ok((lines, ok))
 }
 
 /// The review mark's commit, or `None` (recompute the whole chain) when the ref is unset,
@@ -458,15 +489,16 @@ impl Landed {
 
 /// Deletes the done branches `gone` (each with the tip the fetch read) on `origin`, in one
 /// push, each delete leased on that tip so a push made since the fetch survives. Returns the
-/// branches this push deleted. A delete `origin` refused because the branch isn't at that tip
-/// any more (`wrap-up-delete-loses-race`) is read again: a branch `origin` no longer has is
-/// done, deleted by another session, and one whose tip moved is kept; neither is returned. A
+/// branches this push deleted, also when it then fails, and whether it failed. A delete
+/// `origin` refused because the branch isn't at that tip any more
+/// (`wrap-up-delete-loses-race`) is read again: a branch `origin` no longer has is done,
+/// deleted by another session, and one whose tip moved is kept; neither is returned. A
 /// delete refused while `origin` still holds the branch at the tip judged, and any other
 /// failure, is git's.
 fn delete_on_origin<'a>(
     root: &Path,
     gone: &[(&'a String, &String)],
-) -> Result<Vec<&'a String>, Error> {
+) -> (Vec<&'a String>, Result<(), Error>) {
     let mut args = vec!["push".to_string(), "-q".into(), REMOTE.into()];
     for (b, tip) in gone {
         args.push(format!("--force-with-lease=refs/heads/{b}:{tip}"));
@@ -474,10 +506,11 @@ fn delete_on_origin<'a>(
     }
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let stderr = match git(root, &args) {
-        Ok(_) => return Ok(gone.iter().map(|(b, _)| *b).collect()),
+        Ok(_) => return (gone.iter().map(|(b, _)| *b).collect(), Ok(())),
         Err(clm_git::Error::Failed { stderr, .. }) => stderr,
-        Err(e) => return Err(e.into()),
+        Err(e) => return (Vec::new(), Err(e.into())),
     };
+    let failed = || Err(Error::Git(stderr.trim().to_string()));
     // What git reports for each branch of the push it didn't delete: ` ! [rejected]  (delete)
     // -> <b> (stale info)` for a lease that no longer holds, and ` ! [remote rejected] <b>
     // (<reason>)`, with or without `(delete) -> `, when `origin` itself refuses, as it does a
@@ -496,19 +529,24 @@ fn delete_on_origin<'a>(
             Some(b) if gone.iter().any(|(g, _)| g.as_str() == b) => {
                 stale.insert(b.to_string());
             }
-            _ => return Err(Error::Git(stderr.trim().to_string())),
+            // What the push did isn't known, so it claims to have deleted nothing.
+            _ => return (Vec::new(), failed()),
         }
     }
     if stale.is_empty() {
-        return Err(Error::Git(stderr.trim().to_string()));
+        return (Vec::new(), failed());
     }
-    let mut deleted = Vec::new();
-    for (b, tip) in gone {
-        if !stale.contains(b.as_str()) {
-            deleted.push(*b);
-            continue;
-        }
-        let now = git(root, &["ls-remote", REMOTE, &format!("refs/heads/{b}")])?;
+    // Every branch git didn't flag, the push deleted.
+    let deleted: Vec<&String> = gone
+        .iter()
+        .map(|(b, _)| *b)
+        .filter(|b| !stale.contains(b.as_str()))
+        .collect();
+    for (b, tip) in gone.iter().filter(|(b, _)| stale.contains(b.as_str())) {
+        let now = match git(root, &["ls-remote", REMOTE, &format!("refs/heads/{b}")]) {
+            Ok(now) => now,
+            Err(e) => return (deleted, Err(e.into())),
+        };
         // Still at the tip judged: the refusal is git's. Gone, or moved on: nothing of ours
         // to delete, and nothing to say.
         let ref_name = format!("refs/heads/{b}");
@@ -517,10 +555,10 @@ fn delete_on_origin<'a>(
             f.next() == Some(tip.as_str()) && f.next() == Some(ref_name.as_str())
         });
         if at_tip {
-            return Err(Error::Git(stderr.trim().to_string()));
+            return (deleted, failed());
         }
     }
-    Ok(deleted)
+    (deleted, Ok(()))
 }
 
 fn ledger_error(e: clm_ledger::Error) -> Error {
@@ -607,7 +645,7 @@ mod tests {
 
     #[test]
     fn agent_dirs_directly_in_claude_worktrees_are_builds() {
-        // req:orchestrator.checkpoint/checkpoint@9f671f32
+        // req:orchestrator.checkpoint/checkpoint@d5dafd65
         assert!(is_build_worktree(Path::new("/r/.claude/worktrees/agent-1")));
         assert!(!is_build_worktree(Path::new("/r/.claude/worktrees/p3")));
         assert!(!is_build_worktree(Path::new("/r/worktrees/agent-1")));
