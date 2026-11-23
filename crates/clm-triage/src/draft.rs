@@ -9,11 +9,9 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use clm_git::{Options, git};
+use clm_git::{Options, REMOTE, git};
 use clm_model::{BacklogItem, Priority, split_frontmatter};
-use clm_orchestrator::{
-    PlaceKind, Placed, REMOTE, claim, free_place, places, rename_place, take_place,
-};
+use clm_orchestrator::{PlaceKind, Placed, claim, free_place, places, rename_place, take_place};
 
 use crate::{Error, GATE, PR_BODY, fetch_origin, main_graph};
 
