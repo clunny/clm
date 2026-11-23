@@ -555,7 +555,7 @@ fn gone_drafts(options: &Options, file: &LoopFile) -> Result<Vec<String>, Failur
 
 /// Finishes each draft whose items are gone with `clm draft --finish` and takes it off the loop
 /// file's list, recording none of its items as left; the `say` actions for the `left <path>`
-/// lines its finish prints (`draft-of-gone-items-dropped`).
+/// and `kept` lines its finish prints (`draft-of-gone-items-dropped`, `return-rules`).
 fn finish_gone_drafts(options: &Options) -> Result<Vec<String>, Failure> {
     let Some(file) = state::read(&options.root) else {
         return Ok(Vec::new());
@@ -577,6 +577,7 @@ fn finish_gone_drafts(options: &Options) -> Result<Vec<String>, Failure> {
                 says.push(say(options, left)?);
             }
         }
+        says.extend(crate::returned::kept(options, &ran.stdout)?);
         let name = format!("draft:{id}");
         // `update` keeps the run's task ID under its name.
         state::update(&options.root, |f| {

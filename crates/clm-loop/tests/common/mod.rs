@@ -29,7 +29,7 @@ view) if [ -f "$F/flight.json" ]; then cat "$F/flight.json"; else echo '{"nodes"
 wrap-up) pwd > "$F/wrap-up-cwd"; cat "$F/wrap-up" 2>/dev/null; echo "wrap-up ok"; exit 0 ;;
 run)
   if [ "$2" = "--finish" ]; then
-    cat "$F/finish-$3" 2>/dev/null
+    if [ "$4" = "--returned" ] && [ -f "$F/finish-$3-returned" ]; then cat "$F/finish-$3-returned"; else cat "$F/finish-$3" 2>/dev/null; fi
     if [ -f "$F/finish-exit-$3" ]; then echo "finish failed" >&2; exit "$(cat "$F/finish-exit-$3")"; fi
     exit 0
   fi
@@ -102,7 +102,8 @@ impl Fixture {
     }
 
     /// Sets what the fake `clm` reads: `next`, `triage`, `flight.json`, `wrap-up`,
-    /// `finish-<name>` or `run-exit-<component>`.
+    /// `finish-<name>`, `finish-<component>-returned` (for `run --finish <component>
+    /// --returned`, which reads `finish-<component>` without it) or `run-exit-<component>`.
     pub fn set(&self, name: &str, text: &str) {
         fs::write(self.fake.join(name), text).unwrap();
     }

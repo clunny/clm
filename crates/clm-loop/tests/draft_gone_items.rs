@@ -45,6 +45,7 @@ fn draft(id: &str, items: &[&str], state: RunState, task: Option<&str>) -> clm_l
 #[test]
 fn a_printed_draft_whose_only_item_a_build_resolved() {
     // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
+    // req:orchestrator.loop/return-rules@3c0219a4: the `kept` line of a draft's finish is said.
     let fx = Fixture::new();
     fx.land_file("backlog/b.md", "---\nkind: bug\n---\nb\n");
     fx.set("triage", "group bug:b [b] P3 0 b\n");
@@ -53,7 +54,8 @@ fn a_printed_draft_whose_only_item_a_build_resolved() {
     fx.set("triage", "");
     fx.set(
         "finish-d1",
-        "left b: needs the human\nfreed d1\nleft /w/agent-d1: still on disk\n",
+        "left b: needs the human\nfreed d1\nleft /w/agent-d1: still on disk\n\
+         kept /w/agent-d2: uncommitted changes\n",
     );
     resolve(&fx, "b");
     let second = step(&fx.options()).unwrap();
@@ -76,6 +78,16 @@ fn a_printed_draft_whose_only_item_a_build_resolved() {
         .to_string();
     let text = std::fs::read_to_string(said).unwrap();
     assert!(text.contains("left /w/agent-d1: still on disk"), "{text}");
+    let said: Vec<String> = second
+        .iter()
+        .filter_map(|a| a.strip_prefix("say "))
+        .map(|f| std::fs::read_to_string(f).unwrap())
+        .collect();
+    assert!(
+        said.iter()
+            .any(|t| t.contains("kept /w/agent-d2: uncommitted changes")),
+        "{said:?}"
+    );
 }
 
 #[test]
