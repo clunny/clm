@@ -166,6 +166,13 @@ fn a_claim_lapses_four_hours_after_its_push() {
         time: ten,
         change: None,
     });
+    // A later claim: the earliest lapse is the one returned.
+    r.apply(Change::Ref {
+        name: "impl/b".into(),
+        sha: Some("c2".into()),
+        time: ten + 1800,
+        change: None,
+    });
     let next = r.recompute(11 * 3600).next;
     assert_eq!(next, Some(14 * 3600));
     // A lapsed claim is no longer live, and nothing is left to wait for.

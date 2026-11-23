@@ -68,4 +68,19 @@ fn what_is_still_to_fetch() {
         removed: Vec::new(),
     });
     assert_eq!(r.pending_fetch(), ["specs/a/SPEC.md", "src/b.rs"]);
+
+    // The files whose text it keeps come first, whatever their paths' order.
+    let mut later = Replica::default();
+    later.apply(Change::Tree {
+        sha: "111".into(),
+        entries: vec![
+            listed("a/x.rs", "100644"),
+            listed("specs/a/SPEC.md", "100644"),
+            listed("clm.toml", "100644"),
+        ],
+    });
+    assert_eq!(
+        later.pending_fetch(),
+        ["clm.toml", "specs/a/SPEC.md", "a/x.rs"]
+    );
 }

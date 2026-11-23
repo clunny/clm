@@ -253,7 +253,10 @@ fn nothing_to_judge_against() {
 
     let mut broken = f.clone();
     broken.insert("specs/b/SPEC.md".into(), b"not a spec".to_vec());
-    for r in [Replica::default(), ready(&broken, "111", 100)] {
+    // Listed, but its spec files not yet fetched.
+    let mut listed = Replica::default();
+    listed.apply(tree("111", &f));
+    for r in [Replica::default(), listed, ready(&broken, "111", 100)] {
         for w in &writes {
             assert_eq!(r.validate(w), Err(Refusal::Unknown), "{w:?}");
         }
