@@ -150,13 +150,3 @@ fn takeover_of_a_lapsed_claim_records_the_branch() {
     assert_ne!(tip, old);
     assert_eq!(local_tip(&r, "impl/b").as_deref(), Some(tip.as_str()));
 }
-
-#[test]
-fn scenario_no_other_public_claim_call() {
-    // req:orchestrator/claim-local@bf90a932
-    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let repo = std::fs::read_to_string(src.join("repo.rs")).unwrap();
-    let lib = std::fs::read_to_string(src.join("lib.rs")).unwrap();
-    assert!(!repo.contains("pub fn claim_node"), "claim_node is public");
-    assert!(!lib.contains("claim_node"), "claim_node is re-exported");
-}

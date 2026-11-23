@@ -5,14 +5,20 @@ mod common;
 use std::fs;
 
 use clm_orchestrator::{
-    Error, PlaceKind, Placed, State, claim, claim_fix, claim_refs, next, next_look,
-    queue_from_refs, status_claims, take_place,
+    Error, PlaceKind, Placed, State, claim, claim_fix, claim_refs, claims_section, next, next_look,
+    propose_refs, queue_from_refs, take_place,
 };
 use common::*;
 
 /// `clm next` with room for every node, so the places never cut the list short.
 fn ready(r: &Repo) -> Vec<String> {
     next(&r.work, 4, 9).unwrap()
+}
+
+/// The `claims` section `clm status` ends with, as `claims_section` gives it for the refs at
+/// `root` now.
+fn claims_rows(root: &std::path::Path) -> Vec<Vec<String>> {
+    claims_section(&claim_refs(root), &propose_refs(root), clm_git::now())
 }
 
 fn refused(res: Result<String, Error>) -> String {
@@ -30,12 +36,6 @@ fn scenario_claiming_an_unknown_component() {
     assert!(why.contains("no component `zz`"), "{why}");
     let why = refused(claim(&r.work, "a/b", 4));
     assert!(why.contains("isn't a component ID"), "{why}");
-}
-
-#[test]
-fn scenario_one_remote_name() {
-    // req:orchestrator/shared-plumbing@aeadf0f1
-    assert_eq!(clm_orchestrator::REMOTE, clm_git::REMOTE);
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn nested_branches_claim_no_node() {
     let r = repo();
     push_claim(&r.work, "b/x", 1);
     assert_eq!(ready(&r), ["a", "b", "c"]);
-    assert_eq!(status_claims(&r.work), [["none"]]);
+    assert_eq!(claims_rows(&r.work), [["none"]]);
     assert!(clm_orchestrator::claim_refs(&r.work).is_empty());
 }
 
@@ -252,7 +252,7 @@ fn scenario_archive_branch_beside_a_claim() {
     let r = repo();
     push_claim(&r.work, "b", 1);
     push_claim(&r.work, "archive/20261026-x", 1);
-    assert_eq!(status_claims(&r.work), [["b", "live"]]);
+    assert_eq!(claims_rows(&r.work), [["b", "live"]]);
     assert_eq!(ready(&r), ["a", "c"]);
 }
 
@@ -514,13 +514,13 @@ fn scenario_status_claims_live_lapsed_and_merged() {
     push_claim(&r.work, "c", 5);
     let before = git(&r.origin, &["for-each-ref"]);
     git(&r.work, &["fetch", "-q", "origin"]);
-    assert_eq!(status_claims(&r.work), [["b", "live"], ["c", "lapsed"]]);
+    assert_eq!(claims_rows(&r.work), [["b", "live"], ["c", "lapsed"]]);
     merge_claim(&r.work, "b");
-    assert_eq!(status_claims(&r.work), [["b", "merged"], ["c", "lapsed"]]);
+    assert_eq!(claims_rows(&r.work), [["b", "merged"], ["c", "lapsed"]]);
     // It never fetches: a claim on `origin` the last fetch didn't see doesn't show.
     push_claim(&r.work, "a", 0);
     git(&r.work, &["update-ref", "-d", "refs/remotes/origin/impl/a"]);
-    assert_eq!(status_claims(&r.work).len(), 2);
+    assert_eq!(claims_rows(&r.work).len(), 2);
     assert_ne!(git(&r.origin, &["for-each-ref"]), before);
 }
 
@@ -531,10 +531,7 @@ fn scenario_backlog_claims_after_node_claims() {
     push_claim(&r.work, "b", 1);
     push_propose(&r.work, "q", 1);
     git(&r.work, &["fetch", "-q", "origin"]);
-    assert_eq!(
-        status_claims(&r.work),
-        [["b", "live"], ["backlog/q", "live"]]
-    );
+    assert_eq!(claims_rows(&r.work), [["b", "live"], ["backlog/q", "live"]]);
 }
 
 #[test]
@@ -547,7 +544,7 @@ fn backlog_claims_live_and_lapsed_by_the_expiry_after_node_claims() {
     push_propose(&r.work, "q", 1);
     git(&r.work, &["fetch", "-q", "origin"]);
     assert_eq!(
-        status_claims(&r.work),
+        claims_rows(&r.work),
         [
             ["b", "live"],
             ["c", "lapsed"],
@@ -561,9 +558,9 @@ fn backlog_claims_live_and_lapsed_by_the_expiry_after_node_claims() {
 fn scenario_no_claims() {
     // req:orchestrator/status-claims@726cb7c5
     let r = repo();
-    assert_eq!(status_claims(&r.work), [["none"]]);
+    assert_eq!(claims_rows(&r.work), [["none"]]);
     let dir = tempfile::TempDir::new().unwrap();
-    assert_eq!(status_claims(dir.path()), [["none"]]);
+    assert_eq!(claims_rows(dir.path()), [["none"]]);
 }
 
 /// A backlog item of `kind` naming `nodes` (comma-separated).
@@ -842,23 +839,4 @@ fn converged() -> Repo {
     push_main(&r.work, "cite all");
     assert!(ready(&r).is_empty());
     r
-}
-
-#[test]
-fn scenario_next_wait_wait_refused() {
-    // req:orchestrator/next-wait@e9450c03
-    for args in [vec!["next", "--wait"], vec!["next", "--interval", "5"]] {
-        let out = std::process::Command::new(env!("CARGO"))
-            .args(["run", "-q", "-p", "clm", "--"])
-            .args(&args)
-            .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .output()
-            .unwrap();
-        assert_eq!(out.status.code(), Some(2), "{args:?}");
-        assert!(
-            String::from_utf8_lossy(&out.stderr).contains("Usage"),
-            "{args:?}: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-    }
 }

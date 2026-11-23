@@ -188,7 +188,7 @@ where
         Err(code) => return code,
     };
     let root = args.root.as_deref().unwrap_or(root);
-    let written = match crate::proposals(root, &args.nodes) {
+    let written = match crate::propose::proposals(root, &args.nodes) {
         Ok(p) => p
             .warnings
             .iter()

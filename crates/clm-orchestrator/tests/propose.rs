@@ -5,8 +5,8 @@ mod common;
 use std::collections::BTreeSet;
 
 use clm_orchestrator::{
-    BareClaim, ClaimRef, Error, Holding, HoldingChange, SpecRef, claim, proposals, taken_from_refs,
-    taken_items,
+    BareClaim, ClaimRef, Error, Holding, HoldingChange, SpecRef, claim, proposals_command,
+    taken_from_refs, taken_items,
 };
 use common::*;
 
@@ -33,9 +33,24 @@ fn proposed(extra: &str) -> String {
     change_md("proposed", extra)
 }
 
+/// `clm proposals` in `r`'s clone, with `--component` for each of `nodes`: its status, its
+/// stdout lines and its stderr.
+fn run_proposals(r: &Repo, nodes: &[&str]) -> (u8, Vec<String>, String) {
+    let args: Vec<&str> = nodes.iter().flat_map(|n| ["--component", n]).collect();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = proposals_command(args, &r.work, &|_| None, &mut out, &mut err);
+    let out = String::from_utf8(out).unwrap();
+    (
+        code,
+        out.lines().map(str::to_string).collect(),
+        String::from_utf8(err).unwrap(),
+    )
+}
+
 fn lines(r: &Repo, nodes: &[&str]) -> Vec<String> {
-    let nodes: Vec<String> = nodes.iter().map(|n| n.to_string()).collect();
-    proposals(&r.work, &nodes).unwrap().lines
+    let (code, lines, err) = run_proposals(r, nodes);
+    assert_eq!(code, 0, "{err}");
+    lines
 }
 
 #[test]
@@ -576,13 +591,13 @@ fn scenario_unreadable_change() {
             ("changes/20260101-e/deltas/b.md", &delta("b", &["t"])),
         ],
     );
-    let out = proposals(&r.work, &[]).unwrap();
-    assert_eq!(out.lines, ["20260101-e proposed [b]"]);
-    assert_eq!(out.warnings.len(), 1, "{:?}", out.warnings);
+    let (code, out, err) = run_proposals(&r, &[]);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(out, ["20260101-e proposed [b]"]);
+    assert_eq!(err.lines().count(), 1, "{err}");
     assert!(
-        out.warnings[0].contains("origin/spec/20260101-e"),
-        "{:?}",
-        out.warnings
+        err.starts_with("clm proposals: warning: ") && err.contains("origin/spec/20260101-e"),
+        "{err}"
     );
 }
 

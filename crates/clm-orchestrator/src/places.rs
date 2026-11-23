@@ -10,9 +10,9 @@ use std::fs::{self, File};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use clm_git::git;
+use clm_git::{REMOTE, git};
 
-use crate::{Error, REMOTE, lapsed};
+use crate::{Error, lapsed};
 use clm_git::now;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

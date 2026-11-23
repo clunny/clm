@@ -31,21 +31,18 @@ pub use places::{
     place_slot, places, rename_place, take_place,
 };
 #[cfg(feature = "git")]
-pub use propose::{Proposals, proposals, taken_items};
+pub use propose::taken_items;
 pub use queue::{
     Block, ClaimRef, Node, Queue, Requirement, State, claim_state, claims_section, queue_from_refs,
 };
 #[cfg(feature = "git")]
 pub use repo::{
     Claim, NextLook, claim, claim_fix, claim_local, claim_refs, next, next_look, propose_refs,
-    refusal, status_claims,
 };
 pub use taken::{BareClaim, Holding, HoldingChange, SpecRef, Taken, taken_from_refs};
 
 use clm_model::Violation;
 
-#[cfg(feature = "git")]
-pub use clm_git::REMOTE;
 pub const DEFAULT_EXPIRY_HOURS: u64 = 4;
 
 #[derive(Debug)]
