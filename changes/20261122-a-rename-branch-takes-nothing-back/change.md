@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [reapply-s-take-back-reads-as-undoing-a-rename-branch-s-rebased-deltas, reconsider-sync-reapply, workaround-sync-reapply-1]
 ---
 
