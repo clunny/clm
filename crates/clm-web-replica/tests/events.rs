@@ -40,6 +40,52 @@ fn a_push_to_main() {
 }
 
 #[test]
+fn a_push_listing_every_kind_of_file() {
+    // req:web.worker.replica/fetches-what-the-replica-wants@bb23e1f0
+    let paths = [
+        "web/.gitattributes",
+        "clm.toml",
+        "docs/decisions/d.md",
+        "src/b.rs",
+        "README.md",
+        "docs/guide.md",
+    ];
+    let at = |round: &str| {
+        let texts: Vec<String> = paths.iter().map(|p| format!("{p} {round}\n")).collect();
+        let pairs: Vec<(&str, &str)> = paths
+            .iter()
+            .zip(&texts)
+            .map(|(p, t)| (*p, t.as_str()))
+            .collect();
+        repo_files(&pairs)
+    };
+    let fake = fake_with("111", at("one"));
+    let (mut object, _mem, _slot) = built(&fake);
+    commit(&fake, "222", at("two"));
+    let from = gh_calls(&fake);
+    let fetched_before = fake.gh.fetched_paths().len();
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    let queries = graphql_calls(&fake, from);
+    assert_eq!(queries.len(), 1, "{queries:?}");
+    let mut fetched = fake.gh.fetched_paths().split_off(fetched_before);
+    fetched.sort();
+    assert_eq!(
+        fetched,
+        [
+            "clm.toml",
+            "docs/decisions/d.md",
+            "src/b.rs",
+            "web/.gitattributes"
+        ]
+    );
+    for p in &paths[..4] {
+        assert!(queries[0].contains(&format!("222:{p}")), "{}", queries[0]);
+    }
+    assert!(!queries[0].contains("README.md"));
+    assert!(!queries[0].contains("docs/guide.md"));
+}
+
+#[test]
 fn a_ledger_append() {
     // req:web.worker.replica/applies-events@f75e1a7c
     let mut repo = FakeRepo::new("111", repo_files(&[]));

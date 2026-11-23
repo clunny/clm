@@ -40,20 +40,6 @@ impl Budget {
     }
 }
 
-/// Whether the replica keeps a file's text: the model's files, `clm.toml` and every
-/// `.gitattributes`.
-pub(crate) fn is_spec(path: &str) -> bool {
-    files::is_spec_path(path)
-        || path == "clm.toml"
-        || path == ".gitattributes"
-        || path.ends_with("/.gitattributes")
-}
-
-/// Whether a file's text is read at all: Markdown outside the spec files holds no markers.
-pub(crate) fn wanted(path: &str) -> bool {
-    is_spec(path) || !path.ends_with(".md")
-}
-
 /// The default branch's name.
 pub(crate) async fn default_branch<P: Host>(
     p: &P,
