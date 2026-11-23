@@ -28,3 +28,9 @@ A fetch that can't start `git` in its directory says so, naming the directory, i
 ## Edge cases and workarounds
 
 - `Error::Spawn` also covers a `git` that started but couldn't be waited for or read. Such a run is also not retried and its message names `root`, which is still true of it; no workaround is needed.
+- The stop belongs to `fetch_retrying` alone, not the shared `run_again`: `fetch` (`fetch-tries-again`) and the worktree listing (`worktrees-tries-again`) keep retrying a failed run, and a unit test of the listing relies on a missing directory being retried.
+
+## Open questions
+
+- Four caller requirements (`orchestrator/fetch-retries-race`, `orchestrator.run/run-fetch-retries-race`, `orchestrator.checkpoint/wrap-up-fetch-retries-race`, `orchestrator.triage/draft-fetch-retries-race`) say a failed fetch prints "git's message from the last fetch, or `origin can't be reached`". The new `<command> in <root>: <I/O error>` comes from a `git` that never started; the change reads "git's message" as the last fetch's error and leaves those requirements as they are, since rewording four components for it would change no behaviour (`yagni`).
+- No requirement or test proves at the command line that `clm triage --root /nonexistent/x` names the path: every caller displays `FetchError::Git`'s error as it is, so `vcs/fetch-retries`'s new scenario proves the message, and the callers' existing tests of a missing root check only their prefix and exit 2.
