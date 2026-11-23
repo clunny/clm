@@ -45,7 +45,7 @@ fn proposal(title: &str, nodes: &[&str]) -> Write {
 
 #[test]
 fn a_reworded_capability_is_stale() {
-    // req:replica/validate-writes@a4cd62e9
+    // req:replica/validate-writes@10e8df8e
     let f = repo();
     let r = ready(&f, "111", 100);
     let current = version(&f, "capability/x");
@@ -63,7 +63,7 @@ fn a_reworded_capability_is_stale() {
 
 #[test]
 fn an_entry_the_tip_doesnt_hold_is_unknown() {
-    // req:replica/validate-writes@a4cd62e9
+    // req:replica/validate-writes@10e8df8e
     let f = repo();
     let r = ready(&f, "111", 100);
     assert_eq!(
@@ -91,7 +91,7 @@ fn an_entry_the_tip_doesnt_hold_is_unknown() {
 
 #[test]
 fn signed_comes_before_stale() {
-    // req:replica/validate-writes@a4cd62e9
+    // req:replica/validate-writes@10e8df8e
     let mut f = repo();
     f.insert(
         "docs/allowed_signers".into(),
@@ -115,7 +115,7 @@ fn signed_comes_before_stale() {
 
 #[test]
 fn a_decision_gives_the_flags_it_settles() {
-    // req:replica/validate-writes@a4cd62e9
+    // req:replica/validate-writes@10e8df8e
     let mut f = repo();
     let v = version(&f, "c/r");
     f.insert(
@@ -150,11 +150,16 @@ fn a_decision_gives_the_flags_it_settles() {
 
 #[test]
 fn a_taken_slug() {
-    // req:replica/validate-writes@a4cd62e9
+    // req:replica/validate-writes@10e8df8e
     let mut r = ready(&repo(), "111", 100);
     assert_eq!(
         r.validate(&proposal("Export CSV", &["a"])),
         Err(Refusal::Taken)
+    );
+    // An unknown component is invalid before the slug is judged taken.
+    assert_eq!(
+        r.validate(&proposal("Export CSV", &["nope"])),
+        Err(Refusal::Invalid)
     );
     // A slug a change's `resolves` holds is spent too.
     assert_eq!(
@@ -195,7 +200,7 @@ fn a_taken_slug() {
 
 #[test]
 fn a_component_the_graph_lacks_is_invalid() {
-    // req:replica/validate-writes@a4cd62e9
+    // req:replica/validate-writes@10e8df8e
     let r = ready(&repo(), "111", 100);
     assert_eq!(
         r.validate(&proposal("Dark mode", &["nope"])),
@@ -206,7 +211,7 @@ fn a_component_the_graph_lacks_is_invalid() {
 
 #[test]
 fn slugs_as_clm_defect_does() {
-    // req:replica/validate-writes@a4cd62e9
+    // req:replica/validate-writes@10e8df8e
     let r = ready(&repo(), "111", 100);
     let slug = |title: &str| match r.validate(&proposal(title, &[])) {
         Ok(Validated::Proposal { slug }) => slug,
@@ -222,6 +227,37 @@ fn slugs_as_clm_defect_does() {
         "a".repeat(62),
         "a word that doesn't fit is left out"
     );
+    assert_eq!(r.validate(&proposal("!!!", &[])), Err(Refusal::Invalid));
+}
+
+#[test]
+fn nothing_to_judge_against() {
+    // req:replica/validate-writes@10e8df8e
+    let mut f = repo();
+    f.insert(
+        "backlog/q.md".into(),
+        b"---\ntitle: Q\nkind: question\nchoices: [yes, no]\n---\nQ?\n".to_vec(),
+    );
+    let v = version(&f, "capability/x");
+    let writes = [
+        decision("capability/x", &v),
+        proposal("Dark mode", &["a"]),
+        Write::Answer {
+            item: "q".into(),
+            answer: "yes".into(),
+        },
+    ];
+    // Each holds on the repository as it is.
+    let fine = ready(&f, "111", 100);
+    assert!(writes.iter().all(|w| fine.validate(w).is_ok()));
+
+    let mut broken = f.clone();
+    broken.insert("specs/b/SPEC.md".into(), b"not a spec".to_vec());
+    for r in [Replica::default(), ready(&broken, "111", 100)] {
+        for w in &writes {
+            assert_eq!(r.validate(w), Err(Refusal::Unknown), "{w:?}");
+        }
+    }
 }
 
 #[test]

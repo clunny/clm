@@ -262,7 +262,7 @@ fn held_fixture() -> FileMap {
 
 #[test]
 fn held_items() {
-    // req:replica/taken-items@6f007a48
+    // req:replica/taken-items@ddb71f1e
     let mut r = scratch(&held_fixture(), "111");
     let now = at(12, 0);
     branch_ref(
@@ -291,7 +291,7 @@ fn held_items() {
 
 #[test]
 fn a_rename_branch_names_its_archived_change() {
-    // req:replica/taken-items@6f007a48
+    // req:replica/taken-items@ddb71f1e
     let mut r = scratch(&clm_repo(), "111");
     // The source read `changes/archive/r/` because the tip has no `changes/r/change.md`.
     branch_ref(
@@ -318,7 +318,7 @@ fn a_rename_branch_names_its_archived_change() {
 
 #[test]
 fn taken_carries_the_recompute_time_and_expiry() {
-    // req:replica/taken-items@6f007a48
+    // req:replica/taken-items@ddb71f1e
     let mut r = scratch(&clm_repo(), "111");
     r.recompute(at(12, 0));
     let imp = view(&r, "implementation");
