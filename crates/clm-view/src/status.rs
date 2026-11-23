@@ -185,9 +185,6 @@ pub fn status_text(
             .collect(),
     ));
     text.push_str("\nchanges\n");
-    if sections.changes.is_empty() {
-        text.push_str("  none\n");
-    }
     let mut rows = Vec::new();
     for (status, group) in &sections.changes {
         rows.push(("  ", vec![status.clone()]));
@@ -214,8 +211,12 @@ fn tail(parts: &[String]) -> String {
 }
 
 /// Rows, each with its indent, as lines whose columns start at the same position: a cell's
-/// column is its index after the indent, so group names sit in the first column.
+/// column is its index after the indent, so group names sit in the first column. No rows
+/// is the single row `none`.
 fn section(rows: Vec<(&str, Row)>) -> String {
+    if rows.is_empty() {
+        return "  none\n".into();
+    }
     let mut widths: Vec<usize> = Vec::new();
     for (indent, row) in &rows {
         for (i, cell) in row.iter().enumerate() {
