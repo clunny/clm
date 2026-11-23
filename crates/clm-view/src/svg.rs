@@ -36,6 +36,9 @@ fn style() -> String {
     STYLE.replace("FONT", FONT)
 }
 
+/// `text` as XML character data: the markup characters escaped, and the characters XML 1.0
+/// forbids, which no escape can carry, dropped, so the document parses whatever the
+/// repository's text holds (`view-command`).
 pub(crate) fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
@@ -44,6 +47,12 @@ pub(crate) fn escape(text: &str) -> String {
             '<' => out.push_str("&lt;"),
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
+            '\u{0}'..='\u{8}'
+            | '\u{b}'
+            | '\u{c}'
+            | '\u{e}'..='\u{1f}'
+            | '\u{fffe}'
+            | '\u{ffff}' => {}
             _ => out.push(c),
         }
     }

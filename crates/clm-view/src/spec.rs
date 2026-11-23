@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use clm_coverage::{Marker, State, pending, report};
-use clm_model::{Graph, Layer};
+use clm_model::{Graph, Layer, STATUS_TERMS, Status};
 use serde::Serialize;
 
 use crate::FlightView;
@@ -37,7 +37,7 @@ pub struct SpecNode {
     /// `None` for the root.
     pub parent: Option<String>,
     pub title: String,
-    /// `active`, `specd` or `deprecated`.
+    /// `active`, `unbuilt` or `deprecated`, as `STATUS_TERMS` writes it.
     pub status: String,
     pub owners: Vec<String>,
     pub depends_on: Vec<String>,
@@ -125,6 +125,15 @@ fn node_backlog(graph: &Graph) -> BTreeMap<&str, Vec<NodeItem>> {
     by_node
 }
 
+/// The word a file writes for `status` (`term-lists`).
+fn status_word(status: Status) -> String {
+    STATUS_TERMS
+        .iter()
+        .find(|(s, _)| *s == status)
+        .map(|(_, w)| w.to_string())
+        .expect("STATUS_TERMS lists every status")
+}
+
 /// The `spec` view of `graph` with the markers of its code. `oversized` is the size
 /// report: the IDs of the components `clm size` marks, which the command computes and
 /// hands in, or `None` when it passes none, which leaves every node's `oversized` unset.
@@ -183,7 +192,7 @@ pub fn spec_view(
             node: n.id.clone(),
             parent: n.parent.clone(),
             title: n.frontmatter.title.clone(),
-            status: format!("{:?}", n.frontmatter.status).to_lowercase(),
+            status: status_word(n.frontmatter.status),
             owners: n.frontmatter.owners.clone(),
             depends_on: n.frontmatter.depends_on.clone(),
             current,

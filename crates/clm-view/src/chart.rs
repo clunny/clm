@@ -21,7 +21,7 @@ impl Style {
     pub(crate) fn of(word: &str) -> Style {
         match word {
             "active" | "converged" | "current" | "complete" => Style::Green,
-            "specd" | "unbuilt" | "ready" => Style::Sky,
+            "unbuilt" | "ready" => Style::Sky,
             "claimed" | "behind" => Style::Amber,
             "blocked" | "obsolete" | "deprecated" => Style::Rose,
             _ => Style::Plain,

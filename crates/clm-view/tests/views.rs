@@ -64,7 +64,7 @@ fn spec_with(
 
 #[test]
 fn scenario_nested_nodes() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (g, markers) = nested();
     let v = json(&spec_view(&g, &markers, None));
     assert_eq!(v["view"], "spec");
@@ -87,13 +87,13 @@ fn scenario_nested_nodes() {
     }
     assert_eq!(drift.get("cited"), None, "{drift:#}");
     assert_eq!(drift.get("specd"), None, "{drift:#}");
-    assert_eq!(drift["status"], "specd");
+    assert_eq!(drift["status"], "unbuilt");
     assert_eq!(drift["title"], "T");
 }
 
 #[test]
 fn spec_view_holds_every_node_once_in_tree_order() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (g, markers) = nested();
     let ids: Vec<String> = spec_view(&g, &markers, None)
         .nodes
@@ -105,7 +105,7 @@ fn spec_view_holds_every_node_once_in_tree_order() {
 
 #[test]
 fn scenario_tree_chart() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (g, markers) = nested();
     let out = text(&spec_chart(&g, &markers));
     let lines = lines(&out);
@@ -120,7 +120,7 @@ fn scenario_tree_chart() {
     let indent = |l: &str| l.find(|c: char| c.is_alphanumeric()).unwrap();
     assert!(indent(lines[drift]) > indent(lines[check]), "{out}");
     let line = lines[drift];
-    for fact in ["1/2", "@a", "model", "specd"] {
+    for fact in ["1/2", "@a", "model", "unbuilt"] {
         assert!(line.contains(fact), "{fact} missing from {line:?}");
     }
     assert!(line.contains("█████▓▓▓▓▓ 1/2"), "{line:?}");
@@ -166,7 +166,7 @@ fn counted(
 
 #[test]
 fn scenario_a_node_behind_its_spec_is_not_full() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (g, markers) = counted(4, 3, 1);
     let out = text(&spec_chart(&g, &markers));
     let line = line_of(&out, "a");
@@ -177,11 +177,12 @@ fn scenario_a_node_behind_its_spec_is_not_full() {
 
 #[test]
 fn bar_gives_every_state_a_cell_and_ties_to_current_first() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     for (n, cur, behind, bar) in [
         (3, 1, 1, "████▓▓▓░░░ 1/3"),
         (100, 98, 1, "████████▓░ 98/100"),
         (2, 0, 0, "░░░░░░░░░░ 0/2"),
+        (0, 0, 0, "·········· 0/0"),
     ] {
         let (g, markers) = counted(n, cur, behind);
         let out = text(&spec_chart(&g, &markers));
@@ -192,7 +193,8 @@ fn bar_gives_every_state_a_cell_and_ties_to_current_first() {
 
 #[test]
 fn scenario_queue_states_on_the_chart() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
+    // req:view/view-command@c4a4df22
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -244,7 +246,7 @@ fn obsolete() -> (clm_model::Graph, Vec<clm_coverage::Marker>) {
 
 #[test]
 fn scenario_obsolete_markers() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (g, markers) = obsolete();
     let v = json(&spec_view(&g, &markers, None));
     let a = v["nodes"]
@@ -309,7 +311,7 @@ fn obsolete_by_node(
 
 #[test]
 fn scenario_a_removed_nodes_markers() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let g = removed_node();
     let markers = [current(&g, "a/x"), cite_in("gone/x", "src/a/t.rs", 3)];
     let v = json(&spec_view(&g, &markers, None));
@@ -328,7 +330,7 @@ fn scenario_a_removed_nodes_markers() {
 
 #[test]
 fn a_removed_nodes_requirement_counts_once_on_each_owner() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let g = removed_node();
     let markers = [
         cite_in("gone/x", "src/a/t.rs", 3),
@@ -345,7 +347,7 @@ fn a_removed_nodes_requirement_counts_once_on_each_owner() {
 
 #[test]
 fn a_removed_nodes_marker_no_node_owns_counts_on_the_root() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let g = removed_node();
     let markers = [cite_in("gone/x", "tests/t.rs", 3)];
     let counts = obsolete_by_node(&g, &markers);
@@ -360,7 +362,7 @@ fn a_removed_nodes_marker_no_node_owns_counts_on_the_root() {
 
 #[test]
 fn a_requirement_removed_from_a_node_that_no_longer_exists_counts_on_its_owner() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     // The delta removes `gone/old` without `remove: true`, and no node `gone` exists.
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -378,7 +380,7 @@ fn a_requirement_removed_from_a_node_that_no_longer_exists_counts_on_its_owner()
 
 #[test]
 fn scenario_oversized_without_sizes() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (g, markers) = nested();
     let v = json(&spec_view(&g, &markers, None));
     for n in v["nodes"].as_array().unwrap() {
@@ -410,7 +412,7 @@ fn oversized_view() -> (View, clm_view::SpecView) {
 
 #[test]
 fn oversized_marks_the_model_and_the_chart_line() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (view, model) = oversized_view();
     let v = json(&model);
     let find = |id: &str| {
@@ -438,7 +440,7 @@ fn oversized_marks_the_model_and_the_chart_line() {
 
 #[test]
 fn oversized_marks_the_svg_label_and_outline() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (view, _) = oversized_view();
     let out = render(&view, Format::Svg, 100, None);
     let rect = |id: &str| {
@@ -474,7 +476,7 @@ fn oversized_marks_the_svg_label_and_outline() {
 
 #[test]
 fn scenario_claimed_node() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["p", "q"])),
@@ -498,7 +500,7 @@ fn scenario_claimed_node() {
 
 #[test]
 fn hours_are_rounded_to_the_nearest() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["p"])),
@@ -511,11 +513,30 @@ fn hours_are_rounded_to_the_nearest() {
     let v = json(&flight_view(&g, &[], &refs, NOW, EXPIRY));
     assert_eq!(v["nodes"][0]["claim"]["pushed_hours_ago"], 1);
     assert_eq!(v["nodes"][0]["claim"]["lapses_in_hours"], 3);
+    // A half rounds up.
+    let refs = [clm_orchestrator::ClaimRef {
+        node: "a".into(),
+        tip_time: NOW - 1800,
+        merged: false,
+    }];
+    let v = json(&flight_view(&g, &[], &refs, NOW, EXPIRY));
+    assert_eq!(v["nodes"][0]["claim"]["pushed_hours_ago"], 1);
+    assert_eq!(v["nodes"][0]["claim"]["lapses_in_hours"], 4);
+    // A push after the current time was 0 hours ago.
+    let refs = [clm_orchestrator::ClaimRef {
+        node: "a".into(),
+        tip_time: NOW + 60,
+        merged: false,
+    }];
+    let v = json(&flight_view(&g, &[], &refs, NOW, EXPIRY));
+    assert_eq!(v["nodes"][0]["state"], "claimed", "{v:#}");
+    assert_eq!(v["nodes"][0]["claim"]["pushed_hours_ago"], 0);
+    assert_eq!(v["nodes"][0]["claim"]["lapses_in_hours"], 4);
 }
 
 #[test]
 fn scenario_change_progress() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x", "y"])),
@@ -539,7 +560,7 @@ fn scenario_change_progress() {
 
 #[test]
 fn a_complete_change_and_a_marker_citing_a_removed_requirement() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -569,7 +590,7 @@ fn a_complete_change_and_a_marker_citing_a_removed_requirement() {
 
 #[test]
 fn each_change_is_exactly_its_change_progress() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -606,7 +627,7 @@ fn each_change_is_exactly_its_change_progress() {
 
 #[test]
 fn scenario_requirement_removed_later() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -625,7 +646,7 @@ fn scenario_requirement_removed_later() {
 
 #[test]
 fn an_implementing_change_leaves_out_a_requirement_a_later_change_removed() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -652,7 +673,7 @@ fn an_implementing_change_leaves_out_a_requirement_a_later_change_removed() {
 
 #[test]
 fn an_unapplied_change_counts_requirements_the_spec_does_not_hold_yet() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -667,7 +688,7 @@ fn an_unapplied_change_counts_requirements_the_spec_does_not_hold_yet() {
 
 #[test]
 fn a_change_lists_no_marker_for_a_removed_requirement_the_spec_still_holds() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -686,7 +707,7 @@ fn a_change_lists_no_marker_for_a_removed_requirement_the_spec_still_holds() {
 
 #[test]
 fn flight_leaves_out_done_changes_and_the_archive() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x"])),
@@ -727,7 +748,7 @@ fn ordered() -> clm_model::Graph {
 
 #[test]
 fn scenario_order() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = ordered();
     let out = text(&View::Flight(flight_view(&g, &[], &[], NOW, EXPIRY)));
     let pos = |s: &str| out.find(s).unwrap_or_else(|| panic!("no {s} in {out}"));
@@ -741,7 +762,7 @@ fn scenario_order() {
 
 #[test]
 fn changes_in_a_group_sort_by_priority_then_id() {
-    // req:view/flight-view@d01ad49e
+    // req:view/flight-view@86ea7638
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x", "y", "z"])),
@@ -764,18 +785,30 @@ fn changes_in_a_group_sort_by_priority_then_id() {
 
 #[test]
 fn flight_chart_names_every_state_and_the_claim() {
-    // req:view/flight-view@d01ad49e
-    // req:view/view-command@9fec4d39
-    // req:view/says-component@f1f9079e
+    // req:view/flight-view@86ea7638
+    // req:view/view-command@c4a4df22
+    let twelve: Vec<String> = (0..12).map(|i| format!("s{i:02}")).collect();
+    let twelve: Vec<&str> = twelve.iter().map(String::as_str).collect();
+    let d = specd("", &twelve).replace(
+        "depends_on: []\n",
+        "depends_on: []\npaths: [\"src/d/**\"]\n",
+    );
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["p"])),
         ("specs/b/SPEC.md", &needs(&[("q", &["a/p"])])),
         ("specs/c/SPEC.md", &specd("", &["r"])),
-        ("specs/d/SPEC.md", &specd("", &["s"])),
+        ("specs/d/SPEC.md", &d),
         ("backlog/q.md", &item("question", "c/r")),
+        ("changes/e/change.md", &change("applied", "")),
+        (
+            "changes/e/deltas/n.md",
+            "---\ncomponent: n\n---\n## REMOVED Requirements\n### Requirement: x\n",
+        ),
     ]);
-    let view = View::Flight(flight_view(&g, &[], &[claim("a", 1)], NOW, EXPIRY));
+    // `n/x` is held by no component, and a test in a file `d` owns still cites it.
+    let markers = [cite_in("n/x", "src/d/t.rs", 3)];
+    let view = View::Flight(flight_view(&g, &markers, &[claim("a", 1)], NOW, EXPIRY));
     let out = text(&view);
     let line = |id: &str| {
         out.lines()
@@ -793,10 +826,34 @@ fn flight_chart_names_every_state_and_the_claim() {
         line("c").contains("blocked") && line("c").contains("backlog/q"),
         "{out}"
     );
+    assert!(line("b").contains("by a/p"), "{out}");
+    assert!(line("c").contains("by backlog/q"), "{out}");
     assert!(line("d").contains("ready"), "{out}");
-    assert!(out.starts_with("flight"), "{out}");
-    assert!(out.contains("4 components pending"), "{out}");
-    assert!(out.contains("1 claimed"), "{out}");
+    // Ten cells, then `…`, then the count: twelve unbuilt and the obsolete marker.
+    let bar: String = line("d")
+        .chars()
+        .skip_while(|c| !"▓░✕".contains(*c))
+        .take_while(|c| *c != ' ')
+        .collect();
+    assert_eq!(bar.chars().count(), 11, "{bar:?} in {out}");
+    assert!(bar.ends_with('…'), "{bar:?} in {out}");
+    assert!(line("d").contains("… 13 pending"), "{out}");
+    // Uncut, at no width.
+    let whole = render(&view, Format::Text, 0, None);
+    let first = whole.lines().next().unwrap();
+    assert!(first.starts_with("flight"), "{out}");
+    assert!(
+        first.contains(
+            "4 components pending (1 claimed, 1 ready, 2 blocked)  ·  1 changes live  ·  \
+             16 requirements to do"
+        ),
+        "{out}"
+    );
+    let e = out
+        .lines()
+        .find(|l| l.starts_with("    e "))
+        .unwrap_or_else(|| panic!("no e in {out}"));
+    assert!(e.contains("1 obsolete"), "{out}");
     assert!(!out.contains('\u{1b}'), "{out}");
 }
 
@@ -815,7 +872,7 @@ fn node_and_change_lines(out: &str) -> (Vec<&str>, Vec<&str>) {
 
 #[test]
 fn scenario_node_lines() {
-    // req:view/flight-component-lines@ace29367
+    // req:view/flight-component-lines@92827b9d
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -849,7 +906,7 @@ fn scenario_node_lines() {
 
 #[test]
 fn scenario_long_id() {
-    // req:view/flight-component-lines@ace29367
+    // req:view/flight-component-lines@92827b9d
     let long = "a".repeat(60);
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -871,7 +928,7 @@ fn scenario_long_id() {
 
 #[test]
 fn scenario_nothing_pending() {
-    // req:view/flight-component-lines@ace29367
+    // req:view/flight-component-lines@92827b9d
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -887,7 +944,7 @@ fn scenario_nothing_pending() {
 
 #[test]
 fn scenario_chain_weight() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -941,7 +998,7 @@ fn removed_on(ids: &[&str]) -> clm_model::Graph {
 
 #[test]
 fn scenario_an_obsolete_requirement_pending_on_two_components() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = removed_on(&["a", "b"]);
     let markers = [
         cite_in("b/gone", "src/b/t.rs", 3),
@@ -958,7 +1015,7 @@ fn scenario_an_obsolete_requirement_pending_on_two_components() {
 
 #[test]
 fn scenario_an_obsolete_requirement_pending_on_three_components() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = removed_on(&["a", "b", "c"]);
     let markers = [
         cite_in("b/gone", "src/a/t.rs", 3),
@@ -994,7 +1051,8 @@ fn human_first() -> clm_model::Graph {
 
 #[test]
 fn scenario_human_first() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
+    // req:view/blockers-root-lines@31794d8d
     let g = human_first();
     let view = blockers_view(&g, &[], &[claim("d", 1)], NOW, EXPIRY);
     let v = json(&view);
@@ -1016,7 +1074,7 @@ fn scenario_human_first() {
 
 #[test]
 fn scenario_dependency_holds_nothing() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1045,7 +1103,7 @@ fn scenario_dependency_holds_nothing() {
 
 #[test]
 fn scenario_nothing_blocked() {
-    // req:view/blockers-root-lines@8d9bf009
+    // req:view/blockers-root-lines@31794d8d
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1061,7 +1119,7 @@ fn scenario_nothing_blocked() {
 
 #[test]
 fn a_node_waiting_on_two_chains_is_under_each_root() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         (
@@ -1092,7 +1150,7 @@ fn a_node_waiting_on_two_chains_is_under_each_root() {
 
 #[test]
 fn roots_of_equal_weight_sort_by_name_after_weight() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1152,7 +1210,7 @@ fn roots_of(view: &clm_view::BlockersView) -> Vec<(String, usize, Vec<String>)> 
 
 #[test]
 fn scenario_need_reaches_its_node() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1165,7 +1223,7 @@ fn scenario_need_reaches_its_node() {
 
 #[test]
 fn scenario_need_reaches_the_needed_requirements_item() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1183,7 +1241,7 @@ fn scenario_need_reaches_the_needed_requirements_item() {
 
 #[test]
 fn a_need_on_a_node_with_an_unsettled_dependency_stops_at_that_node() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1203,7 +1261,7 @@ fn a_need_on_a_node_with_an_unsettled_dependency_stops_at_that_node() {
 
 #[test]
 fn a_need_on_a_requirement_that_needs_another_reaches_the_last_ones_node() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/x", &[])),
@@ -1223,11 +1281,12 @@ fn a_need_on_a_requirement_that_needs_another_reaches_the_last_ones_node() {
 
 #[test]
 fn a_cycle_of_needs_in_a_graph_with_violations_terminates() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let files: clm_model::Files = [
         ("specs/SPEC.md", specd("", &[])),
         ("specs/a/SPEC.md", needing("", "b/x", &[])),
         ("specs/b/SPEC.md", needing("", "a/x", &[])),
+        ("specs/c/SPEC.md", needing("", "a/x", &[])),
     ]
     .into_iter()
     .map(|(p, t)| (p.into(), t.into_bytes()))
@@ -1235,12 +1294,144 @@ fn a_cycle_of_needs_in_a_graph_with_violations_terminates() {
     let (g, violations) = clm_model::load_files(&files);
     assert!(!violations.is_empty());
     let view = blockers_view(&g, &[], &[], NOW, EXPIRY);
-    assert!(view.roots.is_empty(), "{:#}", json(&view));
+    // The cycle is one root, named by its first ID, holding its other component and `c`.
+    assert_eq!(
+        roots_of(&view),
+        [("a".into(), 2, vec!["b".into(), "c".into()])],
+        "{:#}",
+        json(&view)
+    );
+    assert_eq!(view.roots[0].state, "blocked");
+    assert_eq!(view.roots[0].kind, "node");
+    assert!(!view.roots[0].waits_on_human);
+    assert!(view.roots[0].holds.iter().all(|h| h.via.is_empty()));
+    let out = text(&View::Blockers(view));
+    let rest = after_blockers(&out);
+    assert!(
+        rest[0].starts_with("a ") && rest[0].contains("blocked") && rest[0].ends_with("holds up 2"),
+        "{out}"
+    );
+}
+
+/// The graph `files` describe, violations and all.
+fn loaded(files: &[(&str, String)]) -> clm_model::Graph {
+    let files: clm_model::Files = files
+        .iter()
+        .map(|(p, t)| ((*p).into(), t.clone().into_bytes()))
+        .collect();
+    clm_model::load_files(&files).0
+}
+
+#[test]
+fn overlapping_cycles_of_needs_are_one_root() {
+    // req:view/blockers-view@e774ca77
+    // `a/x` -> `b/x` -> `a/x`, and `b/x` -> `c/x` -> `b/x`.
+    let b = specd("", &[]).replace(
+        "## Requirements\n",
+        "## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Needs\n- a/x\n- c/x\n\n\
+         #### Scenario: s\n- ok\n",
+    );
+    let g = loaded(&[
+        ("specs/SPEC.md", specd("", &[])),
+        ("specs/a/SPEC.md", needing("", "b/x", &[])),
+        ("specs/b/SPEC.md", b),
+        ("specs/c/SPEC.md", needing("", "b/x", &[])),
+    ]);
+    let view = blockers_view(&g, &[], &[], NOW, EXPIRY);
+    assert_eq!(
+        roots_of(&view),
+        [("a".into(), 2, vec!["b".into(), "c".into()])],
+        "{:#}",
+        json(&view)
+    );
+}
+
+#[test]
+fn a_cycle_is_named_by_its_own_lines_not_by_what_they_reach() {
+    // req:view/blockers-view@e774ca77
+    // `b/x` and `c/x` need each other, and `c/x` also needs `a/x`, which is outside the cycle.
+    let c = specd("", &[]).replace(
+        "## Requirements\n",
+        "## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Needs\n- a/x\n- b/x\n\n\
+         #### Scenario: s\n- ok\n",
+    );
+    let g = loaded(&[
+        ("specs/SPEC.md", specd("", &[])),
+        ("specs/a/SPEC.md", specd("", &["x"])),
+        ("specs/b/SPEC.md", needing("", "c/x", &[])),
+        ("specs/c/SPEC.md", c),
+    ]);
+    let view = blockers_view(&g, &[], &[claim("a", 1)], NOW, EXPIRY);
+    let cycle = view
+        .roots
+        .iter()
+        .find(|r| r.state == "blocked")
+        .unwrap_or_else(|| panic!("{:#}", json(&view)));
+    assert_eq!(cycle.root, "b", "{:#}", json(&view));
+    assert_eq!(cycle.weight, 1, "{:#}", json(&view));
+}
+
+#[test]
+fn a_cycle_named_by_a_ready_component_is_a_root_of_its_own() {
+    // req:view/blockers-view@e774ca77
+    // `a/x` and `b/x` need each other; `a/y` is unblocked, so `a` is ready, and `c` needs it.
+    let g = loaded(&[
+        ("specs/SPEC.md", specd("", &[])),
+        ("specs/a/SPEC.md", needing("", "b/x", &["y"])),
+        ("specs/b/SPEC.md", needing("", "a/x", &[])),
+        ("specs/c/SPEC.md", needing("", "a/y", &[])),
+    ]);
+    let view = blockers_view(&g, &[], &[], NOW, EXPIRY);
+    let roots: Vec<(String, String, Vec<String>)> = view
+        .roots
+        .iter()
+        .map(|r| {
+            (
+                r.root.clone(),
+                r.state.clone(),
+                r.holds.iter().map(|h| h.node.clone()).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        roots,
+        [
+            ("a".into(), "ready".into(), vec!["c".into()]),
+            ("a".into(), "blocked".into(), vec!["b".into()]),
+        ],
+        "{:#}",
+        json(&view)
+    );
+}
+
+#[test]
+fn a_cycle_is_named_by_its_first_id_whatever_reaches_it() {
+    // req:view/blockers-view@e774ca77
+    // `d` needs `c/x`, which is in the cycle `c` -> `b` -> `c`; `e` needs `d/x`.
+    let files: clm_model::Files = [
+        ("specs/SPEC.md", specd("", &[])),
+        ("specs/b/SPEC.md", needing("", "c/x", &[])),
+        ("specs/c/SPEC.md", needing("", "b/x", &[])),
+        ("specs/d/SPEC.md", needing("", "c/x", &[])),
+        ("specs/e/SPEC.md", needing("", "d/x", &[])),
+    ]
+    .into_iter()
+    .map(|(p, t)| (p.into(), t.into_bytes()))
+    .collect();
+    let (g, _) = clm_model::load_files(&files);
+    let view = blockers_view(&g, &[], &[], NOW, EXPIRY);
+    assert_eq!(
+        roots_of(&view),
+        [("b".into(), 3, vec!["c".into(), "d".into(), "e".into()])],
+        "{:#}",
+        json(&view)
+    );
+    assert_eq!(view.roots[0].state, "blocked");
 }
 
 #[test]
 fn a_need_blocked_by_an_item_and_a_need_reaches_both() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/x", &[])),
@@ -1264,7 +1455,7 @@ fn a_need_blocked_by_an_item_and_a_need_reaches_both() {
 
 #[test]
 fn ansi_adds_colour_and_nothing_else() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let view = spec_with(&g, &markers, &[claim("check.drift", 1)]);
     let plain = render(&view, Format::Text, 100, None);
@@ -1276,7 +1467,7 @@ fn ansi_adds_colour_and_nothing_else() {
 
 #[test]
 fn lines_are_cut_to_the_width_in_text_and_ansi() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let long = "a".repeat(60);
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -1301,7 +1492,7 @@ fn lines_are_cut_to_the_width_in_text_and_ansi() {
 
 #[test]
 fn json_is_the_model_with_the_view_named() {
-    // req:view/view-library@645f94e9
+    // req:view/view-library@2bb194e8
     let g = ordered();
     let model = flight_view(&g, &[], &[], NOW, EXPIRY);
     let out = render(&View::Flight(model.clone()), Format::Json, 100, None);
@@ -1312,7 +1503,7 @@ fn json_is_the_model_with_the_view_named() {
 
 #[test]
 fn a_merged_ref_is_not_a_claim() {
-    // req:view/view-library@645f94e9
+    // req:view/view-library@2bb194e8
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1332,7 +1523,7 @@ fn a_merged_ref_is_not_a_claim() {
 
 #[test]
 fn svg_is_a_document_with_the_nodes_and_their_edges() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let out = render(&spec_chart(&g, &markers), Format::Svg, 100, None);
     assert!(out.starts_with("<svg"), "{out}");
@@ -1355,19 +1546,152 @@ fn svg_is_a_document_with_the_nodes_and_their_edges() {
 
 #[test]
 fn svg_escapes_text() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &node("specd", "", "\"<o&o>\"", &["x"])),
     ]);
     let out = render(&spec_chart(&g, &[]), Format::Svg, 100, None);
-    assert!(out.contains("&lt;o&amp;o&gt;"), "{out}");
-    assert!(!out.contains("<o&o>"), "{out}");
+    let doc = roxmltree::Document::parse(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+    assert_eq!(doc.root_element().tag_name().name(), "svg");
+    assert!(
+        doc.descendants()
+            .filter_map(|n| n.text())
+            .any(|t| t.contains("<o&o>")),
+        "{out}"
+    );
+    // A character XML 1.0 forbids, here in a title, still leaves a document that parses.
+    let g = graph(&[
+        ("specs/SPEC.md", &specd("", &[])),
+        (
+            "specs/a/SPEC.md",
+            &specd("", &["x"]).replace("title: T", "title: \"T\\x01\""),
+        ),
+    ]);
+    assert!(g.nodes["a"].frontmatter.title.contains('\u{1}'));
+    let out = render(&spec_chart(&g, &[]), Format::Svg, 100, None);
+    roxmltree::Document::parse(&out).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    // Nor does one in the text the SVG draws: an owner and the checkout's line.
+    let mut model = spec_view(&g, &[], None);
+    for n in &mut model.nodes {
+        n.owners.push("o\u{1}\u{b}".into());
+    }
+    let out = render(
+        &View::Spec(model, Default::default()),
+        Format::Svg,
+        100,
+        Some(&Head::Checkout(Checkout {
+            commit: "abc\u{1}".into(),
+            behind: None,
+        })),
+    );
+    roxmltree::Document::parse(&out).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+    let flight = View::Flight(flight_view(&g, &[], &[], NOW, EXPIRY));
+    let out = render(
+        &flight,
+        Format::Svg,
+        100,
+        Some(&Head::Checkout(Checkout {
+            commit: "abc\u{fffe}".into(),
+            behind: None,
+        })),
+    );
+    roxmltree::Document::parse(&out).unwrap_or_else(|e| panic!("{e}: {out:?}"));
+}
+
+#[test]
+fn scenario_no_width() {
+    // req:view/view-command@c4a4df22
+    let long = "a".repeat(60);
+    let g = graph(&[
+        ("specs/SPEC.md", &specd("", &[])),
+        (&format!("specs/{long}/SPEC.md"), &specd("", &["x"])),
+    ]);
+    let view = spec_chart(&g, &[]);
+    for format in [Format::Text, Format::Ansi] {
+        let out = strip_ansi(&render(&view, format, 0, None));
+        assert!(
+            out.lines().any(|l| l.contains(&format!("{long} "))),
+            "{out}"
+        );
+        assert!(!out.contains('…'), "{out}");
+    }
+}
+
+#[test]
+fn scenario_colours() {
+    // req:view/view-command@c4a4df22
+    let g = graph(&[
+        ("specs/SPEC.md", &specd("", &[])),
+        ("specs/a/SPEC.md", &node("active", "", "", &["x"])),
+        ("specs/b/SPEC.md", &specd("", &["x"])),
+        ("specs/c/SPEC.md", &specd("", &["x"])),
+        ("backlog/q.md", &item("question", "b/x")),
+    ]);
+    let view = spec_with(&g, &[], &[claim("a", 1)]);
+    let behind = head(Some(3));
+    let ansi = render(&view, Format::Ansi, 100, Some(&behind));
+    for coloured in [
+        "\u{1b}[33mclaimed\u{1b}[0m",
+        "\u{1b}[33m⚠ 3 behind origin/main\u{1b}[0m",
+        "\u{1b}[31mblocked\u{1b}[0m",
+        "\u{1b}[36mready\u{1b}[0m",
+        "\u{1b}[32mactive\u{1b}[0m",
+    ] {
+        assert!(ansi.contains(coloured), "{coloured:?} not in {ansi}");
+    }
+    let flight = View::Flight(flight_view(&g, &[], &[claim("a", 1)], NOW, EXPIRY));
+    let ansi = render(&flight, Format::Ansi, 100, None);
+    assert!(
+        ansi.lines().any(|l| l == "\u{1b}[34mcomponents\u{1b}[0m"),
+        "{ansi}"
+    );
+    // `unbuilt` sky and `deprecated` rose on the spec chart, `complete` green on the flight's.
+    let g2 = graph(&[
+        ("specs/SPEC.md", &specd("", &[])),
+        ("specs/u/SPEC.md", &specd("", &["x"])),
+        ("specs/z/SPEC.md", &node("deprecated", "", "", &["x"])),
+        ("changes/k/change.md", &change("applied", "")),
+        ("changes/k/deltas/u.md", &delta("u", &["x"])),
+    ]);
+    let markers = [current(&g2, "u/x")];
+    let ansi = render(&spec_with(&g2, &markers, &[]), Format::Ansi, 100, None);
+    for coloured in [
+        "\u{1b}[36munbuilt\u{1b}[0m",
+        "\u{1b}[31mdeprecated\u{1b}[0m",
+    ] {
+        assert!(ansi.contains(coloured), "{coloured:?} not in {ansi}");
+    }
+    let ansi = render(
+        &View::Flight(flight_view(&g2, &markers, &[], NOW, EXPIRY)),
+        Format::Ansi,
+        100,
+        None,
+    );
+    assert!(ansi.contains("\u{1b}[32mcomplete\u{1b}[0m"), "{ansi}");
+    // The SVG fills `claimed` and the `⚠` part amber and `blocked` rose.
+    let svg = render(&view, Format::Svg, 100, Some(&behind));
+    let style = &svg[svg.find("<style>").unwrap()..svg.find("</style>").unwrap()];
+    let fill = |class: &str| {
+        let at = style
+            .find(&format!(".{class}{{fill:"))
+            .unwrap_or_else(|| panic!("no fill for {class} in {style}"));
+        &style[at + class.len() + 7..at + class.len() + 14]
+    };
+    assert_eq!(fill("amber"), "#b7791f");
+    assert_eq!(fill("rose"), "#dc3558");
+    for drawn in [
+        "<tspan class=\"amber\">claimed</tspan>",
+        "<tspan class=\"amber\">⚠ 3 behind origin/main</tspan>",
+        "<tspan class=\"rose\">blocked</tspan>",
+    ] {
+        assert!(svg.contains(drawn), "{drawn} not in {svg}");
+    }
 }
 
 #[test]
 fn svg_draws_the_bar_and_outlines_a_pending_node_in_its_state() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (g, markers) = nested();
     let out = render(
         &spec_with(&g, &markers, &[claim("check.drift", 1)]),
@@ -1410,8 +1734,8 @@ fn svg_draws_the_bar_and_outlines_a_pending_node_in_its_state() {
 
 #[test]
 fn the_flight_bar_writes_each_pending_state_as_its_own_symbol() {
-    // req:view/flight-view@d01ad49e
-    // req:view/view-command@9fec4d39
+    // req:view/flight-view@86ea7638
+    // req:view/view-command@c4a4df22
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x", "y"])),
@@ -1460,7 +1784,7 @@ fn at(ago: Option<u64>, branch: Option<&str>) -> Head {
 
 #[test]
 fn the_commit_line_heads_every_chart_at_a_commit() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let view = View::Flight(flight_view(&g, &markers, &[], NOW, EXPIRY));
     let first = |head: Head| {
@@ -1486,6 +1810,17 @@ fn the_commit_line_heads_every_chart_at_a_commit() {
         first(at(None, None)),
         "origin/main abc1234 · checkout detached"
     );
+    // A fetch later than the time it is measured to is `0m` ago.
+    assert_eq!(
+        first(Head::At(At {
+            rev: "origin/main".into(),
+            commit: "abc1234".into(),
+            fetched: Some(NOW + 10),
+            branch: None,
+            now: NOW,
+        })),
+        "origin/main abc1234 · fetched 0m ago · checkout detached"
+    );
     let head = at(Some(200), Some("impl/a"));
     let ansi = render(&view, Format::Ansi, 100, Some(&head));
     assert!(!ansi.lines().next().unwrap().contains('⚠'), "{ansi}");
@@ -1509,7 +1844,7 @@ fn the_commit_line_heads_every_chart_at_a_commit() {
 
 #[test]
 fn the_checkout_line_heads_every_chart() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let views = [
         spec_chart(&g, &markers),
@@ -1555,7 +1890,7 @@ fn the_checkout_line_heads_every_chart() {
 
 #[test]
 fn the_spec_svg_puts_the_checkout_above_the_boxes() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let view = spec_chart(&g, &markers);
     let svg = render(&view, Format::Svg, 100, Some(&head(Some(1))));
@@ -1578,8 +1913,8 @@ fn the_spec_svg_puts_the_checkout_above_the_boxes() {
 
 #[test]
 fn the_json_carries_the_checkout_beside_the_model() {
-    // req:view/view-library@645f94e9
-    // req:view/view-command@9fec4d39
+    // req:view/view-library@2bb194e8
+    // req:view/view-command@c4a4df22
     let g = ordered();
     let model = flight_view(&g, &[], &[], NOW, EXPIRY);
     let view = View::Flight(model.clone());
@@ -1603,7 +1938,7 @@ fn the_json_carries_the_checkout_beside_the_model() {
 
 #[test]
 fn scenario_checkout_behind_on_the_chart() {
-    // req:view/view-command@9fec4d39
+    // req:view/view-command@c4a4df22
     let (g, markers) = nested();
     let flight = View::Flight(flight_view(&g, &markers, &[], NOW, EXPIRY));
     let behind = head(Some(3));
@@ -1625,7 +1960,7 @@ fn scenario_checkout_behind_on_the_chart() {
 
 #[test]
 fn scenario_the_model_carries_no_checkout() {
-    // req:view/view-library@645f94e9
+    // req:view/view-library@2bb194e8
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1781,7 +2116,7 @@ fn after_blockers(out: &str) -> Vec<&str> {
 
 #[test]
 fn scenario_root_lines() {
-    // req:view/blockers-root-lines@8d9bf009
+    // req:view/blockers-root-lines@31794d8d
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1799,13 +2134,28 @@ fn scenario_root_lines() {
     assert!(rest[0].starts_with("backlog/q "), "{out}");
     assert!(rest[1].starts_with('└') && rest[1].ends_with(" d"), "{out}");
     assert!(rest[2].starts_with("a "), "{out}");
+    // A root's cells, after its name: its state, `waits on you` when it waits on the human,
+    // then its weight, at least two spaces apart.
+    let cells = |line: &str| -> Vec<String> {
+        line.split("  ")
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .map(String::from)
+            .collect()
+    };
+    assert_eq!(
+        cells(rest[0]),
+        ["backlog/q", "question", "waits on you", "holds up 1"],
+        "{out}"
+    );
+    assert_eq!(cells(rest[2]), ["a", "claimed", "holds up 2"], "{out}");
     // `c` reaches `a` directly (`b/y` is blocked), so both hang off `a`.
     assert_eq!(rest[3..], ["├─ b", "└─ c"], "{out}");
 }
 
 #[test]
 fn blockers_root_line_is_cut_from_the_first_column() {
-    // req:view/blockers-root-lines@8d9bf009
+    // req:view/blockers-root-lines@31794d8d
     let long = "abcdefghij".repeat(6);
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -1825,7 +2175,7 @@ fn blockers_root_line_is_cut_from_the_first_column() {
 
 #[test]
 fn scenario_blockers_nothing_blocked_line() {
-    // req:view/blockers-root-lines@8d9bf009
+    // req:view/blockers-root-lines@31794d8d
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -2011,7 +2361,7 @@ fn scenario_charts_unchanged() {
 
 #[test]
 fn a_human_task_item_waits_on_the_human_and_comes_first() {
-    // req:view/blockers-view@274e56fe
+    // req:view/blockers-view@e774ca77
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),

@@ -107,7 +107,7 @@ fn counts(view: &clm_view::SpecView, id: &str) -> (usize, usize, usize, usize) {
 
 #[test]
 fn spec_view_counts_cited_capabilities_on_the_root_only() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (_dir, graph) = scenario();
     let view = clm_view::spec_view(&graph, &[marker_on_x(&graph)], None);
     let ids: Vec<&str> = view.nodes.iter().map(|n| n.node.as_str()).collect();
@@ -118,7 +118,7 @@ fn spec_view_counts_cited_capabilities_on_the_root_only() {
 
 #[test]
 fn spec_view_counts_capabilities_on_the_capability_node() {
-    // req:view/spec-view@2904c6a2
+    // req:view/spec-view@249ab038
     let (_dir, graph) = graph(
         &[arch("e", &["a/x"], false)],
         &[("b", false), ("u", true)],
