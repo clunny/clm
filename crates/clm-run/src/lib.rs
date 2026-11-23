@@ -1137,12 +1137,22 @@ fn build(
     // (`pending-prompt`); the branch never edits `specs/`, so their history is `main`'s.
     let main = format!("{REMOTE}/main");
     let merged = merged_tree(root, &main, &format!("refs/heads/{branch}"))?;
-    let tmp = clm_git::extract_tree(root, merged.as_deref().unwrap_or(&main))?;
+    let read_from_main = merged.is_none();
+    let merged = merged.as_deref().unwrap_or(&main);
+    let tmp = clm_git::extract_tree(root, merged)?;
     let tree = tmp.path();
     let (graph, markers, pending) = pending_in(tree, node)?;
-    let mut job = job(root, &main, tree, &graph, &markers, node, &pending)?;
+    let mut job = job(
+        root,
+        &main,
+        (merged, tree),
+        &graph,
+        &markers,
+        node,
+        &pending,
+    )?;
     job.resumed = resumed;
-    job.read_from_main = merged.is_none();
+    job.read_from_main = read_from_main;
     job.skills = skills;
     job.check = settled.check;
     job.setup = settled.setup;
@@ -1474,18 +1484,20 @@ fn blockers(lines: &[Pending], p: &Pending) -> Blocked {
     }
 }
 
-/// The job for `node`, whose tree at `rev` in the repository at `root` is extracted at
-/// `tree`, with `graph`, every marker, `scanned`, and the whole list `pending` returns,
-/// `lines`, read from it.
+/// The job for `node` in the repository at `root`, whose specs' history is `rev`'s and whose
+/// tree-ish `extracted.0`, `rev` merged with the branch, is extracted at `extracted.1`, with
+/// `graph`, every marker, `scanned`, and the whole list `pending` returns, `lines`, read from
+/// it.
 fn job(
     root: &Path,
     rev: &str,
-    tree: &Path,
+    extracted: (&str, &Path),
     graph: &Graph,
     scanned: &[Marker],
     node: &str,
     lines: &[Pending],
 ) -> Result<Job, Error> {
+    let (merged, tree) = extracted;
     let mut pending: Vec<&Pending> = lines.iter().filter(|p| p.node == node).collect();
     pending.sort_by(|a, b| (a.priority, &a.id).cmp(&(b.priority, &b.id)));
     let spec = graph.nodes[node].path.to_string_lossy().into_owned();
@@ -1494,15 +1506,23 @@ fn job(
     let mut blocked = Vec::new();
     // The approved lists' lines, read once the first behind or obsolete requirement needs them.
     let mut approved: Option<Vec<ListLine>> = None;
-    // Once the root sets `wiring`, the component that owns a marker's file when that isn't
-    // `node` and no `wiring` glob lets every build edit it: the files `clm land` refuses
-    // this build's edit to (`land/build-holds-own-files`).
-    let foreign_owner = |m: &clm_coverage::Marker| {
-        let wiring = graph.wiring()?;
-        let file = m.path.to_string_lossy();
-        let owner = clm_coverage::owner(graph, &m.path)?;
-        (owner != node && !wiring.iter().any(|g| clm_coverage::matches(g, &file))).then_some(owner)
+    // Once the root sets `wiring`, the owner of each file holding a stale `behind` marker
+    // that `gate` gives as not this build's to change, the files `clm land` refuses this
+    // build's edit to (`gate/own-files`, `land/build-holds-own-files`).
+    let not_ours: HashMap<String, String> = if graph.wiring().is_some() {
+        let mut files: Vec<String> = pending
+            .iter()
+            .filter(|p| p.state == ReqState::Behind)
+            .flat_map(|p| p.markers.iter().filter(|m| m.version != p.version))
+            .map(|m| m.path.to_string_lossy().into_owned())
+            .collect();
+        files.sort();
+        files.dedup();
+        not_ours_to_change(root, rev, (merged, tree), &files, node)?
+    } else {
+        HashMap::new()
     };
+    let foreign_owner = |m: &clm_coverage::Marker| not_ours.get(m.path.to_string_lossy().as_ref());
     for p in pending {
         let b = blockers(lines, p);
         if !b.by.is_empty() || !b.cited_in.is_empty() {
@@ -1694,6 +1714,71 @@ fn not_its_own(
     take_out.sort_by(|a, b| (&a.path, a.line).cmp(&(&b.path, b.line)));
     e.take_out = take_out.iter().map(|m| m.to_string()).collect();
     (delete, e)
+}
+
+/// Of `files`, each with its owner, those `gate` gives as not `node`'s build's to change
+/// (`gate/own-files`): it judges a commit object on `base` holding the tree-ish
+/// `extracted.0`, extracted at `extracted.1`, with each of `files` modified, as `clm land`
+/// would judge a branch that changes them. The commit is written as objects only, with no
+/// ref naming it, so nothing of the clone moves.
+fn not_ours_to_change(
+    root: &Path,
+    base: &str,
+    extracted: (&str, &Path),
+    files: &[String],
+    node: &str,
+) -> Result<HashMap<String, String>, Error> {
+    if files.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let (treeish, tree) = extracted;
+    let scratch = tempfile::TempDir::new().map_err(|e| Error::Refused(format!("temp dir: {e}")))?;
+    let index = scratch.path().join("index");
+    let with = |env: &[(&str, &std::ffi::OsStr)], args: &[&str], stdin: Option<&[u8]>| {
+        let options = clm_git::Options { stdin, env };
+        clm_git::run(root, "git", args, options)
+            .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+    };
+    let own_index = [("GIT_INDEX_FILE", index.as_os_str())];
+    with(&own_index, &["read-tree", treeish], None)?;
+    for file in files {
+        let mut text = fs::read(tree.join(file)).unwrap_or_default();
+        text.push(b'\n');
+        let blob = with(&[], &["hash-object", "-w", "--stdin"], Some(&text))?;
+        let entry = format!("100644,{blob},{file}");
+        with(
+            &own_index,
+            &["update-index", "--add", "--cacheinfo", &entry],
+            None,
+        )?;
+    }
+    let probe = with(&own_index, &["write-tree"], None)?;
+    let who: &std::ffi::OsStr = "clm run".as_ref();
+    let mail: &std::ffi::OsStr = "clm@localhost".as_ref();
+    let identity = [
+        ("GIT_AUTHOR_NAME", who),
+        ("GIT_AUTHOR_EMAIL", mail),
+        ("GIT_COMMITTER_NAME", who),
+        ("GIT_COMMITTER_EMAIL", mail),
+    ];
+    let commit = with(
+        &identity,
+        &[
+            "commit-tree",
+            &probe,
+            "-p",
+            base,
+            "-m",
+            "the files clm run asks about",
+        ],
+        None,
+    )?;
+    let found = clm_gate::foreign_files(root, base, &commit, node).map_err(Error::Git)?;
+    Ok(found
+        .into_iter()
+        .filter(|f| files.contains(&f.path))
+        .map(|f| (f.path, f.owner))
+        .collect())
 }
 
 /// The lines of every change's `deleted-tests.txt` in the tree at `tree`, live or archived
@@ -2035,7 +2120,7 @@ mod tests {
         let job = job(
             dir.path(),
             "HEAD",
-            dir.path(),
+            ("HEAD", dir.path()),
             &graph,
             &scanned,
             "c",
@@ -2047,7 +2132,7 @@ mod tests {
 
     #[test]
     fn scenario_another_component_s_removed_capability() {
-        // req:orchestrator.run/pending-prompt@e02d8d3a
+        // req:orchestrator.run/pending-prompt@15d82893
         let cite = format!("// {}:capability/gone", "req");
         let test = format!("#[test]\nfn old_cap() {{\n    {cite}\n}}\n");
         let p = prompt_for_c(
@@ -2091,7 +2176,7 @@ mod tests {
 
     #[test]
     fn scenario_another_component_s_requirement_whose_own_files_don_t_cite_it() {
-        // req:orchestrator.run/pending-prompt@e02d8d3a
+        // req:orchestrator.run/pending-prompt@15d82893
         let gone = format!("// {}:b/gone\n", "req");
         let lib = format!("//\n//\n//\n{gone}pub fn f() {{}}\n");
         let files = |at: &str, b_cites: &str| {
@@ -2149,7 +2234,7 @@ mod tests {
 
     #[test]
     fn a_wait_on_its_own_id_names_the_other_lines_components_sorted() {
-        // req:orchestrator.run/pending-prompt@e02d8d3a
+        // req:orchestrator.run/pending-prompt@15d82893
         let line = |node: &str, waits_on: &[&str]| Pending {
             id: "b/gone".into(),
             node: node.into(),
@@ -2174,7 +2259,7 @@ mod tests {
 
     #[test]
     fn a_test_that_also_cites_a_held_requirement_loses_only_its_marker() {
-        // req:orchestrator.run/pending-prompt@e02d8d3a
+        // req:orchestrator.run/pending-prompt@15d82893
         let test = format!(
             "#[test]\nfn both() {{\n    // {r}:g/gone\n    // {r}:c/s\n}}\n",
             r = "req"
