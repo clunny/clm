@@ -34,6 +34,12 @@ resolves: [a-ctrl-c-during-clm-verify-s-filing-after-a-run-that-didn-t-pass]
 - The outcome line, stdout and the exit status are unchanged when no signal arrives (`verify/files-unproven`, `verify/mutation-pass`).
 - Only the root's code changes (`path-ownership`).
 
+## Settled by the builder check and the audit
+
+- The new scenario says how no trigger holds: a passing `verified` record for `origin/main`'s head. The test can append it and the `mutated` record with `clm_ledger`, as `crates/clm-verify/tests/file.rs` does. Its fixture also needs a git identity in the clone and a `[land] check` in the committed root `clm.toml`, because the filing commits and lands from there.
+- The builder check found that `clm/verify-command` waits on no pending requirement, that no capability test sees a difference, and that the change widens no type and removes no Contract. The audit found nothing.
+- No scenario covers a signal after a red outcome line. The code path is the same `announce`, and the one scenario proves that the condition is gone.
+
 ## Open questions
 
 None.

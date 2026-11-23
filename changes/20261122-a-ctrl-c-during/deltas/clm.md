@@ -18,7 +18,7 @@ component: clm
 - THEN the command no longer runs, the ledger's new `mutated` record holds one requirement's verdict and the other under `left`, stderr holds `mutation: stopped`, stdout holds `verify passed`, and it exits 143
 
 #### Scenario: stopped while it files after a run that wasn't due
-- GIVEN a repository in `local` mode whose `[verify]` sets `mutate`, with no trigger holding, a `mutated` record for `origin/main`'s head holding an `unproven` entry at its requirement's current version, and a root `clm.toml` whose `[land] check` writes a file, then sleeps for two seconds and exits 0
+- GIVEN a repository in `local` mode whose `[verify]` sets `mutate`, a passing `verified` record for `origin/main`'s head, so no trigger holds, a `mutated` record for `origin/main`'s head holding an `unproven` entry at its requirement's current version, and a root `clm.toml` whose `[land] check` writes a file, then sleeps for two seconds and exits 0
 - WHEN `clm verify --due` gets `SIGTERM`, sent to it alone, once that file appears
 - THEN stdout holds `verify not-due`, stderr holds `unproven: filed 1 items for 1 requirements`, `origin` holds no branch `unproven/<short sha>`, and it exits 143
 
