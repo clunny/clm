@@ -238,7 +238,6 @@ pub fn run(name: &str, kind: Kind, model: &str, state: RunState, task: Option<&s
         serial: false,
         rebuilt_for: None,
         log: Vec::new(),
-        escalated: None,
         hold: None,
     }
 }

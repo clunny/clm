@@ -211,16 +211,21 @@ fn active(file: &LoopFile, name: &str) -> bool {
         .any(|r| r.name == name && r.state != RunState::Returned)
 }
 
-/// Whether a build of the component was escalated, its question item still there.
+/// Whether a build of the component was escalated: a `<component>-stops-on-<cause>` question
+/// item is on `origin/main` or waits in the loop file to land, whether or not a run of the
+/// name is still listed (`repeated-stops-escalate`).
 fn escalated(s: &Snapshot, name: &str) -> bool {
-    s.file.runs.iter().any(|r| {
-        r.name == name
-            && r.state == RunState::Returned
-            && r.escalated.as_ref().is_some_and(|slug| {
-                s.backlog.iter().any(|b| &b.slug == slug)
-                    || s.file.escalations.iter().any(|e| &e.slug == slug)
-            })
-    })
+    let Some(component) = name.strip_prefix("build:") else {
+        return false;
+    };
+    let prefix = format!("{component}-stops-on-");
+    s.backlog
+        .iter()
+        .any(|b| b.kind == "question" && b.slug.starts_with(&prefix))
+        || s.file
+            .escalations
+            .iter()
+            .any(|e| e.slug.starts_with(&prefix))
 }
 
 /// The changes to fold now, in the order their drafts were launched: the fold list, once no
@@ -440,7 +445,8 @@ pub fn plan(snapshot: &Snapshot) -> QueueView {
 }
 
 /// The plan the clone's last step stored, with its runs as the loop file holds them now, read
-/// without fetching; none when the clone has no loop file or no step has stored a plan.
+/// without fetching; none when the clone has no loop file, no step has stored a plan, or the
+/// loop file can't be read, which it leaves where it is.
 pub fn stored_plan(root: &std::path::Path) -> Option<QueueView> {
     let file = crate::state::read(root)?;
     let StoredPlan { next, humans, .. } = file.plan.clone()?;

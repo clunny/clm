@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [draft-of-gone-items-dropped-forbids-the-kept-say-that-return]
 ---
 

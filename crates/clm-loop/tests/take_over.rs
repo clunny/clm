@@ -57,7 +57,7 @@ fn launches(actions: &[String]) -> Vec<&String> {
 
 #[test]
 fn a_branch_still_moving() {
-    // req:orchestrator.loop/take-over-holds-moving-orphans@5a0f0917
+    // req:orchestrator.loop/take-over-holds-moving-orphans@da92f847
     let fx = Fixture::new();
     running_a(&fx);
     push_branch(&fx, "impl/a", 3);
@@ -72,11 +72,21 @@ fn a_branch_still_moving() {
     let view = stored_plan(&fx.work).unwrap();
     let running = view.running.iter().find(|r| r.name == "build:a").unwrap();
     assert!(running.taken_over, "listed as held by a session taken over");
+
+    // Once its branch is gone from `origin`, the orphan is held no more and finished as a build
+    // whose claim has gone.
+    fx.drop_claim("a");
+    let third = step(&fx.options()).unwrap();
+    assert!(launches(&third).is_empty(), "{third:?}");
+    assert_eq!(fx.finishes("a"), 1, "{:?}", fx.calls());
+    let a = fx.file().run("build:a").unwrap().clone();
+    assert_eq!(a.state, RunState::Returned);
+    assert!(a.hold.is_none());
 }
 
 #[test]
 fn a_branch_that_stayed_still_is_relaunched() {
-    // req:orchestrator.loop/take-over-holds-moving-orphans@5a0f0917
+    // req:orchestrator.loop/take-over-holds-moving-orphans@da92f847
     let fx = Fixture::new();
     running_a(&fx);
     push_branch(&fx, "impl/a", 3);
@@ -91,7 +101,7 @@ fn a_branch_that_stayed_still_is_relaunched() {
 
 #[test]
 fn a_push_restarts_the_wait() {
-    // req:orchestrator.loop/take-over-holds-moving-orphans@5a0f0917
+    // req:orchestrator.loop/take-over-holds-moving-orphans@da92f847
     let fx = Fixture::new();
     running_a(&fx);
     push_branch(&fx, "impl/a", 3);
@@ -107,7 +117,7 @@ fn a_push_restarts_the_wait() {
 
 #[test]
 fn a_branch_quiet_before_the_start_is_not_held() {
-    // req:orchestrator.loop/take-over-holds-moving-orphans@5a0f0917
+    // req:orchestrator.loop/take-over-holds-moving-orphans@da92f847
     let fx = Fixture::new();
     running_a(&fx);
     push_branch(&fx, "impl/a", 40);

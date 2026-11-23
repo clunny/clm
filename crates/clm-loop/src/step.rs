@@ -336,7 +336,6 @@ fn planned(name: &str, kind: Option<Kind>, model: &str, prompt: Option<String>) 
         serial: false,
         rebuilt_for: None,
         log: Vec::new(),
-        escalated: None,
         hold: None,
     }
 }

@@ -9,7 +9,7 @@ use common::{Fixture, line};
 
 #[test]
 fn view_and_step_agree() {
-    // req:orchestrator.loop/plan-snapshot@b518eee9
+    // req:orchestrator.loop/plan-snapshot@ac1ecfe5
     let fx = Fixture::new();
     let mut options = fx.options();
     options.max_builds = 1;
@@ -60,10 +60,31 @@ fn view_and_step_agree() {
 
 #[test]
 fn no_loop_has_run() {
-    // req:orchestrator.loop/plan-snapshot@b518eee9
+    // req:orchestrator.loop/plan-snapshot@ac1ecfe5
     let fx = Fixture::new();
     assert!(!fx.loop_dir().exists());
     assert!(stored_plan(&fx.work).is_none());
     assert!(clm_loop::read(&fx.work).is_none());
     assert!(!fx.loop_dir().exists(), "reading creates nothing");
+    assert!(matches!(clm_loop::try_read(&fx.work), Ok(None)));
+    assert!(!fx.loop_dir().exists(), "try_read creates nothing");
+
+    // A loop file no step has stored a plan in.
+    fx.set_lease(0);
+    assert!(clm_loop::read(&fx.work).is_some());
+    assert!(stored_plan(&fx.work).is_none());
+
+    // A loop file of bytes that don't parse: none from both, why from `try_read`, the file kept.
+    let file = fx.loop_dir().join("loop");
+    std::fs::write(&file, b"\xff not json").unwrap();
+    assert!(stored_plan(&fx.work).is_none());
+    assert!(clm_loop::read(&fx.work).is_none());
+    let why = clm_loop::try_read(&fx.work).unwrap_err();
+    assert!(!why.is_empty());
+    assert_eq!(std::fs::read(&file).unwrap(), b"\xff not json");
+    assert!(!fx.loop_dir().join("loop.damaged").exists());
+
+    // A directory in no git repository.
+    let elsewhere = tempfile::tempdir().unwrap();
+    assert!(matches!(clm_loop::try_read(elsewhere.path()), Ok(None)));
 }

@@ -2,7 +2,7 @@
 
 mod common;
 
-use clm_loop::{Kind, RunState, returned, step, stored_plan};
+use clm_loop::{Kind, RunState, returned, start, step, stored_plan};
 use common::{Fixture, run};
 
 /// `build:a` in round 2, rebuilt after a `work` stop, with `a/x` pending.
@@ -25,7 +25,7 @@ fn rebuilt_after_work(fx: &Fixture) {
 
 #[test]
 fn escalated() {
-    // req:orchestrator.loop/repeated-stops-escalate@105738bd
+    // req:orchestrator.loop/repeated-stops-escalate@b9d0e306
     let fx = Fixture::new();
     rebuilt_after_work(&fx);
     let actions = returned(
@@ -57,11 +57,113 @@ fn escalated() {
         .map(|e| e.name)
         .collect();
     assert_eq!(names, ["a-stops-on-work"]);
+
+    // A second escalation of `a` for `work` while the item is on `origin/main` pushes nothing.
+    fx.change_run("build:a", |r| {
+        r.state = RunState::Running;
+        r.task_id = Some("t-3".to_string());
+    });
+    returned(
+        &fx.options(),
+        "build:a",
+        Some("t-3"),
+        "stopped: check fails",
+        Some("work"),
+        None,
+    )
+    .unwrap();
+    // It escalated (no rebuild into round 3), counted as filed, with no land of its own.
+    let a = fx.file().run("build:a").unwrap().clone();
+    assert_eq!((a.state, a.round), (RunState::Returned, 2));
+    assert!(fx.file().escalations.is_empty());
+    assert_eq!(fx.ran("land loop/a-stops-on-work"), 1, "{:?}", fx.calls());
+    assert!(fx.loop_branches().is_empty());
+}
+
+#[test]
+fn an_escalation_whose_land_failed_outlives_a_new_session() {
+    // req:orchestrator.loop/repeated-stops-escalate@b9d0e306
+    let fx = Fixture::new();
+    rebuilt_after_work(&fx);
+    fx.set("land-exit", "1");
+    returned(
+        &fx.options(),
+        "build:a",
+        None,
+        "stopped: check fails",
+        Some("work"),
+        None,
+    )
+    .unwrap();
+    assert!(fx.on_main("backlog/a-stops-on-work.md").is_none());
+    // A new session adopts the loop once the lease has lapsed.
+    fx.set_lease(20);
+    let actions = start(&fx.options(), "opus", false).unwrap();
+    assert!(
+        !actions.iter().any(|l| l.starts_with("launch build:a ")),
+        "{actions:?}"
+    );
+    let again = step(&fx.options()).unwrap();
+    assert!(
+        !again.iter().any(|l| l.starts_with("launch build:a ")),
+        "{again:?}"
+    );
+}
+
+#[test]
+fn an_escalated_draft_leaves_its_item_undrafted() {
+    // req:orchestrator.loop/repeated-stops-escalate@b9d0e306
+    let fx = Fixture::new();
+    let mut d = run(
+        "draft:d",
+        Kind::Draft,
+        "opus",
+        RunState::Running,
+        Some("t-2"),
+    );
+    d.items = vec!["x".to_string()];
+    d.round = 2;
+    d.stops.insert("work".to_string(), 2);
+    d.rebuilt_for = Some("work".to_string());
+    d.log = vec!["work: stopped: check fails".to_string(); 2];
+    fx.add_run(d);
+    returned(
+        &fx.options(),
+        "draft:d",
+        None,
+        "stopped: check fails",
+        Some("work"),
+        None,
+    )
+    .unwrap();
+    assert!(fx.on_main("backlog/d-stops-on-work.md").is_some());
+    fx.set("triage", "group bug:k [k] P4 0 x\n");
+    let actions = step(&fx.options()).unwrap();
+    assert!(
+        !actions.iter().any(|l| l.starts_with("launch draft:")),
+        "{actions:?}"
+    );
+}
+
+#[test]
+fn an_item_of_another_kind_holds_nothing_back() {
+    // req:orchestrator.loop/repeated-stops-escalate@b9d0e306
+    let fx = Fixture::new();
+    fx.land_file(
+        "backlog/a-stops-on-windows.md",
+        "---\ntitle: a stops on windows\nkind: human-task\ncomponents: [a]\n---\nx\n",
+    );
+    fx.set("next", "a\n");
+    let actions = step(&fx.options()).unwrap();
+    assert!(
+        actions.iter().any(|l| l.starts_with("launch build:a ")),
+        "{actions:?}"
+    );
 }
 
 #[test]
 fn a_second_context_stop_escalates() {
-    // req:orchestrator.loop/repeated-stops-escalate@105738bd
+    // req:orchestrator.loop/repeated-stops-escalate@b9d0e306
     let fx = Fixture::new();
     fx.set("pending-a", "a/x 1a2b3c4d unbuilt\n");
     let mut a = run(
@@ -87,7 +189,7 @@ fn a_second_context_stop_escalates() {
 
 #[test]
 fn stops_the_loop_made_never_escalate() {
-    // req:orchestrator.loop/repeated-stops-escalate@105738bd
+    // req:orchestrator.loop/repeated-stops-escalate@b9d0e306
     let fx = Fixture::new();
     fx.set("pending-a", "a/x 1a2b3c4d unbuilt\n");
     let mut a = run(
@@ -146,7 +248,7 @@ fn stops_the_loop_made_never_escalate() {
 
 #[test]
 fn a_failed_land_is_kept_and_tried_again() {
-    // req:orchestrator.loop/repeated-stops-escalate@105738bd
+    // req:orchestrator.loop/repeated-stops-escalate@b9d0e306
     let fx = Fixture::new();
     rebuilt_after_work(&fx);
     fx.set("land-exit", "1");

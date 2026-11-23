@@ -448,9 +448,6 @@ pub fn returned(
                     r.resume = None;
                 }
             }
-            if let Some((slug, _)) = &filed {
-                r.escalated = Some(slug.clone());
-            }
         }
         Ok(())
     })?;
