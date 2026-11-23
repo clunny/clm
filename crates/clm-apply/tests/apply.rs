@@ -2457,9 +2457,6 @@ fn settled_workaround_flag() {
     );
     assert!(!d.join("backlog/workaround-a-x-1.md").exists());
     assert!(read(d, "specs/a/SPEC.md").contains("The x SHALL be new."));
-    let (_, violations) = load(d);
-    assert!(
-        !rules(&violations).contains(&"model/parse-backlog"),
-        "{violations:?}"
-    );
+    // What `clm check` loads reports nothing, `model/parse-backlog` among it.
+    assert_check_clean(d);
 }
