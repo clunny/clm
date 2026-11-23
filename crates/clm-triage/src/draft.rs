@@ -648,9 +648,11 @@ fn prompt_for(
          backlog edits it needs. Removing behaviour needs the human's yes \
          (`removal-needs-a-yes`), and `clm gate` lists each removal it can see as a \
          `gate/cut` line, which makes the branch need review: keep a scenario's name when \
-         you reword or move it, since a renamed one is listed as cut; put both sides of a \
-         moved clause in the change; name each sentence holding `SHALL` that a requirement \
-         loses under `## What the requirements no longer state` in `change.md`; and write \
+         you reword or move it, since a renamed one is listed as cut, and so is a scenario \
+         whose outcome changes under its name; put both sides of a moved clause in the \
+         change; name each sentence holding `SHALL` that a requirement loses, and each \
+         scenario whose outcome changes under its name, under `## What the requirements no \
+         longer state` in `change.md`; and write \
          each test a build is to delete into `changes/<id>/deleted-tests.txt`, one \
          `DELETE <file>::<name>` per line, among them the tests that cite a requirement the \
          change removes from a file another component owns, which `clm check` fails when no \
