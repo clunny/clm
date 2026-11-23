@@ -649,14 +649,21 @@ fn scenario_a_finish_that_refuses_or_keeps() {
     push_main(&r.work, "landed");
     // A branch on `origin` the clone hasn't fetched shows whether a call fetched.
     push_branch(&r.work, "impl/unfetched", 0);
-    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/impl/unfetched"]);
+    git(
+        &r.work,
+        &["update-ref", "-d", "refs/remotes/origin/impl/unfetched"],
+    );
     let root = r.work.display().to_string();
     for bad in ["", "a/b"] {
         let before = refs(&r);
         let ran = draft_call(&["--finish", bad, "--root", &root], &r.work, &r.work, &[]);
         assert_eq!(ran.code, Some(1), "{bad}: {}", ran.stderr);
         assert!(ran.stdout.is_empty(), "{bad}: {}", ran.stdout);
-        assert!(ran.stderr.contains("isn't a change ID"), "{bad}: {}", ran.stderr);
+        assert!(
+            ran.stderr.contains("isn't a change ID"),
+            "{bad}: {}",
+            ran.stderr
+        );
         assert_eq!(refs(&r), before, "{bad}: nothing changed, nothing fetched");
     }
 
@@ -680,7 +687,14 @@ fn scenario_a_finish_that_refuses_or_keeps() {
     let branch = format!("spec/{id}");
     git(
         &r.work,
-        &["worktree", "add", "-q", "-f", stuck.to_str().unwrap(), &branch],
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-f",
+            stuck.to_str().unwrap(),
+            &branch,
+        ],
     );
     let stuck = stuck.canonicalize().unwrap();
     use std::os::unix::fs::PermissionsExt;
@@ -1352,4 +1366,29 @@ fn resume_with_no_free_place_takes_nothing() {
     assert_eq!(ran.code, Some(3), "{}", ran.stderr);
     assert_eq!(ran.stdout, "");
     assert_eq!(place_names(&r), vec!["other".to_string()]);
+}
+
+#[test]
+fn scenario_a_resume_it_cant_take() {
+    // req:orchestrator.triage/draft-resume@38d12444
+    let r = with_items();
+    let ran = clm_draft(&r, &fake(), &["--resume", "a/b"]);
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(
+        ran.stderr.contains("`a/b` isn't a change ID"),
+        "{}",
+        ran.stderr
+    );
+    assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
+    let ran = clm_draft(
+        &r,
+        &fake(),
+        &["--resume", "20261112-x", "--answers", "answers.md"],
+    );
+    assert_eq!(ran.code, Some(2), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert!(ran.stderr.contains("--resume"), "{}", ran.stderr);
+    assert!(ran.stderr.contains("Usage: clm draft"), "{}", ran.stderr);
+    assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
 }

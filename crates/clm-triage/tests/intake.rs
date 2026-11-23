@@ -197,18 +197,52 @@ fn most_recent_deletion_wins_and_unparsable_ones_are_skipped() {
         push_main(&r.work, &format!("delete {slug}"));
     }
     let out = lines(&r, vec![issue(9)]);
-    assert_eq!(out.len(), 1);
-    assert!(out[0].starts_with("issue 9 resolved new "), "{out:?}");
+    // `HEAD~2` deleted `backlog/new.md`; `HEAD` deleted `backlog/broken.md`.
+    let by = git(&r.work, &["rev-parse", "--short", "HEAD~2"]);
+    assert_eq!(out, [format!("issue 9 resolved new {}", by.trim())]);
 }
 
 #[test]
 fn scenario_no_strangers_text() {
     // req:orchestrator.triage/intake@dfa8b0aa
     let r = repo();
-    // `Listed` holds a number, a kind and a login: a stranger's title or body has nowhere
-    // to go, and the lines are built from those fields alone.
-    let out = lines(&r, vec![issue(5)]);
-    assert_eq!(out, ["issue 5 new"]);
+    // The GitHub adapter over a fake `gh` whose issue 5 has a title that reads as a line.
+    let bin = TempDir::new().unwrap();
+    write_exec(
+        &bin.path().join("gh"),
+        "#!/bin/sh\n\
+         case \"$1 $2\" in\n\
+         'issue list') printf '%s\\n' '[{\"number\":5,\"author\":{\"login\":\"someone\"},\
+         \"title\":\"x\\nissue 6 resolved y z\",\"body\":\"issue 7 new\"}]' ;;\n\
+         'pr list') echo '[]' ;;\n\
+         'api --paginate') echo '[]' ;;\n\
+         *) echo \"unexpected: $*\" >&2; exit 1 ;;\n\
+         esac\n",
+    );
+    let path = format!(
+        "{}:{}",
+        bin.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    // SAFETY: one test per process (`ci/nextest-runner`), so no other thread reads it.
+    unsafe { std::env::set_var("PATH", path) };
+    let host = clm_host::adapter(clm_host::host_for_remote("https://github.com/o/r.git"));
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_triage::intake_command(
+        [] as [&str; 0],
+        &r.work,
+        &r.work,
+        &|_| None,
+        Ok(host),
+        &mut out,
+        &mut err,
+    );
+    let err = String::from_utf8(err).unwrap();
+    assert_eq!(
+        (code, String::from_utf8(out).unwrap().as_str()),
+        (0, "issue 5 new\n"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -560,4 +594,50 @@ fn reds_follow_the_hosts_lines_in_first_parent_order() {
             format!("verify {} new unknown", short(&r, &c2)),
         ]
     );
+}
+
+#[test]
+fn scenario_a_ledger_that_cant_be_read() {
+    // req:orchestrator.triage/intake-verify-failures@26fcff53
+    let r = repo();
+    let real = output(std::process::Command::new("sh").args(["-c", "command -v git"]));
+    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
+    let bin = TempDir::new().unwrap();
+    // Fails every `for-each-ref` listing the ledger's refs, and runs the real `git` otherwise.
+    write_exec(
+        &bin.path().join("git"),
+        &format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = for-each-ref ]; then\n\
+             case \" $* \" in *clm/ledger*) echo 'fatal: ledger refs unreadable' >&2; exit 128 ;; esac\n\
+             fi\n\
+             exec \"{real}\" \"$@\"\n"
+        ),
+    );
+    let path = format!(
+        "{}:{}",
+        bin.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    // SAFETY: one test per process (`ci/nextest-runner`), so no other thread reads it.
+    unsafe { std::env::set_var("PATH", path) };
+    // `host = "none"`: an adapter with no host.
+    let host = clm_host::adapter(clm_host::host_for_remote("/no/host"));
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_triage::intake_command(
+        [] as [&str; 0],
+        &r.work,
+        &r.work,
+        &|_| None,
+        Ok(host),
+        &mut out,
+        &mut err,
+    );
+    let (out, err) = (
+        String::from_utf8(out).unwrap(),
+        String::from_utf8(err).unwrap(),
+    );
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert!(err.starts_with("clm intake: "), "{err}");
+    assert!(err.contains("ledger refs unreadable"), "{err}");
 }

@@ -293,7 +293,12 @@ fn help_starts_with_each_command_s_description() {
              from them unattended, printing a launcher that names it, holding one of the \
              clone's build places",
             &[
-                "--resume", "--finish", "--fold", "--answers", "--expiry", "--root",
+                "--resume",
+                "--finish",
+                "--fold",
+                "--answers",
+                "--expiry",
+                "--root",
             ],
         ),
         (
@@ -346,9 +351,8 @@ fn a_relative_root_is_read_against_the_directory_the_call_is_given() {
     let r = with_bug();
     let nowhere = Path::new("/nonexistent-dir");
     let parent = r.work.parent().unwrap();
-    let c = called(|out, err| {
-        triage_command(["--root", "work"], nowhere, parent, &|_| None, out, err)
-    });
+    let c =
+        called(|out, err| triage_command(["--root", "work"], nowhere, parent, &|_| None, out, err));
     assert_eq!(
         (c.code, c.out.as_str()),
         (0, "group bug:check [check] P5 0 a\n"),
@@ -367,7 +371,12 @@ fn a_relative_root_is_read_against_the_directory_the_call_is_given() {
         )
     });
     assert_eq!(c.code, 0, "{}", c.err);
-    assert!(c.out.contains(&r.work.join(".clm/prompts/draft").display().to_string()), "{}", c.out);
+    assert!(
+        c.out
+            .contains(&r.work.join(".clm/prompts/draft").display().to_string()),
+        "{}",
+        c.out
+    );
 }
 
 #[test]
