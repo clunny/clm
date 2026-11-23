@@ -318,7 +318,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let wanted: Vec<Entry> = compare
             .changed
             .iter()
-            .filter(|c| source::wanted(&c.path))
+            .filter(|c| clm_replica::wanted(&c.path))
             .map(entry)
             .collect();
         let mut files = source::fetch(p, auth, &self.name, after, &wanted, b).await;
@@ -372,7 +372,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
     ) -> usize {
         let mut pending = self.replica.pending_fetch();
         if spec_only {
-            pending.retain(|path| source::is_spec(path));
+            pending.retain(|path| clm_replica::keeps_text(path));
         }
         let Some(tip) = self.meta.tip.clone().filter(|_| !pending.is_empty()) else {
             return 0;
