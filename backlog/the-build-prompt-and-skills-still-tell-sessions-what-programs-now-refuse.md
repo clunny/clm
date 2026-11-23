@@ -1,18 +1,14 @@
 ---
 title: "The build prompt and the skills still tell sessions what the land and verify now check"
 kind: deferred
-components: [orchestrator.run, plugin]
+components: [orchestrator.run]
 origin: 20261114-proof-is-real
 ---
 
-Once `20261114-proof-is-real` is built, the prompt and skills say less or more than the programs do:
+Three lines of the prompt `clm run` writes still say less or more than the programs do. They are fixed prompt text, which no requirement may state (`prompt-text-is-source`):
 
-- `clm run`'s prompt and the build skill still tell a build to run mutation spot-checks by hand and to stay in its component's files as a matter of instruction. The land refuses the second (`land/build-holds-own-files`) and `clm verify` does the first (`verify/mutation-pass`). The text is source (`prompt-text-is-source`): it should say what the gate refuses and what a `bug` item with `unproven` asks of the build that takes it, and drop the hand-run spot-checks.
-- `/clm:propose`'s step for removals should name `clm coverage --obsolete-tests` as the program that lists the tests a removal leaves.
-- The build prompt should say what a `bug` item with `unproven` asks of the build that meets it: mend the test, or say in the resolving commit why it is sound, and delete the item with the `Resolves:` trailer. A build whose only work is that deletion changes no code, so its gate prints `spec`, not `code`, and it lands on checks: the ship step, which now tells every build to confirm the gate prints `code`, should accept `spec` for such a branch rather than leave the build to work it out or change a sound test to get `code` (which makes the next mutation pass judge the test again). Seen on `impl/clm` building `clm/doc-readers-marked@3125f2de` against `backlog/unproven-clm-eed96364` (`20261116-a-build-whose-only`).
+- the ship step's "confirm `clm gate --base origin/main` prints `code`" should accept `spec` for a branch with no code file, such as one whose only change deletes a resolved item or is `clm rebase`'s archive move, which lands on checks (`three-routes-onto-main`);
+- the prompt should say what a `bug` item with `unproven` asks of the build that meets it: mend the test, or say in the resolving commit why it is sound, and delete the item with the `Resolves:` trailer;
+- the sentence on the files a build may change should name `capability-tests-follow-rules` (not the removed `template-migration-fix`), follow `wiring` as the re-citing sentences do, and say what the gate and the land refuse (`gate/own-files`, `land/build-holds-own-files`) rather than asking the build to stay in its component's files as a matter of instruction.
 
-Done on 2026-11-14, each on its component's own branch: `/clm:propose` now says a fix across components takes one claim per component, and the build prompt says to leave a requirement that changes a file `clm init` writes unbuilt with a question item.
-
-The rest waits until `config/verify-here` is built, since the hand-run spot-checks are all there is until the mutation pass is on. This repository's `AGENTS.md` names them too, and is a spec path.
-
-All of it is code-only work. It spans two components, so each one's part is done under its own claim, and the last deletes this item.
+`plugin`'s part is done, and the hand-run spot-checks are now `orchestrator.run/prompt-spot-checks`'s. Fixed by `orchestrator.run`'s build of `20261122-wave-4-orchestrator-by-the-rule`, or after it under `clm claim orchestrator.run --fix backlog/the-build-prompt-and-skills-still-tell-sessions-what-programs-now-refuse`, whichever comes first, adding no test of the wording; the fixing commit deletes this item with the trailer `Resolves: backlog/the-build-prompt-and-skills-still-tell-sessions-what-programs-now-refuse`.

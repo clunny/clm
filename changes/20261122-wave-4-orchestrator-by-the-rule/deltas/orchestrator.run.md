@@ -1,0 +1,591 @@
+---
+component: orchestrator.run
+base: { contract: "1fa4dfa23fe68649", design: "629a687fdab3a135" }
+---
+
+## MODIFIED Contract
+`clm run <component>` claims a component through `orchestrator`'s `claim_local`, which records the claim in the local branch `impl/<component>` before pushing it, or picks up its unfinished build, so a launch interrupted at any point is resumed or claimed afresh by the next `clm run <component>`, never held until its claim lapses, and writes the prompt for a session that builds its pending requirements and lands them with `clm land` (`land-locally`) to `.clm/prompts/<component>.md` in the checkout it runs in. On stdout it prints a short launcher naming that file by its absolute path, which the build loop gives to a background subagent of the human's session through the `build` skill in its own Claude Code worktree (`builds-in-subagents`), and which the subagent follows by reading the file (`build-prompt-file`). Before it claims or resumes it loads the settings, resolves the skills the prompt names (fetching the pinned copy when it is absent) and fetches `origin`. It takes `--expiry <hours>` (default 4), which `--finish` reads too, `--review-model <model>`, the alias of the model the build's final review runs on, which the build loop sets to the session's model (`model-per-launch`), and `--root <dir>`, the CLM root it works in (default: the one holding the directory it runs in). Each build holds one of the clone's `max_builds` places (`orchestrator`'s `build-places`) from when `clm run` starts it until it lands, is finished or its claim lapses. When it refuses a component, it says why. It exits 0 on success, 1 when the work isn't possible (with the reason), 2 when git fails, for arguments it can't parse and when it can't write its output, and 3 when the clone has no free place. `clm run --finish <component>`, which the build loop runs whenever a build's claim has left `origin` and, with `--returned`, whenever its subagent hands back, frees the component's place and tidies the worktree of a landed build, keeping one whose lock a running process holds unless `--returned` says the build's subagent has handed back, printing `landed impl/<component>` when the branch has landed (`unclosed-build-reads-finish`); a build that hasn't landed keeps its claim and its branch, pushed or not, so the next `clm run <component>` resumes it (`resume-what-push-accepts`). A build compiles into its own worktree's `target/` (`build-places`). `clm superpowers <skill>` prints the path of `skills/<skill>/SKILL.md` in the pinned superpowers copy, fetching it first if needed, so builds and interactive skills follow one version (`design-brainstorming`, `unattended-superpowers`); it exits 1 for a name that isn't a skill's and 2 when the fetch fails. The pin is moved by hand, on an `impl/orchestrator.run` branch (`cut-evals`). `clm setup` runs the project's `[build] setup` (`config`) in the CLM root of the checkout it runs in, which a build runs before its first test run so that its tests run against its own worktree's code and dependencies (`tests-run-in-their-own-tree`, `build-setup-step`); it exits 0 when the command passes or none is set, 1 otherwise, and 2 for arguments it can't parse and when it can't write the command's output.
+
+A component whose pending requirements name a file Claude Code protects, such as `.claude/settings.json` or an `.npmrc`, is built like any other: Claude Code asks the human to confirm each such write (`builds-in-subagents`).
+
+`clm-run` offers each of `clm run`, `clm setup` and `clm superpowers` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the directory it runs in, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `RunArgs`, `SetupArgs` and `SuperpowersArgs` are the three commands' arguments, which `crates/clm` parses as part of its own command line, reading the `root` of the first two. `crates/clm` routes the command to the call and adds nothing to what it writes.
+
+## MODIFIED Design
+Crate `clm-run`. The queue, the claim and the pending list are `orchestrator`'s; the bundle the prompt points at is `context`'s. The check command the prompt names is `config`'s `[land] check`, read with its `load` from the checkout `clm run` runs in. This component owns what the session is told: the prompt's text, its constants (the superpowers pin, the skills it names, the requirement budget) and the resume logic.
+
+`clm run` prepares builds as `builds-in-subagents` and `unattended-superpowers` decide; it starts no session itself.
+- **Where a build runs.** `build` launches each build with the Agent tool's `isolation: worktree`, so Claude Code gives the subagent its own worktree, starting from `origin/main`, in which every Bash call and every subagent it launches starts: a build can't stray into the human's checkout, even by a relative path. `clm run` makes no worktree. It leaves a local branch `impl/<component>` at the claim, tracking `origin/impl/<component>`, which the build switches to, and keeps `.clm/` (the plan and the pull request body) out of git through `.git/info/exclude`, which every worktree shares. CLM finds a worktree by the branch it has checked out (`git worktree list --porcelain`), never by its path. Claude Code puts an `isolation: worktree` subagent's worktree under the main worktree's `.claude/worktrees/` (`agent-*`), even when the launching session runs in a linked worktree. So `clm run --finish` looks for the build's worktree under the main worktree's `.claude/worktrees/`, whichever worktree it runs in.
+- **Resume and leftovers** (`merged-claims-released`, `run`). A component comes back after its branch landed whenever its spec moves, so an earlier build's local branch `impl/<component>`, or a worktree that has it checked out, may still be there; `run` says what `clm run` removes, resumes and refuses (`git worktree remove` after unlocking, since Claude Code locks its worktrees). The landed test comes first, so a landed branch is never resumed. It comes before the place because of how a place is judged: `orchestrator`'s Design says a build's place has landed when each `impl/<component>` that exists has its tip in `origin/main`, and `clm land` deletes `origin/impl/<component>` but not the local branch, so a place taken while a landed local `impl/<component>` is still there would read as landed, and count for nothing, until the new claim is pushed; another command taking a place in that window would delete it and could take the last free one, running more than `max_builds` builds. With the landed branch gone the component has no branch, which a place reads as not landed, so the new place counts by its `taken` time, and nothing new is recorded. A landed leftover holds nothing `origin/main` lacks, so removing it is harmless even when the run then finds no free place. A landed branch doesn't mean its run is over, though: a draft that landed a fix on `impl/<component>` goes on working in that worktree, and a build writes its report after its land. So a landed leftover whose lock is held by a process that still runs (`vcs/held-lock`) is kept, before the run takes a place or claims (`a-held-lock-keeps-a-worktree`, `run-takes-place`); the finish the build loop runs on that run's return removes it (`run-finish`), and otherwise the next `clm run` once the session whose process the lock names has ended. The test for a dirty worktree comes before the place too, since it writes nothing. A landed `origin/impl/<component>` that still exists, which happens only when `clm land`'s delete of it failed or the branch reached `main` some other way, still makes the new place read as landed until the claim is pushed: that window is accepted, since closing it would take a push before the place. **An interrupted launch** (`claim-local-before-push`). `clm run` claims through `orchestrator`'s `claim_local`, which makes the local branch at the claim commit before pushing it, so no interruption leaves a pushed claim with no local branch. Interrupted after the push, the local branch is the claim's tip, so the next run resumes it by the rule below, whether the claim is still live or has lapsed. Interrupted before the push, or after a push whose outcome `claim_local` couldn't read, the local branch's tip is an *unpushed claim*: a commit with one parent, the same tree as that parent, the parent an ancestor of `origin/main`, on a branch that has never held `origin/impl/<component>`'s tip as below (or with no such branch). It holds no work, so the leftovers step removes it, like a landed branch, when no worktree has it checked out, and the run then claims as usual; when another clone has claimed the component meanwhile, the claim meets that live claim as any claim does (`orchestrator/claim`). The test is by structure, not by the commit's message: a commit that adds nothing to a tree on `main` holds nothing to lose, whoever made it. Another clone's claim is never resumed, since this clone has no local branch at it. **A stopped build's unpushed work** (`resume-what-push-accepts`). A build rewrites its branch at every rebase point (`clm rebase` rebases it onto `origin/main`, the claim commit included) and only then pushes it, so a build that stops between a rebase and its push leaves a local `impl/<component>` that no longer contains `origin/impl/<component>`, though it holds what that tip held and the build's newer commits. `clm run` resumes such a branch when the local branch has held `origin/impl/<component>`'s tip: the tip is an ancestor of the local branch's tip or of one of the entries of its reflog (`git reflog` of `refs/heads/impl/<component>`), the test git's `--force-if-includes` makes. It is the test `clm branch push` passes before it overwrites the remote branch (`host`'s `branch-push`), so every branch `clm run` resumes is one the resumed build's next push accepts while `origin` stays where the fetch found it, and a branch the push would refuse is never resumed: a branch whose `origin` tip this clone never held is another clone's, or misses commits pushed from elsewhere, and resuming it would only fail at the build's first push. Containing the tip is the case where nothing was rewritten. Every value the branch has held is the new value of one of its reflog entries, the tip being the newest, so listing those (`git reflog show --format=%H`) and testing each with `git merge-base --is-ancestor` is the whole test. A build that stopped after rebasing a bare claim, before any work, leaves a tip shaped like an unpushed claim; since the branch held `origin/impl/<component>`'s tip, it isn't one, so it is resumed like any other held branch rather than deleted and then refused by its own live claim. A branch's reflog is kept in the git common directory, so every worktree of the clone reads the same one; a branch deleted and made again starts a new one. A local `impl/<component>` that isn't landed and has never held `origin/impl/<component>`'s tip, or has no `origin/impl/<component>` at all, may hold commits nobody pushed (other than an unpushed claim) or miss commits pushed from elsewhere, so `clm run` leaves it (`run`): only someone who can tell whose commits they are can reconcile or delete it, so `build` tells the human what it printed and launches nothing for the component. Apart from that held lock, `clm run` trusts that no build of the component is running: `build` calls it only for components `clm next` lists, which have no live claim, and for its own builds once they have returned. A worktree with uncommitted changes or untracked files that aren't ignored may hold work nobody committed.
+- **Superpowers.** Builds follow superpowers at a pinned release. The pin is `crates/clm-run/superpowers.pin`, one line `<tag> <commit>`, which `clm-run` reads at compile time with `include_str!` into its `SUPERPOWERS_TAG` and `SUPERPOWERS_COMMIT`; the copy is fetched once into `${XDG_CACHE_HOME:-~/.cache}/clm/superpowers/<commit>`. Moving the pin is a one-line edit of that file, made by hand on an `impl/orchestrator.run` branch after reading the release's notes and landed through `clm land` like any code (`cut-evals`); nothing runs an eval or watches for releases. The skills the prompt names are a constant: `superpowers:writing-plans`, `superpowers:test-driven-development` and `superpowers:verification-before-completion`. Changing the skills is a code change. `$CLM_SUPERPOWERS_DIR` overrides the pin, for tests and for trying a release before moving the pin. `clm superpowers <skill>` resolves the same directory, the override included, and prints `<dir>/skills/<skill>/SKILL.md`. A build runs in the human's session and has its plugins, not the pin, so the prompt gives each skill it names with the path `clm superpowers <skill>` prints, and says to read and follow that file and never to invoke an installed copy.
+- **Prompt file** (`build-prompt-file`). The prompt holds the component's whole `clm context` bundle, tens of KB, so `clm run` writes it to `<root>/.clm/prompts/<component>.md`, where `<root>` is the checkout `clm run` runs in; `.clm/` is already outside git. On stdout it prints only the launcher, a few lines: read `<absolute path>` with the Read tool, all of it (in parts when it is too large to read at once), before anything else, and follow it as your instructions; it is the prompt for building `<component>`, and its first step is `git switch impl/<component>`. The orchestrating session passes the launcher unchanged as the Agent tool's prompt, so it never reads or repeats the bundle, and the subagent, whose worktree is elsewhere, reads the file by that absolute path. The file stays in the orchestrator's checkout, which no build removes, until the next `clm run` of the component replaces it; the file is written last, once the claim is made and the lists are read, so a run that stops earlier leaves an earlier file as it was (`run`). The prompt depends on the claimed tree, so it is written after the claim, to a temporary file in `.clm/prompts/` renamed over the earlier one, so a write that fails leaves the earlier file whole. **The tree it is read from** (`pending-prompt`) is the merge of `origin/main` and `impl/<component>`, as `git merge-tree --write-tree origin/main impl/<component>` writes it after the fetch, the way `land` and `gate` compute a merged tree (`reuse-first`); it writes only objects, so the session's checkout, which `build` never brings up to date (`views-name-their-commit`), is never read. For a fresh claim the merge is the claim's own tree, since the claim's parent is `origin/main`. For a resumed branch cut from an older `main`, it holds what has landed since, so a requirement another component's build has made current since then does not block, and the lists agree with `clm next`, which reads `origin/main`. The branch never edits `specs/`, so the merge's specs are `origin/main`'s, and the earlier texts of a `behind` requirement are looked up in `origin/main`'s history of the component's `SPEC.md`. When the merge conflicts, the lists come from `origin/main`'s tree, which lacks the branch's own markers, so the requirements the branch built show as pending: the prompt says the lists were read from `origin/main` because the branch conflicts with it, and that `clm pending <component>` after the first `clm rebase` is the list to build from; `.clm/prompts/` is created before the claim, beside the exclude, so a missing or unwritable directory is met before anything is claimed (`run`), and a write that still fails after the claim leaves the claim to the next `clm run`, which resumes it. The launcher is a fixed template.
+- **Places** (`build-places`, `run-takes-place`). `clm run` takes a place named `<component>` with `orchestrator`'s `take_place`, its branch `impl/<component>`, with `max_builds` from `config`'s `load` of the checkout it runs in and its `--expiry`. A place `<component>` that counts is reused, so a build that resumes its component's branch, or a retry after a build stopped, holds the place it had; otherwise a new place needs one to be free. Taking it before anything else is written is what lets a clone with no free place be left with nothing but the removed landed leftovers changed (`run-takes-place`). A build of another component that is already running holds its own place, so `build` can't start more builds than the cap however many components `clm next` printed before.
+- **Finishing a build** (`build-places`, `run-finish`). `clm run --finish <component>` frees the place with `free_place`, printing `freed <component>` when there was one. A branch has landed by the place's test (`orchestrator`'s Design: every one of `origin/impl/<component>` and the local `impl/<component>` that exists has its tip in `origin/main`, and one of them exists). **A build still running there** (`a-held-lock-keeps-a-worktree`). Without `--returned`, a worktree whose lock is held by a process that still runs (`vcs/held-lock`) is kept, as `clm wrap-up` and the leftovers step keep it (`run-finish`). The build loop runs the finish not only on a build's return but when the build's claim has left `origin` (`orchestrator.loop`'s `claim-gone-ends-a-build`), and that is the moment the build's own `clm land` pushes `main`: its subagent is then still waiting for the land's completion notice, with its report to write, in that worktree. Removing it there once lost four builds' reports, since Claude Code won't resume a subagent whose worktree is gone. **The hand-back ends the run** (`run-finish`). The lock can't tell when that subagent is done: Claude Code names its own session's process in every subagent's lock (`claude agent agent-<id> (pid <n> start <t>)`) and keeps the lock after the subagent has handed back, until the session ends (seen in practice: every agent worktree of a `/clm:build` session locked naming the same process, those of subagents that had handed back hours before included, until the session unlocked four by hand). Only the hand-back tells, and only the orchestrating session sees it, so the build loop says it: the finish it runs on a build's return passes `--returned`, and that finish removes the worktree whatever its lock says, as `clm draft --finish` does for a draft. A finish run without it (the loop's on a gone claim, a skill's, the human's) still can't remove a live subagent's worktree. A worktree it removes is unlocked first, since Claude Code locks the worktrees it makes, ignoring the error for one that isn't locked, then removed with `git worktree remove`. A worktree elsewhere, such as the human's own checkout, is never touched. When the branch hasn't landed, the claim, the local branch and the worktree stay, so a retry resumes them. It doesn't delete the local branch: `clm wrap-up`, or the next `clm run <component>`'s leftovers step, does. It reads no queue state, so it works for any component, converged or removed. The orchestrating session runs it rather than `git worktree remove` because the build's worktree is another worktree, where a worktree-isolated session may not run git, and the build's own session can't remove the worktree it runs in; `clm land` has already deleted that worktree's `target/` (`land`'s `land-frees-build-target`). **What a build left unwritable** (`run-finish`). A build can leave an ignored directory without its owner's write permission, for instance by unpacking an archive; `git status` still reads the worktree as clean, but `git worktree remove` can't delete what that directory holds. So `--finish` removes a worktree it judged clean with `vcs`'s `remove_worktree`, which unlocks it, makes it removable without following a symbolic link and runs `git worktree remove` (`vcs`'s Design), and holds no removal of its own: `clm wrap-up` removes build worktrees through the same function. What `remove_worktree` still can't remove (a file owned by another user, a worktree git refuses) is reported, not failed on (`run-finish`): the report gives the steps that clear it whether or not git has already unregistered the worktree, and the other worktrees are still judged, so the `freed` and `landed` lines gathered are still printed. Only a worktree's removal is reported this way.
+- **Own target** (`build-places`). The prompt doesn't name `CARGO_TARGET_DIR`, so a build compiles into its own worktree's `target/`, its check command included, and the plain check command (`prompt-check-command`) needs no variable. A target directory shared between checkouts is wrong, not only slow: cargo names a workspace crate's outputs by its path relative to the workspace, so every worktree of a repository writes the same files there, and it judges them fresh by file times, so a build whose untouched sources are older than another build's last compile would test that build's code. When `CARGO_TARGET_DIR` is set in the human's session, a build inherits it, as any command does; CLM sets nothing.
+- **Prompt.** The prompt's fixed text is source in `crates/clm-run/src/`.
+  - **Unattended preamble.** The session works alone: no questions in the conversation, a `question` or `human-task` backlog item for anything only the human can answer or do, and a note that Claude Code may ask the human to confirm a tool call, which the build waits for.
+  - **The job** (`pending-prompt`, `removed-requirements-build-out`). The pending requirements with their versions, what blocks each blocked one and the requirement budget per run, then the step plan, which is executed in the same session. The job is written from the whole list `pending` returns, so `check.coverage`'s `waits` can name the components a blocked line waits for. It has no path for an obsolete requirement's marker in a file another component owns on the requirement's own line: once the root sets `wiring`, `pending` gives that marker to the owner's line (`check.coverage/pending-report`), and without `wiring` the build may change the file. Only a `behind` marker is listed apart. Which of its files the build may not change is `gate`'s judgement, the one `clm land` makes (`gate/own-files`, `land/build-holds-own-files`), never a copy of it: `clm run` asks `foreign_files` for the component with `origin/main` and a commit object it makes on `origin/main`, holding the merged tree with each file that holds such a marker modified, which no ref names, so a capability test the component serves, which the land lets the build edit, is re-cited like the build's own file.
+  - **Removals another component still uses** (`contract-removal-needs`). A build never fixes another component's code or tests to absorb its own change (`coupled-changes-sequence`): each user moves in a requirement of its own, and when an optional component must move off a required one's removal, which no required component may `Need` (`optional-nodes`), the removal waits as a contract step (`contract-step-deferred`). The kept code of an `obsolete` requirement gets no `clm:remove-by` marker, since the removing change may archive first: the item records it. The root's dispatch files (`crates/clm/src/main.rs`, `Cargo.toml`, `Cargo.lock`) are not another component's code for this rule: the root's Design gives every build that adds or changes a command those edits.
+  - **Spot-checks** (`prompt-spot-checks`). Where the project sets no `[verify] mutate`, the build's own hand-run mutation spot-checks are the only mutation check its work gets, so the prompt keeps them; where it sets one, the mutation pass after the land judges the tests (`mutation-after-land`, `verify/mutation-pass`) and the prompt leaves them out.
+  - **Rebase points** (`versioned-markers`). After each step of its step plan, the session commits, runs `clm rebase`, resolves what it reports until it prints `rebase ok`, and pushes with `clm branch push` (`host/branch-push`), which also keeps its claim alive. Before landing it does the same. A push the remote rejects for a transient reason is usually caused by other builds pushing at the same moment, so the session pushes again at most twice more (three pushes in all, as `orchestrator/claim` does), before it stops and reports git's message. This covers every push the session makes, and the prompt says it once, where it first names `clm branch push`. A hook that declines the push and a lease rejection are never retried that way: the first is a decision, and the second means the branch moved, which `clm rebase` handles. When `clm rebase` reports `spec changed <component>` (`sync/spec-changed`), the session reads the lines that follow, runs `clm pending <component>`, and adapts its work to the new text or discards and rebuilds the part it affects, whichever fits; it records what changed and which way it went under `## Sync` in the pull request body. Nothing is re-planned: the pending list is derived from the markers each time. A change `clm rebase` archived on the branch (`sync/archive-complete`) is committed with the rest.
+  - **Checks** (`check-before-land`, `prompt-check-command`). The prompt tells the session to pass the repository's checks in two places: after fixing the review's findings, and before landing. Both name `clm land --check-only` (`land/check-only`); the first also gives the one-plain-command rule, which is about that one command, so the prompt still says nothing general about `cd` or one command per call. The prompt never tells the session to run the configured command by its path: Claude Code's worktree isolation, which refuses a command it can't show stays inside the worktree, refused `.github/scripts/ci-check.sh` in a build, and `clm land --check-only` names no path for it to judge (`land-check-command`). `clm land --check-only` is a `clm` command, which never gets `CARGO_TARGET_DIR` (`build-places`), and it sets none either, so the check compiles into the worktree's own `target/` as every other command of the build does. A failing check is fixed and run again. When Claude Code refuses or denies the command, the session lists the refusal under `## CLM defects` in the pull request body and lands with `clm land`, which runs the whole command on the merged tree and refuses the land when it fails (`defect-reports`). The session may run parts of the check while it works, to fail faster, but never reports them as the check. **The recorded check** (`worktree-check-counts`). A passing `clm land --check-only` on a clean, committed `HEAD` that contains `origin/main` appends a `checked` record (`land/check-only`), so a land made before `main` moves runs no check of its own and takes no lock. The ship step already orders it so: commit everything, `clm rebase` until `rebase ok`, the check, then the gate, the push, the pull request body (outside git) and `clm land`, none of which moves `HEAD` or touches a tracked file. The prompt says why that order matters, so a session doesn't commit between the check and the land, and says that `not recorded:` costs only the land's own check. Because the check runs in the build's own place, outside the clone's check lock (`land/check-lock`), it starts at once, but it still runs every test; so the prompt has the session run the formatter and linter the check runs, and the tests of the code it changed, by hand first, catching a slip in seconds. When the repository sets no `[land] check`, the prompt says "the repo's checks" and names no command. `clm run` reads the setting before it claims, so a `clm.toml` that `load` rejects leaves nothing claimed (`prompt-check-command`).
+  - **Setup** (`prompt-setup`). When `clm.toml` sets `[build] setup`, the prompt has the session run `clm setup` right after it switches to its branch and checks it, before any test run, and again whenever what the setup installs from may have changed: after its own edit to the project's dependency declarations, and after a `clm rebase` that brought such an edit in from `origin/main`. A setup that fails because of the branch's own edits is fixed like a failing check; one that fails otherwise, or that Claude Code refuses, leaves no test result the session can trust, so it reports what failed (`clm defect` for a refusal) and stops. When `clm.toml` sets none, the prompt says the repository declares no setup, and that a test run that resolves code or dependencies from outside the worktree is a defect of the project, which the session records as a `bug` item naming `tests-run-in-their-own-tree` and works around by installing what its tests need into its own worktree by hand before it trusts a red or a green.
+  - **Workaround** (`workaround-flags`, `prompt-workaround`). The prompt is read by whatever `clm` the session has, which may lack the command (`dogfood-from-main`'s older build, a pinned release), so it says what to do when the binary on `PATH` lacks `clm workaround`. A flag is evidence (`workaround-flags`), so a missing flag command is never a reason to stop; the shared-binary rule's stop (below) is for commands the work itself needs. That is why `prompt-workaround` has no `#### Needs` on `check.health/workaround-command`: the prompt is right against any binary, and the need would have held a built requirement behind a command whose absence changes nothing about the build. A flag whose requirement moves under the build (`clm rebase` reports `spec changed` and `clm check` rejects the flag at its old version) is re-recorded at the new version, or deleted when the new text removes the workaround: the build added the file, and editing its own addition keeps the branch a code branch. The reconsider questions the flags may lead to are filed by `clm rebase`, never by the session.
+  - **Shared binary.** A build that replaced the `clm` binary on its `PATH` would change the commands the human's session, which orchestrates the builds, and the other builds rely on mid-session. The installed `clm` changes only outside builds, such as the main checkout's rebuild after a merge (`dogfood-from-main`).
+  - **Pull request and landing** (`own-pr-body`, `land-locally`, `prompt-pr-body`). The pull request is opened before landing so the human has a diff to read wherever the host shows one. `Write` replaces `.clm/pr-body.md`, so a body left by an earlier run never carries over. The body has `## Plan`, `## Review`, `## Sync`, `## Workarounds`, `## Fixes in other components`, `## Left pending` and `## CLM defects`. The session goes by `clm land`'s last line: `landed <sha> ...` ends the build; `gate/up-to-date` or a conflict means `clm rebase`, resolve, push and land again; a check failure is fixed and landed again; anything else is reported.
+  - **Resume.** When `clm run` resumes a branch that has commits `origin/main` lacks, the prompt says so: the session starts with `clm rebase`, handles what it reports as above, and lands the same branch. The branch's pull request, if one was opened, is found by `clm pr open`, which prints the open pull request's URL instead of opening another.
+  - Every land goes to `main`.
+- **Review** (`advisory-code-review`). Before landing, a session reviews its diff with two fresh-context reviewers: `/code-review` at a fixed level for bugs, and the `clm` plugin's `spec-auditor` subagent for the spec, given the component. It fixes the findings it agrees with, re-runs the checks, and lists every finding with what it did about it under `## Review` in the pull request body. The level and the reviewer names are constants in `clm-run`, like the pin. The review advises and never gates, but it always runs: a session judging its own diff too small to review (only markers, two tests, a few lines) is the judgment the fresh-context reviewers exist to replace, and a diff of markers alone is where `spec-auditor` finds a test that cites a requirement it doesn't prove. No program checks that it ran: the record under `## Review` is the visibility `advisory-code-review` chose, and the prompt says plainly that no diff is exempt. The reviewers start in the build's worktree, as every subagent a build launches does, so they read its diff.
+- **Permissions** (`builds-in-subagents`). A build runs under the permission mode of the human's session, which Claude Code doesn't let a subagent override, so `clm run` sets none and ships no allowlist. In manual mode a build's permission prompts reach the human's session. Claude Code asks the human before writing a protected path (`.git/`, `.claude/`, `.npmrc` and the rest of its list) in every mode, and that build waits for the answer while the others carry on. The guard runs on a build's calls through the `clm` plugin's `PreToolUse` hook, which Claude Code runs for subagents (`guard-blocks-push-to-main`). In auto mode Claude Code's classifier judges each command no rule allows, and it denied a raw force-push of a rebased branch as destructive, stopping builds with a checked branch they couldn't land. So every step that writes to `origin` is a `clm` command (`unattended-steps-run-clm`): the build pushes with `clm branch push` and lands with `clm land`, and the project's allow rules, which `clm init` seeds (`init/init-seeds-permissions`), let those run without the classifier. The prompt names no `git push`, so no rule for a raw push is ever needed, and the prompt itself needs no rule and states none: the `build` skill checks the project's rules before the first build.
+- **Setup** (`tests-run-in-their-own-tree`, `build-setup-step`, `setup-command`). A build's worktree is fresh, under `.claude/worktrees/` inside the main checkout, with nothing installed, so a toolchain whose lookup walks up the parent directories, or an environment the checkouts share, would find the main checkout's packages or source. `clm setup` runs the command `[build] setup` names, which the project owns and which holds whatever its toolchains need; CLM names no toolchain. It loads the settings with `config`'s `load` from the CLM root found from the current directory, as every command's `--root` defaults (`clm`'s Design), and runs the command through `sh -c` in that root, with its standard input closed and its output passed through, as `clm land --check-only` runs `[land] check`, but under no lock and setting no variable other than the settings' `[env]` (`config/env-setting`): it installs, it doesn't test, so it takes no host resource another run shares. It is a `clm` command rather than the command itself in the prompt for the reason `prompt-check-command` gives: Claude Code's worktree isolation refuses a script path it can't show stays in the worktree, and `clm setup` names none. It runs nothing when no `[build] setup` is set (`setup-command`), so a session or a human can run it in any repository. `[land] check` never runs it: CI, `[verify]` and a land's own tree run the check in trees no build prepared, so the check stays a command that needs nothing before it.
+- **Parallelism.** Each build has its own worktree, so `build` builds several components at once, at most `max_builds` (above). Components' files are disjoint (`paths`, with `tests` carved out of them), so two builds edit the same files only under `path-ownership`'s exceptions: a capability test and the root's `wiring` files, and, in a project whose root names no `wiring`, re-citing a test in a file no `tests` glob owns, which is the only case in which the prompt's fixed text may call re-citing a marker in another component's file allowed (`pending-prompt`); `clm land`'s merge of `main` then reconciles like any other conflict.
+
+## MODIFIED Requirements
+
+### Requirement: run <!-- base: 9b5c5d1292517c8b -->
+`clm run <component>` and `clm run --finish <component>` SHALL refuse a `<component>` that is empty or holds `/`, exiting 1 with ``clm run: `<component>` isn't a component ID`` on stderr before they load the settings or fetch. Before it fetches `origin`, claims or resumes, `clm run <component>` SHALL resolve each skill the prompt names as `clm superpowers` does (`superpowers-path`), exiting 1 naming a skill whose `SKILL.md` doesn't exist and 2 when fetching the pin fails. `clm run <component>` SHALL first remove leftovers of an earlier build of the component that are already landed: a worktree that has `impl/<component>` checked out, has no uncommitted changes or untracked files that aren't ignored, whose `HEAD` is an ancestor of `origin/main` and whose lock isn't held (`vcs/held-lock`), unlocking it first; and then a local branch `impl/<component>` that no worktree has checked out and whose tip is an ancestor of `origin/main` or is an unpushed claim: a commit with one parent, the same tree as that parent, the parent an ancestor of `origin/main`, on a branch that has never held `origin/impl/<component>`'s tip as below, or with no `origin/impl/<component>`. When the local branch `impl/<component>` then exists and isn't landed, it SHALL exit 1 naming the branch, without claiming, unless `origin/impl/<component>` exists and the local branch has held its tip, which is so when that tip is an ancestor of the local branch's tip or of one of the entries of the local branch's reflog, the test git's `--force-if-includes` makes, in which case it SHALL resume without claiming, first removing a linked worktree that has the branch checked out when that worktree has no uncommitted changes or untracked files that aren't ignored, unlocking it first. Otherwise it SHALL claim the component as `orchestrator/claim-local` claims one, so that the local branch `impl/<component>` is at the claim commit, tracking `origin/impl/<component>`, before the claim is pushed, exiting 1 when the claim is refused and 2 when it fails in git. When a worktree that has `impl/<component>` checked out has uncommitted changes or untracked files that aren't ignored, it SHALL exit 1 naming its path, without claiming. When a worktree that has `impl/<component>` checked out has none, its `HEAD` is an ancestor of `origin/main` and its lock is held, it SHALL keep it and exit 1 naming its path and saying a running process holds its lock, without claiming. When the main worktree has `impl/<component>` checked out where a worktree would be removed above, landed or resumed, it SHALL exit 1 naming the main worktree's path, without claiming, and leave it on the branch. When the specs on `origin/main` don't load, it SHALL exit 1 with each violation on a line of its own on stderr, without claiming; and when it resumes a branch whose merged tree (`pending-prompt`) holds no component `<component>`, it SHALL exit 1 with ``clm run: no component `<component>` `` on stderr, keeping the branch. It SHALL keep `.clm/` out of git through `.git/info/exclude`, create no worktree, and start no `claude` process.
+
+It SHALL then write the prompt to `.clm/prompts/<component>.md` under the CLM root it works in, the one `--root` names when given, replacing any earlier file, print on stdout only a launcher of at most five lines that names that file by its absolute path, says to read all of it before anything else and follow it, and names `git switch impl/<component>` as the file's first step, and exit 0. It SHALL create `.clm/prompts/` before claiming, refusing with exit 1 when it can't; when writing the file fails after the claim, it SHALL exit 1 naming the path, keeping the claim. It SHALL write the file whole or not at all, so a write that fails leaves an earlier file whole. The prompt's first line SHALL say to run `git switch impl/<component>`, and the prompt SHALL say ``Bring component `<component>`'s code up to its spec`` and name `impl/<component>` as the branch that claims component `<component>`. It SHALL name the skills `superpowers:writing-plans`, `superpowers:test-driven-development` and `superpowers:verification-before-completion`, each with the path `clm superpowers <skill>` prints; SHALL name the plan path `.clm/plans/<component>.md`; SHALL say when resuming a branch with unlanded commits that the branch exists; and SHALL end with the `clm context` bundle. When it exits 1, 2 or 3 without having written the prompt, it SHALL print nothing on stdout and leave an earlier `.clm/prompts/<component>.md` as it was. Once it has written the prompt, a launcher it can't write SHALL make it exit 2, keeping the claim, the place and the new prompt.
+
+#### Scenario: node prepared
+- GIVEN a ready component `b`, `CLM_SUPERPOWERS_DIR` set to a directory holding the three skills, and a fake `claude` on PATH that records whether it ran
+- WHEN `clm run b` runs
+- THEN it exits 0, `origin/impl/b` exists, the local branch `impl/b` is at the claim and tracks it, no worktree has `impl/b` checked out, the fake never ran, stdout is at most five lines, names the absolute path of `.clm/prompts/b.md` and `git switch impl/b`, and doesn't contain `b`'s context bundle, and that file's first line names `git switch impl/b`, and the file has the three skill names each with its `SKILL.md` path under `CLM_SUPERPOWERS_DIR` and the plan path `.clm/plans/b.md`, and ends with `b`'s context bundle
+
+#### Scenario: claimed elsewhere
+- GIVEN `origin/impl/b` committed 1 hour ago, and no local branch `impl/b`
+- WHEN `clm run b` runs
+- THEN it exits 1 and prints nothing on stdout
+
+#### Scenario: resume with unlanded commits
+- GIVEN a clean worktree left by an earlier build with `impl/b` checked out, its branch pushed with a commit `origin/main` lacks
+- WHEN `clm run b` runs
+- THEN no claim commit is pushed, that worktree is gone, the local branch `impl/b` still has the commit, and the prompt it writes says the branch exists
+
+#### Scenario: landed leftover worktree
+- GIVEN a clean worktree with local branch `impl/b` checked out, left by an earlier build whose branch landed on `origin/main` with a merge commit, with `origin/impl/b` still at that tip, the worktree locked, and a ready component `b`
+- WHEN `clm run b` runs
+- THEN the worktree is gone, it pushes a new claim commit whose parent is `origin/main` to `origin/impl/b`, the local branch `impl/b` is at that commit, and it exits 0
+
+#### Scenario: landed leftover branch
+- GIVEN a local branch `impl/b` with no worktree, landed on `origin/main`, no `origin/impl/b`, and a ready component `b`
+- WHEN `clm run b` runs
+- THEN it claims `b`, the local branch `impl/b` is at the claim, and it exits 0
+
+#### Scenario: unpushed leftover branch
+- GIVEN a local branch `impl/b`, whose reflog never held `origin/impl/b`'s tip, with a commit that changes a file and that neither `origin/main` nor `origin/impl/b` has, where `origin/impl/b` is a lapsed claim, and a ready component `b`
+- WHEN `clm run b` runs
+- THEN it exits 1 naming `impl/b`, pushes no claim commit, prints nothing on stdout, and `impl/b` still has the commit
+
+#### Scenario: stopped after a rebase
+- GIVEN a ready component `b` whose claim this clone pushed, a clean, locked worktree at `.claude/worktrees/agent-1` with the local `impl/b` checked out, and the local `impl/b` then rebased onto a newer `origin/main`, so that it no longer contains `origin/impl/b`, and given a commit that changes a file, none of it pushed
+- WHEN `clm run b` runs
+- THEN it exits 0, pushes no claim commit, `origin/impl/b` is unchanged, that worktree is gone, the local `impl/b` still has the commit, and the prompt it writes says the branch exists; and `clm branch push`, run on that branch, then pushes it
+
+#### Scenario: claim rebased before any work
+- GIVEN a ready component `b` whose claim this clone pushed, the local `impl/b`, checked out nowhere, rebased onto a newer `origin/main` and holding nothing else, so that its tip is a commit with one parent, the parent's tree, and not contained in `origin/impl/b`
+- WHEN `clm run b` runs
+- THEN it exits 0, pushes no claim commit, `origin/impl/b` is unchanged, and the local `impl/b` is still that commit
+
+#### Scenario: interrupted after the push
+- GIVEN a ready component `b` whose claim this clone pushed 1 minute ago, with the local branch `impl/b` at that claim commit, checked out nowhere, and nothing else done
+- WHEN `clm run b` runs
+- THEN it exits 0, pushes no claim commit, the local `impl/b` and `origin/impl/b` are still that commit, and it writes `b`'s prompt
+
+#### Scenario: interrupted before the push
+- GIVEN a ready component `b`, no `origin/impl/b`, and a local branch `impl/b`, checked out nowhere, at a commit whose parent is `origin/main` and whose tree is `origin/main`'s
+- WHEN `clm run b` runs
+- THEN it exits 0, `origin/impl/b` is a new claim commit whose parent is `origin/main`, and the local `impl/b` is at it
+
+#### Scenario: another clone claimed meanwhile
+- GIVEN the local `impl/b` of "interrupted before the push", and `origin/impl/b` another clone's claim committed 1 hour ago
+- WHEN `clm run b` runs
+- THEN it exits 1, prints nothing on stdout, and `origin/impl/b` is unchanged
+
+#### Scenario: landed leftover in use
+- GIVEN the leftover worktree of "landed leftover worktree", locked with the reason `claude agent agent-1 (pid <p> start 1)`, `<p>` the ID of a process that is running
+- WHEN `clm run b` runs
+- THEN it exits 1 naming the worktree's path, pushes no claim commit, prints nothing on stdout, and the worktree is still there with `impl/b` checked out
+
+#### Scenario: dirty leftover
+- GIVEN the leftover worktree as in "landed leftover worktree", with an untracked file `notes.txt`
+- WHEN `clm run b` runs
+- THEN it exits 1 naming the worktree's path, pushes no claim commit, prints nothing on stdout, and `notes.txt` is still there
+
+#### Scenario: node that writes a protected path
+- GIVEN a ready component `w` whose `paths` are `["web/**"]` and whose pending requirement names `web/.npmrc`
+- WHEN `clm next` and `clm run w` run
+- THEN `clm next` prints `w`, and `clm run w` exits 0 and writes `w`'s prompt
+
+#### Scenario: an ID that isn't a component's
+- GIVEN a ready component `b`
+- WHEN `clm run a/b`, `clm run ""` and `clm run --finish a/b` run
+- THEN each exits 1, prints nothing on stdout, says ``clm run: `a/b` isn't a component ID`` (or the same for the empty ID) on stderr, and pushes no claim
+
+#### Scenario: a skill that can't be resolved
+- GIVEN a ready component `b`, and in turn `CLM_SUPERPOWERS_DIR` set to a directory holding no `skills/writing-plans/`, and no `CLM_SUPERPOWERS_DIR`, `XDG_CACHE_HOME` naming an empty directory and `GIT_ALLOW_PROTOCOL=file`, so the pin's fetch fails
+- WHEN `clm run b` runs each time
+- THEN the first exits 1 naming `writing-plans` and the second exits 2, each printing nothing on stdout, pushing no claim and taking no place `b`
+
+#### Scenario: the main checkout on the branch
+- GIVEN the main worktree with the local `impl/b` checked out, once landed on `origin/main` and once a branch that holds `origin/impl/b`'s tip and a commit `origin/main` lacks
+- WHEN `clm run b` runs each time
+- THEN it exits 1 naming the main worktree's path, prints nothing on stdout, pushes no claim, and the main worktree still has `impl/b` checked out
+
+#### Scenario: a refused run leaves the earlier prompt
+- GIVEN a `.clm/prompts/b.md` an earlier run wrote, and in turn `origin/impl/b` another clone's live claim, and a ready component `b` whose prompt can't be written into `.clm/prompts/` once the claim is made
+- WHEN `clm run b` runs each time
+- THEN it exits 1 each time, and `.clm/prompts/b.md` is byte for byte as it was; the second time the claim `origin/impl/b` stays
+
+#### Scenario: specs that don't load
+- GIVEN a ready component `b` and, on `origin/main`, a directory `changes/archive/h/` holding a `deleted-tests.txt` and no `change.md`
+- WHEN `clm run b` runs
+- THEN it exits 1, prints nothing on stdout, names `missing change.md` on a line of stderr, and pushes no claim
+
+#### Scenario: a resumed component the spec no longer holds
+- GIVEN an earlier build's local branch `impl/b` containing `origin/impl/b`, with a commit `origin/main` lacks, and `origin/main` since then holding no component `b`
+- WHEN `clm run b` runs
+- THEN it exits 1 with ``clm run: no component `b` `` on stderr, prints nothing on stdout, and the local `impl/b` still has the commit
+
+#### Scenario: a build prompt
+- GIVEN a ready component `b` with pending requirements
+- WHEN `clm run b` runs
+- THEN the prompt file it writes holds ``Bring component `b`'s code up to its spec`` and names `impl/b` as the branch that claims component `b`
+
+#### Needs
+- clm/renamed-commands
+- orchestrator/claim-local
+- vcs/held-lock
+
+### Requirement: pending-prompt <!-- base: e02d8d3a90a6c230 -->
+The `clm run` prompt SHALL list the component's pending requirements, most urgent first, each with its ID, version and state; for a `behind` requirement, the diff from the text at each version its markers cite other than the current one to the current text, taken from the history of the component's `SPEC.md`, or a line saying the earlier text wasn't found, and the locations of the markers that cite it at another version or without one, saying to re-cite each one after checking that its test proves the current text (`path-ownership`, `stale-markers-keep-behind`), wherever its file sits, another component's `paths` included, while the root sets no `wiring`; once the root sets `wiring` (`model/wiring-globs`), a marker in a file that `gate/own-files` gives as not this component's build's to change, for a branch from `origin/main` that modifies the file, or adds it when `origin/main` lacks it, SHALL instead be listed apart, naming the owner it gives and saying that `clm land` refuses this build's edit to the file (`land/build-holds-own-files`), that `clm check` reports the marker unless an exemption covers its file (`check/tests-cite-their-owner`), and to leave it and add a `question` item that blocks the requirement; an `obsolete` requirement whose ID names another component, or one the spec graph doesn't hold, and that is pending on this component for the markers in its files (`check.coverage/pending-report`) SHALL be listed with those markers, saying that it was not this component's and which changes removed it, and, in place of the two lists below: each test an approved list names, as a test to delete; each test whose requirement a move takes to a requirement of this component (`check.coverage/move-targets`), as a test to re-cite to that requirement; each marker outside a test, or on a test that also cites a requirement the spec holds, as a marker to take out; and any other test as one to leave, never to re-cite, since this build's bundle doesn't hold another component's requirements, adding a `question` item whose `blocks` names the removed requirement (`model/parse-backlog`), as `check/obsolete-tests-elsewhere` makes the removing change list such a test wherever it applies. The prompt SHALL NOT say to remove code for such a requirement, and when the spec graph holds the component its ID names and no file of that component cites it, SHALL say that the code it needed is that component's to remove and to add a `deferred` item naming that component and the requirement unless the backlog holds one, except for a removed capability (`check.coverage/removed-capabilities`), whose tests are all it has; and for an `obsolete` one, the locations of its markers, saying to remove the code they mark that no other requirement needs, and its tests in two lists: the tests among the markers that an approved list names (`land/deleted-tests-approved`), read and compared as `clm land` reads and compares them (`check.coverage/test-lists`), as tests to delete, and every other test, as tests `clm land` refuses this build to lose, saying to re-cite each to the requirement that now states what it proves and, where none does, to leave it and the code it runs and add a `question` item whose `blocks` names the removed requirement (`model/parse-backlog`), so its line waits until the human's answer, a spec change that lists the test in a `deleted-tests.txt` or states what it proves, is applied. The approved lists SHALL be read from the tree the other lists are taken from. When that judgement fails, `clm run` SHALL exit 2 with its message. When it lists no requirement to build, it SHALL say `Nothing is pending.` in the list's place. It SHALL leave blocked requirements out of the list and name them with what blocks each: the backlog items, or the pending requirement they need, and for an `obsolete` requirement that waits on its own ID (`check.coverage/pending-report`), in place of that ID, the components its other lines are pending on (`check.coverage/wait-lines`), sorted by ID, as the components whose files still cite it, and SHALL NOT name the requirement's own ID as what blocks it. It SHALL take the lists, the earlier texts and the context bundle from the tree `git merge-tree --write-tree origin/main impl/<component>` writes once `clm run` has fetched, never from the checkout it runs in, so that a requirement made current on `origin/main` since a resumed branch was cut neither shows as pending nor blocks another; when that merge conflicts, it SHALL take them from `origin/main`'s tree and say in the prompt that they were read from `origin/main` because the branch conflicts with it, and that `clm pending <component>` after the first `clm rebase` is the list to build from. For a `behind` requirement the prompt SHALL also list, as tests to delete and never to re-cite, each test in a file the build may change that cites the requirement, at any version and whatever else it cites, and that an approved list names, read and compared as for an `obsolete` requirement's tests, since a change lists a test to delete though its requirement stays, such as a duplicate or the test of a sentence the requirement lost (`cuts-are-what-a-program-lists`); such a test's marker SHALL be left out of the markers to re-cite.
+
+#### Scenario: behind and obsolete
+- GIVEN component `b` whose requirement `b/x` is cited at version `11111111`, which `specs/b/SPEC.md` had at an earlier commit, and is now at `22222222`; whose requirement `b/y` is uncited; and a marker at `t.rs:9` citing `b/gone`, which a live change removed
+- WHEN `clm run b` runs
+- THEN the prompt it writes lists `b/x` as `behind` with a diff from the earlier text to the current, `b/y` as `unbuilt`, and `b/gone` as `obsolete` at `t.rs:9`
+
+#### Scenario: an obsolete requirement's tests
+- GIVEN component `b`, a live change that removed `b/gone` and whose `deleted-tests.txt` holds `DELETE t.rs::old_rule`, and tests `old_rule` and `kept_rule` in `t.rs`, each citing `b/gone`
+- WHEN `clm run b` runs
+- THEN the prompt it writes lists `b/gone` as `obsolete`, names `t.rs::old_rule` as a test to delete, and names `t.rs::kept_rule` as a test `clm land` refuses the build to lose, to re-cite or else to leave, with the code it runs, and add a `question` item whose `blocks` names `b/gone`
+
+#### Scenario: an obsolete test in a file the build may not change
+- GIVEN the root's `wiring: []`, no component `g`, a live change `20260101-x` that removed `g/gone`, and a test `old_rule` citing `g/gone` alone in `crates/c/t.rs`, which component `c` owns
+- WHEN `clm run c` runs with `DELETE crates/c/t.rs::old_rule` in that change's `deleted-tests.txt`, and again without that line
+- THEN the first prompt lists `g/gone` as `obsolete`, says it was not `c`'s and that `20260101-x` removed it, and names `crates/c/t.rs::old_rule` as a test to delete; the second names it as a test to leave, with a `question` item whose `blocks` names `g/gone`; neither says to re-cite it, to remove code for it, or to add a `deferred` item, `g` being no component
+
+#### Scenario: an obsolete requirement cited from another component's file
+- GIVEN the root's `wiring: []`, components `b` and `c` with `paths` `["crates/b/**"]` and `["crates/c/**"]`, a live change `20260101-x` that removed `b/gone` and whose `deleted-tests.txt` holds `DELETE crates/c/t.rs::old_rule`, a test `old_rule` citing `b/gone` alone in `crates/c/t.rs`, and a test `kept_rule` citing it in `crates/b/t.rs`
+- WHEN `clm run b` runs, and `clm run c` runs
+- THEN `b`'s prompt names `b/gone` among the blocked requirements, as waiting on `c`, whose files still cite it, and not as blocked by `b/gone`; and `c`'s prompt lists `b/gone` as `obsolete`, says it was not `c`'s, and names `crates/c/t.rs::old_rule` as a test to delete
+
+#### Scenario: another component's removed capability
+- GIVEN a root with `wiring: []`, components `capability` and `c`, a live change `20260101-x` with `removes_capabilities: [gone]` whose `deleted-tests.txt` holds `DELETE crates/c/t.rs::old_cap`, a test `old_cap` citing `capability/gone` alone in `crates/c/t.rs`, no file of `capability` citing it, and `pending` placing `capability/gone` on `c`
+- WHEN the prompt for `c` is written from that pending list
+- THEN it lists `capability/gone` as `obsolete`, says it was not `c`'s and that `20260101-x` removed it, names `crates/c/t.rs::old_cap` as a test to delete, and doesn't say to add a `deferred` item
+
+#### Scenario: a test whose requirement moved to this component
+- GIVEN the same, the change adding `c/gone`, the move of `g/gone`, `c/gone` current, and no `deleted-tests.txt`
+- WHEN `clm run c` runs
+- THEN the prompt names `crates/c/t.rs::old_rule` as a test to re-cite to `c/gone`
+
+#### Scenario: another component's requirement whose own files don't cite it
+- GIVEN a root with no `wiring`, components `b` and `c`, a live change that removed `b/gone`, and `pending` placing `b/gone` on `c` for a marker outside a test at `crates/c/lib.rs:4`, no file of `b` citing it
+- WHEN the prompt for `c` is written from that pending list
+- THEN it names `crates/c/lib.rs:4` as a marker to take out, and says the code `b/gone` needed is `b`'s to remove and to add a `deferred` item naming `b` and `b/gone` unless the backlog holds one
+
+#### Scenario: stale marker in another component's files
+- GIVEN a root that sets no `wiring`, and component `b` whose requirement `b/x` is at version `22222222`, cited at `crates/b/t.rs:3` at `22222222` and at `crates/c/t.rs:8` at `11111111`, which `specs/b/SPEC.md` had at an earlier commit
+- WHEN `clm run b` runs
+- THEN the prompt it writes lists `b/x` as `behind` with a diff from the `11111111` text to the current, and names `crates/c/t.rs:8` as a marker to re-cite, and not `crates/b/t.rs:3`
+
+#### Scenario: stale marker in a file the build may not change
+- GIVEN the same, with the root's `wiring: []` and `crates/c/t.rs` owned by component `c`
+- WHEN `clm run b` runs
+- THEN the prompt it writes lists `b/x` as `behind`, names `crates/c/t.rs:8` apart as a marker in `c`'s file that `clm land` refuses this build to change, says to add a `question` item that blocks `b/x`, and doesn't say to re-cite it
+
+#### Scenario: blocked requirement left out
+- GIVEN component `b` with pending requirements `b/x` and `b/y`, `b/y` in the `blocks` of `backlog/q.md`
+- WHEN `clm run b` runs
+- THEN the prompt it writes lists `b/x` to build, and names `b/y` and `backlog/q` as blocked
+
+#### Scenario: needing requirement left out
+- GIVEN component `b` with pending requirements `b/x` and `b/y`, `b/y` needing uncited `c/z`
+- WHEN `clm run b` runs
+- THEN the prompt it writes lists `b/x` to build, and names `b/y` as blocked by `c/z`
+
+#### Scenario: resumed branch behind main
+- GIVEN an earlier build's local branch `impl/b` containing `origin/impl/b`, with a commit `origin/main` lacks, cut when `b/y` needed uncited `c/z`, and a commit on `origin/main` since then adding a test that cites `c/z` at its current version; and a checkout `clm run` runs in that is at the older commit of `main`
+- WHEN `clm run b` runs
+- THEN the prompt it writes lists `b/y` to build and doesn't name it as blocked
+
+#### Scenario: resumed branch that conflicts with main
+- GIVEN the resumed branch of "resumed branch behind main", whose commit and a later commit on `origin/main` change the same line of one file
+- WHEN `clm run b` runs
+- THEN it exits 0, and the prompt it writes lists `b/y` to build, says its lists were read from `origin/main` because the branch conflicts with it, and names `clm pending b` after the first `clm rebase`
+
+#### Scenario: a listed test of a requirement that stays
+- GIVEN requirement `a/x` at a new version, tests `keeps` and `dup` in `a`'s file `t.rs`, each citing it at its old one, and a live change whose `deleted-tests.txt` holds `DELETE t.rs::dup`
+- WHEN `clm run a` runs
+- THEN the prompt lists `a/x` as `behind`, `dup` as a test to delete, and `keeps`'s marker, and not `dup`'s, as one to re-cite
+
+#### Scenario: stale marker in a capability test the component serves
+- GIVEN the root's `wiring: []`, component `b` whose requirement `b/x`, serving `capability/see`, is at version `22222222`, and a component `capability` owning `tests/capability/see.rs`, which cites `capability/see` and cites `b/x` at `11111111`
+- WHEN `clm run b` runs
+- THEN the prompt it writes lists `b/x` as `behind` and names the marker in `tests/capability/see.rs` as one to re-cite, not apart as a file `clm land` refuses this build to change
+
+#### Scenario: nothing pending
+- GIVEN an earlier build's local branch `impl/b` containing `origin/impl/b`, with a commit `origin/main` lacks that adds a test citing each requirement of `b` at its current version
+- WHEN `clm run b` runs
+- THEN it exits 0, and the prompt it writes says `Nothing is pending.`
+
+#### Needs
+- model/parse-backlog
+- land/deleted-tests-approved
+- clm/renamed-commands
+- check/obsolete-tests-elsewhere
+- check.coverage/move-targets
+- check.coverage/pending-report
+- check.coverage/wait-lines
+- check.coverage/state-names
+
+### Requirement: superpowers-path <!-- base: 411708d0d10375a2 -->
+`clm superpowers <skill>` SHALL print the absolute path of `skills/<skill>/SKILL.md` in the pinned superpowers directory builds follow: `$CLM_SUPERPOWERS_DIR` when it is set and not empty, otherwise `clm/superpowers/<commit>`, `<commit>` the pinned commit, under `$XDG_CACHE_HOME` when it is set and not empty and under `$HOME/.cache` otherwise, a relative directory read from the directory it runs in, fetched first when absent; when neither `XDG_CACHE_HOME` nor `HOME` is set it SHALL exit 1 saying so. It SHALL exit 1, naming the skill, when that file doesn't exist, and exit 1, having fetched and written nothing, for a name that isn't one plain path component, such as `../brainstorming`. It SHALL exit 2 with the reason when fetching the pin fails, leaving nothing at `clm/superpowers/<commit>`, so the next run fetches again. No word SHALL be reserved: `upgrade` and `eval` are resolved as skills like any other, and `clm-run` SHALL NOT read or run anything under `plugin/evals/` (`cut-evals`). It SHALL fetch the pin into a repository of its own in a temporary directory, running every git command there (`init`, `fetch`, `checkout`) isolated from any clone the environment names (`vcs/git-isolated`), so a `GIT_DIR` or `GIT_WORK_TREE` the environment sets, naming a clone, as in a git hook, never makes the clone's git directory reinitialized, fetched into or checked out in.
+
+#### Scenario: pinned copy
+- GIVEN `XDG_CACHE_HOME` holding `clm/superpowers/<pinned commit>/skills/brainstorming/SKILL.md`
+- WHEN `clm superpowers brainstorming` runs
+- THEN it prints that file's path and exits 0, without fetching
+
+#### Scenario: override
+- GIVEN `CLM_SUPERPOWERS_DIR` set to a directory holding `skills/brainstorming/SKILL.md`
+- WHEN `clm superpowers brainstorming` runs
+- THEN it prints the path under that directory
+
+#### Scenario: unknown skill
+- GIVEN the same override
+- WHEN `clm superpowers no-such-skill` runs
+- THEN it exits 1 naming `no-such-skill`, and prints no path
+
+#### Scenario: no reserved words
+- GIVEN the same override, holding no `skills/upgrade/` or `skills/eval/`
+- WHEN `clm superpowers upgrade` and `clm superpowers eval out` run
+- THEN the first exits 1 naming `upgrade` as it names any skill it can't find, and the second exits non-zero with the usage error any extra argument gives, and neither runs `claude` or `git ls-remote`
+
+#### Scenario: a clone the environment names
+- GIVEN an empty `XDG_CACHE_HOME`, `GIT_ALLOW_PROTOCOL=file` so git refuses the pin's https fetch, and a work tree `w` with a commit whose git directory `g` is elsewhere, with `GIT_DIR=g` and `GIT_WORK_TREE=w` set
+- WHEN `clm superpowers brainstorming` runs
+- THEN it exits 2 as when fetching the pin fails, every file under `g` is byte for byte as it was, no file is added there, and `w` is unchanged
+
+#### Scenario: where the pinned copy is cached
+- GIVEN no `CLM_SUPERPOWERS_DIR`, and in turn `XDG_CACHE_HOME` holding the pinned copy; `XDG_CACHE_HOME` set to the empty string and `HOME` holding it under `.cache/`; and neither `XDG_CACHE_HOME` nor `HOME` set
+- WHEN `clm superpowers brainstorming` runs each time
+- THEN the first two print the path of `skills/brainstorming/SKILL.md` under `clm/superpowers/<pinned commit>` of that directory and exit 0, and the third exits 1 naming `XDG_CACHE_HOME` and `HOME`, printing no path
+
+#### Scenario: a name that isn't a skill's
+- GIVEN `XDG_CACHE_HOME` naming an empty directory
+- WHEN `clm superpowers ../brainstorming` runs
+- THEN it exits 1, prints no path, and `XDG_CACHE_HOME` holds no `clm/`
+
+#### Scenario: fetch fails
+- GIVEN `XDG_CACHE_HOME` naming an empty directory and `GIT_ALLOW_PROTOCOL=file`, so git refuses the pin's https fetch
+- WHEN `clm superpowers brainstorming` runs
+- THEN it exits 2, prints nothing on stdout, and `clm/superpowers/<pinned commit>` doesn't exist under `XDG_CACHE_HOME`
+
+#### Serves
+- architecture/pin-working-method
+
+#### Needs
+- vcs/git-isolated
+
+### Requirement: prompt-check-command <!-- base: 8a568bf65ec51c93 -->
+When `clm.toml` sets `[land] check`, `clm run`'s prompt SHALL tell the session, wherever it tells it to pass or re-run the repository's checks, to run `clm land --check-only`, saying that it runs that command, named as `clm.toml` spells it. It SHALL NOT tell the session to run the configured command by its path. When `clm.toml` sets no `[land] check`, the prompt SHALL NOT name a check command or `clm land --check-only`. The prompt SHALL NOT name `CARGO_TARGET_DIR` or a target directory, whatever the environment holds, so the check command and every cargo command compile into the worktree's own `target/` (`build-places`). When `clm.toml` can't be loaded, `clm run` SHALL exit 1 with the reason before claiming, printing nothing on stdout.
+
+#### Scenario: check command named
+- GIVEN a ready component `b` and a `clm.toml` whose `[land] check` is `scripts/check.sh`
+- WHEN `clm run b` runs
+- THEN the prompt it writes names `clm land --check-only` as the command to run and `scripts/check.sh` as what it runs, contains neither ``run `scripts/check.sh` `` nor ``with `scripts/check.sh` ``, and names `clm land --check-only` in both places it says to pass the checks
+
+#### Scenario: no check command
+- GIVEN a ready component `b` and a `clm.toml` with no `[land]` table
+- WHEN `clm run b` runs
+- THEN it exits 0 and the prompt it writes doesn't contain `--check-only`
+
+#### Scenario: no target directory
+- GIVEN a ready component `b`, a `clm.toml` whose `[land] check` is `scripts/check.sh`, and `clm run` run in a linked worktree of the repository, once with `CARGO_TARGET_DIR` unset and once set to `/elsewhere`
+- WHEN `clm run b` runs each time
+- THEN neither prompt contains `CARGO_TARGET_DIR` or `target/build`
+
+#### Scenario: unreadable settings
+- GIVEN a ready component `b` and a `clm.toml` that isn't valid TOML
+- WHEN `clm run b` runs
+- THEN it exits 1 naming `clm.toml`, prints nothing on stdout, and pushes no claim
+
+#### Serves
+- capability/land-safely
+- capability/prove-by-tests
+
+#### Needs
+- land/check-only
+
+### Requirement: run-takes-place <!-- base: 2c1f76bacb184964 -->
+`clm run <component>` SHALL take the clone's build place named `<component>` (`orchestrator/places`), using `max_builds` from the settings it loads and its `--expiry`, after fetching, loading the settings and removing the landed leftovers that `run` names (a clean worktree whose `HEAD`, and a local `impl/<component>` whose tip, is an ancestor of `origin/main`), and before it writes or removes anything else: `.git/info/exclude`, `.clm/prompts/`, other worktrees or branches, or the claim. When a worktree that has `impl/<component>` checked out has uncommitted changes or untracked files that aren't ignored, landed or not, it SHALL exit 1 naming its path without taking a place, as it SHALL when such a worktree is landed and kept because a running process holds its lock (`run`). When the clone's place `<component>` counts, it SHALL reuse it. When no place is free it SHALL exit 3, print nothing on stdout, print on stderr a message naming `max_builds`, its value and the number of places held, and claim, resume and write nothing, and remove nothing but the landed leftovers. When it exits 1 or 2 after taking a new place and without having written the prompt, it SHALL free that place; a place it reused SHALL stay.
+
+#### Scenario: cap reached
+- GIVEN a ready component `b`, `CLM_MAX_BUILDS=1`, a fresh clone with no `.git/info/exclude` line for `.clm/`, and a place `a` for a live claim `origin/impl/a`
+- WHEN `clm run b` runs
+- THEN it exits 3, stdout is empty, stderr names `max_builds`, `1` and `1` held, `origin` has no `impl/b`, the clone has no place `b`, `.git/info/exclude` doesn't name `.clm/`, and `.clm/prompts/` doesn't exist
+
+#### Scenario: landed leftover gone before the place
+- GIVEN a ready component `b`, `CLM_MAX_BUILDS=1`, a place `a` for a live claim `origin/impl/a`, and a local branch `impl/b` with no worktree, whose tip is an ancestor of `origin/main`, and no `origin/impl/b`
+- WHEN `clm run b` runs
+- THEN it exits 3, the local branch `impl/b` is gone, and the clone has no place `b`
+
+#### Scenario: place taken
+- GIVEN a ready component `b` and no places
+- WHEN `clm run b` runs
+- THEN it exits 0 and the clone's place `b`, under the git common directory's `clm/builds/`, holds `kind build` and `branch impl/b`
+
+#### Scenario: resume keeps its place
+- GIVEN `CLM_MAX_BUILDS=1`, a place `b` that counts, and an earlier build's local branch `impl/b` containing `origin/impl/b` with a commit `origin/main` lacks
+- WHEN `clm run b` runs
+- THEN it exits 0, resumes without claiming, and `b` is still the clone's only place
+
+#### Scenario: refused claim frees the place
+- GIVEN `origin/impl/b` committed 1 hour ago by another clone, no local branch `impl/b`, and no places
+- WHEN `clm run b` runs
+- THEN it exits 1 and the clone has no place `b`
+
+#### Scenario: a held leftover takes no place
+- GIVEN the leftover worktree of `run`'s "landed leftover in use"
+- WHEN `clm run b` runs
+- THEN it exits 1, and the clone's places are as they were
+
+#### Serves
+- capability/work-concurrently
+
+### Requirement: run-finish <!-- base: 17d6dafb55287aad -->
+`clm run --finish <component>` SHALL fetch `origin`, free the place `<component>`, printing `freed <component>` as its first line when the clone had a place of that name, counting or not, and no such line when it had none, and, when `impl/<component>` has landed (at least one of `origin/impl/<component>` and the local `impl/<component>` exists, and the tip of each that exists is an ancestor of `origin/main`), print `landed impl/<component>` after the line for the freed place and before any line about worktrees, also when no worktree has the branch checked out, then remove each worktree under the main worktree's `.claude/worktrees/` that has `impl/<component>` checked out, no uncommitted changes or untracked files that aren't ignored and a lock that isn't held (`vcs/held-lock`), unlocking it first, printing `removed <path>`, print `kept <path>: uncommitted changes` for one that has such changes, and print `kept <path>: a running process holds its lock` for one that has none and whose lock is held, leaving it locked. With `--returned`, which says the build's subagent has handed back, a held lock SHALL keep no worktree: one with no such changes SHALL be unlocked and removed, printing `removed <path>` or `left` as below, whatever its lock says. `clm run` SHALL refuse `--returned` without `--finish`, and `--review-model` with it, as arguments it can't parse, exiting 2 and changing nothing. It SHALL remove such a worktree whole, as `vcs/remove-worktree` removes one: ignored files included, also when the build left a directory in it without its owner's write permission, and no permission outside the worktree changes. When a worktree it set out to remove can't be removed, or is left partly on disk, it SHALL print `left <path>: <error>; delete the directory by hand, then run git worktree prune` in place of `removed <path>`, with the error on one line, go on with the other worktrees, and still print every other line and exit 0. When the branch hasn't landed it SHALL print no `landed` line, remove no worktree and push or delete no branch. The `landed impl/<component>` line is how `build` learns that a build whose subagent ended without a closing line landed (`unclosed-build-reads-finish`). It SHALL never remove a worktree outside `.claude/worktrees/`, nor the worktree it runs in or the one that holds the CLM root it works in, SHALL pass over with no line a worktree git lists whose directory is gone, and SHALL exit 0, also when there was no place, and 2 when any other git command fails.
+
+#### Needs
+- vcs/remove-worktree
+- vcs/held-lock
+
+#### Scenario: landed build tidied
+- GIVEN a place `b`, and a clean, locked worktree at `.claude/worktrees/agent-1` with local `impl/b` checked out, whose tip is the second parent of a merge on `origin/main`, and no `origin/impl/b`
+- WHEN `clm run --finish b` runs
+- THEN it exits 0, the clone has no place `b`, the worktree is gone, and it printed `landed impl/b` and, after it, `removed` with its path
+
+#### Scenario: unwritable directory removed
+- GIVEN the landed build of "landed build tidied" with an ignored directory `cache/` in its worktree holding a file, `cache/` without its owner's write permission
+- WHEN `clm run --finish b` runs
+- THEN it exits 0, the worktree's directory is gone from disk and `git worktree list` doesn't name it, and it printed `freed b`, `landed impl/b` and `removed` with its path
+
+#### Scenario: worktree git can't remove
+- GIVEN the landed build of "landed build tidied", and a `git` whose `worktree remove` refuses the worktree, leaving it listed and on disk
+- WHEN `clm run --finish b` runs
+- THEN it exits 0, the clone has no place `b`, and it printed `freed b`, `landed impl/b` and a line starting `left ` with the worktree's path and `git worktree prune`, and no `removed` line
+
+#### Scenario: a running build's worktree kept
+- GIVEN the landed build of "landed build tidied", its worktree locked with the reason `claude agent agent-1 (pid <p> start 1)`, `<p>` the ID of a process that is running
+- WHEN `clm run --finish b` runs
+- THEN it exits 0, the clone has no place `b`, the worktree's directory is still there and `git worktree list` names it, still locked, on `impl/b`, and it printed `freed b`, `landed impl/b` and `kept` with its path and `a running process holds its lock`, and no `removed` line
+
+#### Scenario: a returned build's worktree removed
+- GIVEN the landed build of "a running build's worktree kept", its worktree locked naming a process that is running
+- WHEN `clm run --finish b --returned` runs
+- THEN it exits 0, the clone has no place `b`, the worktree's directory is gone and `git worktree list` doesn't name it, and it printed `freed b`, `landed impl/b` and `removed` with its path, and no `kept` line
+
+#### Scenario: returned without finish
+- GIVEN any repository
+- WHEN `clm run b --returned` runs
+- THEN it exits 2, claims nothing and takes no place
+
+#### Scenario: stopped build kept
+- GIVEN a place `b`, `origin/impl/b` with a commit `origin/main` lacks, and a clean worktree at `.claude/worktrees/agent-1` with `impl/b` checked out at that commit
+- WHEN `clm run --finish b` runs
+- THEN it exits 0, printed no line starting `landed`, the clone has no place `b`, the worktree and `origin/impl/b` are unchanged; and a following `clm run b` resumes the branch without claiming
+
+#### Scenario: dirty worktree kept
+- GIVEN the landed build of "landed build tidied" with an untracked file `notes.txt` in its worktree
+- WHEN `clm run --finish b` runs
+- THEN it exits 0, the worktree and `notes.txt` are still there, and it printed `landed impl/b` and `kept` with its path
+
+#### Scenario: checkout outside the worktrees directory
+- GIVEN local `impl/b`, landed, checked out in a clean linked worktree at `../other` outside `.claude/worktrees/`
+- WHEN `clm run --finish b` runs
+- THEN that worktree is still there
+
+#### Scenario: nothing to finish
+- GIVEN no place `b` and no branch `impl/b`
+- WHEN `clm run --finish b` runs
+- THEN it exits 0 and prints no line starting `landed` or `freed`
+
+#### Scenario: finished from inside the build's worktree
+- GIVEN the landed build of "landed build tidied", its worktree's lock not held
+- WHEN `clm run --finish b` runs in that worktree, given the main worktree's root
+- THEN it exits 0, the worktree is still there, and it printed no `removed` line
+
+#### Scenario: a worktree whose directory is gone
+- GIVEN the landed build of "landed build tidied", its worktree's directory deleted while git still lists it
+- WHEN `clm run --finish b` runs
+- THEN it exits 0, printed `landed impl/b` and no line naming that worktree's path
+
+#### Scenario: review model with finish
+- GIVEN a place `b`
+- WHEN `clm run --finish b --review-model opus` runs
+- THEN it exits 2 with the usage error, and the clone still has the place `b`
+
+#### Serves
+- capability/work-concurrently
+
+### Requirement: pin-file <!-- base: a682a3d85f9765c6 -->
+`clm-run`'s superpowers pin SHALL be the one line `<tag> <commit>` in `crates/clm-run/superpowers.pin`, read at compile time, and nothing else in the crate SHALL name the pinned tag or commit. The pinned commit `clm superpowers <skill>` and `clm run` resolve SHALL be that file's commit.
+
+#### Scenario: one pin
+- GIVEN `crates/clm-run/superpowers.pin`
+- WHEN the file is read beside the tag and commit `clm-run` pins
+- THEN the file is one line `v<MAJOR>.<MINOR>.<PATCH> <40 hex digits>`, and the tag and commit equal its two fields
+
+#### Serves
+- architecture/pin-working-method
+
+### Requirement: capability-waits-for-changed-rule <!-- base: 831f33e5d40474e3 -->
+The `clm run` prompt for the component that builds the capability tests (`prompt-serves`) SHALL tell the session that when a capability's test can't pass because a rule it exercises is still `behind`, its rebuild not yet landed, the session stops at that capability and leaves it pending (`serving-rules-order-capabilities`). A prompt for any other component SHALL NOT hold this text.
+
+#### Scenario: capability tests component
+- GIVEN the graph's capability component `capability`, ready
+- WHEN `clm run capability` runs
+- THEN the prompt it writes says that a capability whose test can't pass because a rule it exercises is still `behind` is left pending, and it contains `serving-rules-order-capabilities`
+
+#### Scenario: other component
+- GIVEN a ready component `b` in that graph
+- WHEN `clm run b` runs
+- THEN the prompt it writes holds no such text
+
+#### Serves
+- capability/build-from-spec
+- capability/prove-by-tests
+
+### Requirement: prompt-slot <!-- base: 7c75a1390abbf07f -->
+The `clm run` prompt SHALL name the build's slot, the slot of the place `clm run` has taken for it (`orchestrator/place-slots`), as `CLM_SLOT=<slot>`, in every prompt, fresh or resuming.
+
+#### Scenario: prompt
+- GIVEN a ready component `b` and a place `a` with slot 1 that counts, once fresh and once resuming a branch with unlanded commits while the place `b` the first run took still counts
+- WHEN `clm run b` runs
+- THEN each prompt it writes contains `CLM_SLOT=2`
+
+#### Needs
+- orchestrator/place-slots
+
+#### Serves
+- architecture/tests-run-concurrently
+- capability/work-concurrently
+
+### Requirement: setup-command <!-- base: fdb7c407e4b269c5 -->
+`clm setup [--root <dir>]` SHALL load the settings of the CLM root, `--root` defaulting to the one found from the current directory as every command's does, and, when `clm.toml` or `clm.local.toml` sets `[build] setup`, run that command through `sh -c` with that root as its working directory and its standard input closed, passing its standard output and standard error through, taking no lock and setting no variable but each variable of the `env` the settings give (`config/env-setting`), which replaces any value the caller's environment holds for that name; it SHALL exit 0 when the command exits 0, and otherwise exit 1 with a line on stderr saying `setup failed` and naming the command and its exit status, or `killed by signal <n>` when it has none. When no `[build] setup` is set, it SHALL print `no [build] setup` and exit 0, running nothing. When the settings can't be loaded, it SHALL exit 1 with the reason, running nothing. When the command leaves a process running in the background that still holds its output, `clm setup` SHALL end within a moment of `sh` ending, with the command's status. It SHALL fetch nothing, commit nothing and write nothing itself.
+
+#### Scenario: setup runs in the root
+- GIVEN a CLM repository whose `clm.toml` sets `[build] setup = "touch ready"`, and a subdirectory `src/` of it
+- WHEN `clm setup` runs in `src/`
+- THEN it exits 0, and the file `ready` exists at the repository's root and not in `src/`
+
+#### Scenario: setup fails
+- GIVEN a CLM repository whose `clm.toml` sets `[build] setup = "exit 3"`
+- WHEN `clm setup` runs in it
+- THEN it exits 1, and stderr says `setup failed` and names `exit 3` and the status 3
+
+#### Scenario: nothing declared
+- GIVEN a CLM repository whose `clm.toml` has no `[build]` table
+- WHEN `clm setup` runs in it
+- THEN it prints `no [build] setup` and exits 0
+
+#### Scenario: unreadable settings
+- GIVEN a CLM repository whose `clm.toml` isn't valid TOML
+- WHEN `clm setup` runs in it
+- THEN it exits 1 naming `clm.toml`
+
+#### Scenario: setup gets the project's variables
+- GIVEN a CLM repository whose `clm.toml` sets `[build] setup = "echo $RELAY_SERVER_IMAGE > seen"` and `[env]` with `RELAY_SERVER_IMAGE = "relay:amd64"`, a `clm.local.toml` with `[env]` setting `RELAY_SERVER_IMAGE = "relay:arm64"`, and `RELAY_SERVER_IMAGE=relay:shell` in the caller's environment
+- WHEN `clm setup` runs in it
+- THEN it exits 0, and `seen` holds `relay:arm64`
+
+#### Scenario: a process left in the background
+- GIVEN a CLM repository whose `clm.toml` sets `[build] setup` to a command that prints `started` and leaves `sleep 30` running in the background with its output
+- WHEN `clm setup` runs in it
+- THEN it exits 0 within 10 seconds, and stdout holds `started`
+
+#### Needs
+- config/build-setup-setting
+- config/env-setting
+
+#### Serves
+- architecture/tests-run-in-their-own-tree
+
+### Requirement: run-fetch-retries-race <!-- base: 4a85eabb2754eccc -->
+Every fetch of `origin` that `clm run <component>` and `clm run --finish <component>` make SHALL be tried again as `vcs/fetch-retries` states, each fetch pruning the remote-tracking refs `origin` no longer has, so a build's launch or finish whose fetch lost a race with another build of the same clone over a remote-tracking ref goes on. When the fetch still fails, the command SHALL exit 2 with git's message from the last fetch when git failed, and `origin can't be reached` when `origin` can't be reached.
+
+#### Scenario: a run whose fetch loses a ref race
+- GIVEN a ready, unclaimed component `b` and a free place, and an executable `git` first on `PATH` that, for the first `fetch` naming `origin`, prints `error: cannot lock ref 'refs/remotes/origin/impl/a'` on stderr and exits 1, and runs the real `git` for every other call
+- WHEN `clm run b` runs
+- THEN it exits 0, prints its launcher, `origin` holds `impl/b`, and the place `b` exists
+
+#### Scenario: a run whose fetch keeps failing
+- GIVEN the same, with a `git` that fails every `fetch` naming `origin` that way
+- WHEN `clm run b` runs
+- THEN it exits 2 with a message containing `cannot lock ref`, `origin` holds no `impl/b`, and no place `b` exists
+
+#### Needs
+- vcs/fetch-retries
+
+#### Serves
+- capability/work-concurrently
+
+### Requirement: commands-in-crate <!-- base: 57a3e9afb1e41a30 -->
+`clm-run` SHALL offer each of `clm run`, `clm setup` and `clm superpowers` as a call of its own that takes the command's arguments as the command line gives them, the repository root it is given, which the command's `--root` overrides, a relative `--root` read from the directory it runs in, the directory it runs in, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. When a stream it is given can't be written, it SHALL return 2, `clm setup`'s call also when the stream is the one it passes the command's output through to, once the command has ended, whatever the command's status. For a `--root` that doesn't exist, the calls of `clm run` and `clm setup` SHALL return 1 naming it, running nothing. Given `--help` each call SHALL write the command's help to the output stream, nothing to the error stream, and return 0: its first line the command's description, then an empty line, then the usage line and the options: for `clm run`, the description ``Claim a component, or pick up its unfinished build, write the prompt for a session that builds and lands its pending requirements to `.clm/prompts/<component>.md`, and print a launcher naming that file. With `--finish`, free the component's build place instead and, once its branch has landed, remove its clean worktrees under `.claude/worktrees/`, keeping one whose lock a running process holds unless `--returned` says the build's subagent has handed back``, then `Usage: clm run [OPTIONS] <COMPONENT>`, and the options `--finish`, `--returned`, `--expiry`, `--review-model` and `--root`; for `clm setup`, ``Run the repository's `[build] setup`, which makes a fresh worktree ready to run its tests``, then `Usage: clm setup [OPTIONS]` and the option `--root`; for `clm superpowers`, `Print the path of a skill's SKILL.md in the pinned superpowers copy builds follow`, then `Usage: clm superpowers <SKILL>`.
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository
+- WHEN `clm-run`'s call is given the arguments of `clm run` and two buffers
+- THEN the buffers hold what `clm run` prints to standard output and to standard error there, and the call returns the status `clm run` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN it is given an option `clm run` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the caller's process goes on
+
+#### Scenario: help
+- GIVEN each of the three calls
+- WHEN it is given `--help`
+- THEN it returns 0, the error buffer is empty, and the output buffer starts with the command's description, then an empty line, then its usage line, and names each of its options
+
+#### Scenario: a root given by --root
+- GIVEN a fixture repository at `r` and a ready component `b`
+- WHEN the call of `clm run b` runs in `r`'s parent with `--root r`, and the calls of `clm run b` and `clm setup` run with a `--root` that doesn't exist
+- THEN the first returns 0 and writes `r/.clm/prompts/b.md`; the others each return 1 naming that root, and nothing is claimed or run
+
+#### Scenario: a stream that can't be written
+- GIVEN an output stream whose every write fails, and a repository whose `clm.toml` sets `[build] setup = "echo ready"`
+- WHEN the call of `clm run b` runs for a ready component `b`, the call of `clm run --finish b` runs with a place `b`, and the call of `clm setup` runs, each with that stream
+- THEN each returns 2, and `clm run b` keeps its claim, the place `b` and the prompt it wrote
+
+#### Serves
+- architecture/path-ownership
+- capability/prove-by-tests
+
+## ADDED Requirements
+
+### Requirement: prompt-spot-checks
+When the settings `clm run` loads set no `mutate` in `[verify]` (`config/verify-setting`), its prompt SHALL tell the session to spot-check the requirements it built by mutation before its review, and to list each mutant with the test that failed under `## Review` in the pull request body; when they set one, the prompt SHALL NOT tell it to spot-check by mutation, since the mutation pass after the land does (`mutation-after-land`).
+
+#### Scenario: mutation spot-checks
+- GIVEN a ready component `b`, and in turn a `clm.toml` with no `[verify]` table and one whose `[verify]` sets `check = "x"`, `mode = "local"` and `mutate = "scripts/mutate.sh"`
+- WHEN `clm run b` runs each time
+- THEN the first prompt it writes tells the session to spot-check by mutation and to list each mutant under `## Review`, and the second doesn't contain `spot-check`
+
+#### Serves
+- capability/prove-by-tests
+
+## REMOVED Requirements
+
+### Requirement: says-component <!-- base: 49a0408e9662df16 -->
