@@ -206,6 +206,13 @@ fn recompute_waits_for_the_spec_files() {
         node("", &[], "active").into_bytes(),
     );
     ready_one.apply(tree("222", &after));
+    // A live claim, so a recompute that computed would give its lapse.
+    ready_one.apply(Change::Ref {
+        name: "impl/a".into(),
+        sha: Some("c1".into()),
+        time: 150,
+        change: None,
+    });
     assert_eq!(ready_one.recompute(200).next, None);
     assert!(ready_one.stale(), "nothing was computed");
     match ready_one.view("snapshot") {

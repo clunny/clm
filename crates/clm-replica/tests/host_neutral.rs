@@ -32,11 +32,13 @@ fn dependency_tree_names_no_host_crate() {
         String::from_utf8_lossy(&out.stderr)
     );
     let tree = String::from_utf8(out.stdout).unwrap();
+    let names: Vec<&str> = tree
+        .lines()
+        .filter_map(|l| l.split_whitespace().next())
+        .collect();
+    assert!(names.contains(&"clm-replica"), "{tree}");
     for banned in BANNED {
-        assert!(
-            !tree.contains(&format!("{banned} ")),
-            "{banned} in:\n{tree}"
-        );
+        assert!(!names.contains(&banned), "{banned} in:\n{tree}");
     }
 }
 

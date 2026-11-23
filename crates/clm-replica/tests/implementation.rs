@@ -147,6 +147,8 @@ fn claims_and_odd_records() {
             approved("1", "spec/z", "2026-10-01"),
             approved("2", "spec/w", "2026-10-01T12:00:00+02:00"),
             approved("3", "spec/v", "2026-10-01T11:00:00Z and more"),
+            approved("4", "spec/u", "2026-02-30T10:00:00Z"),
+            approved("5", "spec/t", "2026-10-01T10:30:60Z"),
         ],
     );
     r.recompute(at(13, 0));

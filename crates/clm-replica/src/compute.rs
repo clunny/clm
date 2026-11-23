@@ -372,7 +372,15 @@ fn unix_time(iso: &str) -> Option<u64> {
     }
     let (y, m, d) = (digits(0..4)?, digits(5..7)?, digits(8..10)?);
     let (hh, mm, ss) = (digits(11..13)?, digits(14..16)?, digits(17..19)?);
-    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || hh > 23 || mm > 59 || ss > 60 {
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let days_in_month = match m {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        1..=12 => 31,
+        _ => return None,
+    };
+    if !(1..=days_in_month).contains(&d) || hh > 23 || mm > 59 || ss > 60 {
         return None;
     }
     let mut i = 19;
@@ -395,6 +403,10 @@ fn unix_time(iso: &str) -> Option<u64> {
         }
         _ => return None,
     };
+    // A leap second comes only in the last minute of a UTC day.
+    if ss == 60 && (hh * 60 + mm - offset).rem_euclid(1440) != 1439 {
+        return None;
+    }
     // Days from civil (Howard Hinnant).
     let y = if m <= 2 { y - 1 } else { y };
     let era = y.div_euclid(400);
