@@ -17,7 +17,9 @@ mod time;
 mod wait;
 
 pub use plan::{BacklogRow, Disk, Group, Launch, Plan, Snapshot, plan, plan_of, stored_plan};
-pub use state::{Batch, Escalation, Hold, Kind, LoopFile, Run, RunState, StopMode, read, update};
+pub use state::{
+    Batch, Escalation, Hold, Kind, LoopFile, Run, RunState, StopMode, read, try_read, update,
+};
 
 pub use release::release;
 pub use returned::returned;

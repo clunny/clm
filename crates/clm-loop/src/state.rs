@@ -396,8 +396,25 @@ pub(crate) fn remove_notes(root: &Path) -> Result<(), Failure> {
 /// The loop file as it stands, read without a lock or a write: none when the clone has none
 /// or it can't be read.
 pub fn read(root: &Path) -> Option<LoopFile> {
-    let path = dir_path(root).ok()?.join("loop");
-    parse(&fs::read(path).ok()?).ok()
+    try_read(root).ok().flatten()
+}
+
+/// The loop file as `read` reads it, telling a file that can't be read, with why, from none:
+/// none when the clone has no loop file or `root` is in no git repository. It locks, fetches
+/// and writes nothing, and leaves the file where it is (`plan-snapshot`).
+pub fn try_read(root: &Path) -> Result<Option<LoopFile>, String> {
+    let Ok(dir) = dir_path(root) else {
+        return Ok(None);
+    };
+    let path = dir.join("loop");
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    parse(&bytes)
+        .map(Some)
+        .map_err(|why| format!("{}: {why}", path.display()))
 }
 
 /// Reads the loop file under its lock, hands it to `change`, and, when that succeeds, writes

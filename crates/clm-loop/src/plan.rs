@@ -440,7 +440,8 @@ pub fn plan(snapshot: &Snapshot) -> QueueView {
 }
 
 /// The plan the clone's last step stored, with its runs as the loop file holds them now, read
-/// without fetching; none when the clone has no loop file or no step has stored a plan.
+/// without fetching; none when the clone has no loop file, no step has stored a plan, or the
+/// loop file can't be read, which it leaves where it is.
 pub fn stored_plan(root: &std::path::Path) -> Option<QueueView> {
     let file = crate::state::read(root)?;
     let StoredPlan { next, humans, .. } = file.plan.clone()?;
