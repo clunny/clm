@@ -36,6 +36,11 @@ fn scenario_claiming_an_unknown_component() {
     assert!(why.contains("no component `zz`"), "{why}");
     let why = refused(claim(&r.work, "a/b", 4));
     assert!(why.contains("isn't a component ID"), "{why}");
+    let (code, out, err) = claim_line(&r.work, &["zz"]);
+    assert_eq!(
+        (code, out.as_str(), err.as_str()),
+        (1, "", "clm claim: no component `zz`\n")
+    );
 }
 
 #[test]
@@ -461,6 +466,10 @@ fn scenario_tip_unreadable_after_a_rejection() {
     assert_eq!((code, out.as_str()), (2, ""), "{err}");
     assert!(err.starts_with("clm claim: "), "{err}");
     assert!(err.contains("git push:"), "{err}");
+    assert!(
+        err.contains("failed to push"),
+        "git's reason for the push: {err}"
+    );
     assert!(
         err.contains("/nonexistent/origin"),
         "the read's reason: {err}"

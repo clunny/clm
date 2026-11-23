@@ -343,10 +343,10 @@ fn rename_moves_the_place() {
     assert_eq!(files(&builds(&r.work)), ["20261027-q"]);
     // Scenario "rename of a place that isn't there".
     let before = fs::read(builds(&r.work).join("20261027-q")).unwrap();
-    assert!(matches!(
-        rename_place(&r.work, "draft-1-q", "x"),
-        Err(Error::Refused(_))
-    ));
+    match rename_place(&r.work, "draft-1-q", "x") {
+        Err(Error::Refused(why)) => assert!(why.contains("no place `draft-1-q`"), "{why}"),
+        other => panic!("{other:?}"),
+    }
     assert_eq!(files(&builds(&r.work)), ["20261027-q"]);
     assert_eq!(
         fs::read(builds(&r.work).join("20261027-q")).unwrap(),
