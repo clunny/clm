@@ -81,7 +81,7 @@ fn verify_as_writer(dir: &Path, args: &[&str]) -> (Option<i32>, String, String) 
     )
 }
 
-// req:clm/verify-command@57b06e54
+// req:clm/verify-command@31b600dd
 #[test]
 fn each_flag_reaches_its_own_mode() {
     let dir = verifying();
@@ -109,7 +109,7 @@ fn each_flag_reaches_its_own_mode() {
     assert!(err.contains("nothing to bisect"), "{err}");
 }
 
-// req:clm/verify-command@57b06e54
+// req:clm/verify-command@31b600dd
 #[test]
 fn a_fresh_project_is_off_from_a_subdirectory() {
     let dir = initialised();
@@ -118,7 +118,7 @@ fn a_fresh_project_is_off_from_a_subdirectory() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), OFF);
 }
 
-// req:clm/verify-command@57b06e54
+// req:clm/verify-command@31b600dd
 #[test]
 fn a_subdirectory_reads_the_project_settings() {
     let dir = verifying();
@@ -129,7 +129,7 @@ fn a_subdirectory_reads_the_project_settings() {
     );
 }
 
-// req:clm/verify-command@57b06e54
+// req:clm/verify-command@31b600dd
 #[test]
 fn help_lists_the_command() {
     let dir = initialised();
@@ -258,7 +258,7 @@ fn spawn_verify(dir: &Path) -> std::process::Child {
         .unwrap()
 }
 
-// req:clm/verify-command@57b06e54
+// req:clm/verify-command@31b600dd
 #[test]
 fn stopped_by_hand() {
     let marks = TempDir::new().unwrap();
@@ -314,7 +314,7 @@ fn stopped_by_hand() {
     }
 }
 
-// req:clm/verify-command@57b06e54
+// req:clm/verify-command@31b600dd
 #[test]
 fn a_signal_before_the_pass_ends_it_as_any_process() {
     use std::os::unix::process::ExitStatusExt;

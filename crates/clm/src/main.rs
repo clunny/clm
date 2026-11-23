@@ -1230,23 +1230,24 @@ fn detectors(root: &Path) -> Result<Vec<clm_check::Detector>, clm_check::Violati
 /// `clm verify`: the one `verify ...` line on stdout, notes on stderr, and the outcome's exit
 /// code; 1 with the reason when it can't run, 2 when git fails.
 fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
-    // The outcome is printed as soon as the result is recorded, before a mutation pass runs;
-    // the pass's own notes follow. From then until the call returns, `SIGINT` and `SIGTERM`
-    // stop the pass instead of the process (`verify-command`).
+    // The outcome is printed as soon as the result is recorded; the notes of what follows it
+    // come after. From a `verify passed ` line until the call returns, the mutation pass and
+    // the filing of what it found together, `SIGINT` and `SIGTERM` set the call's stop request
+    // instead of ending the process (`verify-command`).
     let mut shown = 0;
     let mut catching = None;
     let announce = |outcome: &clm_verify::Outcome| {
+        // Only a run whose check passed goes on to the pass, and the window runs to the call's
+        // return, so the outcome line alone says when to start catching. The handlers go in
+        // before the line is printed, so a caller that signals on reading it is caught.
+        if outcome.line.starts_with("verify passed ") {
+            catching = Some(stop_signal::install());
+        }
         println!("{}", outcome.line);
         for note in &outcome.notes {
             eprintln!("clm verify: {note}");
         }
         shown = outcome.notes.len();
-        // Only a run whose check passed goes on to the pass; `clm-verify` doesn't say whether
-        // this one does, nor when its pass ends before the filing that follows it
-        // (`backlog/clm-verify-can-t-tell-its-caller-when-the-mutation-pass-runs`).
-        if outcome.line.starts_with("verify passed ") {
-            catching = Some(stop_signal::install());
-        }
     };
     let call = clm_verify::Call::standard(&stop_signal::STOP);
     let result = clm_verify::verify_with(root, request, &clm_config::process_env, &call, announce);
