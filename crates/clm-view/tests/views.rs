@@ -1347,6 +1347,31 @@ fn overlapping_cycles_of_needs_are_one_root() {
 }
 
 #[test]
+fn a_cycle_is_named_by_its_own_lines_not_by_what_they_reach() {
+    // req:view/blockers-view@e774ca77
+    // `b/x` and `c/x` need each other, and `c/x` also needs `a/x`, which is outside the cycle.
+    let c = specd("", &[]).replace(
+        "## Requirements\n",
+        "## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Needs\n- a/x\n- b/x\n\n\
+         #### Scenario: s\n- ok\n",
+    );
+    let g = loaded(&[
+        ("specs/SPEC.md", specd("", &[])),
+        ("specs/a/SPEC.md", specd("", &["x"])),
+        ("specs/b/SPEC.md", needing("", "c/x", &[])),
+        ("specs/c/SPEC.md", c),
+    ]);
+    let view = blockers_view(&g, &[], &[claim("a", 1)], NOW, EXPIRY);
+    let cycle = view
+        .roots
+        .iter()
+        .find(|r| r.state == "blocked")
+        .unwrap_or_else(|| panic!("{:#}", json(&view)));
+    assert_eq!(cycle.root, "b", "{:#}", json(&view));
+    assert_eq!(cycle.weight, 1, "{:#}", json(&view));
+}
+
+#[test]
 fn a_cycle_named_by_a_ready_component_is_a_root_of_its_own() {
     // req:view/blockers-view@e774ca77
     // `a/x` and `b/x` need each other; `a/y` is unblocked, so `a` is ready, and `c` needs it.
