@@ -156,7 +156,7 @@ fn no_loop_yet_at_a_commit_reads_that_commit() {
 
 #[test]
 fn the_plans_time_and_commit_go_to_the_error_buffer() {
-    // req:view.repo/commands-in-crate@975b834f
+    // req:view.repo/commands-in-crate@ec1f97fe
     let dir = ready_a();
     let d = dir.path();
     write_loop(d);

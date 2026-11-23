@@ -82,7 +82,7 @@ fn checkout(root: &Path) -> clm_view::Checkout {
 
 #[test]
 fn scenario_a_command_called_in_a_test() {
-    // req:view.repo/commands-in-crate@975b834f
+    // req:view.repo/commands-in-crate@ec1f97fe
     let dir = fixture();
     let out = status(dir.path(), &[]);
     assert_eq!(out.status, 0, "{}", out.stderr);
@@ -99,7 +99,7 @@ fn scenario_a_command_called_in_a_test() {
 
 #[test]
 fn scenario_arguments_it_cant_parse() {
-    // req:view.repo/commands-in-crate@975b834f
+    // req:view.repo/commands-in-crate@ec1f97fe
     let dir = fixture();
     let out = status(dir.path(), &["--bogus"]);
     assert_eq!(out.status, 2);
@@ -126,7 +126,7 @@ fn scenario_arguments_it_cant_parse() {
 
 #[test]
 fn scenario_text_from_the_crate_below() {
-    // req:view.repo/commands-in-crate@975b834f
+    // req:view.repo/commands-in-crate@ec1f97fe
     let dir = fixture();
     let d = dir.path();
     let out = status(d, &[]);
@@ -153,7 +153,7 @@ fn scenario_text_from_the_crate_below() {
 
 #[test]
 fn settings_that_dont_load_are_named_on_stderr() {
-    // req:view.repo/commands-in-crate@975b834f
+    // req:view.repo/commands-in-crate@ec1f97fe
     let dir = fixture();
     let argv: Vec<std::ffi::OsString> = vec!["--root".into(), dir.path().into()];
     let (mut out, mut err) = (Vec::new(), Vec::new());
@@ -182,7 +182,7 @@ fn settings_that_dont_load_are_named_on_stderr() {
 
 #[test]
 fn the_root_it_is_given_without_root() {
-    // req:view.repo/commands-in-crate@975b834f
+    // req:view.repo/commands-in-crate@ec1f97fe
     let dir = fixture();
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let no_args: [&str; 0] = [];
@@ -199,4 +199,90 @@ fn the_root_it_is_given_without_root() {
         String::from_utf8(out).unwrap(),
         status(dir.path(), &[]).stdout
     );
+}
+
+/// The budgets a commit's `clm.toml` gives, as `crates/clm` passes them: the defaults.
+fn budgets_from(_: Option<&str>) -> Result<Budgets, String> {
+    defaults(Path::new(".")).map_err(|v| v.message)
+}
+
+/// `name`'s call given `args` and two buffers: its status and what it wrote to each.
+fn call(name: &str, args: &[&str], out: &mut dyn std::io::Write) -> (u8, String) {
+    let mut err = Vec::new();
+    let here = Path::new(".");
+    let code = match name {
+        "status" => clm_view_repo::status_command(args, here, &|_| None, out, &mut err, &defaults),
+        "view" => clm_view_repo::view_command(
+            args,
+            here,
+            &|_| None,
+            out,
+            &mut err,
+            &defaults,
+            &budgets_from,
+        ),
+        "pending" => clm_view_repo::pending_command(args, here, &|_| None, out, &mut err),
+        other => panic!("no call for `clm {other}`"),
+    };
+    (code, String::from_utf8(err).unwrap())
+}
+
+#[test]
+fn scenario_help() {
+    // req:view.repo/commands-in-crate@ec1f97fe
+    for (name, words) in [
+        ("status", &["--root"][..]),
+        (
+            "view",
+            &[
+                "<NAME>", "spec", "flight", "blockers", "queue", "--format", "text", "ansi", "svg",
+                "json", "--width", "100", "--at", "--root",
+            ][..],
+        ),
+        ("pending", &["[COMPONENT]", "--at", "--root"][..]),
+    ] {
+        let mut out = Vec::new();
+        let (code, err) = call(name, &["--help"], &mut out);
+        let out = String::from_utf8(out).unwrap();
+        assert_eq!((code, err.as_str()), (0, ""), "clm {name} --help: {out}");
+        assert!(
+            out.contains(&format!("Usage: clm {name}")),
+            "clm {name}: {out}"
+        );
+        for word in words {
+            assert!(out.contains(word), "clm {name} --help lacks {word}: {out}");
+        }
+    }
+    // `text` is the default form, and 100 the default width.
+    let mut out = Vec::new();
+    call("view", &["--help"], &mut out);
+    let out = String::from_utf8(out).unwrap();
+    assert!(out.contains("[default: text]"), "{out}");
+    assert!(out.contains("[default: 100]"), "{out}");
+}
+
+/// A stream whose every write fails.
+struct Broken;
+
+impl std::io::Write for Broken {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("broken"))
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("broken"))
+    }
+}
+
+#[test]
+fn scenario_an_output_it_cant_write() {
+    // req:view.repo/commands-in-crate@ec1f97fe
+    let dir = fixture();
+    let root = dir.path().to_str().unwrap();
+    let (code, _) = call("status", &["--root", root], &mut Broken);
+    assert_eq!(code, 1);
+    let (code, _) = call("view", &["--help"], &mut Broken);
+    assert_eq!(code, 1);
+    // The caller's process goes on: this line runs.
+    let (code, _) = call("pending", &["--help"], &mut Broken);
+    assert_eq!(code, 1);
 }
