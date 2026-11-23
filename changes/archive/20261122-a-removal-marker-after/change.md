@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-removal-marker-after-a-non-ascii-letter-skips-its-item-unchecked]
 ---
 
