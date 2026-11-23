@@ -4,7 +4,8 @@ mod common;
 
 use std::fs;
 
-use clm_loop::{Kind, RunState, StopMode, approved, returned, step, stop, stored_plan};
+use clm_git::Failure;
+use clm_loop::{Batch, Kind, RunState, StopMode, approved, returned, step, stop, stored_plan};
 use common::{Fixture, line, run};
 
 /// Drafts `x` and `y` returned for review, in that order, and `build:a` still running.
@@ -31,7 +32,7 @@ fn two_drafts_for_review(fx: &Fixture) {
 
 #[test]
 fn fold_while_builds_run() {
-    // req:orchestrator.loop/plan-fold@b4640dbb
+    // req:orchestrator.loop/plan-fold@fbfc873a
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     let actions = step(&fx.options()).unwrap();
@@ -54,7 +55,7 @@ fn fold_while_builds_run() {
 
 #[test]
 fn no_fold_while_a_draft_runs_but_one_while_draining() {
-    // req:orchestrator.loop/plan-fold@b4640dbb
+    // req:orchestrator.loop/plan-fold@fbfc873a
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     fx.add_run(run(
@@ -74,7 +75,7 @@ fn no_fold_while_a_draft_runs_but_one_while_draining() {
 
 #[test]
 fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
-    // req:orchestrator.loop/plan-fold@b4640dbb
+    // req:orchestrator.loop/plan-fold@fbfc873a
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     step(&fx.options()).unwrap();
@@ -130,7 +131,7 @@ fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
 
 #[test]
 fn a_fold_that_proposes_nothing_is_told_to_the_session() {
-    // req:orchestrator.loop/plan-fold@b4640dbb
+    // req:orchestrator.loop/plan-fold@fbfc873a
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     step(&fx.options()).unwrap();
@@ -139,11 +140,69 @@ fn a_fold_that_proposes_nothing_is_told_to_the_session() {
         "fold:x",
         None,
         "stopped: conflicts",
-        Some("blocked"),
+        None,
         None,
     )
     .unwrap();
     let said = line(&actions, "say ").strip_prefix("say ").unwrap();
-    assert!(fs::read_to_string(said).unwrap().contains("conflicts"));
+    let text = fs::read_to_string(said).unwrap();
+    assert!(text.contains("fold x"), "{text}");
+    assert!(text.contains("conflicts"), "{text}");
     assert!(fx.file().batches.is_empty());
+    let review = fx.file().review;
+    assert!(
+        !review.contains(&"x".to_string()) && !review.contains(&"y".to_string()),
+        "{review:?}"
+    );
+
+    // An approved batch whose land fails is said and goes back to the human.
+    clm_loop::update(&fx.work, |f| {
+        f.batches.push(Batch {
+            id: "b".to_string(),
+            approved: false,
+            drafts: vec!["x".to_string(), "y".to_string()],
+            since: clm_git::now(),
+        });
+        Ok(())
+    })
+    .unwrap();
+    approved(&fx.options(), "b").unwrap();
+    let actions = returned(
+        &fx.options(),
+        "land:b",
+        None,
+        "stopped: check fails",
+        None,
+        None,
+    )
+    .unwrap();
+    let said = line(&actions, "say ").strip_prefix("say ").unwrap();
+    let text = fs::read_to_string(said).unwrap();
+    assert!(text.contains("batch b"), "{text}");
+    let queue = stored_plan(&fx.work).unwrap().waiting_on_you;
+    assert!(queue.iter().any(|e| e.name == "b"), "{queue:?}");
+    assert!(!fx.file().batches[0].approved);
+}
+
+#[test]
+fn approval_of_an_unknown_batch() {
+    // req:orchestrator.loop/plan-fold@fbfc873a
+    let fx = Fixture::new();
+    two_drafts_for_review(&fx);
+    let file = fx.loop_dir().join("loop");
+    let before = fs::read(&file).unwrap();
+    let Err(Failure::Refused(why)) = approved(&fx.options(), "z") else {
+        panic!("an unknown batch is refused");
+    };
+    assert!(why.contains("batch z"), "{why}");
+    assert_eq!(
+        fs::read(&file).unwrap(),
+        before,
+        "the loop file is unchanged"
+    );
+    assert!(
+        !fx.calls().iter().any(|c| c.contains("land")),
+        "{:?}",
+        fx.calls()
+    );
 }
