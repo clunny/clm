@@ -51,14 +51,25 @@ fn scenario_dependency_doesnt_order_then_converged() {
 
 #[test]
 fn next_reads_origin_main_not_the_checkout() {
+    // Scenario "the checkout doesn't count".
     // req:orchestrator/next@cc111fbd
     let r = repo();
     cite(&r.work, "c.rs", &["c/s"]);
     write(&r.work, "specs/a/SPEC.md", "garbage");
+    let status = git(&r.work, &["status", "--porcelain"]);
+    let index = git(&r.work, &["ls-files", "--stage"]);
+    let cited = fs::read_to_string(r.work.join("src/c.rs")).unwrap();
     assert_eq!(
         ready(&r),
         ["a", "b", "c"],
         "the checkout's edits don't count"
+    );
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), status);
+    assert_eq!(git(&r.work, &["ls-files", "--stage"]), index);
+    assert_eq!(fs::read_to_string(r.work.join("src/c.rs")).unwrap(), cited);
+    assert_eq!(
+        fs::read_to_string(r.work.join("specs/a/SPEC.md")).unwrap(),
+        "garbage"
     );
 }
 
@@ -320,8 +331,19 @@ fn scenario_why_it_isnt_ready() {
     assert!(converged.contains("takes no claim"), "{converged}");
     assert!(converged.contains("branch of its own"), "{converged}");
     assert!(converged.contains("clm land"), "{converged}");
-    assert!(refused(claim(&r.work, "ghost", 4)).contains("no component"));
-    assert!(refused(claim(&r.work, "x/b", 4)).contains("isn't a component"));
+    for route in [
+        "impl/",
+        "spec/",
+        "propose/",
+        "autosync/",
+        "gate/own-files",
+        "--fix",
+    ] {
+        assert!(converged.contains(route), "{route}: {converged}");
+    }
+    assert!(!converged.contains("light"), "{converged}");
+    assert!(refused(claim(&r.work, "ghost", 4)).contains("no component `ghost`"));
+    assert!(refused(claim(&r.work, "x/b", 4)).contains("`x/b` isn't a component ID"));
     assert_eq!(git(&r.origin, &["for-each-ref"]), refs, "nothing pushed");
 }
 
@@ -379,23 +401,104 @@ fn scenario_merged_takeover() {
 
 #[test]
 fn claim_that_lands_though_the_push_is_rejected_succeeds_and_tracks_the_claim() {
+    // Scenario "a push that landed though git reported failure".
     // req:orchestrator/claim@026fab7a
     let r = repo();
-    // The hook lets the update through and then fails, as a flaky remote would.
-    pre_receive(&r, "exit 1\n");
-    // `pre-receive` failing rejects the push, so make the hook accept and `update` reject
-    // after the ref moved: emulate with a post-receive that reports failure instead.
-    fs::remove_file(r.origin.join("hooks/pre-receive")).unwrap();
-    write_exec(
-        &r.origin.join("hooks/post-receive"),
-        "#!/bin/sh\necho 'post-receive broke' >&2\nexit 1\n",
+    // The hook pushes the commit it is given itself, drops the tracking ref, and fails the
+    // push it was asked about, as a connection dropped after the update would.
+    clone_hook(
+        &r,
+        "pre-push",
+        "while read lref lsha rref rsha; do\n\
+         git push --no-verify -q \"$2\" \"$lsha:$rref\" || exit 3\n\
+         done\n\
+         git update-ref -d refs/remotes/origin/impl/b 2>/dev/null\n\
+         exit 1\n",
     );
-    assert_eq!(claim(&r.work, "b", 4).unwrap(), "impl/b");
+    assert_eq!(
+        claim_line(&r.work, &["b"]),
+        (0, "impl/b\n".into(), String::new())
+    );
     let tip = remote_tip(&r, "impl/b").unwrap();
     assert_eq!(
         git(&r.work, &["rev-parse", "refs/remotes/origin/impl/b"]).trim(),
         tip
     );
+    let main = git(&r.origin, &["rev-parse", "main"]);
+    assert_eq!(git(&r.origin, &["rev-parse", &format!("{tip}^")]), main);
+}
+
+/// `clm claim` with `args` through its call, in `root`: its status, stdout and stderr.
+fn claim_line(root: &std::path::Path, args: &[&str]) -> (u8, String, String) {
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code =
+        clm_orchestrator::claim_command(args.iter().copied(), root, &|_| None, &mut out, &mut err);
+    (
+        code,
+        String::from_utf8(out).unwrap(),
+        String::from_utf8(err).unwrap(),
+    )
+}
+
+/// Installs the clone's `hook` with `body`.
+fn clone_hook(r: &Repo, hook: &str, body: &str) {
+    write_exec(
+        &r.work.join(format!(".git/hooks/{hook}")),
+        &format!("#!/bin/sh\n{body}"),
+    );
+}
+
+#[test]
+fn scenario_tip_unreadable_after_a_rejection() {
+    // req:orchestrator/claim@026fab7a
+    let r = repo();
+    clone_hook(
+        &r,
+        "pre-push",
+        "git config remote.origin.url /nonexistent/origin\nexit 1\n",
+    );
+    let (code, out, err) = claim_line(&r.work, &["b"]);
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert!(err.starts_with("clm claim: "), "{err}");
+    assert!(err.contains("git push:"), "{err}");
+    assert!(
+        err.contains("/nonexistent/origin"),
+        "the read's reason: {err}"
+    );
+    assert!(!err.contains("may be transient"), "{err}");
+}
+
+#[test]
+fn scenario_an_id_that_cant_be_a_component() {
+    // req:orchestrator/claim@026fab7a
+    let dir = tempfile::tempdir().unwrap();
+    for (id, why) in [
+        ("x/b", "clm claim: `x/b` isn't a component ID\n"),
+        ("", "clm claim: `` isn't a component ID\n"),
+    ] {
+        assert_eq!(
+            claim_line(dir.path(), &[id]),
+            (1, String::new(), why.to_string()),
+            "{id:?}"
+        );
+    }
+}
+
+#[test]
+fn scenario_a_slug_that_cant_be_an_item() {
+    // req:orchestrator/backlog-claim@50959cb7
+    let dir = tempfile::tempdir().unwrap();
+    for id in ["backlog/", "backlog/a/b"] {
+        assert_eq!(
+            claim_line(dir.path(), &[id]),
+            (
+                1,
+                String::new(),
+                format!("clm claim: `{id}` isn't an item\n")
+            ),
+            "{id:?}"
+        );
+    }
 }
 
 #[test]
@@ -795,6 +898,63 @@ fn scenario_item_not_a_bug_on_the_node() {
     assert!(refused(claim_fix(&r.work, "ghost", "backlog/z", 4)).contains("no component"));
     assert!(refused(claim_fix(&r.work, "x/b", "backlog/z", 4)).contains("isn't a component"));
     assert_eq!(git(&r.origin, &["for-each-ref"]), refs, "nothing pushed");
+    // Neither the ID nor the `--fix` value needs a fetch to refuse: outside a repository they
+    // exit 1, not 2.
+    let dir = tempfile::tempdir().unwrap();
+    for (args, why) in [
+        (
+            ["a/b", "--fix", "backlog/x"],
+            "clm claim: `a/b` isn't a component ID\n",
+        ),
+        (["a", "--fix", "x"], "clm claim: `x` isn't a backlog item\n"),
+        (
+            ["a", "--fix", "backlog/"],
+            "clm claim: `backlog/` isn't a backlog item\n",
+        ),
+        (
+            ["a", "--fix", "backlog/a/x"],
+            "clm claim: `backlog/a/x` isn't a backlog item\n",
+        ),
+    ] {
+        assert_eq!(
+            claim_line(dir.path(), &args),
+            (1, String::new(), why.to_string()),
+            "{args:?}"
+        );
+    }
+}
+
+#[test]
+fn scenario_remedies() {
+    // req:orchestrator/claim-fix@5a3c119e
+    let r = fixable();
+    let refused_with = |what: &str| {
+        let why = refused(claim_fix(&r.work, "b", "backlog/x", 4));
+        assert!(why.contains(what), "{what}: {why}");
+        assert_eq!(remote_tip(&r, "impl/b"), None, "nothing pushed");
+    };
+    write(&r.work, "ARCHITECTURE.md", "# Edited\n");
+    refused_with("commit them or set them aside");
+    git(&r.work, &["checkout", "-q", "--", "ARCHITECTURE.md"]);
+    let dir = tempfile::TempDir::new().unwrap();
+    let w = dir.path().join("w");
+    git(
+        &r.work,
+        &["worktree", "add", "-q", w.to_str().unwrap(), "-b", "impl/b"],
+    );
+    let canonical = fs::canonicalize(&w).unwrap();
+    refused_with(&format!("`git worktree remove {}`", canonical.display()));
+    fs::remove_dir_all(&w).unwrap();
+    refused_with("`git worktree prune`");
+    git(&r.work, &["worktree", "prune"]);
+    let tree = git(&r.work, &["rev-parse", "origin/main^{tree}"]);
+    let main = git(&r.work, &["rev-parse", "origin/main"]);
+    let work = git(
+        &r.work,
+        &["commit-tree", tree.trim(), "-p", main.trim(), "-m", "work"],
+    );
+    git(&r.work, &["branch", "-f", "impl/b", work.trim()]);
+    refused_with("`git branch -D impl/b`");
 }
 
 #[test]

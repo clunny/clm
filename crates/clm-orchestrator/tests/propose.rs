@@ -132,6 +132,7 @@ fn scenario_proposed_only_in_an_autosync_snapshot() {
 
 #[test]
 fn scenario_own_spec_work() {
+    // Scenario "own claim renewed".
     // req:orchestrator/backlog-claim@50959cb7
     let r = with_q();
     let branch = format!("spec/{C}");
