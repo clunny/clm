@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-draft-s-left-items-never-reach-the-loop-s-list]
 ---
 
