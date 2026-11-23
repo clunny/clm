@@ -18,7 +18,7 @@ Crate `clm-web-replica`: the Durable Object class `Replica`, one per repo, named
 A read also tells the object the repo has open pages; the object keeps that for 5 minutes.
 
 ## Design
-**Source.** The GitHub source, built on `web.worker.platform`'s installation tokens, `gh` calls and batched GraphQL reads (`files::texts`, `ledger::read`, `live::pulls`, the refs queries `live` makes today, `files::listing` for code keys), which move or are called from here (`no-dead-code`). Each alarm or request keeps within 50 subrequests, the Free plan's limit per invocation: a first build or a recovery fetches in slices and re-arms the alarm for the next.
+**Source.** The GitHub source, built on `web.worker.platform`'s installation tokens, `gh` calls and batched GraphQL reads (`files::texts`, `ledger::read`, `live::pulls`, the refs queries `live` makes today, `files::listing` for code keys), which move or are called from here (`no-dead-code`). Each alarm or request keeps within 50 subrequests, the Free plan's limit per invocation: a first build or a recovery fetches in slices and re-arms the alarm for the next. It fetches by `replica`'s own rule, `clm_replica::keeps_text` and `clm_replica::wanted` (`replica/files-it-fetches`), and reads every time GitHub gives with `install::unix_time`, holding no copy of either: a copy that drifted from the replica's rule would leave a file `pending_fetch` lists unfetched, and the replica `Preparing` for good (`fetches-what-the-replica-wants`, `times-as-instants`).
 
 **Events.**
 - A `push` to the default branch: `compare` the replica's tip with the push's `after`. A fast-forward that lists at most 300 files is fetched by path; anything else lists the tree and refetches every blob whose SHA changed.
@@ -207,3 +207,22 @@ An `installation_repositories` event with action `removed`, or an `installation`
 
 #### Serves
 - architecture/git-is-truth
+
+### Requirement: times-as-instants
+The times the object gives the replica, a ref's tip commit time from a push, a resync or a first build, a push's head commit time and an event's time, SHALL be the instants GitHub's RFC 3339 times name, their offsets counted, so a claim lapses and the activity feed orders by the instant a commit was made, whatever offset its committer's clock had.
+
+#### Scenario: a commit made two hours east
+- GIVEN a built replica, and a push creating `impl/a` whose head commit's `timestamp` is `2026-10-01T12:00:00.5+02:00`; and a second built replica whose resync's refs listing gives `impl/b`, which it doesn't hold, a `committedDate` of `2026-10-01T12:00:00+02:00`
+- WHEN the push is applied to the first and the resync runs on the second, and the replica each object saved is loaded and recomputed at `2026-10-01T11:00:00Z`
+- THEN the first's `activity` holds the claim of `a` at 10:00 UTC, and each `recompute` returns 14:00 UTC as the time the implementation view next changes
+
+#### Needs
+- web.worker.platform/unix-time
+
+### Requirement: fetches-what-the-replica-wants
+Of the files a compare or a tree listing names, the object SHALL fetch exactly those `clm_replica::wanted` accepts (`replica/files-it-fetches`), and in a first build or a recovery SHALL fetch those `clm_replica::keeps_text` accepts before any other, so every file `pending_fetch` lists is fetched while the budget lasts.
+
+#### Scenario: a push listing every kind of file
+- GIVEN a replica at `111`, and a push to `222` whose compare lists `web/.gitattributes`, `clm.toml`, `docs/decisions/d.md`, `src/b.rs`, `README.md` and `docs/guide.md` as modified
+- WHEN the event is applied
+- THEN the files fetched are `web/.gitattributes`, `clm.toml`, `docs/decisions/d.md` and `src/b.rs` at `222`, and neither `README.md` nor `docs/guide.md`
