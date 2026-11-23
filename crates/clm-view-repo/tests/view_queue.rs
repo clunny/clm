@@ -97,6 +97,8 @@ fn write_loop(d: &Path) {
         "stop": null,
         "plan": {"main": "abc", "at": now, "next": [
             {"name": "build:b", "kind": "build", "priority": "P2", "reason": "waits for a place"}
+        ], "humans": [
+            {"name": "fold:x", "kind": "fold", "what": "approve fold x", "since": now, "action": "clm approve spec/x"}
         ]},
     });
     fs::create_dir_all(d.join(".git/clm")).unwrap();
@@ -119,7 +121,10 @@ fn no_loop_yet() {
     assert!(text.contains("loop not held"), "{text}");
     let after_next = text.split("next up").nth(1).unwrap();
     assert!(after_next.contains("build:a"), "{text}");
-    assert!(text.contains("no loop has run on this clone"), "{text}");
+    assert!(
+        after_next.contains("no loop has run on this clone"),
+        "{text}"
+    );
     assert!(!loop_file(d).exists());
     // Reading the loop's file may make its directory, but no file goes in it.
     let files = fs::read_dir(d.join(".git/clm")).map_or(0, Iterator::count);
@@ -217,12 +222,23 @@ fn a_loop_with_no_plan_yet() {
     assert!(text.contains("loop held, renewed 0m ago"), "{text}");
     assert!(next.contains("no plan stored yet"), "{text}");
     assert!(!text.contains("loop not held"), "{text}");
+    for section in ["running", "waiting on you", "waiting on work"] {
+        assert!(text.contains(&format!("\n{section}\n  none\n")), "{text}");
+    }
     assert_eq!(err, "");
 
     // A drain stop requested.
     file["stop"] = serde_json::json!("drain");
     let (text, next, _) = run(file.to_string().as_bytes());
     assert!(text.contains("stop requested: drain"), "{text}");
+    assert!(
+        !text.contains("loop held"),
+        "a stop shows over a live lease: {text}"
+    );
+    assert!(next.contains("no plan stored yet"), "{text}");
+    file["stop"] = serde_json::json!("now");
+    let (text, next, _) = run(file.to_string().as_bytes());
+    assert!(text.contains("stop requested: now"), "{text}");
     assert!(next.contains("no plan stored yet"), "{text}");
 
     // A loop file that isn't JSON.
@@ -309,6 +325,7 @@ fn the_loops_plan() {
         .map(|e| e.name.as_str())
         .collect();
     assert_eq!(names, expected);
+    assert_eq!(names, ["fold:x"]);
     assert_eq!(fs::read(loop_file(d)).unwrap(), loop_before);
     assert_eq!(state(d), before);
 }
