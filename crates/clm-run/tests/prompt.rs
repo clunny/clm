@@ -74,7 +74,7 @@ fn job() -> Job {
 
 #[test]
 fn names_the_branch_skills_plan_and_bundle() {
-    // req:orchestrator.run/run@9b5c5d12
+    // req:orchestrator.run/run@5ea05da6
     let p = prompt(&job());
     let first = p.lines().next().unwrap();
     assert!(first.contains("git switch impl/b"), "{p}");
@@ -285,7 +285,7 @@ fn a_line_waiting_on_its_own_id_names_the_components_that_cite_it() {
 
 #[test]
 fn resume_prompt_says_the_branch_exists() {
-    // req:orchestrator.run/run@9b5c5d12
+    // req:orchestrator.run/run@5ea05da6
     let mut j = job();
     j.resumed = true;
     assert!(prompt(&j).contains("`impl/b` already exists"));

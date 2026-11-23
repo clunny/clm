@@ -1148,9 +1148,15 @@ fn build(
     job.setup = settled.setup;
     job.review_model = review_model.map(str::to_string);
     job.slot = place_slot(root, branch)?;
-    // A write that fails leaves the claim, which the next `clm run` resumes.
+    // A write that fails leaves the claim, which the next `clm run` resumes. The prompt goes
+    // to a temporary file renamed over the earlier one, so a failed write leaves that whole.
     let file = prompts.join(format!("{node}.md"));
-    fs::write(&file, prompt(&job)).map_err(|e| {
+    let written = tempfile::NamedTempFile::new_in(&prompts).and_then(|mut tmp| {
+        tmp.write_all(prompt(&job).as_bytes())?;
+        tmp.persist(&file).map_err(|e| e.error)?;
+        Ok(())
+    });
+    written.map_err(|e| {
         Error::Refused(format!(
             "{}: {e}; run `clm run {node}` again once it can be written",
             file.display()

@@ -17,7 +17,7 @@ use tempfile::TempDir;
 
 #[test]
 fn scenario_node_prepared() {
-    // req:orchestrator.run/run@9b5c5d12
+    // req:orchestrator.run/run@5ea05da6
     let _env = into_process();
     let (r, f) = (repo(), fake());
     let (launcher, p) = launched_in(&r.work, &r.work, &f, "b", &[]);
@@ -63,13 +63,30 @@ fn scenario_node_prepared() {
 
 #[test]
 fn scenario_claimed_elsewhere() {
-    // req:orchestrator.run/run@9b5c5d12
+    // req:orchestrator.run/run@5ea05da6
     let _env = into_process();
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "b", 1);
     refused(&r, &f, "b", &[], 1);
     assert!(!ran(&f), "claude must not start");
     assert!(local_tip(&r, "impl/b").is_none());
+}
+
+#[test]
+fn a_skill_whose_fetch_fails_refuses_before_claiming() {
+    // req:orchestrator.run/run@5ea05da6
+    let _env = into_process();
+    let (r, f) = (repo(), fake());
+    let cache = TempDir::new().unwrap();
+    // No override, so the pinned copy is fetched, and git refuses its https fetch.
+    let env = [
+        ("CLM_SUPERPOWERS_DIR", Path::new("")),
+        ("XDG_CACHE_HOME", cache.path()),
+        ("GIT_ALLOW_PROTOCOL", Path::new("file")),
+    ];
+    refused(&r, &f, "b", &env, 2);
+    assert!(remote_tip(&r, "impl/b").is_none(), "no claim");
+    assert!(place_names(&r).is_empty(), "no place");
 }
 
 #[cfg(unix)]
