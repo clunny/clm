@@ -901,6 +901,73 @@ fn place_taken(r: &Repo, id: &str, hours: u64, branches: &[&str]) {
     fs::write(dir.join(id), text).unwrap();
 }
 
+/// The index of the line of `out` that is `line`.
+fn line_at(out: &str, line: &str) -> Option<usize> {
+    out.lines().position(|l| l == line)
+}
+
+#[test]
+fn scenario_items_the_draft_left() {
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
+    // `with_items` holds `backlog/a.md` and `backlog/b.md`, and no `backlog/c.md`.
+    let r = with_items();
+    let id = "20261027-l";
+    place_taken(
+        &r,
+        id,
+        1,
+        &[&format!("spec/{id}"), "propose/a", "propose/b", "propose/c"],
+    );
+    push_files(
+        &r.work,
+        &format!("spec/{id}"),
+        &[(
+            &format!("changes/{id}/change.md"),
+            &change_md("proposed", "resolves: [a]\n"),
+        )],
+    );
+    let ran = clm_finish(&r, id);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let left = line_at(&ran.stdout, &format!("left b: {id} doesn't resolve it"));
+    let freed = line_at(&ran.stdout, &format!("freed {id}"));
+    assert!(
+        left.is_some() && freed.is_some() && left < freed,
+        "{}",
+        ran.stdout
+    );
+    assert!(
+        !ran.stdout
+            .lines()
+            .any(|l| l.starts_with("left a") || l.starts_with("left c")),
+        "{}",
+        ran.stdout
+    );
+    let again = clm_finish(&r, id);
+    assert_eq!(again.code, Some(0), "{}", again.stderr);
+    assert!(
+        !again.stdout.lines().any(|l| l.starts_with("left")),
+        "{}",
+        again.stdout
+    );
+}
+
+#[test]
+fn scenario_a_draft_that_left_every_item() {
+    // req:orchestrator.triage/draft-finish@6e3b5fc9
+    let r = with_items();
+    let id = "20261027-v";
+    place_taken(&r, id, 1, &[&format!("spec/{id}"), "propose/a"]);
+    let ran = clm_finish(&r, id);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let left = line_at(&ran.stdout, &format!("left a: {id} doesn't resolve it"));
+    let freed = line_at(&ran.stdout, &format!("freed {id}"));
+    assert!(
+        left.is_some() && freed.is_some() && left < freed,
+        "{}",
+        ran.stdout
+    );
+}
+
 #[test]
 fn scenario_worktree_left_behind_by_its_moved_branch() {
     // req:orchestrator.triage/draft-finish@6e3b5fc9

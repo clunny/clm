@@ -382,6 +382,7 @@ fn a_relative_root_is_read_against_the_directory_the_call_is_given() {
 #[test]
 fn a_root_that_doesnt_exist_is_a_git_failure_for_each_form_of_draft() {
     // req:orchestrator.triage/commands-in-crate@acc39bce
+    let r = with_bug();
     let nowhere = Path::new("/nonexistent-dir");
     for args in [
         &["a"][..],
@@ -389,10 +390,35 @@ fn a_root_that_doesnt_exist_is_a_git_failure_for_each_form_of_draft() {
         &["--finish", "20261027-a"],
         &["--fold", "20261027-a"],
     ] {
-        let c = draft(args, nowhere, settings(3));
-        assert_eq!(c.code, 2, "{args:?}: {}", c.err);
-        assert!(c.out.is_empty(), "{args:?}: {}", c.out);
-        assert!(c.err.starts_with("clm draft: "), "{args:?}: {}", c.err);
+        // The root the call is given, and a `--root` naming a missing directory over a
+        // real one.
+        let given = draft(args, nowhere, settings(3));
+        let mut over: Vec<&str> = args.to_vec();
+        over.extend(["--root", "/nonexistent-dir"]);
+        let named = draft(&over, &r.work, settings(3));
+        for c in [given, named] {
+            assert_eq!(c.code, 2, "{args:?}: {}", c.err);
+            assert!(c.out.is_empty(), "{args:?}: {}", c.out);
+            assert!(c.err.starts_with("clm draft: "), "{args:?}: {}", c.err);
+        }
+    }
+    for c in [
+        triage(&["--root", "/nonexistent-dir"], &r.work),
+        called(|out, err| {
+            intake_command(
+                ["--root", "/nonexistent-dir"],
+                &r.work,
+                &r.work,
+                &|_| None,
+                Ok(Box::new(Quiet)),
+                out,
+                err,
+            )
+        }),
+    ] {
+        assert_eq!(c.code, 2, "{}", c.err);
+        assert!(c.out.is_empty(), "{}", c.out);
+        assert!(c.err.starts_with("clm "), "{}", c.err);
     }
 }
 
