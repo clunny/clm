@@ -17,3 +17,5 @@ Rejected:
 - **Leaving the copies.** Cheap today, but each new crate split off copies them again, as `clm-watch` did in its build.
 
 `orchestrator` re-exports `REMOTE` from `clm-git`, so `orchestrator.run`, `orchestrator.checkpoint` and `orchestrator.triage`, which import it from there, don't change. The crates that still spell `"origin"` in their git calls (`land`, `ledger`, `host`, `init`, `view`) and `view`'s copy of the clock move over in their own nodes' changes (`backlog/remote-name-from-clm-git-everywhere.md`).
+
+Amended by `20261122-wave-4-loop-by-the-rule`: `view` and `view.repo` hold no scan of their source for the remote's name or the clock any more, since that change cut `view.repo/shared-plumbing`. That a crate takes the remote's name from `clm-git`'s `REMOTE` and the time from its `now()` stays a principle this decision holds, with no program to check it in those crates; `vcs/one-git-layer` remains the only check of how a crate reaches git. What `clm status`, `clm view` and `clm pending` compare the checkout with stays stated by `view.repo/reads-the-repository`.
