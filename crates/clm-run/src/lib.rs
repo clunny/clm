@@ -1552,14 +1552,14 @@ fn job(
     let mut blocked = Vec::new();
     // The approved lists' lines, read once the first behind or obsolete requirement needs them.
     let mut approved: Option<Vec<ListLine>> = None;
-    // Once the root sets `wiring`, the owner of each file holding a stale `behind` marker
-    // that `gate` gives as not this build's to change, the files `clm land` refuses this
+    // Once the root sets `wiring`, the owner of each file holding a `behind` marker that
+    // `gate` gives as not this build's to change, the files `clm land` refuses this
     // build's edit to (`gate/own-files`, `land/build-holds-own-files`).
     let not_ours: HashMap<String, String> = if graph.wiring().is_some() {
         let mut files: Vec<String> = pending
             .iter()
             .filter(|p| p.state == ReqState::Behind)
-            .flat_map(|p| p.markers.iter().filter(|m| m.version != p.version))
+            .flat_map(|p| &p.markers)
             .map(|m| m.path.to_string_lossy().into_owned())
             .collect();
         files.sort();
@@ -1763,11 +1763,12 @@ fn not_its_own(
     (delete, e)
 }
 
-/// Of `files`, each with its owner, those `gate` gives as not `node`'s build's to change
+/// The files, each with its owner, that `gate` gives as not `node`'s build's to change
 /// (`gate/own-files`): it judges a commit object on `base` holding the tree-ish
 /// `extracted.0`, extracted at `extracted.1`, with each of `files` modified, as `clm land`
 /// would judge a branch that changes them. The commit is written as objects only, with no
-/// ref naming it, so nothing of the clone moves.
+/// ref naming it, so nothing of the clone moves. Every one of `files` is asked about; a file the
+/// branch itself changes may come back too, which a caller looking up `files` never reads.
 fn not_ours_to_change(
     root: &Path,
     base: &str,
@@ -1821,11 +1822,7 @@ fn not_ours_to_change(
         None,
     )?;
     let found = clm_gate::foreign_files(root, base, &commit, node).map_err(Error::Git)?;
-    Ok(found
-        .into_iter()
-        .filter(|f| files.contains(&f.path))
-        .map(|f| (f.path, f.owner))
-        .collect())
+    Ok(found.into_iter().map(|f| (f.path, f.owner)).collect())
 }
 
 /// The lines of every change's `deleted-tests.txt` in the tree at `tree`, live or archived
