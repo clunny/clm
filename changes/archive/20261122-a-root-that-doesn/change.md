@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-root-that-doesn-t-exist-is-reported-as-origin-that-can-t-be-reached]
 ---
 
