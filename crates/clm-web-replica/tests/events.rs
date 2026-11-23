@@ -85,29 +85,98 @@ fn a_push_listing_every_kind_of_file() {
     assert!(!queries[0].contains("docs/guide.md"));
 }
 
+/// Files of every kind the replica's rule sorts, beside the repo's spec files.
+fn every_kind(round: &str) -> clm_web_platform::fake::FileMap {
+    let a = format!("fn a() {{ /* {round} */ }}");
+    let attrs = format!("* text # {round}\n");
+    let toml = format!("# {round}\n");
+    let readme = format!("# r {round}\n");
+    let d = format!("# d {round}\n");
+    repo_files(&[
+        ("a.rs", &a),
+        ("web/.gitattributes", &attrs),
+        ("clm.toml", &toml),
+        ("README.md", &readme),
+        ("docs/decisions/d.md", &d),
+    ])
+}
+
+/// The paths each blob query since `from` calls fetched, query by query.
+fn blob_queries(fake: &clm_web_platform::fake::Fake, from: usize) -> Vec<Vec<String>> {
+    graphql_calls(fake, from)
+        .iter()
+        .filter(|body| body.contains("query Blobs"))
+        .map(|body| {
+            let v: serde_json::Value = serde_json::from_str(body).unwrap();
+            v["variables"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .filter(|(k, _)| k.starts_with('e'))
+                .map(|(_, e)| e.as_str().unwrap().split_once(':').unwrap().1.to_string())
+                .collect()
+        })
+        .collect()
+}
+
+/// Every file `wanted` accepts was fetched, nothing else, and the kept text came first.
+fn kept_text_first(fetched: &[String]) {
+    let last_kept = fetched
+        .iter()
+        .rposition(|p| clm_replica::keeps_text(p))
+        .expect("kept text fetched");
+    let first_other = fetched
+        .iter()
+        .position(|p| !clm_replica::keeps_text(p))
+        .expect("code fetched");
+    assert!(last_kept < first_other, "{fetched:?}");
+    for p in [
+        "web/.gitattributes",
+        "clm.toml",
+        "docs/decisions/d.md",
+        "a.rs",
+    ] {
+        assert!(fetched.contains(&p.to_string()), "{p}: {fetched:?}");
+    }
+    assert!(!fetched.contains(&"README.md".to_string()), "{fetched:?}");
+}
+
 #[test]
 fn a_first_build_fetches_the_kept_text_first() {
     // req:web.worker.replica/fetches-what-the-replica-wants@bb23e1f0
-    let fake = fake_with(
-        "111",
-        repo_files(&[
-            ("a.rs", "fn a() {}"),
-            ("web/.gitattributes", "* text\n"),
-            ("clm.toml", "\n"),
-            ("README.md", "# r\n"),
-            ("docs/decisions/d.md", "# d\n"),
-        ]),
-    );
+    let fake = fake_with("111", every_kind("one"));
     built(&fake);
-    let fetched = fake.gh.fetched_paths();
-    let last_kept = fetched.iter().rposition(|p| clm_replica::keeps_text(p));
-    let first_other = fetched.iter().position(|p| !clm_replica::keeps_text(p));
-    assert!(last_kept < first_other, "{fetched:?}");
-    assert!(fetched.contains(&"a.rs".to_string()), "{fetched:?}");
-    assert!(!fetched.contains(&"README.md".to_string()), "{fetched:?}");
-    for p in ["web/.gitattributes", "clm.toml", "docs/decisions/d.md"] {
-        assert!(fetched.contains(&p.to_string()), "{fetched:?}");
-    }
+    let queries = blob_queries(&fake, 0);
+    assert!(
+        queries[0].iter().all(|p| clm_replica::keeps_text(p)),
+        "the first slice holds only kept text: {queries:?}"
+    );
+    kept_text_first(&queries.concat());
+}
+
+#[test]
+fn a_recovery_fetches_the_kept_text_first() {
+    // req:web.worker.replica/fetches-what-the-replica-wants@bb23e1f0
+    let fake = fake_with("111", every_kind("one"));
+    let (mut object, _mem, _slot) = built(&fake);
+    // A force-push: the compare isn't a fast-forward, so the object lists the tree.
+    commit(&fake, "222", every_kind("two"));
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .compare_status
+        .insert("111...222".into(), "diverged".into());
+    let from = gh_calls(&fake);
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    assert!(
+        urls(&fake, from)
+            .iter()
+            .any(|u| u.contains("/git/trees/222")),
+        "the tree at 222 is listed"
+    );
+    kept_text_first(&blob_queries(&fake, from).concat());
 }
 
 #[test]
