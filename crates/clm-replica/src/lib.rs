@@ -201,13 +201,20 @@ fn is_size_path(path: &str) -> bool {
     path == "clm.toml" || path == ".gitattributes" || path.ends_with("/.gitattributes")
 }
 
-/// Whether the replica keeps a file's text.
-pub(crate) fn wants_text(path: &str) -> bool {
+/// Whether the replica keeps a file's text: the files the model reads, `clm.toml` and every
+/// `.gitattributes` (`replica/files-it-fetches`).
+pub fn keeps_text(path: &str) -> bool {
     is_spec_path(path) || is_size_path(path)
 }
 
+/// Whether the replica reads a file at all: one whose text it keeps, or one that can hold
+/// markers (`replica/files-it-fetches`).
+pub fn wanted(path: &str) -> bool {
+    keeps_text(path) || scannable(path)
+}
+
 /// Whether a file can hold markers that count: Markdown can't.
-pub(crate) fn scannable(path: &str) -> bool {
+fn scannable(path: &str) -> bool {
     !path.ends_with(".md")
 }
 
@@ -237,7 +244,7 @@ impl State {
             },
         );
         self.held.remove(&path);
-        let wanted = regular(&mode) && (wants_text(&path) || scannable(&path));
+        let wanted = regular(&mode) && wanted(&path);
         // A blob the source read nothing of stays to fetch.
         if !wanted || (text.is_none() && !binary) {
             return;
@@ -259,7 +266,7 @@ impl State {
             }
             _ => Vec::new(),
         };
-        let text = if wants_text(&path) { text } else { None };
+        let text = if keeps_text(&path) { text } else { None };
         self.held.insert(
             path,
             Held {
@@ -281,10 +288,8 @@ impl State {
         let mut paths: Vec<(bool, &String)> = self
             .tree
             .iter()
-            .filter(|(p, b)| {
-                regular(&b.mode) && (wants_text(p) || scannable(p)) && !self.holds(p, b)
-            })
-            .map(|(p, _)| (!wants_text(p), p))
+            .filter(|(p, b)| regular(&b.mode) && wanted(p) && !self.holds(p, b))
+            .map(|(p, _)| (!keeps_text(p), p))
             .collect();
         paths.sort_by_key(|(later, _)| *later);
         paths.into_iter().map(|(_, p)| p.clone()).collect()
@@ -298,7 +303,7 @@ impl State {
         let spec: Vec<_> = self
             .tree
             .iter()
-            .filter(|(p, b)| regular(&b.mode) && wants_text(p))
+            .filter(|(p, b)| regular(&b.mode) && keeps_text(p))
             .collect();
         if spec.is_empty() {
             return 1.0;
@@ -354,7 +359,7 @@ impl State {
         Some(
             self.tree
                 .keys()
-                .filter(|p| wants_text(p))
+                .filter(|p| keeps_text(p))
                 .filter_map(|p| Some((p.into(), self.held.get(p)?.text.clone()?.into_bytes())))
                 .collect(),
         )
