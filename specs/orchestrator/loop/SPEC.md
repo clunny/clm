@@ -684,7 +684,6 @@ After its fetch, and before its housekeeping, every command that prints the acti
 - GIVEN a step that printed `launch draft:20261119-x` for a draft of item `b`, no `launched` for it, no `origin/spec/20261119-x`, and then `origin/main` advanced to a commit that deletes `backlog/b.md`
 - WHEN `clm build step` runs
 - THEN it prints no line naming `draft:20261119-x`, `clm draft --finish 20261119-x` ran, and the loop file lists no `draft:20261119-x`
-- AND when that finish prints `kept /w/agent-x: uncommitted changes`, a `say` it prints holds that line
 
 #### Scenario: one item still open
 - GIVEN a step that printed `launch draft:20261119-x` for a draft of items `b` and `c`, no `launched` for it, and `origin/main` holding `backlog/c.md` and no `backlog/b.md`
