@@ -65,6 +65,46 @@ describe('runs', () => {
     expect(list.map(r => r.round)).toEqual([1, 2, 1])
   })
 
+  // req:plugin.panel/build-rows@a8f86422
+  test('a description empty, or empty once read, is round 1; an empty one is drawn as its type', () => {
+    let list: AgentRun[] = []
+    for (const [id, description] of [['e1', ''], ['e2', ''], ['p1', '!!!'], ['p2', '!!!']]) {
+      list = startRun(list, { id: id!, type: 'Explore', description: description!, model: 'claude-opus-5-5', prompt: 'x', at: 0 })
+    }
+    expect(list.map(r => r.round)).toEqual([1, 1, 1, 1])
+    const all = text(queueLines(CHART, list, 0))
+    expect(all.filter(l => /● Explore$/.test(l))).toHaveLength(2)
+    expect(all.filter(l => /● !!!$/.test(l))).toHaveLength(2)
+    expect(all.join('\n')).not.toContain('round')
+  })
+
+  // req:plugin.panel/build-rows@a8f86422
+  test("model and context: the latest request's model and effort, its fill over the model's window", () => {
+    const drawn = (model: string, request?: { sent: string; usage: Usage & { model?: string }; effort?: string }) => {
+      let list = startRun([], { id: 'r', type: 'Explore', description: 'look', model, prompt: 'x', at: 0 })
+      if (request) list = onStep(list, { agentId: 'r', model: request.sent, effort: request.effort }, request.usage)
+      const all = text(queueLines(CHART, list, 0))
+      const at = all.indexOf('agents')
+      return `${all[at + 2]}\n${all[at + 3]}`
+    }
+    const first = drawn('claude-opus-5-5', { sent: 'claude-opus-5-5', effort: 'high', usage: { ...usage(100_000), model: 'claude-sonnet-5-0' } })
+    expect(first).toContain('Explore · Sonnet 5.0 · high')
+    expect(first).toContain('ctx 10%')
+    const haiku = drawn('claude-haiku-4-5-20251001', { sent: 'claude-haiku-4-5-20251001', usage: usage(100_000) })
+    expect(haiku).toContain('Haiku 4.5')
+    expect(haiku).toContain('ctx 50%')
+    const full = drawn('claude-opus-5-5[1m]', { sent: 'claude-opus-5-5[1m]', usage: usage(2_000_000) })
+    expect(full).toContain('Opus 5.5')
+    expect(full).toContain('ctx 100%')
+    expect(drawn('mystery')).toContain('Explore · mystery')
+    expect(drawn('')).toContain('Explore · —')
+    const unnamed = onSpawn([], { prompt: 'x', description: 'look', subagentType: 'Explore' }, { agentId: 'r' }, 0)
+    expect(modelName(unnamed[0]!.model)).toBe('—')
+    expect(drawn('claude-3-5-sonnet-20241022')).toContain('Sonnet 3.5')
+    expect(drawn('claude-3-opus-20240229')).toContain('Opus 3')
+    expect(drawn('us.anthropic.claude-3-5-sonnet-20241022-v2:0')).toContain('Sonnet 3.5')
+  })
+
   // req:plugin.panel/build-row-lifecycle@015a4b69
   test('a spawn that resumes a listed agent keeps its run, running again', () => {
     let list = started(['b1', 'build git', PROMPT('git')])
@@ -80,9 +120,25 @@ describe('runs', () => {
   // req:plugin.panel/build-row-cost@8fdc23db
   // req:plugin.panel/build-row-lifecycle@015a4b69
   test('the list keeps the last 200 runs', () => {
-    const list = started(...Array.from({ length: 201 }, (_, i): [string, string, string] => [`a${i}`, `run ${i}`, 'x']))
+    // The first, described `first`, still running with a million tokens; no other is `first`.
+    let list = started(['a0', 'first', 'x'])
+    list = applyStep(list, 'a0', 'claude-opus-5-5', undefined, usage(1_000_000))
+    for (let i = 1; i <= 200; i++) {
+      list = startRun(list, { id: `a${i}`, type: 'Explore', description: `run ${i}`, model: 'claude-opus-5-5', prompt: 'x', at: i * 1000 })
+    }
+    list = applyStep(list, 'a200', 'claude-opus-5-5', undefined, usage(850))
     expect(list).toHaveLength(200)
     expect(list[0]?.id).toBe('a1')
+    const all = text(queueLines(CHART, list, 300_000))
+    expect(all.join('\n')).not.toMatch(/● first/)
+    expect(all.at(-1)).toMatch(/^≈\$0\.00 · 850 tokens · .* · Opus 5\.5 ×200$/)
+    // A new run described `first` counts no dropped run toward its round.
+    const again = startRun(list, { id: 'b0', type: 'Explore', description: 'first', model: 'claude-opus-5-5', prompt: 'x', at: 301_000 })
+    expect(again.at(-1)).toMatchObject({ id: 'b0', round: 1 })
+    const row = text(queueLines(CHART, again, 301_000))
+    const at = row.findIndex(l => /● first$/.test(l))
+    expect(at).toBeGreaterThan(0)
+    expect(row[at + 1]).not.toContain('round')
   })
 
   // req:plugin.panel/build-row-lifecycle@015a4b69
@@ -128,6 +184,8 @@ describe('updates', () => {
     const list = applyComplete(started(['a1', 'one', 'x']), 'a1', true, 1_000, { ...usage(1_000_000), model: 'claude-haiku-4-5' })
     expect(list[0]).toMatchObject({ tokens: 1_000_000, model: 'claude-haiku-4-5' })
     expect(list[0]?.costUsd).toBeCloseTo(1)
+    // The totals line counts it at the turn's model.
+    expect(text(queueLines(CHART, list, 1_000)).at(-1)).toBe('≈$1.00 · 1.0M tokens · 0:01 · Haiku 4.5 ×1')
   })
 
   // req:plugin.panel/build-rows@a8f86422
@@ -509,6 +567,9 @@ describe('hooks events', () => {
     expect(list[0]).toMatchObject({ id: 'b1', parentId: 'p0', type: 'general-purpose', entry: 'build:git', model: 'claude-opus-5-5', startedAt: 5 })
     expect(onSpawn([], spawn, { deny: 'no' }, 0)).toEqual([])
     expect(onSpawn([], spawn, { model: 'm' }, 0)).toEqual([])
+    // A refused spawn, and one that started no agent, has no row and no totals count it.
+    const refused = onSpawn(onSpawn([], spawn, { deny: 'no' }, 0), spawn, { model: 'm' }, 0)
+    expect(queueLines(CHART, refused, 0)).toEqual(CHART)
   })
 
   // req:plugin.panel/build-rows@a8f86422
@@ -626,12 +687,18 @@ describe('waiting', () => {
 
   // req:plugin.panel/build-row-lifecycle@015a4b69
   test('a turn.step of a waiting or done run runs it again', () => {
-    const waiting = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
-    expect(applyStep(waiting, 'b1', 'claude-opus-5-5', undefined, usage(10))[0]?.status).toBe('running')
-    const done = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000)
-    const stepped = applyStep(done, 'b1', 'claude-opus-5-5', undefined, usage(10))[0]
-    expect(stepped).toMatchObject({ status: 'running' })
-    expect(stepped?.endedAt).toBeUndefined()
+    // A second round of `build git`, with a thousand tokens before its turn ended.
+    const second = () =>
+      applyStep(onSpawn(build(), spawn, { agentId: 'b2', model: 'claude-opus-5-5' }, 1_000), 'b2', 'claude-opus-5-5', undefined, usage(1_000))
+    for (const listed of ['waiting', 'completed']) {
+      const idle = onComplete(second(), { agentId: 'b2', reason: 'answer' }, 9_000, listed)
+      expect(idle[1]?.status).toBe(listed === 'waiting' ? 'waiting' : 'done')
+      const stepped = applyStep(idle, 'b2', 'claude-opus-5-5', undefined, usage(10))
+      expect(stepped[1]).toMatchObject({ status: 'running', tokens: 1_010, round: 2 })
+      expect(stepped[1]?.endedAt).toBeUndefined()
+      expect(rows(stepped, 12_000)[0]).toMatch(/● build git$/)
+      expect(rows(stepped, 12_000)[1]).toContain('round 2')
+    }
   })
 
   // req:plugin.panel/build-row-lifecycle@015a4b69

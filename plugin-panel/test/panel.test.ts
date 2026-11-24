@@ -365,6 +365,11 @@ describe('views-panel', () => {
   test('a failure with nothing on stderr still says something', async () => {
     const $ = fake({ ...REPO, answer: () => ({ exitCode: 2, stdout: '', stderr: '' }) })
     expect(await command($, 'flight', '/work/repo')).toEqual({ text: 'clm exited 2' })
+    // Stdout alone, without the whitespace around it, when stderr is empty.
+    const out = fake({ ...REPO, answer: argv => (argv[0] === 'git' ? ok('') : { exitCode: 1, stdout: ' x\n', stderr: '' }) })
+    expect(await command(out, 'flight', '/work/repo')).toEqual({ text: 'x' })
+    // So too after a stop button.
+    expect(await pressStop(out, 'loop:drain', '/work/repo')).toBe('x')
   })
 
   // req:plugin.panel/views-panel@76d63404
