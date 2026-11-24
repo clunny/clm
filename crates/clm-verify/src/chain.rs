@@ -94,11 +94,10 @@ impl State {
     /// the unbroken run of newest records whose `left` names it (`mutation-pass`). A commit's
     /// newest record is the newest by `at`, which the fold lists first.
     pub(crate) fn carried(&self, end: usize) -> Vec<(String, Option<String>)> {
-        let newest: Vec<&Body> = self.chain[..=end]
-            .iter()
-            .rev()
-            .filter_map(|c| self.fold.mutations.get(c)?.first())
-            .map(|r| &r.body)
+        let newest: Vec<&Body> = self
+            .newest_mutations(end)
+            .into_iter()
+            .map(|(_, b)| b)
             .collect();
         let Some(Body::Mutated { left, .. }) = newest.first() else {
             return Vec::new();
@@ -115,6 +114,39 @@ impl State {
                     }
                 }
                 (id.clone(), base)
+            })
+            .collect()
+    }
+
+    /// Each commit on the chain up to position `end` inclusive that a `mutated` record names,
+    /// newest commit first, with the body of its newest record by `at`, which the fold lists
+    /// first, so two passes on one commit count as one.
+    pub(crate) fn newest_mutations(&self, end: usize) -> Vec<(&String, &Body)> {
+        self.chain[..=end]
+            .iter()
+            .rev()
+            .filter_map(|c| Some((c, &self.fold.mutations.get(c)?.first()?.body)))
+            .collect()
+    }
+
+    /// For each requirement the newest `mutated` record on the whole chain holds under
+    /// `left`, the commits of the unbroken run of newest records whose `left` names it,
+    /// newest first (`files-unproven`).
+    pub(crate) fn left_runs(&self) -> Vec<(String, Vec<String>)> {
+        let newest = self.newest_mutations(self.chain.len() - 1);
+        let Some((_, Body::Mutated { left, .. })) = newest.first() else {
+            return Vec::new();
+        };
+        left.iter()
+            .map(|id| {
+                let run = newest
+                    .iter()
+                    .take_while(
+                        |(_, body)| matches!(body, Body::Mutated { left, .. } if left.contains(id)),
+                    )
+                    .map(|(commit, _)| commit.to_string())
+                    .collect();
+                (id.clone(), run)
             })
             .collect()
     }

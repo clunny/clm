@@ -1,6 +1,7 @@
-//! `files-unproven`: what the mutation pass found unproven reaches `main` as a `bug` backlog
-//! item per component, landed through `clm land` from a temporary branch, so the requirement
-//! reads as not built until a build resolves the item (`check.coverage/coverage-report`).
+//! `files-unproven`: what the mutation pass found unproven, and what two passes in a row left
+//! unjudged, reaches `main` as a `bug` backlog item per component, landed through `clm land`
+//! from a temporary branch, so the requirement reads as not built until a build resolves the
+//! item (`check.coverage/coverage-report`).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -13,14 +14,32 @@ use crate::chain::State;
 use crate::mutate::{Cite, cites, scratch};
 use crate::{Ctx, Error};
 
-/// The entries of one `mutated` record's commit for one component, `<id>@<version>`.
+/// A requirement ID with the commits of its run of records that left it, newest first.
+type Run = (String, Vec<String>);
+
+/// What one item is to name.
+enum Found {
+    /// `<id>@<version>` entries a pass found unproven.
+    Unproven(Vec<String>),
+    /// The requirements two or more passes in a row left.
+    Unjudged(Vec<Run>),
+}
+
+/// One item to file, for one component and the commit of the record that found it.
 struct Candidate {
-    /// The commit the record names, a full ID.
+    /// The commit the item is named after, a full ID.
     found: String,
     component: String,
-    entries: Vec<String>,
+    what: Found,
     /// The item's path in the git repository.
     path: String,
+}
+
+/// How many items, and requirements in them, a filing landed, of each kind.
+#[derive(Default)]
+struct Filed {
+    unproven: (usize, usize),
+    unjudged: (usize, usize),
 }
 
 /// Files what is still to file and returns the notes for stderr; a failure is a note, never
@@ -32,16 +51,18 @@ struct Candidate {
 pub(crate) fn file(ctx: &Ctx, stop: &AtomicBool) -> Vec<String> {
     match try_file(ctx, stop) {
         Ok(None) => Vec::new(),
-        Ok(Some((items, requirements))) => {
-            vec![format!(
-                "unproven: filed {items} items for {requirements} requirements"
-            )]
-        }
+        Ok(Some(filed)) => [("unproven", filed.unproven), ("unjudged", filed.unjudged)]
+            .into_iter()
+            .filter(|(_, (items, _))| *items > 0)
+            .map(|(kind, (items, requirements))| {
+                format!("{kind}: filed {items} items for {requirements} requirements")
+            })
+            .collect(),
         Err(why) => vec![format!("unproven: not filed: {why}")],
     }
 }
 
-fn try_file(ctx: &Ctx, stop: &AtomicBool) -> Result<Option<(usize, usize)>, Error> {
+fn try_file(ctx: &Ctx, stop: &AtomicBool) -> Result<Option<Filed>, Error> {
     // The ledger as it is now, which holds the record the pass just appended.
     let state = State::load(ctx)?;
     let candidates = candidates(ctx, &state)?;
@@ -60,31 +81,56 @@ fn try_file(ctx: &Ctx, stop: &AtomicBool) -> Result<Option<(usize, usize)>, Erro
     done
 }
 
-/// The entries each `mutated` record on the chain holds, by commit and component, left out
-/// when a commit after it already added the item's path.
+/// The items still to file: the entries each `mutated` record on the chain holds, by commit
+/// and component, and the requirements two or more newest records in a row left, by the
+/// commit of the second oldest of the run and component; each left out when a commit after
+/// the one it is named after already added its path.
 fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
-    let mut found: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
+    let component = |id: &str| id.split('/').next().unwrap_or_default().to_string();
+    let mut unproven: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for (commit, records) in &state.fold.mutations {
         if state.index(commit).is_none() {
             continue;
         }
         for record in records {
-            let Body::Mutated { unproven, .. } = &record.body else {
+            let Body::Mutated {
+                unproven: found, ..
+            } = &record.body
+            else {
                 continue;
             };
-            for entry in unproven {
-                let component = entry.split('/').next().unwrap_or_default().to_string();
-                let all = found.entry((commit.clone(), component)).or_default();
+            for entry in found {
+                let all = unproven
+                    .entry((commit.clone(), component(entry)))
+                    .or_default();
                 if !all.contains(entry) {
                     all.push(entry.clone());
                 }
             }
         }
     }
+    let mut unjudged: BTreeMap<(String, String), Vec<Run>> = BTreeMap::new();
+    for (id, run) in state.left_runs() {
+        if run.len() >= 2 {
+            let at = run[run.len() - 2].clone();
+            unjudged
+                .entry((at, component(&id)))
+                .or_default()
+                .push((id, run));
+        }
+    }
+    let found = unproven
+        .into_iter()
+        .map(|(key, entries)| ("unproven", key, Found::Unproven(entries)))
+        .chain(
+            unjudged
+                .into_iter()
+                .map(|(key, runs)| ("unjudged", key, Found::Unjudged(runs))),
+        );
     let mut out = Vec::new();
-    for ((commit, component), entries) in found {
+    for (kind, (commit, component), what) in found {
         let path = format!(
-            "{}backlog/unproven-{component}-{}.md",
+            "{}backlog/{kind}-{component}-{}.md",
             ctx.prefix,
             ctx.short(&commit)?
         );
@@ -103,7 +149,7 @@ fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
             out.push(Candidate {
                 found: commit,
                 component,
-                entries,
+                what,
                 path,
             });
         }
@@ -120,53 +166,79 @@ fn go_on(stop: &AtomicBool) -> Result<(), Error> {
 }
 
 /// Writes the items in a worktree of `origin/main` on `branch`, pushes it and lands it, and
-/// returns how many items and requirements it filed, or none when no entry is current. `stop`
-/// is judged once an entry is found, before each of those steps.
+/// returns how many items and requirements it filed of each kind, or none when nothing is
+/// left to file: no `unproven` entry at its current version and no `unjudged` requirement
+/// that `origin/main` holds. `stop` is judged once one is found, before each of those steps.
 fn attempt(
     ctx: &Ctx,
     candidates: &[Candidate],
     branch: &str,
     top: &Path,
     stop: &AtomicBool,
-) -> Result<Option<(usize, usize)>, Error> {
+) -> Result<Option<Filed>, Error> {
     let at = top.to_string_lossy();
     ctx.git(&["worktree", "add", "--quiet", "-B", branch, &at, &ctx.base])?;
     let dir = top.join(&ctx.prefix);
     let (graph, _) = clm_model::load(&dir);
-    // Each candidate's entries still at their current version, found before anything is
-    // written.
-    let filed: Vec<(&Candidate, Vec<&String>)> = candidates
+    // What each candidate still names, found before anything is written: the entries at
+    // their current version, and the left requirements that still exist.
+    let filed: Vec<(&Candidate, Found)> = candidates
         .iter()
-        .map(|c| {
-            let current: Vec<&String> = c
-                .entries
-                .iter()
-                .filter(|e| {
-                    e.split_once('@').is_some_and(|(id, version)| {
-                        graph
-                            .requirement(id)
-                            .is_some_and(|r| r.version() == version)
-                    })
-                })
-                .collect();
-            (c, current)
+        .filter_map(|c| {
+            let what = match &c.what {
+                Found::Unproven(entries) => Found::Unproven(
+                    entries
+                        .iter()
+                        .filter(|e| {
+                            e.split_once('@').is_some_and(|(id, version)| {
+                                graph
+                                    .requirement(id)
+                                    .is_some_and(|r| r.version() == version)
+                            })
+                        })
+                        .cloned()
+                        .collect(),
+                ),
+                Found::Unjudged(runs) => Found::Unjudged(
+                    runs.iter()
+                        .filter(|(id, _)| graph.requirement(id).is_some())
+                        .cloned()
+                        .collect(),
+                ),
+            };
+            let empty = match &what {
+                Found::Unproven(e) => e.is_empty(),
+                Found::Unjudged(r) => r.is_empty(),
+            };
+            (!empty).then_some((c, what))
         })
-        .filter(|(_, current)| !current.is_empty())
         .collect();
     if filed.is_empty() {
         return Ok(None);
     }
     go_on(stop)?;
     let cites = cites(&dir, &graph)?;
-    let (mut items, mut requirements) = (0, 0);
-    for (c, current) in &filed {
+    let mut counts = Filed::default();
+    for (c, what) in &filed {
         let item = top.join(&c.path);
         if let Some(parent) = item.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(&item, text(ctx, c, current, &cites)?)?;
-        items += 1;
-        requirements += current.len();
+        let (text, count, requirements) = match what {
+            Found::Unproven(current) => (
+                unproven_text(ctx, c, current, &cites)?,
+                &mut counts.unproven,
+                current.len(),
+            ),
+            Found::Unjudged(runs) => (
+                unjudged_text(ctx, &c.component, runs)?,
+                &mut counts.unjudged,
+                runs.len(),
+            ),
+        };
+        fs::write(&item, text)?;
+        count.0 += 1;
+        count.1 += requirements;
     }
     clm_git::git(top, &["add", "--all"])?;
     clm_git::git(
@@ -175,7 +247,7 @@ fn attempt(
             "commit",
             "--quiet",
             "--message",
-            "File the requirements the mutation pass found unproven",
+            "File the requirements the mutation pass found unproven or left unjudged",
         ],
     )?;
     go_on(stop)?;
@@ -190,21 +262,22 @@ fn attempt(
     clm_git::remove_worktree(&ctx.root, top)?;
     go_on(stop)?;
     clm_land::land(&ctx.root, Some(branch), ctx.env)?;
-    Ok(Some((items, requirements)))
+    Ok(Some(counts))
 }
 
-/// The item for one component: the entries and the tests that cite each.
-fn text(ctx: &Ctx, c: &Candidate, current: &[&String], cites: &[Cite]) -> Result<String, Error> {
+/// The `unproven` item for one component: the entries and the tests that cite each.
+fn unproven_text(
+    ctx: &Ctx,
+    c: &Candidate,
+    current: &[String],
+    cites: &[Cite],
+) -> Result<String, Error> {
     let short = ctx.short(&c.found)?;
     let component = &c.component;
     let mut out = format!(
         "---\ntitle: Tests of {component} notice no change to its code\nkind: bug\n\
          components: [{component}]\nunproven: [{}]\n---\n\n",
-        current
-            .iter()
-            .map(|e| e.as_str())
-            .collect::<Vec<_>>()
-            .join(", ")
+        current.join(", ")
     );
     out.push_str(&format!(
         "After the land `{short}` the mutation pass changed the code of `{component}`, and the \
@@ -224,6 +297,33 @@ fn text(ctx: &Ctx, c: &Candidate, current: &[&String], cites: &[Cite]) -> Result
     out.push_str(
         "\nA test that proves the requirement fails when its code is wrong: strengthen these \
          so one does, or, when they are already sound, delete this item.\n",
+    );
+    Ok(out)
+}
+
+/// The `unjudged` item for one component: each requirement and the commits of the passes
+/// that left it, oldest first.
+fn unjudged_text(ctx: &Ctx, component: &str, runs: &[Run]) -> Result<String, Error> {
+    let mut out = format!(
+        "---\ntitle: The mutation pass can't judge requirements of {component}\nkind: bug\n\
+         components: [{component}]\n---\n\n\
+         Each of the mutation passes after the lands named left these requirements of \
+         `{component}` unjudged, having stopped, reached its limit or failed before its \
+         verdict:\n\n"
+    );
+    for (id, run) in runs {
+        let commits = run
+            .iter()
+            .rev()
+            .map(|commit| Ok(format!("`{}`", ctx.short(commit)?)))
+            .collect::<Result<Vec<_>, Error>>()?;
+        out.push_str(&format!("- `{id}`: {}\n", commits.join(", ")));
+    }
+    out.push_str(
+        "\nEach pass after the first tried them first, so one that left them was stopped, reached \
+         `mutate_minutes`, or met a mutation command that fails on their code: `clm verify`'s \
+         stderr for those passes says which. Mend what keeps the pass from its verdict, then \
+         delete this item.\n",
     );
     Ok(out)
 }
