@@ -38,3 +38,10 @@ Edge cases:
 
 - From `main`, a push of `HEAD` beside a named branch is blocked by the on-`main` case before the settings query is asked, as a push of `HEAD` alone is now. From another branch, the push goes on to the settings cases for its named branches.
 - `HEAD:<branch>` is unaffected: it holds a `:`, so it is neither `HEAD` nor a named refspec, and it reaches `main` only as written. It stays the remedy every reason suggests.
+
+Settled by the builder check:
+
+- git 2.43 behaves as the new scenario says. `HEAD impl/x/b`, `impl/x/b @`, `+HEAD` and `+@` from `main` each update `main`, and `impl/x/b HEAD:impl/x/c` leaves it alone.
+- The on-`main` reason today says "a push without a branch pushes `main`", which is wrong for `HEAD impl/x/b`. The build rewords it to say a push of `HEAD` from `main` pushes `main`. No requirement fixes the exact text, so this is the build's own edit.
+- When an unreadable setting or a `GIT_CONFIG_*` assignment also holds on `main`, its reason still wins, as it does today, since those cases are decided before any query.
+- No requirement it relies on is pending, no capability test sees a difference, and no type another component matches is widened.
