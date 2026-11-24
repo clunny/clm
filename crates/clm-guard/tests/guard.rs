@@ -2123,7 +2123,8 @@ fn a_guard_with_no_directory() {
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
     let repo = TempDir::new().unwrap();
     checkout_on(repo.path(), "main");
-    let m = repo.path().display();
+    // Quoted, so a temporary directory holding a space or a glob character stays one word.
+    let m = format!("'{}'", repo.path().display());
     let cases = [
         (
             "git push origin main".to_string(),

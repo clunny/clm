@@ -138,7 +138,8 @@ pub fn reach<'a>(
                 options.extend(value.map(|v| format!("{t}={v}")));
                 i += 1;
             }
-            // Their values are no subcommand, and they don't move where a push goes.
+            // Their values are no subcommand (`push-guard`). A `--config-env` setting isn't read
+            // from the environment, so it isn't passed to the queries.
             "--namespace" | "--config-env" => i += 1,
             _ if t.starts_with("--git-dir=") || t.starts_with("--work-tree=") => {
                 elsewhere = true;
