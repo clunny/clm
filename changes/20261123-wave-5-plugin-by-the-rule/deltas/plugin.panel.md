@@ -1,0 +1,547 @@
+---
+component: plugin.panel
+base: { contract: "ef2345ca059da16b", design: "49a564f1f5c97452" }
+---
+
+## MODIFIED Contract
+
+The Claude Code plugin `clm-panel`, which needs the `clm` plugin. It answers the `clm` plugin's `/clm:view` command in the chat with `clm status` or `clm view <name>` (of `origin/main` while that ref exists), without a model turn, and with no argument opens a pane titled `CLM` with four tabs, Queue, Spec, Flight and Blockers, showing those views of `origin/main` as of the pane's last fetch, or of the checkout when there is no `origin/main` (`views-rendered-by-clm`). On the terminal surface a component's line in the Spec and Flight charts can be pressed to open an inspector of that component (its counts, its work in flight, its changes and backlog, and its Contract behind a `Contract` button), and the Blockers tab's chains are folded until pressed. Above every tab it shows the three rows `clm machine --format ansi` draws, charting the machine's CPU load, available memory and free disk over the last 30 minutes (`machine`), run every 10 seconds. It opens the same pane, on Queue, when the `clm:build` skill starts and the pane isn't open (`build-opens-panel`). It runs the `clm` plugin's `bin/clm` shim, or `clm` on `PATH`, displays what `clm` prints and decides nothing about the repository or the machine. Under the Queue chart's running entries it adds the one kind of fact `clm` can't see: the runs its own session launched for the build loop that are running, waiting or failed, with their nested subagents, status, steps (from the task lists Claude Code's `TodoWrite`, `TaskCreate` and `TaskUpdate` tools keep), context, tokens, estimated cost and time; after the chart, the session's other subagents under an `agents` heading and a totals line over its runs. Above the Queue chart its buttons Drain and Stop now run `clm build stop --drain` and `clm build stop --now`, which only record the human's request for the loop (`orchestrator.loop`).
+
+## MODIFIED Design
+
+**The CLM panel** (`views-rendered-by-clm`). The panel is its own plugin, `clm-panel`, in `plugin-panel/`. Keeping it out of `clm` means `clm`'s command hooks never share a plugin with a hooks module, and a person on a Claude Code too old for hooks modules simply doesn't install it. It needs `clm`, and runs the `clm` plugin's shim so it gets the same binary and `version-skew` handling as the Bash tool. Its rules (which command to run for a surface and width, ANSI escapes to coloured cells, when to fetch, what to answer for each `/clm:view` argument, the inspector and the build rows) are plain functions in `plugin-panel/src/`, taking only the few `$` calls and events they use; `register.tsx` wires them to `$`: the timers, the atoms and the hooks. `npm test` runs the panel's tests, which CI runs (`ci`). The `/clm:view` command is the `clm` plugin's, not this module's: `$.command.register` takes a bare name run as `/<name>`, so a hooks module can't register a `clm:`-namespaced command, and `clm-panel`'s own would be `clm-panel:`. `plugin/commands/view.md` makes `/clm:view` exist (`plugin`), and the module hooks `command.run` for `clm:view` and answers it without calling `next`, so no model turn starts. The view tabs run `clm` through `$.process.run` at the session's `cwd`, so they describe what has landed, whichever branch or worktree the session is on. Whether `refs/remotes/origin/main` exists is checked with `git rev-parse --verify -q` once per redraw, so again after each fetch; the chart's first line names the commit, when it was fetched and the session's branch (`view`'s `view-at-rev`). Each redraw bumps a generation, and a `clm` run is cached under its generation and arguments, so a draw that changes no argument (a press, a tick, a sample) reuses it. On the terminal surface, and on the Queue tab on every surface, the ANSI escapes become coloured text cells; the SVG is drawn with `Svg`. `clm view` itself never fetches. Outside a CLM repository means no `specs/SPEC.md` found as `session-start` finds it. Without `clm-panel`, the command file has the model run `clm status` or `clm view <name>` through the Bash tool, so the panel's answer that `clm` isn't installed arises only with the `clm` plugin installed but its shim not found and no `clm` on `PATH`.
+
+**Build rows** (`views-rendered-by-clm`, `builds-in-subagents`). Every build is a background subagent of the human's session, so the panel sees it through the hooks events. The rules are pure functions in `plugin-panel/src/agents.ts`, over a list of runs kept in an atom, with the time in another.
+- **Runs.** The `agent.spawn` hook, after `next`, records a run from the event and what `next` answered. The build loop's launcher names the run on its first line, `loop run <name>` (`orchestrator.loop/step-actions`); the model's `description` never decides. Five lines, not the whole prompt, so a subagent whose long prompt quotes a launcher (a reviewer's diff, a builder check's change) isn't taken for a run; the launcher's lines aren't otherwise read, so its wording can change without the panel. The list is capped so a long session's atom stays small. After a reload the atom holds the list, so `session.start` reconciles it with `$.agent.list()`.
+- **Updates.** `turn.step` with an `agentId` is one model request of that run; `turn.complete` ends its turn, and on an answer, after `next` resolves, the hook asks `$.agent.list()` whether the agent is `waiting` (held on background work it owns, such as a `clm land --check-only` it ran in the background). `turn.start` with a listed run's `agentId` is the engine resuming that agent's loop. The engine's status may lag the hook, so the waiting check runs again in the pane's 30-second timer, before its redraw, and at `session.start`, never in a draw. `tool.call` with an `agentId` feeds that run's task list.
+- **Cost.** An estimate: a table in `agents.ts` of USD per million tokens, input, output, cache read and cache write, keyed by a regular expression on the lowercased model ID, most specific first, with a fallback rate for a model it doesn't know. It carries the date it was last checked against the list prices, as `effort`'s does. Its rows merge those of `effort`'s table (`crates/clm-effort/src/prices.rs`) that share rates, and it prices every model ID as `effort/prices` does (`build-row-cost`), so the pane's estimate and `clm capabilities`' agree; changing a price changes both tables in one change. The panel ships alone in `plugin-panel/` and can't read `crates/` at run time, which is why it keeps a copy; its test reads `prices.rs` as text to hold the two together.
+- **Drawing.** A row is three lines: the status glyph and the description (`colour-meanings`), ` · waiting` dimmed while waiting, and on a failed run's first line, last, the `Dismiss` button (`role` `dismiss`, `key` `dismiss:<id>`); the type, model name, effort and `round n` when above 1, dimmed; and a bar of ten cells with its stats, dimmed: the bar is the run's task progress `k/n` in amber when it keeps a task list, else its context fill dimmed; then `k/n <current step> · ` when there is a list, `ctx <p>% · <tokens> tok ≈<cost> <elapsed>`. Each top-level run goes newest first, followed by its subtree depth-first, children oldest first, indented two cells per level up to four levels, a child's first line prefixed `└`. `Dismiss` marks the run dismissed in the runs atom; a run that isn't drawn stays in the list, for rounds and the totals. The `agents` heading is indigo.
+- **Ticking.** The tick is a one-second `$.clock.every` setting the time atom, which only the Queue tab reads, so a tick redraws no other tab.
+
+**Inspector and blocker chains** (`views-rendered-by-clm`). On the terminal surface the charts can be pressed into, as the web app's graph can. The panel draws nothing of its own about the repository: every fact comes from `clm view <name> --format json`, and every line from `clm view <name> --format ansi`. The rules are pure functions in `plugin-panel/src/inspector.ts`, over the ANSI lines `ansiLines` gives, the parsed JSON models and three atoms; `register.tsx` only turns what they return into elements.
+- **Which line is which.** `view` pins the lines the pane presses (`view/spec-component-lines`, `view/flight-component-lines`, `view/blockers-root-lines`): on the Spec tab every line after the checkout line is a component's (the chart begins with a header line exactly when the JSON's top-level `checkout` or `at` is present, so the pane skips one line then); on Flight, the lines `component-heading` finds that start with two spaces and aren't `  none`; on Blockers, the lines after `blockers` that start in the first column and aren't `nothing is blocked`, each followed by its tree's lines. Matching by position lets a cut ID (`…`) match. The JSON runs beside the chart, at the same `cwd` with the same `clm`, and is cached per generation as the chart is. A count that differs means the two runs straddled a change to the repository; the next generation tries again. Such a draw leaves `selected` and `unfolded` as they were. Colours follow `chart.rs`'s ANSI table, as `ansiLines` reads it: green, sky as `cyan`, amber as `yellow`, rose as `red` and indigo as `blue`.
+- **Pressable lines.** Each such line is drawn as a `Button` with `plain`, the line's styled runs as its `Text` children, and `key` `node:<id>` or `root:<name>`, so the surface finds it again after a redraw; the person presses it with a click, or moves the focus ring onto it and presses Enter. A press changes an atom and nothing else.
+- **Atoms.** `selected` (a component ID or `null`), `contract` (a boolean) and `unfolded` (a list of root names) are kept like `tab` across a reload, each under its own `shape`, declared in `types/index.d.ts`. `selected` is kept but not drawn on Blockers. No draw writes an atom, since only presses and the hooks events do. The selected component's line is drawn `bold`.
+- **The inspector's lines**, in `colour-meanings`: first the ID in indigo, bold, and the title, then the `Close` button (`role` `dismiss`); then `<status>`, `owners <owners>` and `depends on <ids>` (or `depends on nothing`), joined by ` · `; then `requirements <current>/<total> current`, followed by `, <n> behind`, `, <n> unbuilt` and `, <n> obsolete` for each non-zero count and `  ⚠ oversized` in amber; then the work in flight: `converged` in green, or the state, coloured as the chart colours it, and its priority, then `pushed <h>h ago, lapses in <h>h` when claimed, `blocked by <blocker> (<requirements>)` for each blocker, then one line per pending requirement, indented two cells: its ID, its state (sky `unbuilt`, amber `behind`, rose `obsolete`), and each `<file>:<line>` of an obsolete one's markers.
+- **Changes, backlog and the contract** (`inspector-detail`). The `changes` and `backlog` headings are indigo and ` none` plain, each entry indented two cells, in the model's order, `complete` in green and a backlog item's kind dimmed. A contract line is wrapped with one character to a cell, as `lineText` and `--width` assume, and nothing is rendered as markdown, since the terminal shows text and the panel draws no view of its own. The rules return this detail as a part of its own beside the inspector's lines, so the lines `component-inspector` pins keep their positions and `register.tsx` places the `Button` after them. The contract is hidden at first because it runs to paragraphs and would push the chart the person just pressed off the pane.
+- **Blocker chains.** A folded root's line alone is drawn, whose `holds up <n>` says how much is beneath it.
+
+**Machine load** (`machine-charts`, `machine-load-measured-by-clm`). The rows are `clm`'s, as the views are: `clm machine --format ansi --width <the pane's columns>` (`machine/machine-history`) keeps the 30-minute history in the clone, judges each reading and draws the rows, and the pane shows its lines as `ansiLines` reads them, on every surface, since they are text. The sampling is its own `$.clock.every` of 10 seconds, started and stopped with the redraw timer; a sample that finds the previous run still going is skipped, since a run that measures the builds' worktrees can take seconds. The pane keeps the last output in memory only, since the history is `clm`'s, and a sample redraws from the views' cache, never rerunning `clm view`. The rows go above the tab's content and the fetch-failed line, so they read the same on every tab. The rules are pure functions in `plugin-panel/src/machine.ts`; `register.tsx` only wires them.
+
+**Type-check** (`type-check`, `panel-types-hand-written`). The type-check runs first because the tests strip types, and `claude plugin validate` checks only what the engine would refuse to load. `tsconfig.json` types the module as the engine does (`target` and `lib` `es2023`, `module` `esnext`, `moduleResolution` `bundler`, `strict`, `noUncheckedIndexedAccess`, `noEmit`, `skipLibCheck`, `jsx` `react` with `h` and `Fragment`, and `allowImportingTsExtensions`, there since the module imports its files by their `.ts` names). The declarations are never a copy of the ones Claude Code writes, which no package ships and which aren't this repository's to redistribute. When `tsc` and `claude plugin validate` disagree about the module, the file is what's wrong, since the validator reads the module as the engine does. `.claude-plugin/types/`, where the engine lays its own when it hot-reloads the panel from a checkout, stays ignored. The lockfile pins `typescript`, so `npm ci` brings `tsc` and the check needs nothing else on the machine; it runs inside `npm test` rather than as `npx tsc`, which unattended sessions may not run (`unattended-commands`), and a human typing `npm test` here gets the same check as a land. The tests type under the same options as the module, with `vitest`'s own types from `node_modules`, so they use only what the module's environment has (no `Buffer`: the engine has no Node.js), and a fake they pass is the type the rule takes. `claude plugin validate` passes with `declarations/` and `tsconfig.json` present: it reads the manifest, the module and the contract, nothing else.
+
+**Queue tab and its buttons** (`queue-tab`, `queue-stop-buttons`). The Queue tab is the build loop's plan as `clm view queue` renders it (`view/queue-view`), so the pane shows what the loop acts on and decides nothing (`views-rendered-by-clm`). The tab has no SVG form, and its chart is text, so it runs the `ansi` chart on every surface, as the machine rows do: its colours are `clm`'s (`colour-meanings`), among them the amber that marks the entries waiting on the human, and the build rows go under their running entries on every surface alike. The buttons (`key` `loop:drain` and `loop:now`) only record the human's request with `clm build stop`; the loop's `clm build wait` sees it within seconds and wakes the session, which acts on it. They are drawn whatever the loop's state, since the request also stops a loop the next session adopts; `clm build stop` needs no lease.
+
+## MODIFIED Requirements
+
+### Requirement: views-panel <!-- base: 29b65e2f31adc725 -->
+`/clm:view` with no argument, in a CLM repository, SHALL open a pane titled `CLM` with tabs Queue, Spec, Flight and Blockers, showing Queue first, and answer `Opened the CLM panel.` in the transcript; a tab kept across a reload that is none of the four SHALL read as Queue. The tabs SHALL show the output of `clm view <tab> --at origin/main`, with `--format ansi --width <the pane's columns>` on the terminal surface, drawn in colour, with its component lines pressable and the Blockers tab's chains folded until pressed (`component-inspector`, `blocker-chains`), and with `--format svg` on other surfaces, except the Queue tab, which has no SVG form and runs `--format ansi --width <the pane's columns>` on every surface, drawn in colour (`queue-tab`). Wherever the panel passes `--width`, `<the pane's columns>` SHALL be the pane's columns rounded down and kept within 1 to 65535, or 100 before the pane has been measured. Drawn in colour SHALL mean that the basic and bright foreground colours, bold and dim are drawn as the escapes set them, and that every other escape sequence (another colour or style parameter, such as a 256-colour, RGB or background colour; any other control sequence, such as `\x1b[?25l`; an operating-system command, such as a hyperlink's; and any other escape, such as `\x1b(B` (an escape with intermediate bytes) or `\x1b7`, up to its final character) is dropped whole and the text around it kept. It SHALL redraw when it opens, when the tab changes, when a turn ends, and every 30 seconds while it is placed, and SHALL run `git fetch --quiet origin` at most once every 2 minutes while it is placed, a fetch that failed counting as one; a redraw that starts a fetch SHALL run its views again once that fetch ends. A press of a component's or a root's line, `Close`, `Contract` or `Dismiss` SHALL run no `clm` command the pane has already run since its latest redraw. Every `clm view` the pane runs SHALL pass `--at origin/main` while `refs/remotes/origin/main` exists, and no `--at` otherwise. When the latest fetch failed, the pane SHALL draw above the chart an amber line `⚠ fetch failed <age> ago: ` followed by the first line of git's stderr, until a fetch succeeds. `<age>` SHALL be the time since that fetch started, in whole minutes rounded down as `<n>m` under an hour, else in whole hours rounded down as `<n>h`. A failed fetch whose stderr is empty SHALL read `git exited <n>` in its place, a git that couldn't start SHALL be a failed fetch whose line gives the reason it couldn't, and a fetch Claude Code cut short SHALL leave the line as it was. When `clm` exits non-zero, the pane SHALL show its stderr (`view-command-in-chat`). Outside a CLM repository, `/clm:view` SHALL say so and open no pane.
+
+#### Scenario: terminal pane
+- GIVEN a session on the terminal surface in a CLM repository, with a pane 80 columns wide
+- WHEN the person runs `/clm:view`
+- THEN the pane runs `clm view queue --at origin/main --format ansi --width 80` and shows its text, coloured as its escapes say
+
+#### Scenario: opened
+- GIVEN a session in a CLM repository with no pane `CLM` listed
+- WHEN the person runs `/clm:view`
+- THEN the transcript shows `Opened the CLM panel.`, no model request is made, and the pane `CLM` is open on the Queue tab
+
+#### Scenario: desktop pane
+- GIVEN the same session on the desktop surface
+- WHEN the person opens the Spec tab, and then the Queue tab
+- THEN the pane runs `clm view spec --at origin/main --format svg` and draws the SVG, and then `clm view queue --at origin/main --format ansi` with `--width` and shows its text, coloured as its escapes say
+
+#### Scenario: odd widths
+- GIVEN a terminal pane on the Flight tab
+- WHEN it draws 79.5 columns wide, before it has been measured, and 1 000 000 columns wide
+- THEN it runs `clm view flight` with `--width 79`, `--width 100` and `--width 65535`
+
+#### Scenario: escapes it doesn't draw
+- GIVEN `clm view` lines holding, in turn: `a` set in an RGB colour, a space, and `link` inside a hyperlink's escapes; `\x1b[?25l` followed by `foo`; and `a`, `\x1b(B` and `b`
+- WHEN the pane draws them
+- THEN the lines read `a link`, with no colour on `a`, then `foo`, then `ab`, none holding escape text
+
+#### Scenario: four tabs
+- GIVEN a pane whose kept tab, from an earlier version of the panel, is `capabilities`
+- WHEN the module is reloaded and the pane draws
+- THEN its tab row holds Queue, Spec, Flight and Blockers only, and it shows Queue
+
+#### Scenario: refresh and fetch
+- GIVEN an open pane
+- WHEN a turn ends, and again 30 seconds later, and three turns end within a minute
+- THEN it reruns `clm view` each time, and runs `git fetch --quiet origin` no more than once in those 2 minutes
+
+#### Scenario: after the fetch
+- GIVEN an open pane whose `git fetch --quiet origin` moves `refs/remotes/origin/main` to a new commit
+- WHEN a redraw starts that fetch
+- THEN once the fetch ends the pane runs `clm view` again, and the chart it draws names the new commit
+
+#### Scenario: press reruns nothing
+- GIVEN a terminal pane on the Spec tab with `a` selected, having run `clm view spec --format ansi`, `clm view spec --format json` and `clm view flight --format json` since its latest redraw
+- WHEN the person presses `b`'s line, and in a second run presses `Contract`
+- THEN no `clm` command has run again
+
+#### Scenario: fetch fails
+- GIVEN an open pane whose `git fetch --quiet origin` exits 128 with `fatal: unable to access` on stderr
+- WHEN it redraws, and again after a later fetch succeeds
+- THEN the first chart is preceded by an amber line starting `⚠ fetch failed` and holding `fatal: unable to access`, and the second has no such line
+
+#### Scenario: fetch age
+- GIVEN failed fetches that started 59 seconds, 3 minutes 59 seconds, 59 minutes 59 seconds, 1 hour and 2 hours before the pane draws
+- WHEN the pane draws each
+- THEN their lines begin `⚠ fetch failed 0m ago:`, `⚠ fetch failed 3m ago:`, `⚠ fetch failed 59m ago:`, `⚠ fetch failed 1h ago:` and `⚠ fetch failed 2h ago:`
+
+#### Scenario: fetch fails oddly
+- GIVEN three fetches: one whose git can't start, failing with `spawn git ENOENT`; one that exits 1 with nothing on stderr; and one Claude Code cuts short after an earlier fetch failed
+- WHEN the pane draws after each
+- THEN the first line reads `⚠ fetch failed 0m ago: spawn git ENOENT`, the second `⚠ fetch failed 0m ago: git exited 1`, and the third is the line of the fetch before it, its age counted from that fetch's start
+
+#### Scenario: no origin/main
+- GIVEN an open pane in a repository with no `refs/remotes/origin/main`
+- WHEN it redraws
+- THEN it runs `clm view queue` without `--at` and shows its chart
+
+#### Scenario: clm fails
+- GIVEN an open pane whose `clm view` exits 1 with violations on stderr
+- WHEN it redraws
+- THEN it shows those violations
+
+#### Scenario: not a CLM repository
+- GIVEN a session whose `cwd` has no `specs/SPEC.md` up to its git root
+- WHEN the person runs `/clm:view`
+- THEN it says the directory isn't a CLM repository and no pane opens
+
+#### Needs
+- view.repo/view-queue
+
+### Requirement: panel-package <!-- base: 286ccb95187212fb -->
+`plugin-panel/.claude-plugin/plugin.json` SHALL name the plugin `clm-panel`, list `clm` under `dependencies`, name `Christopher Lunny` as its `author` and `MIT` as its `license`, and have a `version` equal to the cargo workspace version (the `version` under `[workspace.package]` in `Cargo.toml`), as `plugin/.claude-plugin/plugin.json`'s is (`plugin/package`), so each release changes it and `claude plugin update` delivers the panel's fixes, and its cache directory names the same version as the `clm` plugin whose shim it prefers. `plugin-panel/hooks/hooks.json` SHALL name exactly one hooks module, `./register.tsx`, under `modules`, and no command hooks. `plugin-panel/package.json` SHALL have a `test` script that runs the panel's tests, with `package-lock.json` committed and `.npmrc` setting `ignore-scripts=true`, as `web/` does (`unattended-commands`).
+
+#### Scenario: the panel's hooks module
+- GIVEN the repository
+- WHEN Claude Code reads `plugin-panel/hooks/hooks.json`
+- THEN it holds only `modules: ["./register.tsx"]`
+
+#### Scenario: the owner's full name
+- GIVEN the repository
+- WHEN Claude Code reads `plugin-panel/.claude-plugin/plugin.json`
+- THEN `author.name` is `Christopher Lunny` and `license` is `MIT`
+
+#### Scenario: depends on clm
+- GIVEN the repository
+- WHEN Claude Code reads `plugin-panel/.claude-plugin/plugin.json`
+- THEN its `name` is `clm-panel` and its `dependencies` are `["clm"]`
+
+#### Scenario: panel version
+- GIVEN the repository
+- WHEN `plugin-panel/.claude-plugin/plugin.json` and `Cargo.toml` are read
+- THEN the manifest's `version` is the `version` under `[workspace.package]`
+
+#### Serves
+- capability/install-and-release
+- capability/watch-beside-chat
+
+#### Needs
+- ci/release
+
+### Requirement: view-command-in-chat <!-- base: 56b47f4386387851 -->
+`/clm:view <name>`, for `name` one of `status`, `queue`, `spec`, `flight` and `blockers`, with or without spaces around it, SHALL answer with the output of `clm status`, or of `clm view <name>` with `--at origin/main` while `refs/remotes/origin/main` exists and no `--at` when it doesn't or git can't start, run at the session's `cwd`, in a code block shown in the transcript without starting a model turn. When `clm` exits non-zero, it SHALL answer with its stderr instead; with any other name, wherever the session is, with the list of names, running nothing; and, for one of those names, outside a CLM repository, saying that the directory isn't one, running nothing. Wherever the panel shows the stderr of a `clm` that exited non-zero (in the chat, in the pane, in the machine rows' line and after a stop button), an empty stderr SHALL be replaced by `clm`'s stdout without the whitespace around it, and an empty stdout by `clm exited <n>`, `<n>` its exit status. The `clm` the panel runs, in the chat and in the pane, SHALL be the first of: `plugin/bin/clm` in the directory that holds the panel's own directory (the two plugins installed from a directory marketplace); else, in the plugin cache, the `clm` plugin's `bin/clm` of the panel's own version; else that of the highest version that has one; else `clm` on `PATH`. The panel SHALL run that file itself, with no shell, and run no git to find it. When it can't start, the answer SHALL be, when the session's `cwd` no longer exists, a line starting `This session's directory no longer exists: <cwd>.`; when no shim was found and no `clm` is on `PATH`, that `clm` isn't installed, naming the `clm` plugin; and otherwise `clm couldn't start: <clm> in <cwd>: <reason>`, `<clm>` the path it ran and `<reason>` why the start failed.
+
+#### Scenario: flight in the chat
+- GIVEN a session in a CLM repository, and a `clm` whose `view flight --at origin/main` prints a chart
+- WHEN the person runs `/clm:view flight`
+- THEN the transcript shows that chart in a code block, and no model request is made
+
+#### Scenario: no origin/main in the chat
+- GIVEN a session in a CLM repository with no `refs/remotes/origin/main`, and in a second run with no `git` that starts
+- WHEN the person runs `/clm:view flight`, and then `/clm:view` with ` status ` as its argument
+- THEN both times the panel runs `clm view flight` with no `--at`, and then `clm status`
+
+#### Scenario: unknown name
+- WHEN the person runs `/clm:view everything`
+- THEN the answer lists `status`, `queue`, `spec`, `flight` and `blockers`
+
+#### Scenario: name outside a repository
+- GIVEN a session whose `cwd` has no `specs/SPEC.md` up to its git root
+- WHEN the person runs `/clm:view flight`
+- THEN it says the directory isn't a CLM repository and runs no command
+
+#### Scenario: silent failure
+- GIVEN a `clm` whose `view flight` exits 2 printing nothing, and in a second run one that exits 1 printing `x` on stdout only
+- WHEN the person runs `/clm:view flight`
+- THEN the first answer is `clm exited 2` and the second `x`
+
+#### Scenario: which clm
+- GIVEN the panel installed from a directory marketplace with `plugin/bin/clm` beside it; then, from the plugin cache at version 0.6.0 with the `clm` plugin's shims of versions 0.6.0, 0.9.0 and 0.10.0; then at version 0.7.0 with shims of 0.9.0 and 0.10.0
+- WHEN the person runs `/clm:view flight` in each
+- THEN the panel runs, directly and with no git run, `plugin/bin/clm`, then the 0.6.0 shim, then the 0.10.0 shim
+
+#### Scenario: no clm
+- GIVEN the panel loaded with neither the `clm` plugin's shim nor `clm` on `PATH`
+- WHEN the person runs `/clm:view flight`
+- THEN it answers that `clm` isn't installed, naming the `clm` plugin
+
+#### Scenario: clm can't start
+- GIVEN a session whose `cwd` was removed, and in a second run a shim that fails to start with `spawn EACCES`
+- WHEN the person runs `/clm:view flight`
+- THEN the first answer starts `This session's directory no longer exists: <cwd>.` and the second is `clm couldn't start: <shim> in <cwd>: spawn EACCES`, neither saying `clm` isn't installed
+
+#### Serves
+- capability/see-project-state
+
+#### Needs
+- view.repo/view-queue
+
+### Requirement: build-rows <!-- base: 84e4b711233f6449 -->
+The Queue tab SHALL show, under each entry of the chart's `running` section, the runs this session launched for that entry: a subagent belongs to the entry `<name>` when one of the first five lines of its prompt is `loop run <name>` (`orchestrator.loop/step-actions`), the first such line deciding. A running entry whose name the chart cut with `…` SHALL take the runs whose entry starts with the part shown and that no uncut running entry names. A subagent whose spawn Claude Code refused, or that started no agent, SHALL be no run, neither drawn nor counted. The Flight tab SHALL draw no runs. Each run it draws SHALL show its status (`●` running or waiting, `✗` failed, coloured amber and rose, and `waiting` while waiting), its description, type, model name, effort, its round when above 1, a bar, its task progress `k/n` and current step when it keeps a task list, its context fill, and the subagents it launched indented under it, oldest first, each with the same facts. A run's round SHALL be one more than the number of runs the list holds whose description is the same as its own once both are lowercased, each run of characters other than letters and digits read as one space, and trimmed; a run whose description is empty once so read SHALL be round 1, and a run whose description is empty SHALL be drawn with its type in the description's place. Its model and effort SHALL be those of its latest model request: the model that request's usage names, or else the one it was sent with, and an effort that request doesn't give keeping the one before. Its model name SHALL be the family and version the model ID names (`claude-opus-5-5[1m]` reads `Opus 5.5`, `claude-haiku-4-5-20251001` reads `Haiku 4.5`), an ID holding the older form `claude-<major>[-<minor>]-<family>-<date>` wherever `claude-` stands in it, not only at its start, SHALL read the same way (`claude-3-5-sonnet-20241022` reads `Sonnet 3.5`, `claude-3-opus-20240229` reads `Opus 3`, `us.anthropic.claude-3-5-sonnet-20241022-v2:0` reads `Sonnet 3.5`); an ID naming none of the families `fable`, `mythos`, `opus`, `sonnet` and `haiku` with a version, as the family followed by `-` and a number or in the older form, SHALL read as itself less a leading `claude-` and a trailing bracketed part, and an ID that reads empty so (an empty ID, `claude-` or `[1m]`) SHALL read `—`. Its context fill SHALL be its latest model request's input, output, cache-read and cache-write tokens over 200 000 for a model ID holding `haiku` and 1 000 000 otherwise, as a whole percentage, at most 100. Its task list SHALL follow those of its tool calls that succeed: `TodoWrite` replaces it, `TaskCreate` appends a pending task, and `TaskUpdate` changes a task's status or subject, or deletes it; `k` SHALL be its completed tasks, `n` all its tasks, and the current step the first in-progress task, else the first pending one. Which runs are drawn is `build-row-lifecycle`'s, and their cost `build-row-cost`'s. Drawn runs that belong to no running entry SHALL follow the chart under an `agents` heading, drawn only when a row follows it. The rows SHALL go under their running entries on every surface alike.
+
+#### Scenario: build under its node
+- GIVEN an open Queue pane on the terminal surface whose chart's running entries are `build:git` then `build:init`, and a subagent spawned with description `build git` and a prompt whose first line is `loop run build:git`, which has made two model requests and whose `TodoWrite` lists five tasks, two completed and one in progress, and which has spawned a subagent with description `code review`
+- WHEN the pane draws
+- THEN the lines between `build:git`'s line and `init`'s hold `●` and `build git`, the model's name, a bar, `2/5` and the in-progress task's text, and `ctx`, then `code review`'s row, indented and prefixed `└`, with its own status and stats
+
+#### Scenario: launcher prompt
+- GIVEN an open Queue pane on the terminal surface whose chart's running entries are `build:git` then `build:init`, a subagent spawned with the launcher the loop's `launch build:git` named, whose first line is `loop run build:git`, and another whose prompt's first five lines hold no `loop run` line, and whose tenth line is `loop run build:git`
+- WHEN the pane draws
+- THEN the first's row is between `build:git`'s line and `build:init`'s, and the second's follows the chart under `agents`, not `build:git`'s line
+
+#### Scenario: cut entry
+- GIVEN a Queue chart whose running entries are `build:plugin.p…` and `build:plugin`, and a run of `build:plugin.panel`
+- WHEN the pane draws
+- THEN the run's row follows `build:plugin.p…`'s line, before `build:plugin`'s
+
+#### Scenario: refused spawn
+- GIVEN a subagent spawn that Claude Code refused, and another that answered with no agent
+- WHEN the pane draws
+- THEN neither has a row, and no totals line counts them
+
+#### Scenario: not a build
+- GIVEN a running subagent whose prompt has no `loop run` line
+- WHEN the pane draws, and again after its turn completes with reason `answer`
+- THEN the first time its row follows the chart under the heading `agents`, under no component line, and the second time neither the row nor the heading is drawn, while the totals line counts it both times
+
+#### Scenario: round
+- GIVEN a build of `git` whose turn failed, not dismissed, and a second subagent spawned later with the same description `build git`
+- WHEN the pane draws
+- THEN the second run's row holds `round 2` and sits above the first's under `build:git`
+
+#### Scenario: round by description
+- GIVEN runs spawned with descriptions `build git` then `Build  Git!`, two running subagents of type `Explore` with empty descriptions, and two with the description `!!!`
+- WHEN the pane draws
+- THEN the second `git` row holds `round 2`; neither `Explore` row holds `round`, and each reads `Explore` where its description would be; and neither `!!!` row holds `round`, each reading `!!!`
+
+#### Scenario: model and context
+- GIVEN a run whose latest model request was sent as `claude-opus-5-5` with effort `high`, its usage naming `claude-sonnet-5-0`, with 100 000 input tokens; a run on `claude-haiku-4-5-20251001` whose latest request used 100 000 tokens; one on `claude-opus-5-5[1m]` whose latest request used 2 000 000; one on the model `mystery`; one whose spawn Claude Code answered with no model; one on `claude-3-5-sonnet-20241022`; one on `claude-3-opus-20240229`; and one on `us.anthropic.claude-3-5-sonnet-20241022-v2:0`
+- WHEN the pane draws
+- THEN the first row names `Sonnet 5.0` and effort `high` and reads `ctx 10%`; the second names `Haiku 4.5` and reads `ctx 50%`; the third names `Opus 5.5` and reads `ctx 100%`; the fourth names `mystery`; the fifth names `—`; the sixth names `Sonnet 3.5`; the seventh names `Opus 3`; and the eighth names `Sonnet 3.5`
+
+#### Scenario: task tools
+- GIVEN a run whose `TaskCreate` calls created `write tests` and `implement`, whose `TaskUpdate` calls then set `write tests` completed and `implement` in progress under the subject `implement it`, and then deleted `write tests`; and a `TaskUpdate` that failed
+- WHEN the pane draws after each
+- THEN its progress reads `0/2 write tests`, then `1/2 implement it`, then `0/1 implement it`, and the failed call changes nothing
+
+#### Scenario: desktop
+- GIVEN the same build on the desktop surface
+- WHEN the pane draws
+- THEN the build's row is between `build:git`'s line and the next line of the chart, as on the terminal surface
+
+#### Needs
+- view.repo/view-queue
+- orchestrator.loop/step-actions
+
+### Requirement: type-check <!-- base: 16075ab75e0b4677 -->
+`plugin-panel/package.json`'s `test` script, which npm runs for `npm test` and `ci`'s check script runs (`ci/web-checks`), SHALL run `tsc -p .` before `vitest run`, with `typescript` among its devDependencies, so a type error in a file `plugin-panel/tsconfig.json` includes fails `npm test` before any test runs. `plugin-panel/tsconfig.json`, which `tsc -p .` reads, SHALL include `hooks`, `src`, `types` and `test`, type them as the engine does (the options this component's Design lists), and name `declarations` as its one type root and `claude-code` as its one type, so `'claude-code'` resolves to `plugin-panel/declarations/claude-code/index.d.ts`, the panel's declarations of the parts of the plugin API it uses. The panel and its tests SHALL type-check under that configuration.
+
+#### Scenario: a type error fails the suite
+- GIVEN a file that uses a type it never imports
+- WHEN the compiler types it with `plugin-panel/tsconfig.json`'s options and type root
+- THEN it reports an error naming the file and its line
+
+#### Scenario: the suite type-checks first
+- GIVEN the repository
+- WHEN npm and the compiler read `plugin-panel/package.json` and `plugin-panel/tsconfig.json`
+- THEN the `test` script runs `tsc -p .` before `vitest run`, `typescript` is a devDependency, and the tsconfig includes `hooks`, `src`, `types` and `test` with `declarations` its one type root and `claude-code` its one type
+
+#### Serves
+- architecture/deterministic-enforcement
+
+### Requirement: inspector-detail <!-- base: 184cdbab9fdb614f -->
+While a component is selected (`component-inspector`), the inspector SHALL hold, after the work in flight and from the `spec` model's component (`view/component-detail`): under `changes` one line per entry of its `changes` with the change's ID, status and `<current>/<total> requirements`, and `complete` when the entry says so, or `changes none`; under `backlog` one line per item of its `backlog` with `backlog/<slug>`, its kind and its title, or `backlog none`; and a `Contract` button, `secondary` while the contract is hidden and `primary` while it shows, which SHALL show or hide the component's `contract` text below it as plain lines no wider than the pane's columns, broken at spaces. The contract SHALL be hidden at first, and whether it shows SHALL hold across components and a reload. In breaking the contract into lines, tabs and runs of spaces SHALL read as one space, a word longer than a line SHALL be cut across lines, each line break of the text (`\n` or `\r\n`) and each blank line SHALL be kept, and the pane's columns, rounded down, SHALL read as 100 when they aren't at least 1. When the `spec` model's component has no `changes`, no `backlog` or no `contract` (from a `clm` older than `view/component-detail`), the inspector SHALL draw none of the three and no `Contract` button.
+
+#### Serves
+- capability/see-project-state
+
+#### Needs
+- view/component-detail
+
+#### Scenario: changes and backlog
+- GIVEN a terminal pane 80 columns wide on the Spec tab with `a` selected, whose `clm view spec --format json` gives `a` the `changes` entry `20260101-c` with status `applied`, current 1, total 2 and complete false, and the `backlog` item `q` of kind `question` titled `Ask`
+- WHEN the pane draws
+- THEN the inspector holds, after the work in flight, a line holding `20260101-c`, `applied` and `1/2`, a line holding `backlog/q`, `question` and `Ask`, and a `secondary` `Contract` button, and none of `a`'s `contract` text
+
+#### Scenario: nothing touches it
+- GIVEN `b` selected, whose `changes` and `backlog` in the `spec` model are empty
+- WHEN the pane draws
+- THEN the inspector holds `changes none` and `backlog none`
+
+#### Scenario: contract shown
+- GIVEN `a` selected, its `contract` being a paragraph of 300 characters, and the pane 80 columns wide
+- WHEN the person presses `Contract`, and in a second run the module is reloaded after that press
+- THEN both times the button is `primary` and the paragraph follows it on lines no wider than 80 columns, broken at spaces
+
+#### Scenario: odd contract text
+- GIVEN the contract shown, and as its text in turn `abcdefghij x` in a pane 4 columns wide, `one`, a blank line and `two` 10 wide, `a  b   c` 3 wide, `ab`, `\r\n` and `cd` followed by a tab and `ef` 5 wide, and a hundred `x` words separated by spaces in a pane not yet measured
+- WHEN the pane draws each
+- THEN the lines are `abcd`, `efgh`, `ij x`; `one`, a blank line, `two`; `a b`, `c`; `ab`, `cd ef`; and lines of at most 100 characters, the first 99
+
+#### Scenario: contract hidden again
+- GIVEN the contract shown
+- WHEN the person presses `Contract` again, and then presses `b`'s line
+- THEN after the first press the button is `secondary` and no contract text is drawn, and `b`'s inspector draws its button `secondary` too
+
+#### Scenario: spec model fails on the Flight tab
+- GIVEN `a` selected on the Flight tab, and a `clm view spec --format json` that exits 1 with `boom` on stderr
+- WHEN the pane draws
+- THEN the inspector holds `boom` and no `changes`, `backlog` or `Contract` button
+
+#### Scenario: older clm
+- GIVEN `a` selected on the Spec tab, and a `clm view spec --format json` whose component `a` has no `changes`, `backlog` or `contract`
+- WHEN the pane draws
+- THEN the inspector holds `a`'s lines and no `changes`, `backlog` or `Contract` button
+
+### Requirement: component-inspector <!-- base: d5852e70fb9afc58 -->
+On the terminal surface the pane SHALL draw each component's line of the Spec chart (`view/spec-component-lines`) and of the Flight chart (`view/flight-component-lines`) as a pressable line holding the same text and colours, matched to the component by its position among those lines and the `spec` or `flight` model's `/nodes`, from `clm view <tab> --format json` run as the chart is. On the terminal surface the Spec, Flight and Blockers tabs SHALL each run their own `clm view <tab> --format json` beside the chart, and the Spec and Flight tabs SHALL run the other's only while a component is selected. Pressing a component's line SHALL select it; pressing the selected component's line again, or the inspector's `Close` button, SHALL clear the selection. While a component is selected, the Spec and Flight tabs SHALL draw, between the tab row and the chart, an inspector holding, from the `spec` model, the component's ID, title, status, owners, `depends_on` and requirement counts (current of total, then behind, unbuilt and obsolete when non-zero, and `⚠ oversized` when the model says so), and, from the `flight` model, its work in flight: `converged` when the model doesn't list it, else its state, priority, claim, its blockers and each pending requirement's ID and state, with the markers of an obsolete one. When the other tab's JSON run exits non-zero, the inspector SHALL hold that run's stderr where the part from its model would be, and, when that run prints no model the pane can read, `clm view <tab> --format json printed no model the pane can read` there, `<tab>` that tab. The selection SHALL hold across the Spec and Flight tabs and across a reload, and a selected component the `spec` model doesn't list SHALL draw no inspector. When the lines can't be matched (their count differs from the model's, or the tab's own JSON run fails or doesn't parse), the tab SHALL draw its chart with no pressable line and no inspector. Other surfaces SHALL have no pressable line and no inspector.
+
+#### Serves
+- capability/see-project-state
+
+#### Needs
+- view/spec-component-lines
+- check.coverage/state-names
+- view/spec-view
+
+#### Scenario: select a node
+- GIVEN a terminal pane 80 columns wide on the Spec tab, whose `clm view spec --format ansi` prints the checkout line and lines for `r`, `a` and `b`, and whose `clm view spec --format json` lists `r`, `a` and `b` in that order, `a` with title `Alpha`, owners `@o`, `depends_on` `[b]`, 3 current of 4 and 1 unbuilt, and whose `clm view flight --format json` lists `a` as `ready`, with pending requirement `a/x` `unbuilt`
+- WHEN the person presses `a`'s line
+- THEN the pane draws, above the chart, lines holding `a` and `Alpha`, `@o` and `depends on b`, `3/4` and `1 unbuilt`, `ready` and `a/x` with `unbuilt`, and a `Close` button, and `a`'s line is still drawn in the chart
+
+#### Scenario: models run
+- GIVEN a terminal pane
+- WHEN it draws the Spec tab with nothing selected, the Spec tab with `a` selected, and the Blockers tab with `a` selected
+- THEN beside each chart it runs `clm view spec --format json` alone; then that and `clm view flight --format json`; then `clm view blockers --format json` alone
+
+#### Scenario: cut ID
+- GIVEN that pane, with `clm view spec --format ansi` cutting `a`'s ID as `al…`, the model's second component being `alongname`
+- WHEN the person presses the line `al…`
+- THEN the inspector is `alongname`'s
+
+#### Scenario: converged
+- GIVEN that pane, with `b` absent from `clm view flight --format json`'s `/nodes`
+- WHEN the person presses `b`'s line
+- THEN the inspector's work in flight reads `converged` and lists no requirement
+
+#### Scenario: deselect
+- GIVEN `a` selected
+- WHEN the person presses `a`'s line, and in a second run presses `Close`
+- THEN both times no inspector is drawn
+
+#### Scenario: across tabs and a reload
+- GIVEN `a` selected on the Spec tab
+- WHEN the person opens the Flight tab, and the module is then reloaded
+- THEN both times the Flight tab draws `a`'s inspector above the chart, and `a`'s line between `components` and `changes` is pressable
+
+#### Scenario: no inspector
+- GIVEN `a` selected on the Spec tab, and three redraws: one whose `clm view spec --format ansi` prints three component lines and whose `clm view spec --format json` lists four components, one whose model no longer lists `a`, and one that lists `a` again
+- WHEN the pane draws each
+- THEN the first draws the three lines as text, with no pressable line and no inspector, the second holds no inspector, and the third holds `a`'s
+
+#### Scenario: model fails
+- GIVEN `a` selected, and a `clm view flight --format json` that exits 1 with `boom` on stderr
+- WHEN the Spec tab draws
+- THEN the inspector holds `a`, `Alpha` and `boom` where its work in flight would be, and when `clm view spec --format json` fails instead on the Flight tab, the inspector holds `a` and that run's stderr where the title and counts would be
+
+#### Scenario: model unreadable
+- GIVEN `a` selected on the Spec tab, and a `clm view flight --format json` that exits 0 printing `nope`
+- WHEN the pane draws
+- THEN the inspector holds `clm view flight --format json printed no model the pane can read` where its work in flight would be
+
+#### Scenario: no presses on the desktop
+- GIVEN `a` selected, and the pane on the desktop surface
+- WHEN the pane draws the Spec tab
+- THEN it draws no inspector and no pressable line
+
+### Requirement: superseded-draw <!-- base: 53be288d47cf7554 -->
+A pane draw one of whose calls to Claude Code is cut short because a newer draw replaced it, Claude Code rejecting that call with a message that ends in `aborted` with no letter, digit or `_` just before it, SHALL end without throwing and draw nothing of its own, so Claude Code reports no hook as having thrown, and the newer draw SHALL draw the pane. A run of `clm` or of git that Claude Code cut short SHALL NOT be kept as the answer of that run, so the newer draw runs it again. Any other failure of a draw SHALL be shown in the pane.
+
+#### Scenario: opening replaces the first draw
+- GIVEN a session in a CLM repository with no pane open
+- WHEN the person runs `/clm:view`, and the engine aborts the first draw's `clm view` run once the redraw that opening starts replaces that draw, and in a second run aborts that draw's every later call too, its check that the session's directory exists among them
+- THEN the first draw's hook resolves without drawing and without throwing, and the second draw runs `clm view` again and shows its chart
+
+#### Scenario: another failure still shows
+- GIVEN an open pane whose `clm view` rejects with a message that doesn't end in `aborted`
+- WHEN it redraws
+- THEN the pane shows why `clm` couldn't start
+
+### Requirement: build-opens-panel <!-- base: 10e6e6a208b018fd -->
+When Claude Code expands a skill's prompt for the model, whether the person typed its slash command or the model called the Skill tool, the panel SHALL leave the prompt the model reads unchanged. For the `clm` plugin's `build` skill (named `clm:build`, or `build` from the plugin `clm`), when the session's `cwd` is in a CLM repository as `/clm:view` finds one and Claude Code lists no pane `CLM`, open or waiting for room, the panel SHALL open the pane as `/clm:view` with no argument does: on the Queue tab, redrawing as `views-panel` says and sampling as `machine-charts` says from then on. When the pane is listed it SHALL leave it as it is, its tab unchanged. Outside a CLM repository, and for any other skill, it SHALL open nothing. A failure while opening SHALL leave the prompt unchanged.
+
+#### Scenario: build opens the closed panel
+- GIVEN a session in a CLM repository with `clm-panel` loaded and no pane `CLM` listed
+- WHEN the `clm:build` skill's prompt is expanded
+- THEN the pane `CLM` is opened on the Queue tab, and the prompt the model reads is unchanged
+
+#### Scenario: the open panel is left alone
+- GIVEN the same session with the pane `CLM` listed, showing the Spec tab
+- WHEN the `clm:build` skill's prompt is expanded
+- THEN no pane is opened and the tab is still Spec
+
+#### Scenario: not a CLM repository
+- GIVEN a session whose `cwd` has no `specs/SPEC.md` up to its git root and no pane `CLM` listed
+- WHEN the `clm:build` skill's prompt is expanded
+- THEN no pane is opened
+
+#### Scenario: another skill
+- GIVEN a session in a CLM repository with no pane `CLM` listed
+- WHEN the `clm:propose` skill's prompt is expanded
+- THEN no pane is opened
+
+#### Scenario: opening fails
+- GIVEN a session in a CLM repository with no pane `CLM` listed, where opening a pane fails
+- WHEN the `clm:build` skill's prompt is expanded
+- THEN the prompt the model reads is unchanged
+
+#### Serves
+- capability/watch-beside-chat
+
+#### Needs
+- view.repo/view-queue
+
+### Requirement: build-row-lifecycle <!-- base: f82ccf351419d246 -->
+Only running, waiting and failed runs SHALL be drawn among the build rows (`build-rows`). A run whose turn ends with an answer SHALL be waiting while Claude Code lists its agent as `waiting` on background work it owns, and `done` otherwise. At each 30-second redraw and at session start the panel SHALL check again: a `done` run whose agent is listed `waiting` SHALL be waiting again, and a waiting run whose agent is listed neither `waiting` nor `running`, or isn't listed, SHALL be `done`; when Claude Code can't list its agents, the runs SHALL stay as they were. A run whose turn ends with any other reason SHALL be failed; a run that finishes `done` SHALL leave the rows at once; and a failed run SHALL keep its row, with a `Dismiss` button that removes it, until pressed. A listed run SHALL be running again and drawn, keeping its tokens, cost, round and task list, when Claude Code starts a turn of its agent (resuming it when its background work ends, or a message waking it) or spawns its agent again, dismissed or not, and when a model request of it arrives while it is waiting or `done`. After a reload, a running or waiting run whose agent Claude Code no longer lists SHALL be dropped from the list. The list SHALL hold only the latest 200 runs the session launched: an older run, a running one included, SHALL be dropped from it, so it is neither drawn, nor counted in the totals, nor counted toward a later run's round. A drawn run whose parent isn't drawn SHALL take its parent's place, and a run whose parent the list doesn't hold SHALL be drawn at the top level. Clearing or resuming the session SHALL empty the list; quitting it SHALL NOT.
+
+#### Scenario: finished and failed builds
+- GIVEN an open Queue pane on the terminal surface whose chart's running entries are `build:git` then `build:init`, a build of `git` with a nested subagent `code review` whose turns complete with reason `answer` while Claude Code lists their agents `completed`, and a build of `init` whose turn completes with a reason other than `answer`
+- WHEN the pane draws
+- THEN no row holds `build git` or `code review`, `build:init`'s line follows `build:git`'s, the `init` build's row shows `✗` in rose and a `Dismiss` button, and the totals line still counts all three runs' tokens and cost
+
+#### Scenario: dismissed and cleared
+- GIVEN a failed build not dismissed
+- WHEN the person presses its `Dismiss` and the pane draws, and in a second run a `session.end` with reason `clear` arrives instead and the pane draws
+- THEN after the press no row is drawn for it while the totals line still counts it, and after the clear no build row and no totals line is drawn
+
+#### Scenario: failed child of a finished build
+- GIVEN a build of `git` that finished `done`, whose nested subagent `code review` failed
+- WHEN the pane draws
+- THEN `code review`'s row follows `build:git`'s line at the top level under that line, without `└`
+
+#### Scenario: orphan
+- GIVEN a running subagent whose parent agent the list doesn't hold, and whose prompt has no `loop run` line
+- WHEN the pane draws
+- THEN its row follows the `agents` heading at the top level, without `└`
+
+#### Scenario: waiting on its own check
+- GIVEN a build of `git` whose turn completes with reason `answer` while Claude Code lists its agent `waiting`
+- WHEN the pane draws
+- THEN its row is under `build:git`'s line with `●` and `waiting`, and the elapsed time keeps growing each second
+
+#### Scenario: resumed on its own
+- GIVEN a build of `git` whose turn completed with reason `answer` while its agent was listed `completed`, so it is drawn no more
+- WHEN Claude Code starts a turn of its agent and the pane draws
+- THEN its row is under `build:git`'s line again with `●` and no `waiting`, keeping its earlier tokens
+
+#### Scenario: resumed by a request
+- GIVEN a build of `git` that is waiting, one that is `done`, and one that keeps a task list of one task and is `done`
+- WHEN a model request of the first and of the second arrives, and Claude Code spawns the third's agent again, and the pane draws
+- THEN each is running again with `●`, keeping its earlier tokens and round, and the third keeps its task
+
+#### Scenario: waiting reconciled
+- GIVEN a build drawn `waiting`, and another whose turn completes with reason `answer` while its agent is still listed `running`, so it finishes `done`
+- WHEN the pane's next 30-second redraw comes, with Claude Code listing the first's agent `completed` and the second's `waiting`
+- THEN no row holds the first, the totals line still counts it, and the second's row is drawn again with `waiting`
+
+#### Scenario: the list keeps 200
+- GIVEN a session that launched 201 runs, the first, described `first`, still running, and no other described `first`
+- WHEN the pane draws, and then a run described `first` is spawned and the pane draws again
+- THEN the first run has no row and the totals line doesn't count it, and the new `first` run's row holds no `round`
+
+#### Scenario: no agent list
+- GIVEN a build drawn `waiting`, and a Claude Code whose list of agents fails
+- WHEN the session starts again after a reload, and when the pane's next 30-second redraw comes
+- THEN both times the build's row is still drawn `waiting`
+
+#### Scenario: reload drops the lost
+- GIVEN, before a reload, runs `one` and `three` running and `two` done, and in a second run `one` waiting instead
+- WHEN the session starts after the reload and Claude Code lists only `three`'s agent
+- THEN both times the totals line counts `two` and `three` and not `one`, and `one` has no row
+
+### Requirement: build-row-cost <!-- base: 5e68018b98d656ce -->
+Each build row (`build-rows`) SHALL show its run's tokens, estimated cost marked `≈` and elapsed time. Tokens SHALL read as a whole number when they round to under 1000, else as whole thousands `<n>k` under 999 500, else as millions to one decimal `<n.n>M`; a cost SHALL read `$` and the dollars to the cent when they round to under $10.00, else to the tenth; and a time SHALL read `m:ss`, or `h:mm:ss` from an hour, in whole seconds. Each model request's cost SHALL be what `effort/prices` gives for its model ID and its input, output, cache-read and cache-write tokens, and a run's estimate their sum; a run that reported no model request SHALL take its tokens, cost and model from its turn's end. While the session's list holds a run, the rows SHALL end with a totals line `≈<cost> · <tokens> tokens · <time>`, followed by ` · <model> ×<n>` for each model name, the one with most runs first, over the runs the session's list holds (`build-row-lifecycle` says which: at most the latest 200), drawn or not, `<time>` running from the earliest start to the latest end, or to now while one hasn't ended. While a run is running or waiting, the Queue tab SHALL redraw its rows every second without running `clm view` again.
+
+#### Scenario: ticking without clm
+- GIVEN a running build and a pane that has run `clm view queue` once since its latest redraw
+- WHEN a second passes
+- THEN the pane redraws with a larger elapsed time, and `clm view` has not run again
+
+#### Scenario: cost estimate
+- GIVEN a run whose one model request used a million input tokens on a model the price table knows
+- WHEN the pane draws
+- THEN its row holds `≈$` followed by that model's input rate, and `1.0M tok`
+
+#### Scenario: priced as effort prices
+- GIVEN, for each model family `effort/prices` lists and for a model ID no family matches, a run whose model requests used a million tokens of input, of output, of cache reads and of cache writes in turn
+- WHEN the pane prices them
+- THEN each request costs what `effort/prices` gives for the same model ID and tokens
+
+#### Scenario: usage at the end
+- GIVEN a run that made no model request, whose turn ends with a million input tokens on `claude-haiku-4-5`
+- WHEN the pane draws
+- THEN the totals line counts `1.0M tokens` at `≈$1.00` and names `Haiku 4.5`
+
+#### Scenario: formats
+- GIVEN runs whose tokens, cost and time are 850, 85 000, 1 300 000, 999.6 and 999 600 tokens; $4, $9.996 and $12.34; and 65 and 3 725 seconds
+- WHEN the pane draws them
+- THEN they read `850`, `85k`, `1.3M`, `1k` and `1.0M`; `$4.00`, `$10.0` and `$12.3`; and `1:05` and `1:02:05`
+
+#### Scenario: two hundred runs
+- GIVEN a session that launched 201 runs
+- WHEN the pane draws
+- THEN the totals line counts the latest 200 and not the first
+
+#### Needs
+- effort/prices
+
+### Requirement: queue-tab <!-- base: f6749284d74da20e -->
+The Queue tab SHALL show `clm view queue --at origin/main`, with `--format ansi --width <the pane's columns>` on every surface, drawn in colour as its escapes say, so the entries `clm` colours as waiting on the human stand out wherever the pane is (`view/queue-view`), redrawn and fetched as the other tabs are (`views-panel`), and with the build rows under its running entries (`build-rows`). Its lines SHALL NOT be pressable, it SHALL draw no inspector, and the pane SHALL run no `clm view queue --format json` for it.
+
+#### Scenario: queue on the desktop
+- GIVEN an open pane on the desktop surface showing the Queue tab, whose `clm view queue` output holds the line `  fold:x  say "approve x"` wrapped in `\x1b[33m` and `\x1b[0m`
+- WHEN it redraws
+- THEN it runs `clm view queue --at origin/main --format ansi` with `--width`, runs no `--format text`, and draws `fold:x`'s line in amber
+
+#### Serves
+- capability/watch-beside-chat
+
+#### Needs
+- view.repo/view-queue
+
+### Requirement: queue-stop-buttons <!-- base: 14eb1ea39f117239 -->
+Above the Queue tab's chart the pane SHALL draw two buttons, `Drain` and `Stop now`, which run `clm build stop --drain` and `clm build stop --now` in the session's `cwd` when pressed, and then run the tab's views again. When the command exits non-zero the pane SHALL show its stderr above the chart until either button is pressed again or the pane next redraws for a reason `views-panel` lists (its opening, a tab change, a turn's end or the 30-second timer). While a line of the Queue chart reads, without its escapes and the spaces around it, `stop requested: drain` or `stop requested: now`, the pane SHALL draw that button's label (`Drain` for `drain`, `Stop now` for `now`) followed by ` · requested`, dimmed.
+
+#### Scenario: drain pressed
+- GIVEN an open pane on the Queue tab with a `clm` whose `build stop` succeeds
+- WHEN the person presses `Drain`
+- THEN the pane has run `clm build stop --drain`, then `clm view queue`, and drawn the chart
+
+#### Scenario: stop requested
+- GIVEN a queue chart whose loop line is `stop requested: now`
+- WHEN the pane draws
+- THEN the `Stop now` button reads `Stop now · requested`, dimmed
+
+#### Serves
+- capability/watch-beside-chat
+
+#### Needs
+- view.repo/view-queue
+- orchestrator.loop/build-stop
