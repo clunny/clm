@@ -1,6 +1,9 @@
 //! The plugin under `plugin/`: its package, hooks, skills, agent and `bin/clm` shim.
 // clm:reads plugin/skills/**
 // clm:reads plugin/commands/**
+// clm:reads plugin/bin/clm
+// clm:reads plugin/hooks/hooks.json
+// clm:reads .claude-plugin/marketplace.json
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -338,6 +341,7 @@ fn view_command() {
 
 #[test]
 fn launch_models() {
+    // clm:reads plugin/agents/**
     // req:plugin/launch-models@e8f4da39
     for agent in ["spec-auditor", "architecture-auditor", "spec-slimmer"] {
         let fm = frontmatter(&plugin().join(format!("agents/{agent}.md")));
@@ -900,6 +904,18 @@ fn is_root() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
 
+/// Makes its directories writable again when dropped, so a failing test leaves none behind.
+struct Writable(Vec<PathBuf>);
+
+impl Drop for Writable {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        for dir in &self.0 {
+            let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o755));
+        }
+    }
+}
+
 /// Sets `path`'s permission bits to `mode`.
 fn chmod(path: &Path, mode: u32) {
     use std::os::unix::fs::PermissionsExt;
@@ -918,6 +934,7 @@ fn shim_with_a_cache_it_cannot_write() {
         let cache = shim.version_cache();
         fs::create_dir_all(&cache).unwrap();
         let mark = cache.join(".unavailable");
+        let _restore = Writable(vec![cache.clone(), shim.path("closed")]);
         match case {
             "unwritable" => chmod(&cache, 0o555),
             "read-only mark" => {
@@ -967,10 +984,6 @@ fn shim_with_a_cache_it_cannot_write() {
             assert!(err.contains("can't write to"), "{case}: {err}");
         }
         assert!(!shim.cached(), "{case}");
-        chmod(&cache, 0o755);
-        if shim.path("closed").exists() {
-            chmod(&shim.path("closed"), 0o755);
-        }
     }
 }
 

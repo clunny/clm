@@ -11,6 +11,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0" 2>/dev/null)/.." 2>/dev/null && pwd -P)
 
 tmp=
 cache=
+skipped=
 # No binary: say how to get one, and exit 1. A hook exits 0 instead, so a missing binary
 # never breaks a session, and stays silent except at session start, which says the guard
 # is off (say-guard-is-off): SessionStart's stdout reaches Claude's context. A hook that
@@ -86,6 +87,7 @@ if [ ! -x "$bin" ]; then
   fi
   reason="$asset holds no clm"
   tar xzf "$tmp/$asset" -C "$tmp" clm >/dev/null 2>&1 && [ -f "$tmp/clm" ] || fail "$@"
+  reason="can't install clm into $cache"
   chmod +x "$tmp/clm" 2>/dev/null && mv -f "$tmp/clm" "$bin" 2>/dev/null || fail "$@"
   rm -rf "$tmp" "$cache/.unavailable" 2>/dev/null
 fi
