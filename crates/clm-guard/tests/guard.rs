@@ -263,7 +263,7 @@ fn pushing_branches_that_do_not_reach_main() {
 
 #[test]
 fn merging_into_main_through_the_host() {
-    // req:plugin.hooks.guard/host-routes-guard@8750869f
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
     // req:plugin.hooks.guard/push-guard@dabbe399
     // merging into main through the host
     for command in [
@@ -289,7 +289,7 @@ fn merging_into_main_through_the_host() {
 
 #[test]
 fn reading_or_merging_elsewhere_through_the_host() {
-    // req:plugin.hooks.guard/host-routes-guard@8750869f
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
     // reading or merging elsewhere through the host
     for command in [
         "gh api -X POST repos/o/r/merges -f base=impl/x/b -f head=main",
@@ -472,7 +472,7 @@ fn guard_allows_every_other_event() {
 
 #[test]
 fn guard_blocks_cutting_releases() {
-    // req:plugin.hooks.guard/release-guard@6e589859
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
     for command in [
         // dispatching a release
         "gh workflow run release.yml -f version=0.2.0",
@@ -503,6 +503,9 @@ fn guard_blocks_cutting_releases() {
         "gh workflow run --ref main release.yml",
         "gh workflow run --ref main --json release.yml",
         "gh workflow run -f version=1 Release",
+        "gh workflow run -f -r release.yml",
+        "gh workflow run --json release.yml",
+        "gh workflow run -- site.yml",
         // dispatching the site
         "gh workflow run site.yml",
         "gh workflow run .github/workflows/Site.YAML",
@@ -528,7 +531,7 @@ fn guard_blocks_cutting_releases() {
 
 #[test]
 fn guard_allows_reading_releases_and_runs() {
-    // req:plugin.hooks.guard/release-guard@6e589859
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
     for command in [
         // reading releases
         "gh release list",
@@ -551,9 +554,63 @@ fn guard_allows_reading_releases_and_runs() {
         "gh release -R o/r view v0.1.0",
         "gh release --repo o/r list",
         "gh workflow --repo o/r view release.yml",
+        // a value of `--ref` or `-r` that names a release workflow is no workflow argument
+        "gh workflow run --ref release ci.yml",
+        "gh workflow run -r site ci.yml",
+        "gh workflow run --ref=release ci.yml",
     ] {
         assert_eq!(guard(&bash(command)), Decision::Allow, "{command}");
     }
+}
+
+#[test]
+fn methods_as_gh_reads_them() {
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
+    for command in [
+        "gh api -XPOST repos/o/r/releases",
+        "gh api --method=post repos/o/r/releases",
+        "gh api -X GET -X POST repos/o/r/releases",
+    ] {
+        let why = blocks(&bash(command));
+        assert!(why.contains("humans-cut-releases"), "{command}: {why}");
+    }
+    allows(&bash("gh api -X get repos/o/r/releases"));
+}
+
+#[test]
+fn a_gh_call_behind_a_prefix() {
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
+    for command in [
+        "sudo gh release create v1",
+        "/usr/local/bin/gh release create v1",
+        "GH_TOKEN=x nohup gh release create v1",
+        "sudo -u gh gh release create v1",
+        "env -C /src/gh gh release create v1",
+    ] {
+        let why = blocks(&bash(command));
+        assert!(why.contains("humans-cut-releases"), "{command}: {why}");
+    }
+}
+
+#[test]
+fn a_gh_merge_behind_a_prefix() {
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
+    blocks_push(&bash("sudo gh pr merge 3 --squash"));
+}
+
+#[test]
+fn options_before_the_subcommand() {
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
+    for command in [
+        "gh workflow --ref x run release.yml",
+        "gh workflow -f a=b run release.yml",
+        "gh release --notes x create v1",
+    ] {
+        let why = blocks(&bash(command));
+        assert!(why.contains("humans-cut-releases"), "{command}: {why}");
+    }
+    let why = blocks_push(&bash("gh pr --body x merge 3"));
+    assert!(!why.contains("humans-cut-releases"), "{why}");
 }
 
 #[test]
@@ -779,11 +836,6 @@ fn guard_allows_an_implicit_push_it_cannot_decide() {
     // req:plugin.hooks.guard/push-guard@dabbe399
     let dir = TempDir::new().unwrap();
     assert_eq!(
-        guard(&bash_in_opt("git push", None)),
-        Decision::Allow,
-        "no cwd"
-    );
-    assert_eq!(
         guard(&bash_in_opt("git push", Some(dir.path()))),
         Decision::Allow,
         "not a repository"
@@ -901,7 +953,7 @@ fn a_push_whose_repository_the_guard_cannot_tell() {
 
 #[test]
 fn the_hosts_routes_outside_clm() {
-    // req:plugin.hooks.guard/host-routes-guard@8750869f
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     blocks_push(&bash_in("gh pr merge 3 --squash", &work));
@@ -913,7 +965,7 @@ fn the_hosts_routes_outside_clm() {
 
 #[test]
 fn guard_blocks_moving_main_through_the_api() {
-    // req:plugin.hooks.guard/host-routes-guard@8750869f
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
     blocks_push(&bash(
         "gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc",
     ));
@@ -1100,119 +1152,14 @@ fn other_pipes_are_allowed() {
 
 #[test]
 fn the_hooks_budgets_are_twenty_and_thirty_seconds() {
-    // req:plugin.hooks.guard/hook-budgets@991e0eaf
+    // req:plugin.hooks.guard/hook-budgets@60ab39c0
     assert_eq!(Budgets::HOOK.push, Duration::from_secs(20));
     assert_eq!(Budgets::HOOK.lookup, Duration::from_secs(30));
 }
 
-/// Every `.rs` file under `dir`, with its text.
-fn sources(dir: &Path) -> Vec<(std::path::PathBuf, String)> {
-    let mut found = Vec::new();
-    for entry in fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
-        if path.is_dir() {
-            found.extend(sources(&path));
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            let text = fs::read_to_string(&path).unwrap();
-            found.push((path, text));
-        }
-    }
-    found
-}
-
-#[test]
-fn nothing_shortens_the_hooks_budgets() {
-    // req:plugin.hooks.guard/hook-budgets@991e0eaf
-    let krate = Path::new(env!("CARGO_MANIFEST_DIR"));
-    // The guard's own names, not `clm-check`'s `Budgets`, which `main.rs` also uses.
-    let clm = sources(&krate.parent().unwrap().join("clm/src"));
-    assert!(
-        clm.iter().any(|(p, _)| p.ends_with("main.rs")),
-        "main.rs wasn't read"
-    );
-    for (path, text) in &clm {
-        assert!(
-            !text.contains("guard_within"),
-            "{} names `guard_within`",
-            path.display()
-        );
-        // A file that reaches `clm_guard` names `Budgets` only as `clm_check`'s, so no import
-        // over several lines or under an alias brings in the guard's.
-        let others = text.replace("clm_check::Budgets", "");
-        assert!(
-            !(text.contains("clm_guard") && others.contains("Budgets")),
-            "{} names the guard's `Budgets`",
-            path.display()
-        );
-    }
-    let own = sources(&krate.join("src"));
-    assert!(
-        own.iter().any(|(p, _)| p.ends_with("lib.rs")),
-        "lib.rs wasn't read"
-    );
-    for (path, text) in &own {
-        for (n, line) in text.lines().enumerate() {
-            let code = line.split("//").next().unwrap();
-            let reads_env = code.contains("env::var") || code.contains("var_os");
-            assert!(
-                !(reads_env && code.contains("BUDGET")),
-                "{}:{} reads a budget from the environment",
-                path.display(),
-                n + 1
-            );
-        }
-    }
-}
-
-#[test]
-fn the_hook_judges_with_the_hooks_budgets() {
-    // req:plugin.hooks.guard/hook-budgets@991e0eaf
-    let lib = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).unwrap();
-    // The whole function, whitespace aside, so its body is that one call and nothing else.
-    // Each brace sits in a string with its partner: `clm-coverage` finds a test's end by
-    // counting braces, and one alone would carry this test's span over every later test.
-    let words: Vec<&str> = lib.split_whitespace().collect();
-    let lib = words.join(" ");
-    let function = "pub fn guard(event: &str) -> Decision { guard_within(event, &Budgets::HOOK) }";
-    let guards = lib.matches("pub fn guard(").count();
-    assert_eq!(guards, 1, "lib.rs defines `guard` {guards} times");
-    assert!(lib.contains(function), "`guard` isn't `{function}`");
-    // The hook's own path, `clm hook guard`'s call, judges with the same budgets: across
-    // every source file, each judgement passes `Budgets::HOOK`, but `guard_within`'s, which
-    // passes the budgets it was given, and the call runs the judgement that does.
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let hook = "judge_event(agent_harness, event, &Budgets::HOOK, env)";
-    let within =
-        "judge_event( AgentHarness::ClaudeCode, event, budgets, &clm_config::process_env, )";
-    let definition = "judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets,";
-    for (path, text) in sources(&src) {
-        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-        for (at, _) in text.match_indices("judge_event(") {
-            let rest = &text[at..];
-            assert!(
-                [hook, within, definition]
-                    .iter()
-                    .any(|allowed| rest.starts_with(allowed)),
-                "{} judges with other budgets: {}",
-                path.display(),
-                &text[at..(at + 80).min(text.len())]
-            );
-        }
-    }
-    assert!(
-        lib.contains(hook),
-        "the hook doesn't judge with `Budgets::HOOK`"
-    );
-    let call = fs::read_to_string(src.join("command_call.rs")).unwrap();
-    assert!(
-        call.contains("guard_hook_in(agent_harness, event, env)"),
-        "`clm hook guard`'s call doesn't judge through `guard_hook_in`"
-    );
-}
-
 #[test]
 fn the_guard_and_the_hook_judge_with_the_hooks_budgets() {
-    // req:plugin.hooks.guard/hook-budgets@991e0eaf
+    // req:plugin.hooks.guard/hook-budgets@60ab39c0
     use clm_agent_harness::{AgentHarness::ClaudeCode, render};
     let dir = TempDir::new().unwrap();
     let w = dir.path().join("w");
@@ -1274,6 +1221,12 @@ fn the_guard_and_the_hook_judge_with_the_hooks_budgets() {
             rendered.stdout,
             "{event}"
         );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let expected = match rendered.stderr.as_str() {
+            "" => String::new(),
+            reason => format!("{reason}\n"),
+        };
+        assert_eq!(stderr, expected, "{event}");
     }
 }
 
@@ -1281,7 +1234,7 @@ const WHOLE_LINE_REFUSED: &str = "nothing in it ran";
 
 #[test]
 fn a_block_says_the_whole_command_line_was_refused() {
-    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    // req:plugin.hooks.guard/block-refuses-whole-command@050af7ab
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     for command in [
@@ -1296,7 +1249,7 @@ fn a_block_says_the_whole_command_line_was_refused() {
 
 #[test]
 fn two_refusing_rules_say_it_once() {
-    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    // req:plugin.hooks.guard/block-refuses-whole-command@050af7ab
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     let why = blocks(&bash_in(
@@ -1310,8 +1263,23 @@ fn two_refusing_rules_say_it_once() {
 }
 
 #[test]
+fn an_ask_the_agent_harness_refuses() {
+    // req:plugin.hooks.guard/block-refuses-whole-command@050af7ab
+    let event = bash("git commit -m m && clm approve spec/x");
+    for name in ["codex", "none"] {
+        let out = hook_args(&["guard", "--agent-harness", name], &event, &[]);
+        assert_eq!(out.status.code(), Some(2), "{name}: {out:?}");
+        let err = String::from_utf8(out.stderr).unwrap();
+        assert!(err.contains("own terminal"), "{name}: {err}");
+        assert_eq!(err.matches(WHOLE_LINE_REFUSED).count(), 1, "{name}: {err}");
+        let last = err.lines().last().unwrap();
+        assert!(last.contains(WHOLE_LINE_REFUSED), "{name}: {err}");
+    }
+}
+
+#[test]
 fn allowed_and_asked_commands_carry_no_such_line() {
-    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    // req:plugin.hooks.guard/block-refuses-whole-command@050af7ab
     allows(&bash("git commit -m m && clm land impl/x"));
     let why = asks_cmd("clm approve spec/x");
     assert!(!why.contains(WHOLE_LINE_REFUSED), "{why}");
@@ -1319,7 +1287,7 @@ fn allowed_and_asked_commands_carry_no_such_line() {
 
 #[test]
 fn a_push_to_main_under_codex_is_blocked() {
-    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    // req:plugin.hooks.guard/guard-per-agent-harness@1ce86c3d
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     let out = guard_hook(
@@ -1332,18 +1300,21 @@ fn a_push_to_main_under_codex_is_blocked() {
 
 #[test]
 fn an_approve_under_codex_says_to_use_the_humans_terminal() {
-    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    // req:plugin.hooks.guard/guard-per-agent-harness@1ce86c3d
     let out = guard_hook(
         clm_agent_harness::AgentHarness::Codex,
         &bash("clm approve spec/x"),
     );
     assert_eq!(out.exit_code, 2, "{out:?}");
     assert!(out.stderr.contains("own terminal"), "{out:?}");
+    // with the line `block-refuses-whole-command` adds to an ask it gives as a refusal
+    let last = out.stderr.lines().last().unwrap();
+    assert!(last.contains(WHOLE_LINE_REFUSED), "{out:?}");
 }
 
 #[test]
 fn claude_code_is_unchanged_and_other_events_pass() {
-    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    // req:plugin.hooks.guard/guard-per-agent-harness@1ce86c3d
     use clm_agent_harness::AgentHarness::ClaudeCode;
     let out = guard_hook(ClaudeCode, &bash("clm approve spec/x"));
     assert_eq!(out.exit_code, 0);
@@ -1471,7 +1442,7 @@ fn hook_args(args: &[&str], event: &str, env: &[(&str, &str)]) -> Output {
 
 #[test]
 fn the_call_prints_and_exits_as_the_hook_does() {
-    // req:plugin.hooks.guard/commands-in-crate@136dbe76
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
     let repo = clm_repo(None);
     // A block: the reason on the error stream, a line of its own, and exit 2.
     let push = bash_in("git push origin main", repo.path());
@@ -1517,7 +1488,7 @@ fn the_call_prints_and_exits_as_the_hook_does() {
 
 #[test]
 fn the_call_returns_2_on_arguments_it_cant_parse() {
-    // req:plugin.hooks.guard/commands-in-crate@136dbe76
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
     // An option it doesn't have, `--root` among them, since it takes no repository root (the
     // guard places each command by its event's `cwd`); the test's process goes on after each.
     for (args, named) in [
@@ -1534,8 +1505,85 @@ fn the_call_returns_2_on_arguments_it_cant_parse() {
 }
 
 #[test]
+fn the_call_prints_its_help() {
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
+    let description = "PreToolUse: exit 2 with the reason when a Bash command would cut a \
+                       release or push to `main`; print the `ask` decision when it would run \
+                       `clm approve`, or file a CLM defect as an issue";
+    for flag in ["--help", "-h"] {
+        let out = hook_args(&["guard", flag], &bash("clm approve spec/x"), &[]);
+        assert_eq!(out.status.code(), Some(0), "{flag}: {out:?}");
+        assert!(out.stderr.is_empty(), "{flag}: {out:?}");
+        let help = String::from_utf8(out.stdout).unwrap();
+        assert_eq!(help.lines().next(), Some(description), "{flag}: {help}");
+        assert!(
+            help.contains("Usage: clm hook guard [OPTIONS]"),
+            "{flag}: {help}"
+        );
+        let option = help
+            .lines()
+            .find(|l| l.contains("--agent-harness <AGENT_HARNESS>"))
+            .unwrap_or_else(|| panic!("{flag}: {help}"));
+        assert!(option.contains("[default: claude-code]"), "{flag}: {help}");
+        assert!(
+            option.contains(
+                "The agent harness running the hook: `claude-code` (the default), `codex` or `none`"
+            ),
+            "{flag}: {help}"
+        );
+    }
+}
+
+/// A stream whose every write fails.
+struct Broken;
+
+impl std::io::Write for Broken {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("broken"))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("broken"))
+    }
+}
+
+#[test]
+fn a_stream_that_fails_returns_2() {
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
+    let repo = clm_repo(None);
+    let ask = bash("clm approve spec/x");
+    let block = bash_in("git push origin HEAD:main", repo.path());
+    let lookup = |name: &str| std::env::var(name).ok();
+    let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+    let mut buffer = Vec::new();
+    let code = clm_guard::guard_command(
+        Vec::<String>::new(),
+        &ask,
+        &lookup,
+        &mut Broken,
+        &mut buffer,
+    );
+    assert_eq!(code, 2, "an ask on a failing output stream");
+    let code = clm_guard::guard_command(
+        Vec::<String>::new(),
+        &block,
+        &lookup,
+        &mut buffer,
+        &mut Broken,
+    );
+    assert_eq!(code, 2, "a block on a failing error stream");
+    // An agent harness it doesn't know returns 1, its failed write included.
+    let unknown = ["--agent-harness", "nope"];
+    let code = clm_guard::guard_command(unknown, &ask, &lookup, &mut buffer, &mut Broken);
+    assert_eq!(
+        code, 1,
+        "an unknown agent harness on a failing error stream"
+    );
+}
+
+#[test]
 fn the_call_reads_the_settings_from_its_environment() {
-    // req:plugin.hooks.guard/commands-in-crate@136dbe76
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
     // A report the guard can't show is refused under `ask`, and let through under
     // `backlog`, which only the lookup holds, not this process's environment.
     let nowhere = TempDir::new().unwrap();
@@ -1606,7 +1654,7 @@ fn guard_command_asks_with_the_reason() {
 
 #[test]
 fn guard_command_blocks_dispatching_a_release() {
-    // req:plugin.hooks.guard/release-guard@6e589859
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "gh workflow run release.yml -f version=0.2.0" },
@@ -1684,8 +1732,8 @@ fn take_calls(calls: &Path) -> Vec<String> {
 
 #[test]
 fn guard_blocks_rerunning_a_release_run() {
-    // req:plugin.hooks.guard/release-guard@6e589859
-    // req:plugin.hooks.guard/release-run-lookup@3024a9da
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
@@ -1776,6 +1824,20 @@ fn guard_blocks_rerunning_a_release_run() {
         let (code, why) = guard(command);
         assert_eq!(code, Some(2), "{command}: {why}");
     }
+    // an ID the guard can't know fails its lookup with no `gh` call, and a word that is no
+    // ID is nothing to look up
+    take_calls(&calls);
+    for command in [
+        "gh run rerun $RUN",
+        "gh run rerun --job $JOB",
+        "gh run rerun `cat id`",
+    ] {
+        let (code, why) = guard(command);
+        assert_eq!(code, Some(2), "{command}: {why}");
+        assert!(why.contains("humans-cut-releases"), "{command}: {why}");
+    }
+    assert_eq!(guard("gh run rerun abc"), (Some(0), String::new()));
+    assert_eq!(take_calls(&calls), Vec::<String>::new());
     let no_gh = TempDir::new().unwrap();
     let path = no_gh.path().to_str().unwrap();
     for command in ["gh run rerun 42", "gh run rerun --job 901"] {
@@ -1799,7 +1861,7 @@ fn guard_blocks_rerunning_a_release_run() {
 
 #[test]
 fn guard_looks_a_rerun_up_where_it_runs() {
-    // req:plugin.hooks.guard/release-run-lookup@3024a9da
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/p/q");
@@ -1891,6 +1953,41 @@ fn guard_looks_a_rerun_up_where_it_runs() {
     }
 }
 
+#[test]
+fn a_rerun_with_no_directory_makes_no_lookup() {
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
+    // a guard with no directory: it runs in a directory that has been removed, and the event
+    // has no `cwd`, so the re-run's segment has no checkout and every lookup fails
+    let fake = TempDir::new().unwrap();
+    let calls = fake.path().join("calls");
+    let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
+    let event = serde_json::json!({
+        "tool_name": "Bash",
+        "tool_input": { "command": "gh run rerun 42" },
+    })
+    .to_string();
+    let (code, err) = {
+        // The working directory is the process's, so it is moved only under the exclusive
+        // spawn lock, as `ProcessEnv` sets variables, and put back before the lock drops.
+        let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+        let _set = ProcessEnv::set([("PATH", path.as_str())].iter());
+        let home = std::env::current_dir().unwrap();
+        let gone = TempDir::new().unwrap();
+        std::env::set_current_dir(gone.path()).unwrap();
+        fs::remove_dir(gone.path()).unwrap();
+        let lookup = |name: &str| std::env::var(name).ok();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code =
+            clm_guard::guard_command(Vec::<String>::new(), &event, &lookup, &mut out, &mut err);
+        std::env::set_current_dir(home).unwrap();
+        assert!(out.is_empty(), "{out:?}");
+        (code, String::from_utf8(err).unwrap())
+    };
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("humans-cut-releases"), "{err}");
+    assert!(!calls.exists(), "gh was called: {:?}", take_calls(&calls));
+}
+
 /// A shell line printing `url` as `gh repo view --json url` would. A URL's `//` sits apart
 /// from the JSON's braces: `clm-coverage` reads a test's end by counting braces outside a
 /// `//` comment, so a test holding both on one line would never end.
@@ -1900,7 +1997,7 @@ fn echo_url(url: &str) -> String {
 
 #[test]
 fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
-    // req:plugin.hooks.guard/release-run-lookup@3024a9da
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     // a repository that can't be resolved: `repo view` fails, or its `url` isn't
     // `<scheme>://<host>/<owner>/<repo>`
     let api_ci = "if [ \"$1\" = api ]; then \

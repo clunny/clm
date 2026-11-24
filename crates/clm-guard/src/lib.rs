@@ -7,7 +7,7 @@ mod push;
 mod release;
 mod shell;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub use clm_agent_harness::Decision;
@@ -33,11 +33,22 @@ pub fn guard_hook(agent_harness: AgentHarness, event: &str) -> Rendered {
 /// `guard_hook` with `env` as the environment the settings load with; the `git` and `gh`
 /// the guard asks inherit the process's.
 fn guard_hook_in(agent_harness: AgentHarness, event: &str, env: Env) -> Rendered {
-    render(
-        agent_harness,
-        &judge_event(agent_harness, event, &Budgets::HOOK, env),
-    )
+    let decision = judge_event(agent_harness, event, &Budgets::HOOK, env);
+    let mut rendered = render(agent_harness, &decision);
+    // An agent harness that can't confirm refuses an ask, which cancels the whole command as
+    // a block does: the line follows what the agent harness adds (`block-refuses-whole-command`).
+    if matches!(decision, Decision::Ask(_)) && rendered.exit_code == 2 {
+        rendered.stderr = format!("{}\n{WHOLE_LINE_REFUSED}", rendered.stderr);
+    }
+    rendered
 }
+
+/// The line that ends every refusal: Claude Code, and an agent harness that refuses an ask,
+/// cancel the whole tool call on exit 2, while each reason speaks only of the part it judged
+/// (`block-refuses-whole-command`).
+const WHOLE_LINE_REFUSED: &str = "clm: the whole command line was refused and nothing in it \
+    ran, the commands chained before and after the refused part included; run again any of \
+    them you still need.";
 
 /// The environment the guard reads, as a lookup.
 type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
@@ -66,7 +77,7 @@ pub fn guard(event: &str) -> Decision {
 }
 
 /// `PreToolUse`: refuses a `Bash` command that would cut a release or move `main`, and
-/// has the human confirm one that runs `clm approve` (`approve-in-session`), or files a CLM
+/// has the human confirm one that runs `clm approve` (`approval-policy`), or files a CLM
 /// defect as an issue. A block wins over an ask. Git queries and `gh` lookups spend `budgets`.
 pub fn guard_within(event: &str, budgets: &Budgets) -> Decision {
     judge_event(
@@ -89,7 +100,13 @@ fn judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets, env:
     let Some(command) = event.command.as_deref() else {
         return Decision::Allow;
     };
-    judge_command(command, event.cwd.as_deref().map(Path::new), budgets, env)
+    // An event with no `cwd` runs in the guard's own working directory, and in none when
+    // that is gone (`approve-guard`).
+    let cwd = match event.cwd {
+        Some(cwd) => Some(PathBuf::from(cwd)),
+        None => std::env::current_dir().ok(),
+    };
+    judge_command(command, cwd.as_deref(), budgets, env)
 }
 
 /// The rules, whatever the agent harness: judges `command` run from `cwd`, loading the
@@ -101,7 +118,7 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env)
     // looked up might be one.
     let reruns: Vec<_> = judged
         .iter()
-        .filter_map(|j| release::rerun(&j.tokens, &j.command(), j.checkout.as_deref()))
+        .flat_map(|j| release::reruns(&j.tokens, &j.command(), j.checkout.as_deref()))
         .collect();
     if judged.iter().any(|j| release::cuts_release(&j.tokens))
         || release::reruns_release(&reruns, budgets.lookup)
@@ -151,7 +168,7 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env)
     }
     // `clm defect` reads `CLM_DEFECTS` from its own environment, which the segment can set.
     // Loaded once, and only when a segment runs `clm defect` without its own value, as
-    // `clm-hooks`' `settings` loads them, under `env`.
+    // `clm defect` loads them, under `env`.
     let asks_by_settings = std::cell::OnceCell::new();
     let files_issue = |j: &&Judged| {
         runs_defect(&j.tokens)
@@ -176,14 +193,7 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env)
         );
     }
     if !reasons.is_empty() {
-        // Claude Code cancels the whole tool call on exit 2, while each reason speaks only
-        // of the part it judged (`block-refuses-whole-command`).
-        reasons.push(
-            "clm: the whole command line was refused and nothing in it ran, the commands \
-             chained before and after the refused part included; run again any of them you \
-             still need."
-                .to_string(),
-        );
+        reasons.push(WHOLE_LINE_REFUSED.to_string());
         return Decision::Block(reasons.join("\n"));
     }
     let mut asks: Vec<String> = judged

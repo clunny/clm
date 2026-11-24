@@ -437,7 +437,6 @@ dependencies = [
  "clm-hooks",
  "serde_json",
  "tempfile",
- "toml",
 ]
 
 [[package]]

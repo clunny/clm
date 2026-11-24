@@ -13,40 +13,44 @@ use crate::shell::command::Command;
 /// Whether a segment with `tokens` dispatches the release workflow or writes a release
 /// with `gh`.
 pub(crate) fn cuts_release(tokens: &[String]) -> bool {
-    let Some(args) = gh::args(tokens) else {
-        return false;
-    };
-    let words = gh::words(args);
-    match (words.first().copied(), words.get(1).copied()) {
-        // The workflow argument is the first word after `workflow run`. The first word
-        // after the values of the flags `gh workflow run` takes is judged too, so a value
-        // before the workflow (`--ref main release.yml`) doesn't hide it.
-        (Some("workflow"), Some("run")) => {
-            let run = args.iter().position(|t| t == "run").unwrap_or(0);
-            let takes_value = |t: &str| {
-                matches!(
-                    t,
-                    "-R" | "--repo" | "-r" | "--ref" | "-f" | "-F" | "--field" | "--raw-field"
-                )
-            };
-            let past_values = (run + 1..args.len())
-                .find(|&i| !args[i].starts_with('-') && !takes_value(&args[i - 1]))
-                .map(|i| args[i].as_str());
-            [words.get(2).copied(), past_values]
-                .into_iter()
-                .flatten()
-                .any(names_release)
+    gh::calls(tokens).any(call_cuts_release)
+}
+
+/// Whether one `gh` call with `args` dispatches the release workflow or writes a release.
+fn call_cuts_release(args: &[String]) -> bool {
+    match gh::words(args)[..] {
+        [(_, "workflow"), (run, "run")] => {
+            workflow_argument(&args[run + 1..]).is_some_and(names_release)
         }
-        (Some("release"), Some(sub)) => {
+        [(_, "release"), (_, sub)] => {
             ["create", "edit", "upload", "delete", "delete-asset"].contains(&sub)
         }
-        (Some("api"), _) => {
+        [(api, "api"), ..] => {
+            let args = &args[api + 1..];
             args.iter()
                 .any(|t| t.contains("/dispatches") || t.contains("/releases"))
-                && gh::api_writes(&args[1..])
+                && gh::api_writes(args)
         }
         _ => false,
     }
+}
+
+/// The workflow argument among the tokens after `gh workflow run`'s command word `run`, read
+/// as `gh` reads its options: the options that take a value skip the next token, whatever it
+/// is; `--` makes the next token the operand; any other option stands alone.
+fn workflow_argument(args: &[String]) -> Option<&str> {
+    let mut args = args.iter().map(String::as_str);
+    while let Some(t) = args.next() {
+        match t {
+            "-R" | "--repo" | "-r" | "--ref" | "-f" | "--raw-field" | "-F" | "--field" => {
+                args.next();
+            }
+            "--" => return args.next(),
+            _ if t.starts_with('-') && t != "-" => {}
+            _ => return Some(t),
+        }
+    }
+    None
 }
 
 /// Whether a workflow argument names the release or the site workflow, as gh matches
@@ -82,8 +86,9 @@ pub(crate) struct Rerun {
     repo: Repo,
     /// The segment's own `GH_REPO=` and `GH_HOST=` assignments.
     env: Vec<(&'static str, String)>,
-    /// The checkout the segment runs in.
-    dir: PathBuf,
+    /// The checkout the segment runs in; with none (the guard's own directory is gone),
+    /// every lookup fails with no `gh` call (`approve-guard`).
+    dir: Option<PathBuf>,
 }
 
 /// The repository a re-run's lookups ask.
@@ -103,15 +108,35 @@ fn id_word(word: &str) -> Option<String> {
     (digits || word.contains(['$', '`'])).then(|| word.to_string())
 }
 
-/// The re-run of a segment with `tokens` and command `command`, run from `checkout`, when
-/// it runs `gh run rerun` with a run or job ID.
-pub fn rerun(tokens: &[String], command: &Command, checkout: Option<&Path>) -> Option<Rerun> {
-    let args = gh::args(tokens)?;
-    let words = gh::words(args);
-    if words.get(..2) != Some(&["run", "rerun"][..]) {
+/// The re-runs of a segment with `tokens` and command `command`, run from `checkout`: one for
+/// each of its `gh` calls that runs `gh run rerun` with a run or job ID.
+pub(crate) fn reruns(tokens: &[String], command: &Command, checkout: Option<&Path>) -> Vec<Rerun> {
+    gh::calls(tokens)
+        .filter_map(|args| rerun(args, command, checkout))
+        .collect()
+}
+
+/// The re-run of one `gh` call with `args`, when it runs `gh run rerun` with a run or job ID.
+fn rerun(args: &[String], command: &Command, checkout: Option<&Path>) -> Option<Rerun> {
+    let [(_, "run"), (rerun, "rerun")] = gh::words(args)[..] else {
         return None;
+    };
+    // The run ID: the first token after `rerun` that isn't an option or the value of one
+    // that takes a value.
+    let mut after = args[rerun + 1..].iter().map(String::as_str);
+    let mut run = None;
+    while let Some(t) = after.next() {
+        match t {
+            "-R" | "--repo" | "-j" | "--job" => {
+                after.next();
+            }
+            _ if t.starts_with('-') => {}
+            _ => {
+                run = id_word(t);
+                break;
+            }
+        }
     }
-    let run = words.get(2).and_then(|w| id_word(w));
     // A flag's values, alone or glued on (`--job=1`, `-j1`).
     let flag = |long: &str, short: &str| -> Vec<String> {
         args.iter()
@@ -143,7 +168,7 @@ pub fn rerun(tokens: &[String], command: &Command, checkout: Option<&Path>) -> O
         .into_iter()
         .filter_map(|name| command.assigned(name).map(|v| (name, v.to_string())))
         .collect();
-    let dir = checkout.unwrap_or(Path::new(".")).to_path_buf();
+    let dir = checkout.map(Path::to_path_buf);
     Some(Rerun {
         run,
         jobs,
@@ -221,8 +246,9 @@ impl Rerun {
     }
 
     /// One `gh` call's stdout, run in the re-run's checkout with its environment; `None`
-    /// when it fails or outlasts `deadline` (`bounded-runs`). A call still running then is
-    /// killed, and once `deadline` has passed no call is started.
+    /// when it fails or outlasts `deadline` (`bounded-runs`), and with no call when the
+    /// re-run has no checkout. A call still running at `deadline` is killed, and once
+    /// `deadline` has passed no call is started.
     fn gh(&self, args: Vec<String>, deadline: Instant) -> Option<Vec<u8>> {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let env: Vec<(&str, &OsStr)> = self.env.iter().map(|(n, v)| (*n, OsStr::new(v))).collect();
@@ -231,7 +257,7 @@ impl Rerun {
             env: &env,
         };
         let limit = deadline.saturating_duration_since(Instant::now());
-        clm_git::run_within(&self.dir, "gh", &args, options, limit).ok()
+        clm_git::run_within(self.dir.as_deref()?, "gh", &args, options, limit).ok()
     }
 }
 

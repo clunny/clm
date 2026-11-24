@@ -78,8 +78,8 @@ fn all_gone(pids: &Path, count: usize) {
 #[test]
 fn queries_and_lookups_that_outlast_their_budget_block() {
     // req:plugin.hooks.guard/push-guard@dabbe399
-    // req:plugin.hooks.guard/release-guard@6e589859
-    // req:plugin.hooks.guard/release-run-lookup@3024a9da
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     let original = std::env::var("PATH").unwrap();
     let cwd = TempDir::new().unwrap();
     let one_second = Budgets {
@@ -104,8 +104,8 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
     let Decision::Block(why) = decision else {
         panic!("not blocked: {decision:?}")
     };
-    // Well under the fake's 60 seconds, and wide enough for a loaded host.
-    assert!(took.as_secs() < 30, "{took:?}");
+    // Within the 5 seconds `release-run-lookup`'s scenario allows, far under the fake's 60.
+    assert!(took.as_secs() < 5, "{took:?}");
     assert!(
         why.contains("guard-blocks-push-to-main")
             && why.contains("didn't answer in time")
@@ -150,7 +150,7 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
         panic!("not blocked: {decision:?}")
     };
     assert!(why.contains("didn't answer in time"), "{why}");
-    assert!(took.as_secs() < 30, "{took:?}");
+    assert!(took.as_secs() < 5, "{took:?}");
     let calls = fs::read_to_string(&calls).unwrap();
     // Spawn overhead may delay the fifth past the deadline; a sixth never starts.
     assert!((1..=5).contains(&calls.lines().count()), "{calls}");
@@ -202,7 +202,7 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
                 panic!("{command}: not blocked: {decision:?}")
             };
             assert!(why.contains("humans-cut-releases"), "{command}: {why}");
-            assert!(took.as_secs() < 30, "{command}: {took:?}");
+            assert!(took.as_secs() < 5, "{command}: {took:?}");
         }
         all_gone(&pids, 2);
     }

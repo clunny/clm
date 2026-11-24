@@ -304,16 +304,16 @@ impl Query<'_> {
 /// a write to `git/refs/heads/main`, a merge with base `main`, merging a pull request, or
 /// a GraphQL mutation that merges or moves a ref.
 pub(crate) fn host_moves_main(tokens: &[String]) -> bool {
-    let Some(args) = gh::args(tokens) else {
-        return false;
+    gh::calls(tokens).any(call_moves_main)
+}
+
+/// Whether one `gh` call with `args` moves or merges into `main` through the host.
+fn call_moves_main(args: &[String]) -> bool {
+    let args = match gh::words(args)[..] {
+        [(_, "pr"), (_, "merge")] => return true,
+        [(api, "api"), ..] => &args[api + 1..],
+        _ => return false,
     };
-    let words = gh::words(args);
-    if words.get(..2) == Some(&["pr", "merge"][..]) {
-        return true;
-    }
-    if words.first() != Some(&"api") {
-        return false;
-    }
     if args.iter().any(|t| t == "graphql") {
         return args.iter().any(|t| {
             [
@@ -326,7 +326,7 @@ pub(crate) fn host_moves_main(tokens: &[String]) -> bool {
             .any(|m| t.contains(m))
         });
     }
-    if !gh::api_writes(&args[1..]) {
+    if !gh::api_writes(args) {
         return false;
     }
     let paths = || {
