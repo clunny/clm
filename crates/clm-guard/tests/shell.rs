@@ -622,7 +622,8 @@ fn guard_follows_cd_into_a_worktree() {
     for command in [
         "cd nowhere; git push",
         "cd nowhere && git push",
-        "cd ../ma* && git push",
+        // A glob with no match is the word as written, which isn't there.
+        "cd nowhere* && git push",
     ] {
         blocks_push(&bash_in_opt(command, Some(dir.path())));
     }
@@ -672,6 +673,9 @@ fn guard_resets_on_a_cd_it_cannot_follow() {
         "cd w && cd ~/w && git push",
         "cd w && cd && git push",
         "cd w && cd `pwd` && git push",
+        // A `$` or `~` resets before any glob is expanded.
+        "cd w && cd $D* && git push",
+        "cd w && cd ~/w* && git push",
     ] {
         blocks_push(&bash_in_opt(command, Some(dir.path())));
     }
@@ -685,11 +689,13 @@ fn guard_keeps_a_cd_it_could_not_follow_until_an_absolute_one() {
     checkout_on(dir.path(), "impl/x/b");
     checkout_on(&dir.path().join("m"), "main");
     let absolute = dir.path().join("m");
-    let why = blocks_push(&bash_in_opt(
-        &format!("cd gone; cd {} && git push", absolute.display()),
-        Some(dir.path()),
-    ));
-    assert!(!why.contains("cd gone"), "{why}");
+    for cd in ["cd", "cd -P"] {
+        let why = blocks_push(&bash_in_opt(
+            &format!("cd gone; {cd} {} && git push", absolute.display()),
+            Some(dir.path()),
+        ));
+        assert!(!why.contains("cd gone"), "{why}");
+    }
     for prefix in ["env -C", "sudo -D"] {
         let why = blocks_push(&bash_in_opt(
             &format!("cd gone; {prefix} {} git push", absolute.display()),
@@ -699,6 +705,55 @@ fn guard_keeps_a_cd_it_could_not_follow_until_an_absolute_one() {
     }
     let why = blocks_push(&bash_in_opt("cd gone; cd m && git push", Some(dir.path())));
     assert!(why.contains("cd gone"), "{why}");
+}
+
+/// A checkout on `impl/x/b` with a worktree-like checkout `m` under it on `main`.
+fn impl_with_m() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    checkout_on(dir.path(), "impl/x/b");
+    checkout_on(&dir.path().join("m"), "main");
+    dir
+}
+
+#[test]
+fn a_cd_with_options_or_several_directories() {
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // a cd with options or several directories
+    let dir = impl_with_m();
+    for command in [
+        "cd -P m && git push",
+        "cd -LPe m && git push",
+        "cd -- m && git push",
+        "cd m; cd m x; git push",
+        "cd m; cd -x .; git push",
+    ] {
+        blocks_push(&bash_in(command, dir.path()));
+    }
+    // A `cd` that fails stays where it was.
+    allows(&bash_in("cd -x m; git push", dir.path()));
+    allows(&bash_in("cd m x; git push", dir.path()));
+}
+
+#[test]
+fn a_cd_into_a_glob() {
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // a cd into a glob
+    let dir = impl_with_m();
+    fs::create_dir(dir.path().join("x1")).unwrap();
+    fs::create_dir(dir.path().join("x2")).unwrap();
+    for command in [
+        "cd m* && git push",
+        "cd [m] && git push",
+        "cd m; cd ../x*; git push",
+        "env -C m* git push",
+        "sudo -D m* git push",
+        "git -C m* push",
+    ] {
+        blocks_push(&bash_in(command, dir.path()));
+    }
+    for command in ["cd 'm*' && git push", "git -C 'm*' push"] {
+        allows(&bash_in(command, dir.path()));
+    }
 }
 
 #[test]

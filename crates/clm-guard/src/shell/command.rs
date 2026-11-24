@@ -10,7 +10,14 @@ pub struct Command<'a> {
     /// Every `NAME=value` among the skipped tokens, in order; the last of a name wins.
     pub assigns: Vec<(&'a str, &'a str)>,
     /// The directories `env -C` or `sudo -D` move the command's checkout by, in order.
-    pub chdir: Vec<&'a str>,
+    pub chdir: Vec<Dir<'a>>,
+}
+
+/// A directory an `env -C` or `sudo -D` gives: its value, and the index of its token
+/// when the value is a whole token (`-C m`), not glued to its option (`-Cm`).
+pub struct Dir<'a> {
+    pub value: &'a str,
+    pub token: Option<usize>,
 }
 
 impl Command<'_> {
@@ -87,6 +94,8 @@ struct Valued<'a> {
     /// The option, `-x` or `--name`.
     name: &'a str,
     value: Option<&'a str>,
+    /// The index of the value's token, when it is the next token.
+    token: Option<usize>,
     /// The letters of a cluster before the option, as an option of their own (`-i` of
     /// `-iS`), when there are any.
     before: Option<&'a str>,
@@ -103,10 +112,12 @@ fn option<'a>(tokens: &'a [String], i: usize, values: &[&'a str]) -> (Option<Val
     let valued = |name, glued: Option<&'a str>, before| {
         let value = glued.or(tokens.get(i + 1).map(String::as_str));
         let next = if glued.is_some() { i + 1 } else { i + 2 };
+        let token = (glued.is_none() && i + 1 < tokens.len()).then_some(i + 1);
         (
             Some(Valued {
                 name,
                 value,
+                token,
                 before,
             }),
             next,
@@ -146,23 +157,28 @@ pub fn parse(tokens: &[String]) -> Command<'_> {
 
 /// `tokens` with each `env -S`/`--split-string` value among the command's prefixes split
 /// as `guard-quotes` splits a segment and read in the option's place, as `env` reads it
-/// (`guard-command-position`). Every rule reads a segment's tokens this way.
-pub fn expand(tokens: &[String]) -> Vec<String> {
+/// (`guard-command-position`), with their glob patterns (`globs`, one per token) kept
+/// beside them. Every rule reads a segment's tokens this way.
+pub fn expand(tokens: &[String], globs: &[Option<String>]) -> (Vec<String>, Vec<Option<String>>) {
     let mut tokens = tokens.to_vec();
+    let mut globs = globs.to_vec();
     // A value may hold another `env -S`. Each round replaces the option and its value with
     // fewer characters than they had, so the rounds end.
     while let Some(split) = walk(&tokens).1 {
         let mut out = tokens[..split.at].to_vec();
+        let mut patterns = globs[..split.at].to_vec();
         out.extend(split.before.map(String::from));
-        out.extend(
-            crate::shell::scan::segments(split.value)
-                .into_iter()
-                .flat_map(|s| s.tokens),
-        );
+        patterns.extend(split.before.map(|_| None));
+        for segment in crate::shell::scan::segments(split.value) {
+            out.extend(segment.tokens);
+            patterns.extend(segment.globs);
+        }
         out.extend_from_slice(&tokens[split.end..]);
+        patterns.extend_from_slice(&globs[split.end.min(globs.len())..]);
         tokens = out;
+        globs = patterns;
     }
-    tokens
+    (tokens, globs)
 }
 
 /// The command of a segment with `tokens`, and the first `env -S` value among its
@@ -221,7 +237,10 @@ fn walk(tokens: &[String]) -> (Command<'_>, Option<Split<'_>>) {
                         return (command, split);
                     }
                     if dirs.contains(&valued.name) {
-                        chdir.extend(valued.value);
+                        chdir.extend(valued.value.map(|value| Dir {
+                            value,
+                            token: valued.token,
+                        }));
                     }
                 }
             }

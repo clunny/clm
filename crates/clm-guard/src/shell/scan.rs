@@ -36,6 +36,9 @@ pub(crate) struct Segment {
     /// Its words, with the quotes and backslashes that quote removed and its redirections
     /// (`>f`, `2>&1`, `<<EOF` and a bare operator's target) left out.
     pub tokens: Vec<String>,
+    /// For each token, its glob pattern when a `*`, `?` or `[` in it stood outside quotes:
+    /// the token with each quoted wildcard and each backslash escaped (`guard-checkout`).
+    pub globs: Vec<Option<String>>,
     pub sep: Sep,
     /// The bodies of the heredocs it opened, in order.
     pub bodies: Vec<String>,
@@ -98,10 +101,12 @@ struct Scan {
     unbalanced: bool,
 }
 
-/// A word as scanned, and whether it holds a redirection operator outside quotes.
+/// A word as scanned, whether it holds a redirection operator outside quotes, and its glob
+/// pattern when it holds a `*`, `?` or `[` outside quotes.
 struct Word {
     text: String,
     redirect: bool,
+    glob: Option<String>,
 }
 
 /// The quote the scan is inside.
@@ -147,6 +152,11 @@ struct Scanner<'a> {
     subs: Vec<String>,
     /// Whether a backtick substitution is open.
     tick: bool,
+    /// The current word's glob pattern so far, whether a wildcard in it stood outside
+    /// quotes, and how much of the word it mirrors.
+    pattern: String,
+    glob: bool,
+    noted: usize,
 }
 
 impl<'a> Scanner<'a> {
@@ -166,6 +176,9 @@ impl<'a> Scanner<'a> {
             start: 0,
             subs: Vec::new(),
             tick: false,
+            pattern: String::new(),
+            glob: false,
+            noted: 0,
         }
     }
 
@@ -228,9 +241,12 @@ impl<'a> Scanner<'a> {
                     }
                     _ => self.word.push(c),
                 }
+                self.note(true);
                 i += width;
                 continue;
             }
+            // A character a backslash escapes is quoted.
+            let escaped = quotes && c == '\\';
             match c {
                 '\'' if quotes => {
                     quote = Some(Quote::Single);
@@ -336,6 +352,7 @@ impl<'a> Scanner<'a> {
                     self.started = true;
                 }
             }
+            self.note(escaped);
             i += width;
         }
         self.end_segment(text.len(), Sep::Newline);
@@ -365,15 +382,35 @@ impl<'a> Scanner<'a> {
         self.redirect = true;
     }
 
+    /// Mirrors the word's characters not yet noted into its glob pattern: a quoted `*`, `?`,
+    /// `[` or `]`, and every backslash, escaped, so only the characters that stood outside
+    /// quotes match as wildcards.
+    fn note(&mut self, quoted: bool) {
+        for c in self.word[self.noted..].chars() {
+            if c == '\\' || (quoted && "*?[]".contains(c)) {
+                self.pattern.push('\\');
+            } else if !quoted && "*?[".contains(c) {
+                self.glob = true;
+            }
+            self.pattern.push(c);
+        }
+        self.noted = self.word.len();
+    }
+
     fn end_word(&mut self) {
+        self.note(false);
+        let pattern = std::mem::take(&mut self.pattern);
         if self.started || !self.word.is_empty() {
             self.words.push(Word {
                 text: std::mem::take(&mut self.word),
                 redirect: self.redirect,
+                glob: self.glob.then_some(pattern),
             });
         }
         self.started = false;
         self.redirect = false;
+        self.glob = false;
+        self.noted = 0;
     }
 
     /// Ends the segment at `at`, by `sep`; the next starts after the separator.
@@ -446,7 +483,8 @@ impl<'a> Scanner<'a> {
             .iter()
             .map(|d| Segment {
                 text: text[d.start..d.end.max(d.start)].trim().to_string(),
-                tokens: tokens(&d.words),
+                tokens: tokens(&d.words).iter().map(|w| w.text.clone()).collect(),
+                globs: tokens(&d.words).iter().map(|w| w.glob.clone()).collect(),
                 sep: d.sep,
                 bodies: Vec::new(),
                 subs: d.subs.clone(),
@@ -630,7 +668,7 @@ fn unescape(text: &str, chars: &str) -> String {
 
 /// A segment's arguments: its words without its redirections, nor the target of an
 /// operator written alone (`> f`, `<< EOF`).
-fn tokens(words: &[Word]) -> Vec<String> {
+fn tokens(words: &[Word]) -> Vec<&Word> {
     let mut out = Vec::new();
     let mut target = false;
     for w in words {
@@ -641,7 +679,7 @@ fn tokens(words: &[Word]) -> Vec<String> {
             target = w.text.ends_with(['<', '>', '&']) || w.text.ends_with("<<-");
             continue;
         }
-        out.push(w.text.clone());
+        out.push(w);
     }
     out
 }
