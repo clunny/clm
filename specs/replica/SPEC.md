@@ -14,7 +14,7 @@ Crate `clm-replica`: a repository's derived state, kept up to date from the chan
 - `Replica::default()`: a new replica, holding nothing, which a runtime makes when it starts again from git.
 - `Replica::load(store)` and `save(store)`: the state, to and from a `Store` (`get(key) -> Option<bytes>`, `put(key, bytes)`, `delete_all()`), in chunks of at most 1 MiB each, so a store with a per-value limit holds it; `load` gives a new replica from a store that holds none that reads (`stores-in-chunks`).
 - `apply(change)`: takes a change a source has already fetched and marks the views stale. The changes are:
-  - `Tip { sha, files, removed }`: the default branch at a new commit, with the text of each file that changed and that `wanted` accepts, and the paths removed. Each file comes with its blob SHA, size, mode and whether it is binary.
+  - `Tip { sha, files, removed }`: the default branch at a new commit, with each file that changed and that `wanted` accepts, and the paths removed. Each file is an `Entry { path, sha, size, mode }`, its blob SHA, size and git mode, made into a `File` by one of `File::text(entry, text)`, a file read as text; `File::binary(entry)`, a blob the source says is binary; and `File::unfetched(entry)`, a file the source read nothing of (`files-a-source-gives`). A source builds a `File` only with these, so a field `File` gains breaks no source.
   - `Tree { sha, entries }`: the whole listing at a commit, to rebuild from, or to recover after a force-push.
   - `Ledger { branch, text }`: a ledger branch's `records.jsonl` at its tip, or its deletion (`text: None`).
   - `Ref { name, sha, time, change }`: a ref the views read, moved, created or deleted (`sha: None`). `change` is a spec ref's change files or an `impl/*` head's code key, when the source fetched them.
@@ -371,6 +371,18 @@ The replica's implementation view SHALL carry `answers`: the open answers of its
 - GIVEN a replica given a `Tree` change listing `specs/a/SPEC.md`, `src/b.rs`, `README.md`, a symlink `a/link` (mode `120000`) and a submodule `vendor/x` (mode `160000`)
 - WHEN `pending_fetch` is read, then a `Tip` change carrying `src/b.rs` with no text and not marked binary is applied and `pending_fetch` is read again
 - THEN the first read lists `specs/a/SPEC.md` then `src/b.rs`, and nothing else, and the second still lists `src/b.rs`
+
+#### Serves
+- capability/follow-from-browser
+- architecture/reuse-first
+
+### Requirement: files-a-source-gives
+A `File` made by `File::text(entry, text)` SHALL be held at `entry`'s path, blob SHA, size and mode as read: scanned for markers when it holds markers that count, its text kept when `keeps_text` accepts its path, and held as binary, scanned for none, when its text has a NUL byte in its first 8000 bytes. One made by `File::binary(entry)` SHALL be held as binary, with no text and no markers. One made by `File::unfetched(entry)` SHALL be held in the tree only, so `pending_fetch` still lists it. Each SHALL leave `pending_fetch` and the views as a file of the same fields given today does.
+
+#### Scenario: each kind of file
+- GIVEN a replica given a `Tree` change listing `specs/a/SPEC.md`, `src/a.rs`, `src/b.bin`, `src/nul.rs` and `src/c.rs`
+- WHEN a `Tip` change carries `File::text` of `specs/a/SPEC.md` and of `src/a.rs` citing a requirement, `File::binary` of `src/b.bin`, `File::text` of `src/nul.rs` whose text holds a NUL byte at offset 10 and a marker after it, and `File::unfetched` of `src/c.rs`, and `pending_fetch` is read
+- THEN `pending_fetch` lists `src/c.rs` only; the marker index holds `src/a.rs`'s marker and none from `src/nul.rs`; and the spec file's text is held
 
 #### Serves
 - capability/follow-from-browser
