@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use clm_ledger::Body;
 
 use crate::chain::State;
+use crate::kept::MIN_NAME;
 use crate::mutate::{Cite, cites, scratch};
 use crate::{Ctx, Error};
 
@@ -84,7 +85,8 @@ fn try_file(ctx: &Ctx, stop: &AtomicBool) -> Result<Option<Filed>, Error> {
 /// The items still to file: the entries each `mutated` record on the chain holds, by commit
 /// and component, and the requirements two or more newest records in a row left, by the
 /// commit of the second oldest of the run and component; each left out when a commit after
-/// the one it is named after already added its path.
+/// the one it is named after already added an item of its kind and component named by any
+/// prefix of that commit at least 7 characters long.
 fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
     let component = |id: &str| id.split('/').next().unwrap_or_default().to_string();
     let mut unproven: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
@@ -134,6 +136,9 @@ fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
             ctx.prefix,
             ctx.short(&commit)?
         );
+        // An item filed under any prefix of the commit at least 7 long counts, whatever
+        // length `rev-parse --short` gave it then.
+        let named = format!("{}backlog/{kind}-{component}-", ctx.prefix);
         let range = format!("{commit}..{}", ctx.base);
         let added = ctx.git(&[
             "log",
@@ -143,9 +148,14 @@ fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
             "--format=",
             &range,
             "--",
-            &format!(":(top){path}"),
+            &format!(":(top){}backlog/", ctx.prefix),
         ])?;
-        if added.trim().is_empty() {
+        let filed = added.lines().any(|line| {
+            line.strip_prefix(&named)
+                .and_then(|rest| rest.strip_suffix(".md"))
+                .is_some_and(|p| p.len() >= MIN_NAME && commit.starts_with(p))
+        });
+        if !filed {
             out.push(Candidate {
                 found: commit,
                 component,

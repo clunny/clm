@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::tree;
 
 /// The shortest name a log may have: `git rev-parse --short`'s least length.
-const MIN_NAME: usize = 7;
+pub(crate) const MIN_NAME: usize = 7;
 
 /// The path of the log a failed run of `commit` (a full commit ID) kept in the clone of `root`,
 /// a CLM root in any of its worktrees, or none. The file is `<name>.log` in
