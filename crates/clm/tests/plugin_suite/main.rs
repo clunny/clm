@@ -2,7 +2,7 @@
 // clm:reads plugin/skills/**
 // clm:reads plugin/commands/**
 // clm:reads plugin/bin/clm
-// clm:reads plugin/hooks/hooks.json
+// clm:reads plugin/hooks/*.json
 // clm:reads .claude-plugin/marketplace.json
 
 use std::fs;
@@ -161,9 +161,7 @@ fn hooks_wired() {
 
 #[test]
 fn codex_hooks_wired() {
-    // req:plugin/codex-hooks-wired@1b861624
-    // clm:reads plugin/hooks/codex.json
-    // clm:reads plugin/hooks/hooks.json
+    // req:plugin/codex-hooks-wired@4867eba4
     let hooks = json(&plugin().join("hooks/codex.json"));
     let commands = |event: &str, matcher: Option<&str>| -> Vec<String> {
         hooks["hooks"][event]
@@ -192,9 +190,15 @@ fn codex_hooks_wired() {
         commands("PreToolUse", Some("Bash"))[0]
             .ends_with("bin/clm\" hook guard --agent-harness codex")
     );
-    // Claude Code's wiring is unchanged.
-    let claude = fs::read_to_string(plugin().join("hooks/hooks.json")).unwrap();
-    assert!(!claude.contains("--agent-harness"), "{claude}");
+    // autosync bounded for Codex
+    let stop: Vec<&Value> = hooks["hooks"]["Stop"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|g| g["hooks"].as_array().unwrap().iter())
+        .collect();
+    assert_eq!(stop.len(), 1, "{hooks}");
+    assert_eq!(stop[0]["timeout"], 30, "{hooks}");
 }
 
 /// Whether a markdown file exists with a non-empty `description` in its frontmatter.
