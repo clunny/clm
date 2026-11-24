@@ -176,6 +176,17 @@ fn session_start_reminds_to_upgrade() {
     // Nothing pending: no line.
     let text = start(&clm_repo(None));
     assert!(!text.contains("/clm:upgrade"), "{text}");
+    // A migration `init` holds pending (the unattended allow rules missing): the line, after
+    // the status.
+    let repo = clm_repo(None);
+    fs::remove_file(repo.path().join(".claude/settings.json")).unwrap();
+    let text = start(&repo);
+    let claims = text.find("\nclaims\n").expect("claims section");
+    let line = text.find("/clm:upgrade").expect("reminder");
+    assert!(
+        line > claims && text.contains("migration(s) pending"),
+        "{text}"
+    );
     // A project a newer `clm` upgraded: the line, after the status.
     let repo = clm_repo(Some("upgraded = \"20990101-from-the-future\"\n"));
     let text = start(&repo);
@@ -544,6 +555,19 @@ fn a_stream_it_cannot_write_returns_2() {
     );
     assert_eq!(code, 2, "{}", String::from_utf8_lossy(&err));
     assert!(root.join("backlog/x.md").is_file());
+    // A failure it can't write to the error stream returns 2 too.
+    let mut out = Vec::new();
+    let code = clm_hooks::defect_command(
+        ["--title", "y", "--component", "nonesuch"],
+        Some(root),
+        root,
+        "report\n",
+        &lookup,
+        &mut out,
+        &mut Broken,
+    );
+    assert_eq!(code, 2);
+    assert!(!root.join("backlog/y.md").exists());
     let event = serde_json::json!({ "cwd": root }).to_string();
     let code = clm_hooks::session_start_command(
         std::iter::empty::<&str>(),

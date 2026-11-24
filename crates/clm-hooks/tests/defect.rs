@@ -286,6 +286,7 @@ fn backlog_odd_titles() {
         ("Ça casse", "backlog/a-casse.md"),
         ("Gate: \"x\" # y", "backlog/gate-x-y.md"),
         ("!!!", "backlog/defect.md"),
+        (&"a".repeat(70), &format!("backlog/{}.md", "a".repeat(64))),
     ] {
         let out = defect(repo.path(), &["--title", title], REPORT, &[]);
         assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -724,6 +725,7 @@ fn defect_is_a_call_that_writes_its_streams() {
         String::from_utf8_lossy(&out.stdout).contains("off"),
         "{out:?}"
     );
+    assert!(!repo.path().join("backlog/x.md").exists(), "filed anyway");
 }
 
 #[test]

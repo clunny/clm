@@ -74,6 +74,7 @@ fn session_start_is_written_in_each_harnesss_form() {
         .as_str()
         .unwrap();
     assert!(ctx.contains("\nCLM status\n"), "{ctx}");
+    assert!(out.ends_with("}\n"), "one object and a newline: {out}");
 
     let (plain, code) = hook("session-start", "claude-code", &event);
     assert_eq!(code, 0);
