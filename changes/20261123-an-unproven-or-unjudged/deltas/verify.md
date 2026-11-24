@@ -54,7 +54,7 @@ At the end of every `clm verify --due` without `--dry-run`, in `local` mode, who
 - THEN it lands nothing
 
 #### Scenario: resolved under a shorter name
-- GIVEN a `mutated` record for a commit `R` with `unproven` `a/x@<current version>`, and records for commits `Q` and `R` each holding `a/y` under `left` with `a/y` existing in `origin/main`; a land after `R` that added `backlog/unproven-a-<first 7 of R>.md` and `backlog/unjudged-a-<first 7 of R>.md`, and a later land that deleted both; and the clone's `core.abbrev` set to 12
+- GIVEN one `mutated` record for a commit `R` holding `a/x@<current version>` under `unproven` and `a/y` under `left`, and one for an earlier commit `Q` holding `a/y` under `left`, with `a/y` existing in `origin/main`; a land after `R` that added `backlog/unproven-a-<first 7 of R>.md` and `backlog/unjudged-a-<first 7 of R>.md`, and a later land that deleted both; and the clone's `core.abbrev` set to 12
 - WHEN `clm verify --due` runs with nothing due
 - THEN it lands nothing
 
