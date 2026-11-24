@@ -14,8 +14,8 @@ use crate::shell::command::Command;
 pub(crate) enum Reach {
     /// It names `main`, or pushes every branch.
     Explicit,
-    /// It names no branch, or names `HEAD` or `@` among its refspecs, from a checkout on
-    /// `main`.
+    /// It names no branch, or names `HEAD` or `@`, with or without a leading `+`, among its
+    /// refspecs, from a checkout on `main`.
     OnMain,
     /// It names no branch, and git says the branch pushes to `main` (`@{push}`).
     PushesTo(String),
