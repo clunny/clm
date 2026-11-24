@@ -1,4 +1,4 @@
-//! The plugin under `plugin/`: its package, hooks, skills, agent and `bin/clm` shim.
+//! The plugin under `plugin/`: its package, hooks, skills, commands and `bin/clm` shim.
 // clm:reads plugin/skills/**
 // clm:reads plugin/commands/**
 // clm:reads plugin/bin/clm
@@ -197,14 +197,6 @@ fn codex_hooks_wired() {
     assert!(!claude.contains("--agent-harness"), "{claude}");
 }
 
-/// The YAML frontmatter of a markdown file.
-fn frontmatter(path: &Path) -> serde_yaml::Value {
-    let text = fs::read_to_string(path).unwrap();
-    let rest = text.strip_prefix("---\n").expect("frontmatter");
-    let (yaml, _) = rest.split_once("\n---\n").expect("frontmatter end");
-    serde_yaml::from_str(yaml).unwrap()
-}
-
 /// Whether a markdown file exists with a non-empty `description` in its frontmatter.
 fn described(file: &Path) -> bool {
     fs::read_to_string(file).ok().is_some_and(|text| {
@@ -337,19 +329,6 @@ fn view_command() {
     )
     .unwrap();
     assert!(command_gaps(tmp.path()).is_empty());
-}
-
-#[test]
-fn launch_models() {
-    // clm:reads plugin/agents/**
-    // req:plugin/launch-models@e8f4da39
-    for agent in ["spec-auditor", "architecture-auditor", "spec-slimmer"] {
-        let fm = frontmatter(&plugin().join(format!("agents/{agent}.md")));
-        assert_eq!(
-            fm["model"], "sonnet",
-            "{agent}: frontmatter must set model: sonnet"
-        );
-    }
 }
 
 #[path = "../../../clm-git/tests/exec/mod.rs"]
