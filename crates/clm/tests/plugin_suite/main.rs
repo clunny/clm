@@ -2,7 +2,7 @@
 // clm:reads plugin/skills/**
 // clm:reads plugin/commands/**
 // clm:reads plugin/bin/clm
-// clm:reads plugin/hooks/hooks.json
+// clm:reads plugin/hooks/*.json
 // clm:reads .claude-plugin/marketplace.json
 
 use std::fs;
@@ -162,7 +162,6 @@ fn hooks_wired() {
 #[test]
 fn codex_hooks_wired() {
     // req:plugin/codex-hooks-wired@4867eba4
-    // clm:reads plugin/hooks/codex.json
     let hooks = json(&plugin().join("hooks/codex.json"));
     let commands = |event: &str, matcher: Option<&str>| -> Vec<String> {
         hooks["hooks"][event]
