@@ -99,7 +99,7 @@ fn bash_in_opt(command: &str, cwd: Option<&Path>) -> String {
 
 #[test]
 fn quotes_hold_separators_and_lines() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
     // separators inside a message
     for command in [
         "git commit -m \"build; git push origin main is forbidden\"",
@@ -115,7 +115,7 @@ fn quotes_hold_separators_and_lines() {
 
 #[test]
 fn quotes_and_heredocs_in_comments_count_for_nothing() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
     for command in [
         "# it's here\ngit push origin main\n# that's all",
         "# use <<EOF style\ngit push origin main\nEOF",
@@ -124,12 +124,39 @@ fn quotes_and_heredocs_in_comments_count_for_nothing() {
         blocks_push(&bash(command));
     }
     // A `#` inside a word isn't a comment.
+    blocks_push(&bash("echo a#b; git push origin main"));
     blocks_push(&bash("echo a#'b\ngit push origin main"));
+    // One that begins a word comments out the rest of its line, separators included.
+    allows(&bash("echo x # ; git push origin main"));
+}
+
+#[test]
+fn a_continued_line_is_one_segment() {
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
+    // a continued line
+    for command in ["git push origin \\\nmain", "git push \\\norigin main"] {
+        blocks_push(&bash(command));
+    }
+    // Inside single quotes the backslash and newline stay.
+    allows(&bash("git commit -m 'a \\\ngit push origin main'"));
+}
+
+#[test]
+fn redirections_are_no_tokens() {
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
+    // redirections are no tokens
+    for command in ["> out git push origin main", "2>err git push origin main"] {
+        blocks_push(&bash(command));
+    }
+    let dir = main_with_w();
+    for command in ["cd w > /dev/null && git push", "cd w 2> err && git push"] {
+        allows(&bash_in(command, dir.path()));
+    }
 }
 
 #[test]
 fn quotes_keep_a_directory_with_a_space() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
     // a quoted directory with a space
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
@@ -141,7 +168,7 @@ fn quotes_keep_a_directory_with_a_space() {
 
 #[test]
 fn quotes_that_do_not_balance_are_ignored() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
     // unbalanced quotes
     blocks_push(&bash("echo don't; git push origin main"));
     blocks_push(&bash("echo \"a; git push origin 'main"));
@@ -153,7 +180,7 @@ fn quotes_that_do_not_balance_are_ignored() {
 
 #[test]
 fn quotes_in_a_heredoc_body_do_not_count() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
     // an apostrophe in a heredoc body
     allows(&bash(
         "cat > n.md <<'EOF'\ndon't\nEOF\ngit commit -m \"a; git push origin main\"",
@@ -162,14 +189,14 @@ fn quotes_in_a_heredoc_body_do_not_count() {
 
 #[test]
 fn quotes_inside_quotes_stay() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
     // a quote inside a quote
     allows(&bash("bash -c 'git commit -m \"a; git push origin main\"'"));
 }
 
 #[test]
 fn ansi_c_quotes() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
     // ANSI-C quotes
     blocks_push(&bash("echo $'\\''; git push origin main; echo \\'"));
     allows(&bash("git commit -m $'a\\'; git push origin main'"));
@@ -185,8 +212,8 @@ fn ansi_c_quotes() {
 
 #[test]
 fn a_heredoc_in_a_quoted_substitution() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // a heredoc in a quoted substitution
     let commit = "git commit -m \"$(cat <<'EOF'\nSay \"a; git push origin main\" here.\nEOF\n)\"";
     allows(&bash(commit));
@@ -220,7 +247,7 @@ fn a_heredoc_in_a_quoted_substitution() {
 
 #[test]
 fn redirections_separate_nothing() {
-    // req:plugin.hooks.guard.shell/guard-quotes@49fd6b7e
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
     let dir = main_with_w();
     for command in [
         "cd w &>/dev/null && git push",
@@ -234,7 +261,7 @@ fn redirections_separate_nothing() {
 
 #[test]
 fn wrapped_pushes_are_judged() {
-    // req:plugin.hooks.guard.shell/guard-command-position@381136c0
+    // req:plugin.hooks.guard.shell/guard-command-position@606ed8d7
     // wrapped pushes
     for command in [
         "(git push origin main)",
@@ -280,7 +307,7 @@ fn wrapped_pushes_are_judged() {
 
 #[test]
 fn clustered_options_and_split_strings() {
-    // req:plugin.hooks.guard.shell/guard-command-position@381136c0
+    // req:plugin.hooks.guard.shell/guard-command-position@606ed8d7
     // clustered options and split strings
     for command in [
         "sudo -Eu root git push origin main",
@@ -308,7 +335,7 @@ fn clustered_options_and_split_strings() {
 
 #[test]
 fn cd_in_a_subshell_stays_there() {
-    // req:plugin.hooks.guard.shell/guard-command-position@381136c0
+    // req:plugin.hooks.guard.shell/guard-command-position@606ed8d7
     let dir = main_with_w();
     // cd in a subshell
     allows(&bash_in("(cd w && git push)", dir.path()));
@@ -322,7 +349,7 @@ fn cd_in_a_subshell_stays_there() {
 
 #[test]
 fn prefixes_that_change_directory() {
-    // req:plugin.hooks.guard.shell/guard-command-position@381136c0
+    // req:plugin.hooks.guard.shell/guard-command-position@606ed8d7
     // a prefix that changes directory
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
@@ -386,8 +413,9 @@ fn with_push_body(command: &str) -> String {
 
 #[test]
 fn a_body_piped_into_a_shell() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
-    // a body piped into a shell
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
+    // a body piped into a shell; a pipe of standard error (`|&`)
     for command in [
         "cat <<'EOF' | bash",
         "cat <<'EOF' | tee log | sh",
@@ -400,7 +428,7 @@ fn a_body_piped_into_a_shell() {
 
 #[test]
 fn a_body_piped_elsewhere() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // a body piped elsewhere
     for command in [
         "cat <<'EOF' | grep x",
@@ -414,7 +442,7 @@ fn a_body_piped_elsewhere() {
 
 #[test]
 fn wrapped_shells_run_their_body() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // wrapped shells
     for command in [
         "sudo bash <<'EOF'",
@@ -434,7 +462,7 @@ fn wrapped_shells_run_their_body() {
 
 #[test]
 fn a_shell_running_its_argument() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // a shell running its argument
     for command in ["bash -ec 'cat > f' <<'EOF'", "sh -xc 'cat > f' <<'EOF'"] {
         allows(&bash(&with_push_body(command)));
@@ -447,7 +475,7 @@ fn a_shell_running_its_argument() {
 
 #[test]
 fn a_cd_in_a_body_stays_in_its_shell() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     let dir = main_with_w();
     allows(&bash_in(
         "cd w && cat <<'EOF' | bash\ngit push\nEOF",
@@ -466,7 +494,7 @@ fn a_cd_in_a_body_stays_in_its_shell() {
 
 #[test]
 fn cd_that_does_not_move_the_push() {
-    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
     // cd that doesn't move the push
     let dir = main_with_w();
     for command in [
@@ -477,14 +505,12 @@ fn cd_that_does_not_move_the_push() {
     ] {
         blocks_push(&bash_in(command, dir.path()));
     }
-    // cd with a redirection
-    allows(&bash_in("cd w 2>&1 && git push", dir.path()));
     allows(&bash_in("cd w\ngit push", dir.path()));
 }
 
 #[test]
 fn a_push_in_a_quoted_substitution() {
-    // req:plugin.hooks.guard.shell/guard-quoted-substitutions@2be088d6
+    // req:plugin.hooks.guard.shell/guard-quoted-substitutions@c092a288
     // a push in a quoted substitution
     for command in [
         "echo \"$(git push origin main)\"",
@@ -507,7 +533,7 @@ fn a_push_in_a_quoted_substitution() {
 
 #[test]
 fn a_quoted_substitution_runs_before_its_command_moves() {
-    // req:plugin.hooks.guard.shell/guard-quoted-substitutions@2be088d6
+    // req:plugin.hooks.guard.shell/guard-quoted-substitutions@c092a288
     let dir = main_with_w();
     // From the checkout the earlier `cd`s leave, before the segment's own `-C`.
     allows(&bash_in("cd w && echo \"$(git push)\"", dir.path()));
@@ -548,7 +574,7 @@ fn here_strings_fed_to_a_shell() {
 
 #[test]
 fn guard_follows_cd_into_a_worktree() {
-    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
     // cd into a worktree
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -592,7 +618,7 @@ fn guard_follows_cd_into_a_worktree() {
 
 #[test]
 fn guard_follows_cd_into_main() {
-    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
     // cd into main
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
@@ -602,7 +628,7 @@ fn guard_follows_cd_into_main() {
 
 #[test]
 fn guard_resets_on_a_cd_it_cannot_follow() {
-    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
     // cd it can't follow
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -622,7 +648,7 @@ fn guard_resets_on_a_cd_it_cannot_follow() {
 
 #[test]
 fn guard_keeps_a_cd_it_could_not_follow_until_an_absolute_one() {
-    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
     // an absolute cd after one it can't follow
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
@@ -646,7 +672,7 @@ fn guard_keeps_a_cd_it_could_not_follow_until_an_absolute_one() {
 
 #[test]
 fn guard_ignores_guard_text_written_to_a_file() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // writing guard text to a file
     for command in [
         "cat > d.md <<'EOF'\n- GIVEN the command clm approve spec/x\nclm approve spec/x\ngit push origin main\nEOF",
@@ -663,7 +689,7 @@ fn guard_ignores_guard_text_written_to_a_file() {
 
 #[test]
 fn guard_judges_no_command_in_a_gh_body() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // a body sent to gh: it can't make a gh call, cut a release or approve of its own.
     for command in [
         "gh pr comment 3 --body-file - <<'EOF'\nclm approve spec/x\ngh release create v1\ngit push origin main\nEOF",
@@ -675,7 +701,7 @@ fn guard_judges_no_command_in_a_gh_body() {
 
 #[test]
 fn guard_judges_a_body_run_by_a_shell() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // body run by a shell
     for command in [
         "bash <<'EOF'\nclm approve spec/x\nEOF",
@@ -695,7 +721,7 @@ fn guard_judges_a_body_run_by_a_shell() {
 
 #[test]
 fn guard_judges_commands_after_the_body() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // commands after the body
     blocks_push(&bash("cat > f <<'EOF'\ntext\nEOF\ngit push origin main"));
     // `<<-` ends at a tab-indented terminator.
@@ -708,7 +734,7 @@ fn guard_judges_commands_after_the_body() {
 
 #[test]
 fn guard_finds_no_heredoc_after_all() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // no heredoc after all
     for command in [
         "echo \"<<X\"\ngit push origin main",
@@ -724,7 +750,7 @@ fn guard_finds_no_heredoc_after_all() {
 
 #[test]
 fn guard_takes_several_heredocs_in_order() {
-    // req:plugin.hooks.guard.shell/guard-heredocs@63eaa78e
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // The first body is `cat`'s, the second the shell's.
     blocks_push(&bash(
         "cat <<A | bash <<B\nclm approve spec/x\nA\ngit push origin main\nB",

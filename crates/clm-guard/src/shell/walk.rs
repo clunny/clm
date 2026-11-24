@@ -227,7 +227,7 @@ mod tests {
         }
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn a_quoted_heredoc_is_sent_as_written() {
         assert_eq!(
@@ -236,7 +236,7 @@ mod tests {
         );
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn an_unquoted_heredoc_is_sent_as_written_only_without_expansions() {
         assert_eq!(
@@ -261,7 +261,7 @@ mod tests {
         );
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn a_dash_heredoc_loses_its_leading_tabs() {
         assert_eq!(
@@ -270,7 +270,7 @@ mod tests {
         );
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn the_last_redirection_wins() {
         assert_eq!(
@@ -285,12 +285,15 @@ mod tests {
             inputs("clm defect < f <<< x <<'EOF'\nr\nEOF", "clm"),
             [heredoc("r", true)]
         );
+        // another descriptor
         assert_eq!(inputs("clm defect 3< f", "clm"), [Stdin::Own]);
+        assert_eq!(inputs("clm defect 3<<'EOF'\nr\nEOF", "clm"), [Stdin::Own]);
+        assert_eq!(inputs("clm defect 0< f", "clm"), [Stdin::File]);
         assert_eq!(inputs("clm defect 0<&3", "clm"), [Stdin::File]);
         assert_eq!(inputs("clm defect <> f", "clm"), [Stdin::File]);
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn other_sources() {
         assert_eq!(inputs("clm defect < r.md", "clm"), [Stdin::File]);
@@ -302,7 +305,7 @@ mod tests {
         assert_eq!(inputs("cat r.md; clm defect", "clm"), [Stdin::Own]);
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn a_heredoc_inside_a_substitution_belongs_to_its_own_piece() {
         let walked = walk("git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n)\"", None);
@@ -316,7 +319,7 @@ mod tests {
         assert_eq!(of("cat"), Some(heredoc("msg", true)));
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn a_script_and_a_body_judged_as_commands_keep_their_own_input() {
         assert_eq!(
