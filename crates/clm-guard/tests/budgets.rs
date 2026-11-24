@@ -77,10 +77,16 @@ fn all_gone(pids: &Path, count: usize) {
 
 #[test]
 fn queries_and_lookups_that_outlast_their_budget_block() {
-    // req:plugin.hooks.guard/push-guard@d1b155d4
+    // req:plugin.hooks.guard/push-guard@d829891a
     // req:plugin.hooks.guard/release-guard@1c7c5dad
     // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     let original = std::env::var("PATH").unwrap();
+    // The developer's own git config must not reach the guard's queries.
+    // SAFETY: this is the only test function of its process, and it spawns no thread.
+    unsafe {
+        std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
+        std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
+    }
     let cwd = TempDir::new().unwrap();
     let one_second = Budgets {
         push: Duration::from_secs(1),
@@ -123,9 +129,9 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
         why.contains("didn't answer in time") && !why.contains("couldn't follow"),
         "{why}"
     );
-    // An explicit branch needs no query.
+    // An explicit destination needs no query.
     fs::remove_file(&pids).unwrap();
-    let (decision, _) = judge(cwd.path(), "git push origin impl/x/b", &one_second);
+    let (decision, _) = judge(cwd.path(), "git push origin HEAD:impl/x/b", &one_second);
     assert_eq!(decision, Decision::Allow);
     assert!(!pids.exists(), "the fake git ran");
 
