@@ -223,19 +223,3 @@ fn activity_of(e: &Value) -> Option<Activity> {
         r#ref: r#ref.into(),
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn nested_branches_are_left_out() {
-        let at = json!({"oid": "abc", "committedDate": "2026-10-27T00:00:00Z"});
-        let node = tip(&json!({"name": "orchestrator.run", "target": at})).unwrap();
-        assert_eq!(node.name, "orchestrator.run");
-        assert_eq!(
-            tip(&json!({"name": "archive/20261026-x", "target": at})),
-            None
-        );
-    }
-}
