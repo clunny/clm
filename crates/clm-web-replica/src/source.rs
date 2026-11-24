@@ -23,8 +23,6 @@ const REF_PAGES: usize = 3;
 const PER_SPEC_QUERY: usize = 50;
 /// A compare lists at most this many files, so a list this long may be cut short.
 const COMPARE_FILES: usize = 300;
-/// Bytes from the start of a file whose NUL decides it is binary.
-const BINARY_PROBE: usize = 8000;
 
 /// The subrequests an invocation has made.
 #[derive(Debug, Default)]
@@ -212,17 +210,15 @@ pub(crate) async fn fetch<P: Host>(
                 }
                 (text, _) => text.map(String::from),
             };
-            let nul = text
-                .as_ref()
-                .is_some_and(|t| t.bytes().take(BINARY_PROBE).any(|c| c == 0));
             let mut entry = entry.clone();
             if entry.size == 0 {
                 entry.size = text.as_ref().map_or(0, |t| t.len() as u64);
             }
-            out.push(File {
-                binary: object["isBinary"] == true || nul || text.is_none(),
-                text,
-                entry,
+            // A text with a NUL byte near its start is held binary by the replica itself
+            // (`replica/files-a-source-gives`).
+            out.push(match text {
+                Some(text) if object["isBinary"] != true => File::text(entry, text),
+                _ => File::binary(entry),
             });
         }
     }
