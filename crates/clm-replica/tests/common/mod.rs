@@ -89,11 +89,9 @@ pub fn entry(path: &str, bytes: &[u8]) -> Entry {
 
 /// `path` as a source reports it: its text, or binary when the bytes aren't UTF-8.
 pub fn file(path: &str, bytes: &[u8]) -> File {
-    let text = String::from_utf8(bytes.to_vec()).ok();
-    File {
-        entry: entry(path, bytes),
-        binary: text.is_none(),
-        text,
+    match String::from_utf8(bytes.to_vec()) {
+        Ok(text) => File::text(entry(path, bytes), text),
+        Err(_) => File::binary(entry(path, bytes)),
     }
 }
 
