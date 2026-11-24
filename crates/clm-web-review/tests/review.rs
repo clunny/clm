@@ -1128,11 +1128,19 @@ fn move_branch(fake: &Fake, branch: &str, sha: &str) {
 }
 
 /// Drops the spec files kept per commit, as the Cache API may at any time, so only the
-/// review's own cache can answer without fetching them.
+/// review's own cache can answer without fetching them. Every version of the platform's
+/// key is dropped (`files2:`, `files3:`, ...), so the test proves the review's cache
+/// whichever version the platform writes.
 fn evict_files(fake: &Fake) {
-    fake.cache
-        .borrow_mut()
-        .retain(|k, _| !k.starts_with("files2:"));
+    fake.cache.borrow_mut().retain(|k, _| !is_files_key(k));
+}
+
+/// Whether `key` is the platform's spec-files key: `files`, an optional version number
+/// and `:`.
+fn is_files_key(key: &str) -> bool {
+    key.strip_prefix("files")
+        .map(|rest| rest.trim_start_matches(|c: char| c.is_ascii_digit()))
+        .is_some_and(|rest| rest.starts_with(':'))
 }
 
 #[test]
