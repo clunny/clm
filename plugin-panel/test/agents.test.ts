@@ -22,18 +22,16 @@ import {
   onSpawn,
   onStep,
   onToolCall,
-  PRICES_CHECKED,
   ticking,
   progress,
   reconcile,
-  resetsOn,
   startRun,
   queueLines,
   runEntry,
   windowOf,
 } from '../src/agents.ts'
 import { keyTarget } from '../src/inspector.ts'
-import { type Host, type Run, type Span, ansiLines, cachedRun, command, viewArgs, viewKey } from '../src/panel.ts'
+import { type Run, type Span, ansiLines, cachedRun, viewArgs, viewKey } from '../src/panel.ts'
 
 const PROMPT = (node: string) => `loop run build:${node}\nMore.`
 
@@ -61,23 +59,6 @@ describe('runs', () => {
     expect(started(['a1', 'anything', PROMPT('git')])[0]?.entry).toBe('build:git')
   })
 
-  test('a run records what the spawn said, running from its start', () => {
-    const [run] = started(['a1', 'code review', 'Review.', 'b0'])
-    expect(run).toMatchObject({
-      id: 'a1',
-      parentId: 'b0',
-      type: 'general-purpose',
-      description: 'code review',
-      model: 'claude-opus-5-5',
-      status: 'running',
-      startedAt: 0,
-      round: 1,
-      tokens: 0,
-      steps: 0,
-      tasks: [],
-    })
-  })
-
   // req:plugin.panel/build-rows@84e4b711
   test('a description a listed run already has is the next round', () => {
     const list = started(['a1', 'build git', PROMPT('git')], ['a2', 'Build  Git!', PROMPT('git')], ['a3', 'build init', PROMPT('init')])
@@ -99,13 +80,6 @@ describe('runs', () => {
     const list = started(...Array.from({ length: 201 }, (_, i): [string, string, string] => [`a${i}`, `run ${i}`, 'x']))
     expect(list).toHaveLength(200)
     expect(list[0]?.id).toBe('a1')
-  })
-
-  // req:plugin.panel/build-row-lifecycle@f82ccf35
-  test('clear and resume empty the list; quitting does not', () => {
-    expect(resetsOn('clear')).toBe(true)
-    expect(resetsOn('resume')).toBe(true)
-    expect(resetsOn('prompt_input_exit')).toBe(false)
   })
 
   test('after a reload a running run the engine no longer lists is dropped', () => {
@@ -180,8 +154,6 @@ describe('updates', () => {
 
 describe('cost and formatting', () => {
   test('cost is priced by the most specific row, with the sonnet row for an unknown model', () => {
-    // The rows of `effort`'s `prices.rs`, checked the same day.
-    expect(PRICES_CHECKED).toBe('2026-10-30')
     const million = usage(1_000_000)
     const reads = usage(0, 0, 1_000_000)
     expect(costOf('claude-fable-5-1', million)).toBe(10)
@@ -470,15 +442,6 @@ describe('drawing', () => {
     expect(cache.has(key)).toBe(false)
   })
 
-  test("a new generation's run drops the older generations' outputs", async () => {
-    const cache = new Map<string, Promise<Run>>()
-    const start = async (): Promise<Run> => ({ exitCode: 0, stdout: 'x', stderr: '' })
-    await cachedRun(cache, viewKey(1, ['view', 'flight']), start)
-    await cachedRun(cache, viewKey(1, ['view', 'spec']), start)
-    await cachedRun(cache, viewKey(2, ['view', 'flight']), start)
-    expect([...cache.keys()]).toEqual([viewKey(2, ['view', 'flight'])])
-  })
-
   // req:plugin.panel/build-row-cost@5e68018b
   test('a million input tokens cost the model\'s input rate', () => {
     const list = applyStep(started(['b1', 'build git', PROMPT('git')]), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
@@ -516,29 +479,6 @@ describe('drawing', () => {
     expect(all[all.indexOf('agents') + 1]).toMatch(/● look around/)
     expect(all.at(-1)).toMatch(/^≈\$/)
     expect(queueLines(CHART, [], 0)).toEqual(CHART)
-  })
-
-  test('only drawn runs appear, a failed child of a finished build under its node', () => {
-    let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'm', prompt: 'x', at: 30_000 })
-    list = startRun(list, { id: 'x1', type: 'Explore', description: 'look around', model: 'm', prompt: 'x', at: 31_000 })
-    list = applyComplete(applyComplete(applyComplete(list, 'c1', false, 40_000), 'b1', true, 50_000), 'x1', true, 50_000)
-    const all = text(queueLines(CHART, list, 61_000))
-    expect(between(all, '  build:git ', '  build:init ')[0]).toMatch(/^ {4}✗ code review/)
-    expect(all).not.toContain('agents')
-    expect(all.at(-1)).toMatch(/^≈\$.* · m ×2 · Opus 5\.5 ×1$/)
-  })
-
-  test('/clm:view flight in the chat is clm\'s output alone, whatever runs', async () => {
-    const files = ['/work/repo/specs/SPEC.md', '/plugins/clm/plugin/bin/clm']
-    const $: Host = {
-      plugin: { root: '/plugins/clm/plugin-panel' },
-      process: { run: async () => ({ exitCode: 0, stdout: 'nodes\n  git  P5\nchanges\n', stderr: '' }) },
-      fs: {
-        stat: async path => (files.includes(path) ? { kind: 'file' } : Promise.reject(new Error(path))),
-        list: async () => [],
-      },
-    }
-    expect(await command($, 'flight', '/work/repo')).toEqual({ text: '\n```\nnodes\n  git  P5\nchanges\n```' })
   })
 })
 

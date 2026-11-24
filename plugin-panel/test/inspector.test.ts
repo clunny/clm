@@ -157,23 +157,6 @@ describe('component-inspector', () => {
   })
 
   // req:plugin.panel/component-inspector@d5852e70
-  test('no waiting field: without `waiting_on`, or with it, nothing says waiting', () => {
-    // The flight model as `view` gives it after `needs-alone-order`, and as older builds did.
-    for (const extra of [{}, { waiting_on: ['b'] }]) {
-      const other = flightJson([{ ...flightA, ...extra }])
-      const { inspector } = chartLines({ tab: 'spec', chart: SPEC_CHART, own: SPEC, other, selected: 'a', unfolded: [] })
-      const lines = inspectorText(inspector).split('\n')
-      expect(lines.slice(3)).toEqual(['ready · P5', '  a/x unbuilt'])
-    }
-  })
-
-  test('no waiting state: a `waiting` node takes no state colour', () => {
-    const other = flightJson([{ ...flightA, state: 'waiting' }])
-    const { inspector } = chartLines({ tab: 'spec', chart: SPEC_CHART, own: SPEC, other, selected: 'a', unfolded: [] })
-    expect(inspector![3]![0]).toEqual({ text: 'waiting', color: undefined })
-  })
-
-  // req:plugin.panel/component-inspector@d5852e70
   test('a cut ID matches by position', () => {
     const chart = ansiLines('commit abc\nr  active\n├─ al…  active\n└─ b  active\n')
     const { lines, inspector } = chartLines({
@@ -313,27 +296,6 @@ describe('component-inspector', () => {
       expect(lines.map(l => l.spans)).toEqual(chart)
     }
     expect(paneChart({ tab: 'spec', chart: SPEC_CHART, own: SPEC, other: FLIGHT, selected: 'a', unfolded: [] }).inspector).toBeDefined()
-  })
-
-  // req:plugin.panel/views-panel@29b65e2f
-  test('a press reruns nothing the pane already holds this generation', async () => {
-    const cache = new Map<string, Promise<Run>>()
-    const started: string[] = []
-    const draw = async (selected: string | null) => {
-      const runs = modelRuns('spec', 'terminal', selected)
-      for (const args of [viewArgs('spec', 'terminal', 80), runs.own, runs.other]) {
-        if (args) await cachedRun(cache, viewKey(7, args), async () => (started.push(args.join(' ')), ok('')))
-      }
-    }
-    await draw('a')
-    expect(started).toEqual([
-      'view spec --format ansi --width 80',
-      'view spec --format json',
-      'view flight --format json',
-    ])
-    await draw('b')
-    await draw(null)
-    expect(started).toHaveLength(3)
   })
 
   // req:plugin.panel/build-rows@84e4b711

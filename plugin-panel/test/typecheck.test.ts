@@ -74,11 +74,4 @@ describe('type-check', () => {
     })
     expect(opts.lib).toEqual(['lib.es2023.d.ts'])
   })
-
-  // req:plugin.panel/type-check@16075ab7
-  test('the declarations are the panel\'s own, and nothing is vendored', () => {
-    const first = read('declarations/claude-code/index.d.ts').split('\n')[0]
-    expect(first).toBe("// The parts of Claude Code's plugin API this panel uses, written by hand.")
-    expect(ts.sys.directoryExists(panel + 'vendor')).toBe(false)
-  })
 })

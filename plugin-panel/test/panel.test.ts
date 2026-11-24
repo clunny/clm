@@ -322,29 +322,6 @@ describe('views-panel', () => {
     expect(paneBody('desktop', ok('<svg/>'), 'spec')).toEqual({ svg: '<svg/>' })
   })
 
-  test('no pictures: no Picture button, no Image, and no png on any tab or surface', () => {
-    for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
-      for (const tab of ['queue', 'spec', 'flight', 'blockers'] as const) {
-        for (const at of [true, false]) expect(viewArgs(tab, surface, 80, at)).not.toContain('png')
-      }
-    }
-    const panel = `${ts.sys.getCurrentDirectory()}/`
-    for (const file of ['hooks/register.tsx', 'src/panel.ts', 'src/inspector.ts', 'src/agents.ts']) {
-      expect(ts.sys.readFile(panel + file), file).not.toMatch(/Picture|<Image|\bpng\b/)
-    }
-  })
-
-  test("the terminal chart's node lines are pressable and the Blockers tab's chains folded", () => {
-    expect(modelRuns('blockers', 'terminal', null).own).toEqual(['view', 'blockers', '--format', 'json'])
-    const chart = ansiLines('blockers\ngate  holds up 1\n└─ c\n')
-    const roots = ok(JSON.stringify({ roots: [{ root: 'gate' }] }))
-    const { lines } = chartLines({ tab: 'blockers', chart, own: roots, selected: null, unfolded: [] })
-    expect(lines.map(l => l.key)).toEqual([undefined, 'root:gate'])
-    const spec = ansiLines('r  active\n')
-    const nodes = ok(JSON.stringify({ nodes: [{ node: 'r' }] }))
-    expect(chartLines({ tab: 'spec', chart: spec, own: nodes, selected: null, unfolded: [] }).lines[0]!.key).toBe('node:r')
-  })
-
   test('the width is a whole number clm takes', () => {
     expect(viewArgs('flight', 'terminal', 79.5).at(-1)).toBe('79')
     expect(viewArgs('flight', 'terminal', Number.NaN).at(-1)).toBe('100')

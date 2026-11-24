@@ -65,7 +65,7 @@ export function startRun(
 }
 
 /** `/clear` and resume begin a new conversation: the list empties. Quitting keeps it. */
-export const resetsOn = (reason: string): boolean => reason === 'clear' || reason === 'resume'
+const resetsOn = (reason: string): boolean => reason === 'clear' || reason === 'resume'
 
 /** After a reload: a run still running or waiting whose agent the engine no longer lists won't finish. */
 export const reconcile = (list: readonly AgentRun[], listed: readonly { id: string }[]): AgentRun[] =>
