@@ -494,7 +494,7 @@ fn a_cd_in_a_body_stays_in_its_shell() {
 
 #[test]
 fn cd_that_does_not_move_the_push() {
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     // cd that doesn't move the push
     let dir = main_with_w();
     for command in [
@@ -605,7 +605,7 @@ fn here_strings_fed_to_a_shell() {
 
 #[test]
 fn guard_follows_cd_into_a_worktree() {
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     // cd into a worktree
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -650,7 +650,7 @@ fn guard_follows_cd_into_a_worktree() {
 
 #[test]
 fn guard_follows_cd_into_main() {
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     // cd into main
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
@@ -660,7 +660,7 @@ fn guard_follows_cd_into_main() {
 
 #[test]
 fn guard_resets_on_a_cd_it_cannot_follow() {
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     // cd it can't follow
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -683,7 +683,7 @@ fn guard_resets_on_a_cd_it_cannot_follow() {
 
 #[test]
 fn guard_keeps_a_cd_it_could_not_follow_until_an_absolute_one() {
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     // an absolute cd after one it can't follow
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
@@ -717,7 +717,7 @@ fn impl_with_m() -> TempDir {
 
 #[test]
 fn a_cd_with_options_or_several_directories() {
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     // a cd with options or several directories
     let dir = impl_with_m();
     for command in [
@@ -736,7 +736,7 @@ fn a_cd_with_options_or_several_directories() {
 
 #[test]
 fn a_cd_into_a_glob() {
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     // a cd into a glob
     let dir = impl_with_m();
     fs::create_dir(dir.path().join("x1")).unwrap();
@@ -753,6 +753,22 @@ fn a_cd_into_a_glob() {
     }
     for command in ["cd 'm*' && git push", "git -C 'm*' push"] {
         allows(&bash_in(command, dir.path()));
+    }
+}
+
+#[test]
+fn a_git_c_glob_after_env_c() {
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
+    // a git -C glob after env -C: bash globs `m*` where the shell stands, before `env`
+    // or `sudo` changes directory, so git pushes from `s/m`, not from `s/m s/m2`.
+    let dir = TempDir::new().unwrap();
+    checkout_on(dir.path(), "impl/x/b");
+    fs::create_dir(dir.path().join("m")).unwrap();
+    let s = dir.path().join("s");
+    checkout_on(&s.join("m"), "main");
+    fs::create_dir(s.join("m2")).unwrap();
+    for command in ["env -C s git -C m* push", "sudo -D s git -C m* push"] {
+        blocks_push(&bash_in(command, dir.path()));
     }
 }
 
