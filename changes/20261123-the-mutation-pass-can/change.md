@@ -38,6 +38,8 @@ The second half of the item: a failing command leaves its block and every block 
 - `mutate.sh` is `ci`'s; `clm-verify` is `verify`'s. Neither build touches `plugin-panel/`.
 - The pass still changes no outcome line, stdout or exit status (`mutation-after-land`).
 - An `unjudged` item names no `unproven` entries, so it doesn't make its requirements read as not built.
+- `verify/files-unproven` Needs `ci/mutate-script`: built first, the filing would find the `plugin.panel` requirements the past three passes left and file an `unjudged` item for what this change already resolves. Once `ci` is built, the next pass judges them first and the run is broken.
+- An `unjudged` item names the component whose requirement was left, while the fix may lie elsewhere, as it did here in `ci`; its draft corrects the item's `components`, as for any bug filed on the wrong component.
 
 Edge cases known now: a pass stopped by a human twice in a row files an item (accepted above); a requirement under `left` that `origin/main` no longer has is not filed.
 
