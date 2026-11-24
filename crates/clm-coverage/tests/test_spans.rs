@@ -667,13 +667,43 @@ fn script_title_is_the_literal_as_the_language_reads_it() {
     // req:check.coverage/test-spans@056ed909
     let text = "\
 it('the panel\\'s own', () => {});
-it(\"a \\\"b\\\" \\\\ c\\td\\x41\\u0042\\u{43}\", () => {});
+it(\"a \\\"b\\\" \\\\ c\\x41\\u0042\\u{43}\", () => {});
 it(`e\\`f`, () => {});
 it('unclosed\\', () => {});
+it('ships \\uD83D\\uDE80', () => {});
+it('octal \\01', () => {});
+it('bad \\xZZ', () => {});
+it('signed \\x+4', () => {});
+it('surrogate \\uD83D', () => {});
 ";
     let names: Vec<String> = spans("a.test.ts", text)
         .into_iter()
         .map(|(n, ..)| n)
         .collect();
-    assert_eq!(names, ["the panel's own", "a \"b\" \\ c\tdABC", "e`f", ""]);
+    assert_eq!(
+        names,
+        [
+            "the panel's own",
+            "a \"b\" \\ cABC",
+            "e`f",
+            "",
+            "ships \u{1F680}",
+            "",
+            "",
+            "",
+            "",
+        ]
+    );
+}
+
+#[test]
+fn script_title_keeps_a_control_escape_as_written() {
+    // req:check.coverage/test-spans@056ed909
+    // A name holds no tab or line break, so a list line can still name its test.
+    let text = "it('a\\tb\\n\\r\\b\\f\\v\\0\\x09\\u000a c', () => {});\n";
+    let names: Vec<String> = spans("a.test.ts", text)
+        .into_iter()
+        .map(|(n, ..)| n)
+        .collect();
+    assert_eq!(names, ["a\\tb\\n\\r\\b\\f\\v\\0\\x09\\u000a c"]);
 }
