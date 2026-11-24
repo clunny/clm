@@ -70,23 +70,4 @@ fn panel_hooks_module() {
         serde_json::json!({ "modules": ["./register.tsx"] })
     );
     assert!(panel.join("hooks/register.tsx").is_file());
-    // Held here until `plugin`'s suite asserts them (`plugin/package`, `plugin/hooks-wired`):
-    // the marketplace lists `clm` then `clm-panel`, and `clm`'s hooks file names no module.
-    let market = json(&repo().join(".claude-plugin/marketplace.json"));
-    let names: Vec<_> = market["plugins"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|p| (p["name"].as_str().unwrap(), p["source"].as_str().unwrap()))
-        .collect();
-    assert_eq!(
-        names,
-        [("clm", "./plugin"), ("clm-panel", "./plugin-panel")],
-        "{market}"
-    );
-    assert!(
-        json(&repo().join("plugin/hooks/hooks.json"))
-            .get("modules")
-            .is_none()
-    );
 }
