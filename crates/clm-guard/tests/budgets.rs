@@ -134,6 +134,14 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
     let (decision, _) = judge(cwd.path(), "git push origin HEAD:impl/x/b", &one_second);
     assert_eq!(decision, Decision::Allow);
     assert!(!pids.exists(), "the fake git ran");
+    // A named branch runs the settings query, which spends the same budget.
+    let (decision, took) = judge(cwd.path(), "git push origin impl/x/b", &one_second);
+    let Decision::Block(why) = decision else {
+        panic!("not blocked: {decision:?}")
+    };
+    assert!(why.contains("didn't answer in time"), "{why}");
+    assert!(took.as_secs() < 5, "{took:?}");
+    all_gone(&pids, 1);
 
     // The push queries of a command share one budget: each takes 0.4 seconds and answers
     // nothing, so a segment's three fit in 2 seconds and two segments' six don't. The fifth

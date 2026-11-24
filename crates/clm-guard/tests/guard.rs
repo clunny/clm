@@ -1029,7 +1029,27 @@ fn a_branch_named_without_its_destination() {
         "{why}"
     );
     allows(&bash_in("git push origin HEAD:impl/x/b", &work));
-    git(&work, &["config", "--unset", "remote.origin.push"]);
+    // Every value of a key counts, not only the last, which git uses.
+    git(
+        &work,
+        &[
+            "config",
+            "--add",
+            "remote.origin.push",
+            "refs/heads/impl/x/b:refs/heads/impl/x/b",
+        ],
+    );
+    blocks_push(&bash_in("git push origin impl/x/b", &work));
+    git(&work, &["config", "--unset-all", "remote.origin.push"]);
+    // A branch named as `heads/<b>`, and an upstream written `main` or `heads/main`.
+    for command in [
+        "git -c push.default=upstream -c branch.impl/x/b.merge=main push origin impl/x/b",
+        "git -c push.default=upstream -c branch.impl/x/b.merge=heads/main \
+         push origin heads/impl/x/b",
+    ] {
+        let why = blocks_push(&bash_in(command, &work));
+        assert!(why.contains("`impl/x/b`"), "{command}: {why}");
+    }
     git(&work, &["config", "push.default", "upstream"]);
     blocks_push(&bash_in("git push origin impl/x/c", &work));
 }
