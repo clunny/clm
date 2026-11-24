@@ -3013,6 +3013,20 @@ fn stryker_mutates_no_test_file() {
         ranges.iter().all(|r| r.starts_with("src/a.ts:")),
         "{config}"
     );
+    // Nor the further mutants' run, which a block with no diff makes alone.
+    let tree = mutate_tree(
+        "requirement p/q\ncode plugin-panel/src/a.ts\ncode plugin-panel/test/a.test.ts\n\
+         test plugin-panel/test/a.test.ts\tt\nlimit 20\n",
+    );
+    tree.report("stryker-killed", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["p/q killed"]);
+    let config = fs::read_to_string(tree.dir.path().join("log.stryker")).unwrap();
+    assert!(
+        config.contains("\"mutate\": [\"src/a.ts:1-20\"]"),
+        "{config}"
+    );
     // A vitest test file is neither kind of code file: a block naming only one, `.tsx` too,
     // runs no StrykerJS and is not judged.
     let tree = mutate_tree(
