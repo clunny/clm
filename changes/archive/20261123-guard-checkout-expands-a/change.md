@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [guard-checkout-expands-a-git-c-glob-from-the-segment-s-checkout]
 ---
 
