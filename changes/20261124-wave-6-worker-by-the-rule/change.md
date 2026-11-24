@@ -147,6 +147,7 @@ One component builds twice: `web.worker.platform` (2 and 5). On branch B, `web`'
 - The gone-endpoint list `web.worker.replica` keeps is a disposable cache of the object, consistent with `git-is-truth` and `web.worker/cache-is-disposable`: a rebuild from git forgets it, and it is re-learned at one push per gone endpoint. Its Design says so.
 - The platform's dead code, `live`'s copies and the `clm-orchestrator` dependency: `backlog/platform-fake-dead-helpers`, widened here, resolved by `web.worker.platform`'s first build with a `Resolves:` trailer.
 - The unused `clm-context` dev-dependency: `backlog/clm-web-lists-clm-context-as-a-dev-dependency-nothing-uses`, resolved by `web.worker`'s build with a `Resolves:` trailer.
+- `crates/clm-web/tests/keys.rs::code_key_matches_ledger` stays as it is: it cites nothing and copies a case `web.worker.platform/code-key-doc-only` states, so it loses nothing by staying and is no cut; the platform's next pass can take it.
 - After both builds land, dropping `context` from `web.worker`'s `depends_on` and `orchestrator` from `web.worker.platform`'s: `backlog/the-web-worker-crates-depends-on-keep-components-their-builds-stop-importing`, by a small spec change that lists it in `resolves` (`check/undeclared-imports` sees both imports until the builds remove them).
 
 ## Decisions
