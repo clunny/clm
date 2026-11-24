@@ -774,6 +774,17 @@ fn guard_names_a_cd_it_cannot_follow() {
         why.contains("`cd nowhere`") && why.contains("configured push refspec"),
         "{why}"
     );
+    // A setting from the environment, judged from the checkout it fell back to.
+    let why = blocks(&bash_in_opt(
+        "cd nowhere && git --config-env push.default=U push",
+        Some(other.path()),
+    ));
+    assert!(
+        why.contains("`cd nowhere`")
+            && why.contains("checkout it fell back to")
+            && why.contains("`--config-env push.default=U`"),
+        "{why}"
+    );
 }
 
 #[test]
@@ -864,7 +875,9 @@ fn settings_from_the_environment() {
     ] {
         let why = blocks_push(&bash_in(command, &work));
         assert!(
-            why.contains(option) && why.contains("environment") && why.contains("HEAD:<branch>"),
+            why.contains(option)
+                && why.contains("environment, which the guard can't read")
+                && why.contains("HEAD:<branch>"),
             "{command}: {why}"
         );
     }
