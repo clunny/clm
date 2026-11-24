@@ -162,7 +162,7 @@ const REPORT: &str = "`clm gate` passed a task whose basis had changed.\n";
 
 #[test]
 fn backlog_item_body_and_origin() {
-    // req:plugin.hooks/defect-backlog@06439020
+    // req:plugin.hooks/defect-backlog@f713f1f6
     let repo = repo("defects = \"backlog\"\n");
     // A report without a final newline ends in exactly one; a title of only punctuation
     // still gets a file name.
@@ -188,7 +188,7 @@ fn backlog_item_body_and_origin() {
 
 #[test]
 fn backlog_on_a_spec_branch() {
-    // req:plugin.hooks/defect-backlog@06439020
+    // req:plugin.hooks/defect-backlog@f713f1f6
     let repo = repo("defects = \"backlog\"\n");
     git(repo.path(), &["checkout", "-q", "-b", "spec/20261022-x"]);
     let title = "Gate passes a stale task";
@@ -210,7 +210,7 @@ fn backlog_on_a_spec_branch() {
 
 #[test]
 fn backlog_node_a_live_change_creates() {
-    // req:plugin.hooks/defect-backlog@06439020
+    // req:plugin.hooks/defect-backlog@f713f1f6
     let repo = repo("defects = \"backlog\"\n");
     write(
         repo.path(),
@@ -234,7 +234,7 @@ fn backlog_node_a_live_change_creates() {
 
 #[test]
 fn backlog_on_an_implementation_branch() {
-    // req:plugin.hooks/defect-backlog@06439020
+    // req:plugin.hooks/defect-backlog@f713f1f6
     let repo = repo("defects = \"backlog\"\n");
     for (branch, title) in [
         ("impl/gate", "On a node"),
@@ -252,7 +252,7 @@ fn backlog_on_an_implementation_branch() {
 
 #[test]
 fn backlog_long_title() {
-    // req:plugin.hooks/defect-backlog@06439020
+    // req:plugin.hooks/defect-backlog@f713f1f6
     let repo = repo("defects = \"backlog\"\n");
     let title = "word ".repeat(80);
     let out = defect(repo.path(), &["--title", &title], REPORT, &[]);
@@ -260,20 +260,69 @@ fn backlog_long_title() {
     let rel = String::from_utf8(out.stdout).unwrap();
     let name = rel.trim().strip_prefix("backlog/").unwrap();
     assert!(name.len() <= 64 + ".md".len(), "{name}");
+    // Cut at a whole word: 13 words of 4 letters and their 12 dashes fill 64 bytes.
     assert!(
-        name.starts_with("word-word-") && !name.contains("-.md"),
+        name.starts_with("word-word-") && name.ends_with("-word.md"),
         "{name}"
     );
+    assert_eq!(name, format!("{}.md", ["word"; 13].join("-")));
     let item = fs::read_to_string(repo.path().join(rel.trim())).unwrap();
-    assert!(
-        item.contains(title.as_str()),
-        "the whole title is kept: {item}"
-    );
+    assert_eq!(title_of(&item), title, "the whole title is kept: {item}");
+}
+
+/// The `title` of the backlog item `text`, as the model reads it.
+fn title_of(text: &str) -> String {
+    clm_model::parse_backlog_item("x", text)
+        .unwrap_or_else(|v| panic!("{v:?}: {text}"))
+        .frontmatter
+        .title
+}
+
+#[test]
+fn backlog_odd_titles() {
+    // req:plugin.hooks/defect-backlog@f713f1f6
+    let repo = repo("defects = \"backlog\"\n");
+    for (title, file) in [
+        ("Ça casse", "backlog/a-casse.md"),
+        ("Gate: \"x\" # y", "backlog/gate-x-y.md"),
+        ("!!!", "backlog/defect.md"),
+        (&"a".repeat(70), &format!("backlog/{}.md", "a".repeat(64))),
+    ] {
+        let out = defect(repo.path(), &["--title", title], REPORT, &[]);
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), file);
+        let item = fs::read_to_string(repo.path().join(file)).unwrap();
+        assert_eq!(title_of(&item), title, "{item}");
+        assert!(item.ends_with(&format!("---\n\n{REPORT}")), "{item}");
+    }
+}
+
+#[test]
+fn backlog_that_cannot_be_written() {
+    // req:plugin.hooks/defect-backlog@f713f1f6
+    let repo = repo("defects = \"backlog\"\n");
+    let backlog = repo.path().join("backlog");
+    fs::create_dir_all(&backlog).unwrap();
+    fs::set_permissions(&backlog, fs::Permissions::from_mode(0o555)).unwrap();
+    // Root writes whatever the mode says: no directory can be made unwritable to it.
+    if fs::write(backlog.join("probe"), "").is_ok() {
+        eprintln!("skipped: this process writes a 0o555 directory");
+        return;
+    }
+    let out = defect(repo.path(), &["--title", "x"], REPORT, &[]);
+    fs::set_permissions(&backlog, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert_eq!(fs::read_dir(&backlog).unwrap().count(), 0);
+    let err = String::from_utf8_lossy(&out.stderr);
+    for needle in ["backlog/x.md", REPORT.trim(), "wasn't filed"] {
+        assert!(err.contains(needle), "{needle}: {err}");
+    }
 }
 
 #[test]
 fn backlog_unknown_node() {
-    // req:plugin.hooks/defect-backlog@06439020
+    // req:plugin.hooks/defect-backlog@f713f1f6
     let repo = repo("defects = \"backlog\"\n");
     let out = defect(
         repo.path(),
@@ -291,7 +340,7 @@ fn backlog_unknown_node() {
 
 #[test]
 fn backlog_outside_a_clm_repository() {
-    // req:plugin.hooks/defect-backlog@06439020
+    // req:plugin.hooks/defect-backlog@f713f1f6
     let dir = TempDir::new().unwrap();
     git(dir.path(), &["init", "-q"]);
     let out = defect(
@@ -306,7 +355,7 @@ fn backlog_outside_a_clm_repository() {
 
 #[test]
 fn backlog_taken_slug() {
-    // req:plugin.hooks/defect-backlog@06439020
+    // req:plugin.hooks/defect-backlog@f713f1f6
     let repo = repo("defects = \"backlog\"\n");
     let args = ["--title", "Gate passes a stale task", "--component", "gate"];
     for expected in [
@@ -323,7 +372,7 @@ fn backlog_taken_slug() {
 
 #[test]
 fn issue_filed() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     let repo = repo("host = \"github\"\n");
     let gh = fake_gh("echo https://github.com/clunny/clm/issues/7");
     let out = defect(
@@ -361,7 +410,7 @@ fn issue_filed() {
 
 #[test]
 fn issue_filed_from_a_project_on_another_host() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     for host in ["azure", "git", "none"] {
         let repo = repo(&format!("host = \"{host}\"\n"));
         let gh = fake_gh("echo https://github.com/clunny/clm/issues/7");
@@ -402,7 +451,7 @@ fn text_of(out: &Output) -> String {
 
 #[test]
 fn issue_not_filed_is_kept_without_gh() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     let repo = repo("host = \"git\"\n");
     // A `PATH` that holds `git` and no `gh`.
     let no_gh = TempDir::new().unwrap();
@@ -436,7 +485,7 @@ fn issue_not_filed_is_kept_without_gh() {
 
 #[test]
 fn issue_without_access() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     let repo = repo("");
     let gh = fake_gh(
         "echo \"GraphQL: Could not resolve to a Repository with the name 'clunny/clm'.\" >&2\nexit 1",
@@ -466,7 +515,7 @@ fn issue_without_access() {
 
 #[test]
 fn issue_kept_from_a_linked_worktree() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     let repo = repo("");
     git(
         repo.path(),
@@ -506,7 +555,7 @@ fn issue_kept_from_a_linked_worktree() {
 
 #[test]
 fn issue_not_kept_outside_git() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     let dir = TempDir::new().unwrap();
     let gh = fake_gh("echo nope >&2\nexit 1");
     let out = defect(
@@ -525,7 +574,7 @@ fn issue_not_kept_outside_git() {
 
 #[test]
 fn issue_unfiled_when_gh_fails_silently_or_is_missing() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     let repo = repo("");
     let silent = fake_gh("exit 3");
     let no_gh = TempDir::new().unwrap();
@@ -564,7 +613,7 @@ fn issue_unfiled_when_gh_fails_silently_or_is_missing() {
 
 #[test]
 fn reporting_off() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     let repo = repo("");
     let gh = fake_gh("echo https://github.com/clunny/clm/issues/7");
     let out = defect(
@@ -584,19 +633,59 @@ fn reporting_off() {
 
 #[test]
 fn settings_that_cannot_load() {
-    // req:plugin.hooks/defect-issue@698b188d
+    // req:plugin.hooks/defect-issue@8464fac2
     let repo = repo("defects = \"always\"\n");
-    let out = defect(repo.path(), &["--title", "x"], REPORT, &[]);
-    assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert!(
-        String::from_utf8_lossy(&out.stderr).contains("clm.toml"),
-        "{out:?}"
+    let gh = fake_gh("echo https://github.com/clunny/clm/issues/7");
+    let out = defect(
+        repo.path(),
+        &["--title", "x"],
+        REPORT,
+        &[("PATH", &path_with(&gh))],
     );
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.starts_with("clm defect: settings: "), "{err}");
+    assert!(err.contains("clm.toml"), "{err}");
+    assert!(!gh.path().join("args").exists(), "gh was called");
+    assert!(!repo.path().join("backlog").exists());
+    assert!(!repo.path().join(".git/clm").exists());
+}
+
+#[test]
+fn issue_body() {
+    // req:plugin.hooks/defect-issue@8464fac2
+    let repo = repo("");
+    // A component no spec holds is named all the same.
+    let gh = fake_gh("echo https://github.com/clunny/clm/issues/7");
+    let path = path_with(&gh);
+    let out = defect(
+        repo.path(),
+        &["--title", "x", "--component", "nonesuch"],
+        REPORT,
+        &[("PATH", &path)],
+    );
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let body = fs::read_to_string(gh.path().join("body")).unwrap();
+    assert!(
+        body.starts_with(&format!("## What happened\n\n{REPORT}")),
+        "{body}"
+    );
+    for line in ["- Components: nonesuch\n", "- clm: ", "- OS: "] {
+        assert!(body.contains(line), "{line}: {body}");
+    }
+    let out = defect(repo.path(), &["--title", "x"], REPORT, &[("PATH", &path)]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let body = fs::read_to_string(gh.path().join("body")).unwrap();
+    assert!(!body.contains("- Components:"), "{body}");
+    for line in ["- clm: ", "- OS: "] {
+        assert!(body.contains(line), "{line}: {body}");
+    }
 }
 
 #[test]
 fn defect_is_a_call_that_writes_its_streams() {
-    // req:plugin.hooks/commands-in-crate@305d2b91
+    // req:plugin.hooks/commands-in-crate@666cc027
     // What `clm defect` prints to each stream, and its status, come back from the call.
     let repo = repo("defects = \"backlog\"\n");
     let out = defect(
@@ -636,11 +725,12 @@ fn defect_is_a_call_that_writes_its_streams() {
         String::from_utf8_lossy(&out.stdout).contains("off"),
         "{out:?}"
     );
+    assert!(!repo.path().join("backlog/x.md").exists(), "filed anyway");
 }
 
 #[test]
 fn defect_call_refuses_an_option_it_does_not_have() {
-    // req:plugin.hooks/commands-in-crate@305d2b91
+    // req:plugin.hooks/commands-in-crate@666cc027
     let repo = repo("defects = \"backlog\"\n");
     let out = defect(repo.path(), &["--title", "x", "--nonesuch"], REPORT, &[]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");

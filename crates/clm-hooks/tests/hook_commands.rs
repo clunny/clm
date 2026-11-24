@@ -55,6 +55,8 @@ fn hook_args(name: &str, args: &[&str], event: &str, env: &[(&str, &str)]) -> Ou
         unsafe {
             std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
             std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
+            // Only the call's lookup gives git an ssh command.
+            std::env::remove_var("GIT_SSH_COMMAND");
         }
     });
     // The hook finds its repository from the event's `cwd`: the call runs in a directory
@@ -72,6 +74,7 @@ fn hook_args(name: &str, args: &[&str], event: &str, env: &[(&str, &str)]) -> Ou
             &lookup,
             &mut stdout,
             &mut stderr,
+            &roomy,
         ),
         "autosync" => {
             clm_hooks::autosync_command(args, root, cwd, event, &lookup, &mut stdout, &mut stderr)
@@ -85,13 +88,21 @@ fn hook_args(name: &str, args: &[&str], event: &str, env: &[(&str, &str)]) -> Ou
     }
 }
 
+/// Budgets no fixture here reaches.
+fn roomy(_: &Path) -> Result<clm_view_repo::Budgets, clm_model::Violation> {
+    Ok(clm_view_repo::Budgets {
+        spec_tokens: 1_000_000,
+        code_tokens: 1_000_000,
+    })
+}
+
 fn hook_env(name: &str, event: &str, env: &[(&str, &str)]) -> Output {
     hook_args(name, &[], event, env)
 }
 
 #[test]
 fn session_start_command() {
-    // req:plugin.hooks/session-status@1e909501
+    // req:plugin.hooks/session-status@441436bd
     // A repository of its own, not this one: a doc-only PR skips the tests
     // (ci/light-checks).
     let repo = clm_repo(None);
@@ -154,7 +165,8 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
 
 #[test]
 fn session_start_reminds_to_upgrade() {
-    // req:plugin.hooks/session-upgrade-reminder@c217417c
+    // req:plugin.hooks/session-upgrade-reminder@99f7db79
+    // req:plugin.hooks/session-status@441436bd
     let start = |repo: &TempDir| {
         let event = serde_json::json!({ "cwd": repo.path() }).to_string();
         let out = hook("session-start", &event);
@@ -164,22 +176,35 @@ fn session_start_reminds_to_upgrade() {
     // Nothing pending: no line.
     let text = start(&clm_repo(None));
     assert!(!text.contains("/clm:upgrade"), "{text}");
+    // A migration `init` holds pending (the unattended allow rules missing): the line, after
+    // the status.
+    let repo = clm_repo(None);
+    fs::remove_file(repo.path().join(".claude/settings.json")).unwrap();
+    let text = start(&repo);
+    let claims = text.find("\nclaims\n").expect("claims section");
+    let line = text.find("/clm:upgrade").expect("reminder");
+    assert!(
+        line > claims && text.contains("migration(s) pending"),
+        "{text}"
+    );
     // A project a newer `clm` upgraded: the line, after the status.
     let repo = clm_repo(Some("upgraded = \"20990101-from-the-future\"\n"));
     let text = start(&repo);
     let claims = text.find("\nclaims\n").expect("claims section");
     let line = text.find("needs a newer `clm`").expect("reminder");
     assert!(line > claims, "{text}");
-    // Even when `clm status` fails.
+    // Even when `clm status` fails: that line alone, with no status and no defect rule.
     fs::write(repo.path().join("specs/SPEC.md"), "not a spec").unwrap();
     let text = start(&repo);
     assert!(text.contains("needs a newer `clm`"), "{text}");
     assert!(!text.contains("CLM status"), "{text}");
+    assert!(!text.contains("clm defect"), "{text}");
+    assert_eq!(text.lines().count(), 1, "{text}");
 }
 
 #[test]
 fn session_start_states_the_defect_rule() {
-    // req:plugin.hooks/defect-rule@8551aeef
+    // req:plugin.hooks/defect-rule@c1b0da79
     let start = |repo: &TempDir| {
         let event = serde_json::json!({ "cwd": repo.path() }).to_string();
         let out = hook("session-start", &event);
@@ -274,7 +299,7 @@ fn autosynced(origin: &Path) -> Option<String> {
 
 #[test]
 fn autosync_hook_pushes_spec_work_silently() {
-    // req:plugin.hooks/autosync-hook@3a75312d
+    // req:plugin.hooks/autosync-hook@f1079232
     let (_dir, origin, work) = spec_branch();
     // From a subdirectory: the hook finds the repository as `session-start` does.
     let cwd = work.join("changes/x");
@@ -295,7 +320,7 @@ fn autosync_hook_pushes_spec_work_silently() {
 
 #[test]
 fn autosync_hook_turned_off() {
-    // req:plugin.hooks/autosync-hook@3a75312d
+    // req:plugin.hooks/autosync-hook@f1079232
     let (_dir, origin, work) = spec_branch();
     let event = serde_json::json!({ "cwd": work }).to_string();
     for off in ["0", "false"] {
@@ -315,7 +340,7 @@ fn autosync_hook_turned_off() {
 
 #[test]
 fn autosync_hook_turned_off_in_the_repository() {
-    // req:plugin.hooks/autosync-hook@3a75312d
+    // req:plugin.hooks/autosync-hook@f1079232
     let (_dir, origin, work) = spec_branch();
     fs::write(work.join("clm.toml"), "autosync = false\n").unwrap();
     let event = serde_json::json!({ "cwd": work }).to_string();
@@ -337,7 +362,7 @@ fn autosync_hook_turned_off_in_the_repository() {
 
 #[test]
 fn autosync_hook_stays_silent_when_it_cannot_push() {
-    // req:plugin.hooks/autosync-hook@3a75312d
+    // req:plugin.hooks/autosync-hook@f1079232
     let (dir, _origin, work) = spec_branch();
     let gone = dir.path().join("gone");
     git(
@@ -362,7 +387,8 @@ fn autosync_hook_stays_silent_when_it_cannot_push() {
 
 #[test]
 fn hook_calls_take_the_command_line() {
-    // req:plugin.hooks/commands-in-crate@305d2b91
+    // req:plugin.hooks/commands-in-crate@666cc027
+    // req:plugin.hooks/hooks-per-agent-harness@3b9c1b3f
     let repo = clm_repo(None);
     let event = serde_json::json!({ "cwd": repo.path() }).to_string();
     // `--agent-harness codex`: the call writes Codex's form to its output stream.
@@ -394,7 +420,7 @@ fn hook_calls_take_the_command_line() {
 
 #[test]
 fn hook_calls_refuse_an_option_they_do_not_have() {
-    // req:plugin.hooks/commands-in-crate@305d2b91
+    // req:plugin.hooks/commands-in-crate@666cc027
     let repo = clm_repo(None);
     let event = serde_json::json!({ "cwd": repo.path() }).to_string();
     for (name, usage) in [
@@ -407,4 +433,151 @@ fn hook_calls_refuse_an_option_they_do_not_have() {
         let err = String::from_utf8(out.stderr).unwrap();
         assert!(err.contains("--nonesuch") && err.contains(usage), "{err}");
     }
+}
+
+#[test]
+fn autosync_hook_hands_git_the_calls_environment() {
+    // req:plugin.hooks/autosync-hook@f1079232
+    let (dir, origin, work) = spec_branch();
+    git(
+        &work,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "ssh://nobody@host.invalid/repo.git",
+        ],
+    );
+    // An ssh command that records that it ran, and fails.
+    let ran = dir.path().join("ran");
+    let ssh = dir.path().join("my-ssh");
+    fs::write(
+        &ssh,
+        format!("#!/bin/sh\ntouch '{}'\nexit 1\n", ran.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&ssh, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let event = serde_json::json!({ "cwd": work }).to_string();
+    let command = ssh.display().to_string();
+    let out = hook_env("autosync", &event, &[("GIT_SSH_COMMAND", &command)]);
+    // `hook_args` took `GIT_SSH_COMMAND` out of this process's environment.
+    assert_eq!(std::env::var_os("GIT_SSH_COMMAND"), None);
+    assert_eq!(
+        (out.status.code(), out.stdout.len(), out.stderr.len()),
+        (Some(0), 0, 0),
+        "{out:?}"
+    );
+    assert!(ran.exists(), "the call's ssh command never ran");
+    assert_eq!(autosynced(&origin), None);
+}
+
+#[test]
+fn each_call_prints_its_help() {
+    // req:plugin.hooks/commands-in-crate@666cc027
+    let elsewhere = TempDir::new().unwrap();
+    let cwd = elsewhere.path();
+    let lookup = |_: &str| None;
+    for (name, description, usage, options) in [
+        (
+            "defect",
+            "Report a defect in CLM itself, the report on stdin, as the `defects` setting says: \
+             a backlog item, an issue on clunny/clm, or nothing",
+            "Usage: clm defect ",
+            &["--title <TITLE>", "--component <COMPONENT>"][..],
+        ),
+        (
+            "session-start",
+            "SessionStart: print `clm status` and the rule for reporting CLM defects when the \
+             session's cwd is a CLM repository",
+            "Usage: clm hook session-start ",
+            &["--agent-harness <AGENT_HARNESS>", "[default: claude-code]"][..],
+        ),
+        (
+            "autosync",
+            "Stop: push a snapshot of the spec work on a `spec/*` branch; silent, never fails. \
+             The `autosync` setting (`clm config get autosync`) turns it off",
+            "Usage: clm hook autosync ",
+            &["--agent-harness <AGENT_HARNESS>", "[default: claude-code]"][..],
+        ),
+    ] {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let args = ["--help"];
+        let code = match name {
+            "defect" => clm_hooks::defect_command(args, None, cwd, "", &lookup, &mut out, &mut err),
+            "session-start" => clm_hooks::session_start_command(
+                args, None, cwd, "", &lookup, &mut out, &mut err, &roomy,
+            ),
+            _ => clm_hooks::autosync_command(args, None, cwd, "", &lookup, &mut out, &mut err),
+        };
+        let help = String::from_utf8(out).unwrap();
+        assert_eq!(code, 0, "{name}: {help}");
+        assert!(err.is_empty(), "{name}: {}", String::from_utf8_lossy(&err));
+        let lines: Vec<&str> = help.lines().collect();
+        assert_eq!(lines[0], description, "{name}");
+        assert_eq!(lines[1], "", "{name}");
+        assert!(lines[2].starts_with(usage), "{name}: {help}");
+        for option in options {
+            assert!(help.contains(option), "{name}: {option}: {help}");
+        }
+    }
+}
+
+/// A stream whose every write fails.
+struct Broken;
+
+impl std::io::Write for Broken {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("broken"))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("broken"))
+    }
+}
+
+#[test]
+fn a_stream_it_cannot_write_returns_2() {
+    // req:plugin.hooks/commands-in-crate@666cc027
+    let repo = clm_repo(Some("defects = \"backlog\"\n"));
+    let config = TempDir::new().unwrap();
+    let home = config.path().display().to_string();
+    let lookup = |key: &str| (key == "XDG_CONFIG_HOME").then(|| home.clone());
+    let root = repo.path();
+    let mut err = Vec::new();
+    let code = clm_hooks::defect_command(
+        ["--title", "x"],
+        Some(root),
+        root,
+        "report\n",
+        &lookup,
+        &mut Broken,
+        &mut err,
+    );
+    assert_eq!(code, 2, "{}", String::from_utf8_lossy(&err));
+    assert!(root.join("backlog/x.md").is_file());
+    // A failure it can't write to the error stream returns 2 too.
+    let mut out = Vec::new();
+    let code = clm_hooks::defect_command(
+        ["--title", "y", "--component", "nonesuch"],
+        Some(root),
+        root,
+        "report\n",
+        &lookup,
+        &mut out,
+        &mut Broken,
+    );
+    assert_eq!(code, 2);
+    assert!(!root.join("backlog/y.md").exists());
+    let event = serde_json::json!({ "cwd": root }).to_string();
+    let code = clm_hooks::session_start_command(
+        std::iter::empty::<&str>(),
+        Some(root),
+        root,
+        &event,
+        &lookup,
+        &mut Broken,
+        &mut err,
+        &roomy,
+    );
+    assert_eq!(code, 2, "{}", String::from_utf8_lossy(&err));
 }

@@ -7,6 +7,7 @@ use std::path::Path;
 
 use clap::Parser;
 use clm_agent_harness::AgentHarness;
+use clm_view_repo::NodeSize;
 
 use crate::Env;
 
@@ -31,7 +32,13 @@ pub struct HookArgs {
 }
 
 #[derive(Parser)]
-#[command(name = "clm defect", bin_name = "clm defect", no_binary_name = true)]
+#[command(
+    name = "clm defect",
+    bin_name = "clm defect",
+    no_binary_name = true,
+    about = "Report a defect in CLM itself, the report on stdin, as the `defects` setting says: \
+a backlog item, an issue on clunny/clm, or nothing"
+)]
 struct DefectLine {
     #[command(flatten)]
     args: DefectArgs,
@@ -41,7 +48,9 @@ struct DefectLine {
 #[command(
     name = "clm hook session-start",
     bin_name = "clm hook session-start",
-    no_binary_name = true
+    no_binary_name = true,
+    about = "SessionStart: print `clm status` and the rule for reporting CLM defects when the \
+session's cwd is a CLM repository"
 )]
 struct SessionStartLine {
     #[command(flatten)]
@@ -52,7 +61,9 @@ struct SessionStartLine {
 #[command(
     name = "clm hook autosync",
     bin_name = "clm hook autosync",
-    no_binary_name = true
+    no_binary_name = true,
+    about = "Stop: push a snapshot of the spec work on a `spec/*` branch; silent, never fails. \
+The `autosync` setting (`clm config get autosync`) turns it off"
 )]
 struct AutosyncLine {
     #[command(flatten)]
@@ -107,10 +118,13 @@ where
 }
 
 /// `clm hook session-start` with `args`, the strings after the hook's name, and the agent
-/// harness's event as `stdin`: writes what `session_start_hook` gives to `out`, with the
-/// settings read through `env`, and returns 0. The hook finds its repository from the event's
+/// harness's event as `stdin`: writes the session's text to `out`, with the settings read
+/// through `env` and the status as `clm status` prints it given `budgets`, what that writes to
+/// standard error to `err`, and returns 0. The hook finds its repository from the event's
 /// `cwd`, not from `_root` or `_cwd`, which it takes as every command's call does. An agent
-/// harness CLM doesn't know gives nothing to do; arguments it can't parse return 2.
+/// harness CLM doesn't know gives nothing to do; arguments it can't parse return 2, and so does
+/// a failed write to `out`.
+#[allow(clippy::too_many_arguments)]
 pub fn session_start_command<I, T>(
     args: I,
     _root: Option<&Path>,
@@ -119,37 +133,38 @@ pub fn session_start_command<I, T>(
     env: Env,
     out: &mut dyn Write,
     err: &mut dyn Write,
+    budgets: NodeSize,
 ) -> u8
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
     match parse::<SessionStartLine, _, _>(args, out, err) {
-        Ok(SessionStartLine { args }) => run_hook(&args, stdin, env, out, crate::session_start_in),
+        Ok(SessionStartLine { args }) => run_hook(&args, out, |harness| {
+            crate::session_start_in(harness, stdin, env, err, budgets)
+        }),
         Err(code) => code,
     }
 }
 
-/// Runs `hook` for the agent harness `args` names, on the event `stdin`, and writes what it
-/// gives to `out`: nothing to do, and 0, for an agent harness CLM doesn't know.
+/// Runs `hook` for the agent harness `args` names and writes what it gives to `out`: nothing
+/// to do, and 0, for an agent harness CLM doesn't know; 2 when the write fails.
 fn run_hook(
     args: &HookArgs,
-    stdin: &str,
-    env: Env,
     out: &mut dyn Write,
-    hook: fn(AgentHarness, &str, Env) -> (String, i32),
+    hook: impl FnOnce(AgentHarness) -> (String, i32),
 ) -> u8 {
     let Some(agent_harness) = AgentHarness::from_name(&args.agent_harness) else {
         return 0;
     };
-    let (text, code) = hook(agent_harness, stdin, env);
+    let (text, code) = hook(agent_harness);
     write!(out, "{text}").map_or(2, |()| u8::try_from(code).unwrap_or(2))
 }
 
 /// `clm hook autosync` with `args`, the strings after the hook's name, and the agent harness's
-/// event as `stdin`: autosyncs the repository holding the event's `cwd` as `autosync_hook`
-/// does, with the settings read through `env`, writes nothing and returns 0, whatever
-/// happens; arguments it can't parse return 2. `_root` and `_cwd` are taken as for
+/// event as `stdin`: autosyncs the repository holding the event's `cwd` with `sync`'s call,
+/// given `env`, which the settings are read through too, writes nothing and returns 0,
+/// whatever happens; arguments it can't parse return 2. `_root` and `_cwd` are taken as for
 /// `session_start_command`.
 pub fn autosync_command<I, T>(
     args: I,
@@ -165,7 +180,9 @@ where
     T: Into<OsString> + Clone,
 {
     match parse::<AutosyncLine, _, _>(args, out, err) {
-        Ok(AutosyncLine { args }) => run_hook(&args, stdin, env, out, crate::autosync_hook_in),
+        Ok(AutosyncLine { args }) => run_hook(&args, out, |harness| {
+            crate::autosync_hook_in(harness, stdin, env)
+        }),
         Err(code) => code,
     }
 }

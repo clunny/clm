@@ -39,7 +39,7 @@ fn to_backlog(
 ) -> Result<String, String> {
     let root = root.ok_or("no CLM repository (`specs/SPEC.md`) here; nothing filed")?;
     let (graph, _) = clm_model::load(root);
-    // A node a live change creates may be named too (`model/backlog-nodes`).
+    // A node a live change creates may be named too (`model/backlog-components`).
     if let Some(node) = nodes.iter().find(|n| !graph.backlog_node_known(n)) {
         return Err(format!(
             "no component `{node}` in this repository's specs or live changes; nothing filed"

@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn advised_drift_is_not_blocking() {
-        // req:plugin.hooks/session-upgrade-reminder@c217417c
+        // req:plugin.hooks/session-upgrade-reminder@99f7db79
         let text = line(&[migration("a", Level::Advised)], &[]).unwrap();
         assert!(
             text.contains("1 advised") && text.contains("/clm:upgrade"),
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn required_pending_blocks() {
-        // req:plugin.hooks/session-upgrade-reminder@c217417c
+        // req:plugin.hooks/session-upgrade-reminder@99f7db79
         let text = line(&[migration("a", Level::Required)], &[]).unwrap();
         for needle in ["1 required", "blocked", "/clm:upgrade"] {
             assert!(text.contains(needle), "{needle}: {text}");
@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn required_but_skipped_does_not_block() {
-        // req:plugin.hooks/session-upgrade-reminder@c217417c
+        // req:plugin.hooks/session-upgrade-reminder@99f7db79
         let list = [
             migration("a", Level::Required),
             migration("b", Level::Advised),
@@ -116,13 +116,13 @@ mod tests {
 
     #[test]
     fn nothing_pending_is_no_line() {
-        // req:plugin.hooks/session-upgrade-reminder@c217417c
+        // req:plugin.hooks/session-upgrade-reminder@99f7db79
         assert_eq!(line(&[], &[]), None);
     }
 
     #[test]
     fn too_new_says_a_newer_clm() {
-        // req:plugin.hooks/session-upgrade-reminder@c217417c
+        // req:plugin.hooks/session-upgrade-reminder@99f7db79
         let text = upgrade_line(Err(TooNew("x".into())), &[]).unwrap();
         assert!(text.contains("needs a newer `clm`"), "{text}");
     }

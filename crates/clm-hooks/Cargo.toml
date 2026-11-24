@@ -18,6 +18,3 @@ clm-upgrade.workspace = true
 clm-view-repo.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
-
-[dev-dependencies]
-toml.workspace = true
