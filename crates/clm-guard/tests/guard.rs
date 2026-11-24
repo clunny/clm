@@ -648,6 +648,9 @@ fn guard_blocks_an_implicit_push_from_main() {
     for command in ["git push", "git push origin HEAD", "git push -u origin"] {
         blocks_push(&bash_in_opt(command, Some(dir.path())));
     }
+    // or from a directory `sub` of one
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    blocks_push(&bash_in_opt("git push", Some(&dir.path().join("sub"))));
 }
 
 #[test]
@@ -2150,6 +2153,25 @@ fn a_guard_with_no_directory() {
         }
     }
     assert!(!calls.exists(), "gh was called: {:?}", take_calls(&calls));
+    // The last absolute `-C` sets the checkout and a relative one after it joins it, and a
+    // push it sets in a repository not under CLM isn't under CLM.
+    let scratch = TempDir::new().unwrap();
+    scratch_on(&scratch.path().join("s"), "main");
+    let top = format!("'{}'", scratch.path().display());
+    for (command, code) in [
+        (format!("git -C {top} -C {m} push"), 2),
+        (format!("git -C {m} -C {top} -C s push origin main"), 0),
+        (format!("git -C {m} -C {top} -C s push"), 0),
+    ] {
+        let (got, _, err) = guard_with_no_cwd(None, &command, &path);
+        assert_eq!(got, code, "{command}: {err}");
+    }
+    // The `defects` setting is the guard's own directory's: a report under `backlog` files
+    // no issue, so nothing is asked.
+    let backlog = clm_repo(Some("defects = \"backlog\"\n"));
+    let report = "clm defect --title x <<'EOF'\nr\nEOF";
+    let answer = guard_with_no_cwd(Some(backlog.path()), report, &path);
+    assert_eq!(answer, (0, String::new(), String::new()));
 }
 
 /// A shell line printing `url` as `gh repo view --json url` would. A URL's `//` sits apart
