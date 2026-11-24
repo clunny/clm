@@ -224,9 +224,13 @@ fn resolved_by_a_build() {
     assert_eq!(p.on_origin(&item), None);
 }
 
-#[test]
-fn resolved_under_a_shorter_name() {
-    // req:verify/files-unproven@d8c36be4
+/// A clone with lands `Q` and then `R`, verified green at `R`, a `mutated` record for `R`
+/// holding `a/thing` at its current version under `unproven` and under `left`, and one for `Q`
+/// holding it under `left`; then a land adding `backlog/unproven-a-<p>.md` and
+/// `backlog/unjudged-a-<p>.md`, `p` what `name` gives of `Q` and `R`'s full IDs, and a later
+/// land deleting both; and `core.abbrev` set to 12. Returns whether `clm verify --due` landed
+/// anything, having checked that it printed a filing line for each kind exactly when it did.
+fn files_after_deleted_items(name: impl Fn(&str, &str) -> String) -> bool {
     let f = Fixture::new(None);
     let version = clm_model::load(&f.work())
         .0
@@ -252,17 +256,18 @@ fn resolved_under_a_shorter_name() {
     clm_ledger::append(&f.work(), body, &f.env()).unwrap();
     let body = Body::mutated(
         r.clone(),
-        Some(q),
+        Some(q.clone()),
         vec![],
         vec![format!("a/thing@{version}")],
         vec![],
     )
     .with_left(thing);
     clm_ledger::append(&f.work(), body, &f.env()).unwrap();
-    // Filed under the first 7 characters of `R`, then deleted by a build.
+    // Filed under `p`, then deleted by a build.
+    let p = name(&q, &r);
     let items = [
-        format!("backlog/unproven-a-{}.md", &r[..7]),
-        format!("backlog/unjudged-a-{}.md", &r[..7]),
+        format!("backlog/unproven-a-{p}.md"),
+        format!("backlog/unjudged-a-{p}.md"),
     ];
     f.land(
         &[(&items[0], "filed\n"), (&items[1], "filed\n")],
@@ -277,12 +282,26 @@ fn resolved_under_a_shorter_name() {
     f.git(&work, &["config", "core.abbrev", "12"]);
     assert_eq!(f.git(&work, &["rev-parse", "--short", &r]).len(), 12);
     let out = f.due();
-    assert_eq!(
-        f.git(&f.path("origin.git"), &["rev-parse", "main"]),
-        resolved
-    );
-    assert_eq!(said(&out, "unproven:"), None, "{out:?}");
-    assert_eq!(said(&out, "unjudged:"), None, "{out:?}");
+    let filed = f.git(&f.path("origin.git"), &["rev-parse", "main"]) != resolved;
+    let line = |kind: &str| said(&out, &format!("{kind}: filed 1 items for 1 requirements"));
+    assert_eq!(line("unproven").is_some(), filed, "{out:?}");
+    assert_eq!(line("unjudged").is_some(), filed, "{out:?}");
+    filed
+}
+
+#[test]
+fn resolved_under_a_shorter_name() {
+    // req:verify/files-unproven@d8c36be4
+    assert!(!files_after_deleted_items(|_, r| r[..7].to_string()));
+}
+
+#[test]
+fn an_item_of_another_name_resolves_nothing() {
+    // req:verify/files-unproven@d8c36be4
+    // A prefix of `R` shorter than 7 characters names no item of `R`.
+    assert!(files_after_deleted_items(|_, r| r[..6].to_string()));
+    // Nor does a prefix of another commit.
+    assert!(files_after_deleted_items(|q, _| q[..7].to_string()));
 }
 
 #[test]
