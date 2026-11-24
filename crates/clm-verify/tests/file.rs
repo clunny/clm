@@ -134,7 +134,7 @@ fn said(out: &Outcome, start: &str) -> Option<String> {
 
 #[test]
 fn filed_and_read_as_not_built() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.due();
@@ -187,7 +187,7 @@ fn filed_and_read_as_not_built() {
 
 #[test]
 fn already_filed() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", None);
     p.f.due();
     let filed = p.head();
@@ -198,7 +198,7 @@ fn already_filed() {
 
 #[test]
 fn reworded_since() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", Some("11111111"));
     let before = p.head();
     let out = p.f.due();
@@ -209,7 +209,7 @@ fn reworded_since() {
 
 #[test]
 fn resolved_by_a_build() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", None);
     p.f.due();
     p.sync();
@@ -225,8 +225,69 @@ fn resolved_by_a_build() {
 }
 
 #[test]
+fn resolved_under_a_shorter_name() {
+    // req:verify/files-unproven@d8c36be4
+    let f = Fixture::new(None);
+    let version = clm_model::load(&f.work())
+        .0
+        .requirement("a/thing")
+        .unwrap()
+        .version()
+        .to_string();
+    let toml = format!(
+        "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nmutate = \"true\"\n",
+        f.path("bin/check").display()
+    );
+    let q = f.land(
+        &[
+            ("clm.toml", &toml),
+            ("crates/a/tests/x.rs", &test_file(&version)),
+        ],
+        "Q",
+    );
+    let r = f.land(&[("crates/a/src/r.rs", "fn r() {}\n")], "R");
+    f.verified(&r, true);
+    let thing = vec!["a/thing".to_string()];
+    let body = Body::mutated(q.clone(), None, vec![], vec![], vec![]).with_left(thing.clone());
+    clm_ledger::append(&f.work(), body, &f.env()).unwrap();
+    let body = Body::mutated(
+        r.clone(),
+        Some(q),
+        vec![],
+        vec![format!("a/thing@{version}")],
+        vec![],
+    )
+    .with_left(thing);
+    clm_ledger::append(&f.work(), body, &f.env()).unwrap();
+    // Filed under the first 7 characters of `R`, then deleted by a build.
+    let items = [
+        format!("backlog/unproven-a-{}.md", &r[..7]),
+        format!("backlog/unjudged-a-{}.md", &r[..7]),
+    ];
+    f.land(
+        &[(&items[0], "filed\n"), (&items[1], "filed\n")],
+        "the items",
+    );
+    let work = f.work();
+    f.git(&work, &["rm", "-q", &items[0], &items[1]]);
+    f.git(&work, &["commit", "-q", "-m", "resolved"]);
+    f.git(&work, &["push", "-q", "origin", "main"]);
+    let resolved = f.git(&work, &["rev-parse", "HEAD"]);
+    // The clone now abbreviates every commit to 12 characters.
+    f.git(&work, &["config", "core.abbrev", "12"]);
+    assert_eq!(f.git(&work, &["rev-parse", "--short", &r]).len(), 12);
+    let out = f.due();
+    assert_eq!(
+        f.git(&f.path("origin.git"), &["rev-parse", "main"]),
+        resolved
+    );
+    assert_eq!(said(&out, "unproven:"), None, "{out:?}");
+    assert_eq!(said(&out, "unjudged:"), None, "{out:?}");
+}
+
+#[test]
 fn the_land_fails() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", None);
     let hook = p.f.path("origin.git/hooks/pre-receive");
     write_exec(
@@ -252,7 +313,7 @@ fn the_land_fails() {
 
 #[test]
 fn pipeline_mode_files_nothing() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("pipeline", None);
     let before = p.head();
     let out = p.f.due();
@@ -262,7 +323,7 @@ fn pipeline_mode_files_nothing() {
 
 #[test]
 fn a_commit_verification_files_nothing() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.run(&clm_verify::Request::Commit(p.found.clone()));
@@ -272,7 +333,7 @@ fn a_commit_verification_files_nothing() {
 
 #[test]
 fn a_dry_run_files_nothing() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.dry(false);
@@ -310,7 +371,7 @@ fn a_dry_run_files_nothing() {
 
 #[test]
 fn a_verification_that_ends_in_an_error_files_nothing() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", None);
     // A trigger holds, and the verify tree's lock can't be opened (a directory stands in its
     // place), so the verification ends in a failure once its settings are loaded; a filing
@@ -343,7 +404,7 @@ fn a_verification_that_ends_in_an_error_files_nothing() {
 
 #[test]
 fn stopped_before_it_files() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", None);
     let before = p.head();
     let out = due_stopped(&p, true);
@@ -368,7 +429,7 @@ fn stopped_before_it_files() {
 
 #[test]
 fn a_stop_with_nothing_current_to_file_says_nothing() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let p = filing("local", Some("11111111"));
     let before = p.head();
     let out = due_stopped(&p, true);
@@ -379,7 +440,7 @@ fn a_stop_with_nothing_current_to_file_says_nothing() {
 
 #[test]
 fn a_filing_command_ended_by_a_signal() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     // The land's check writes its process group and sends `SIGINT` to its own shell, as a
     // Ctrl-C at a terminal reaches every process of `clm verify`'s group.
     let p = filing_with(
@@ -451,7 +512,7 @@ fn left_twice(q_left: bool) -> (Fixture, String, String) {
 
 #[test]
 fn left_by_two_passes_in_a_row() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let (f, q, r) = left_twice(true);
     let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
     let short = |sha: &str| f.git(&f.work(), &["rev-parse", "--short", sha]);
@@ -537,7 +598,7 @@ fn files_after(records: &[(usize, &str, bool)]) -> bool {
 
 #[test]
 fn only_an_unbroken_run_of_commits_files() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     // R's pass judged it, so the run is S's alone.
     assert!(!files_after(&[
         (0, "a/thing", true),
@@ -564,7 +625,7 @@ fn only_an_unbroken_run_of_commits_files() {
 
 #[test]
 fn a_stop_keeps_an_unjudged_item_from_filing() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let (f, _, r) = left_twice(true);
     let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
     let before = origin(&["rev-parse", "main"]);
@@ -597,7 +658,7 @@ fn a_stop_keeps_an_unjudged_item_from_filing() {
 
 #[test]
 fn left_by_one_pass() {
-    // req:verify/files-unproven@ec5a9e04
+    // req:verify/files-unproven@d8c36be4
     let (f, _, _) = left_twice(false);
     let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
     let before = origin(&["rev-parse", "main"]);

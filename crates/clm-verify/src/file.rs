@@ -134,6 +134,9 @@ fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
             ctx.prefix,
             ctx.short(&commit)?
         );
+        // An item filed under any prefix of the commit at least 7 long counts, whatever
+        // length `rev-parse --short` gave it then.
+        let named = format!("{}backlog/{kind}-{component}-", ctx.prefix);
         let range = format!("{commit}..{}", ctx.base);
         let added = ctx.git(&[
             "log",
@@ -143,9 +146,14 @@ fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
             "--format=",
             &range,
             "--",
-            &format!(":(top){path}"),
+            &format!(":(top){}backlog/", ctx.prefix),
         ])?;
-        if added.trim().is_empty() {
+        let filed = added.lines().any(|line| {
+            line.strip_prefix(&named)
+                .and_then(|rest| rest.strip_suffix(".md"))
+                .is_some_and(|p| p.len() >= 7 && commit.starts_with(p))
+        });
+        if !filed {
             out.push(Candidate {
                 found: commit,
                 component,
