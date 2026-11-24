@@ -303,8 +303,9 @@ fn backlog_that_cannot_be_written() {
     let backlog = repo.path().join("backlog");
     fs::create_dir_all(&backlog).unwrap();
     fs::set_permissions(&backlog, fs::Permissions::from_mode(0o555)).unwrap();
-    // Root writes whatever the mode says.
+    // Root writes whatever the mode says: no directory can be made unwritable to it.
     if fs::write(backlog.join("probe"), "").is_ok() {
+        eprintln!("skipped: this process writes a 0o555 directory");
         return;
     }
     let out = defect(repo.path(), &["--title", "x"], REPORT, &[]);
