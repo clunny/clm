@@ -110,7 +110,7 @@ fn id_word(word: &str) -> Option<String> {
 
 /// The re-runs of a segment with `tokens` and command `command`, run from `checkout`: one for
 /// each of its `gh` calls that runs `gh run rerun` with a run or job ID.
-pub fn reruns(tokens: &[String], command: &Command, checkout: Option<&Path>) -> Vec<Rerun> {
+pub(crate) fn reruns(tokens: &[String], command: &Command, checkout: Option<&Path>) -> Vec<Rerun> {
     gh::calls(tokens)
         .filter_map(|args| rerun(args, command, checkout))
         .collect()
