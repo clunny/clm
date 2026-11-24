@@ -503,6 +503,65 @@ fn left_by_two_passes_in_a_row() {
     assert_eq!(backlog, path, "{backlog}");
 }
 
+/// A clone with three lands, verified green at the last, and a `mutated` record for each
+/// `(land, id, left)` in order, holding `id` under `left` when `left`, else under `killed`.
+/// Returns whether `clm verify --due` landed anything.
+fn files_after(records: &[(usize, &str, bool)]) -> bool {
+    let f = Fixture::new(None);
+    let toml = format!(
+        "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nmutate = \"true\"\n",
+        f.path("bin/check").display()
+    );
+    let lands = [
+        f.land(&[("clm.toml", &toml)], "Q"),
+        f.land(&[("crates/a/src/r.rs", "fn r() {}\n")], "R"),
+        f.land(&[("crates/a/src/s.rs", "fn s() {}\n")], "S"),
+    ];
+    f.verified(&lands[2], true);
+    for (land, id, left) in records {
+        let ids = vec![id.to_string()];
+        let body = if *left {
+            Body::mutated(lands[*land].clone(), None, vec![], vec![], vec![]).with_left(ids)
+        } else {
+            Body::mutated(lands[*land].clone(), None, ids, vec![], vec![])
+        };
+        clm_ledger::append(&f.work(), body, &f.env()).unwrap();
+    }
+    let out = f.due();
+    let head = f.git(&f.path("origin.git"), &["rev-parse", "main"]);
+    assert_eq!(said(&out, "unproven:"), None, "{out:?}");
+    let filed = head != lands[2];
+    assert_eq!(said(&out, "unjudged:").is_some(), filed, "{out:?}");
+    filed
+}
+
+#[test]
+fn only_an_unbroken_run_of_commits_files() {
+    // req:verify/files-unproven@ec5a9e04
+    // R's pass judged it, so the run is S's alone.
+    assert!(!files_after(&[
+        (0, "a/thing", true),
+        (1, "a/thing", false),
+        (2, "a/thing", true)
+    ]));
+    // Two passes on one commit count as one.
+    assert!(!files_after(&[(2, "a/thing", true), (2, "a/thing", true)]));
+    // A commit's newest record by `at` is the one read: S's last pass judged it.
+    assert!(!files_after(&[
+        (1, "a/thing", true),
+        (2, "a/thing", true),
+        (2, "a/thing", false)
+    ]));
+    // A requirement `origin/main` no longer holds is not filed.
+    assert!(!files_after(&[(1, "a/gone", true), (2, "a/gone", true)]));
+    // The same records with the run unbroken file.
+    assert!(files_after(&[
+        (0, "a/thing", true),
+        (1, "a/thing", true),
+        (2, "a/thing", true)
+    ]));
+}
+
 #[test]
 fn left_by_one_pass() {
     // req:verify/files-unproven@ec5a9e04
