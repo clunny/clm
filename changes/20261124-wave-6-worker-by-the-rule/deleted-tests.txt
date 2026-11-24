@@ -14,3 +14,4 @@ DELETE crates/clm-web-review/tests/keys.rs::same_as_the_cli	moved to web.worker.
 DELETE crates/clm-web-review/tests/keys.rs::truncated_listing_has_no_fingerprint	moved to web.worker.platform/fingerprint-from-listings (scenario "either listing truncated")
 DELETE crates/clm-web-review/tests/approve.rs::nothing_named	moved to web.worker's branch-route requirement (scenario "nothing named" moved by name), proven there through the real router
 DELETE crates/clm-web-live/tests/wasm.rs::needs_no_getrandom	guards a Design choice no caller observes (no getrandom, no worker without durable); builds-for-wasm states neither
+DELETE crates/clm-web/src/proposals.rs::slugs_as_clm_defect_does	the Worker's copy of the slug rule goes; proposals' scenario "the slug" proves slugs end to end

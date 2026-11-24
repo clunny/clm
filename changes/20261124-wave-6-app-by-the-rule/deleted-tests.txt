@@ -1,0 +1,4 @@
+DELETE web/src/errors.test.ts::falls back to the kept copy, but not for a live refresh or a preparing 503	moved to web/src/views/api.test.ts, citing web.views/worker-requests
+DELETE crates/clm/tests/ci_suite/community_files.rs::early_access_form_asks_one_question_and_no_email	moved to web/src/early-access.test.ts, citing web/sign-in-early-access
+DELETE web/src/views/queue-states.test.ts::no source file under web/src names the state the queue no longer has	scan of source text
+DELETE web/site/test/seo.spec.ts::no built agent file is committed	"None of them SHALL be committed" and the scenario "not committed" of agent-markdown are cut; the built guide/ holding no .md but the copies is stated in "each copy is its file" instead
