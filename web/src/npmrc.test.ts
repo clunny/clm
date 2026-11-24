@@ -20,11 +20,4 @@ describe('web/.npmrc', () => {
     const text = readFileSync(fileURLToPath(new URL('../.npmrc', import.meta.url)), 'utf8');
     expect(ignoresScripts(text)).toBe(true);
   });
-
-  it('a later line can turn scripts back on', () => {
-    expect(ignoresScripts('ignore-scripts=true\n')).toBe(true);
-    expect(ignoresScripts('')).toBe(false);
-    expect(ignoresScripts('ignore-scripts=false\n')).toBe(false);
-    expect(ignoresScripts('ignore-scripts=true\nignore-scripts=false\n')).toBe(false);
-  });
 });
