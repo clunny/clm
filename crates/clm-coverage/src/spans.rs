@@ -430,9 +430,50 @@ fn script_name(args: &str) -> String {
     else {
         return String::new();
     };
-    let body = &inner[1..];
-    body.find(quote)
-        .map_or_else(String::new, |end| body[..end].to_string())
+    script_literal(&inner[1..], quote).unwrap_or_default()
+}
+
+/// The value of a string literal whose opening `quote` comes just before `body`, read to
+/// its unescaped closing quote with its escapes as the language reads them; `None` when
+/// the line holds no closing quote.
+fn script_literal(body: &str, quote: char) -> Option<String> {
+    let mut value = String::new();
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == quote {
+            return Some(value);
+        }
+        if c != '\\' {
+            value.push(c);
+            continue;
+        }
+        let escaped = chars.next()?;
+        let code = |chars: &mut std::iter::Peekable<std::str::Chars>, n: usize| {
+            let hex: String = chars.by_ref().take(n).collect();
+            u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32)
+        };
+        let read = match escaped {
+            'n' => Some('\n'),
+            't' => Some('\t'),
+            'r' => Some('\r'),
+            'b' => Some('\u{8}'),
+            'f' => Some('\u{c}'),
+            'v' => Some('\u{b}'),
+            '0' if !chars.peek().is_some_and(char::is_ascii_digit) => Some('\0'),
+            'x' => code(&mut chars, 2),
+            'u' if chars.peek() == Some(&'{') => {
+                chars.next();
+                let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
+                u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32)
+            }
+            'u' => code(&mut chars, 4),
+            other => Some(other),
+        };
+        // A malformed escape is no literal the language reads: it names no test, never a
+        // guess at its value.
+        value.push(read?);
+    }
+    None
 }
 
 fn script_tests(lines: &[&str]) -> Vec<TestSpan> {

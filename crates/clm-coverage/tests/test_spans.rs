@@ -661,3 +661,19 @@ fn scenario_a_test_in_a_block_comment() {
         ]
     );
 }
+
+#[test]
+fn script_title_is_the_literal_as_the_language_reads_it() {
+    // req:check.coverage/test-spans@056ed909
+    let text = "\
+it('the panel\\'s own', () => {});
+it(\"a \\\"b\\\" \\\\ c\\td\\x41\\u0042\\u{43}\", () => {});
+it(`e\\`f`, () => {});
+it('unclosed\\', () => {});
+";
+    let names: Vec<String> = spans("a.test.ts", text)
+        .into_iter()
+        .map(|(n, ..)| n)
+        .collect();
+    assert_eq!(names, ["the panel's own", "a \"b\" \\ c\tdABC", "e`f", ""]);
+}
