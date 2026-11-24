@@ -1,7 +1,7 @@
 ---
 title: "Every build runs on one fixed model, whatever the task"
 kind: idea
-components: [agent-harness, config, orchestrator.loop, orchestrator.run, orchestrator.triage, plugin]
+components: [agent-harness, config, orchestrator.loop, orchestrator.run, orchestrator.triage, plugin, plugin.agents]
 ---
 
 ## Intent
@@ -21,5 +21,5 @@ Builds on `sonnet` made too many mistakes, so the value was changed to `opus` at
 
 - No measurement backs the choice either way. The loop file and the ledger could show how many builds on each model were rebuilt, escalated or refused at the land; nobody has read them.
 - What `opus` builds cost against `sonnet` ones (`effort-accounted` records it).
-- The literal `sonnet` elsewhere, which this should take with it: the prompts written by `crates/clm-run/src/lib.rs`, `crates/clm-triage/src/draft.rs` and `crates/clm-triage/src/fold.rs` for the subagents a build or draft launches, the builder check among them, which no requirement states; and the frontmatter of `plugin/agents/architecture-auditor.md`, `spec-auditor.md` and `spec-slimmer.md`, which `plugin/launch-models` states. The builder check runs on `sonnet` while the builder runs on `opus`, against the reason `model-per-launch` gives for it.
+- The literal `sonnet` elsewhere, which this should take with it: the prompts written by `crates/clm-run/src/lib.rs`, `crates/clm-triage/src/draft.rs` and `crates/clm-triage/src/fold.rs` for the subagents a build or draft launches, the builder check among them, which no requirement states; and the frontmatter of `plugin/agents/architecture-auditor.md`, `spec-auditor.md` and `spec-slimmer.md`, which `plugin.agents/launch-models` states. The builder check runs on `sonnet` while the builder runs on `opus`, against the reason `model-per-launch` gives for it.
 - Whether a capability, `right-model-per-task`, should say the person can choose.

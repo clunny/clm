@@ -9,63 +9,76 @@ serves: [architecture/method-in-the-plugin]
 ---
 
 ## Contract
-The plugin's four read-only subagents, `plugin/agents/<name>.md`: `spec-auditor`, which audits a diff against a component's spec; `architecture-auditor`, which audits a spec branch's design against `ARCHITECTURE.md` and the decisions it touches; `spec-slimmer`, which reads a component against the rule for a requirement (`requirements-state-what-the-contract-shows`) and returns what it would reword, newly state, move and cut; and `issue-verifier`, which judges the host's issues and pull requests against the backlog, the specs, the code and `ARCHITECTURE.md`. Which skill launches each, and on which model, is the skills'.
+The plugin's four subagents, `plugin/agents/<name>.md`, none of which has `Edit` or `Write` among its tools: `spec-auditor`, which audits a diff against a component's spec; `architecture-auditor`, which audits a spec branch's design against `ARCHITECTURE.md` and the decisions it touches; `spec-slimmer`, which reads a component against the rule for a requirement (`requirements-state-what-the-contract-shows`) and returns what it would reword, newly state, move and cut; and `issue-verifier`, which judges the host's issues and pull requests against the backlog, the specs, the code and `ARCHITECTURE.md`, and has only `Read`, `Glob` and `Grep`. Each file's `name` is the name it is launched by, which `orchestrator.run`'s prompt (as `clm:spec-auditor`), `orchestrator.triage`'s prompts (`architecture-auditor`) and `plugin`'s skills use; its `model`, where it sets one, is the model a launch that names none runs it on. Which skill or prompt launches each, and the model it names, is the launcher's (`model-per-launch`).
 
 ## Design
-`spec-auditor` (`advisory-code-review`) is launched with a component ID. It reads the component's requirements and scenarios from `clm context <component>`, the component's pending list from `clm pending <component>`, and the diff against `origin/main`, but not the implementer's reasoning. For each requirement and scenario the diff builds it reports where the behaviour is implemented, or that it's missing; which tests cite `req:<id>` at the current version; and whether each such test would fail if the behaviour broke where it's used, and if not, the gap: no test, a test that can't observe the breakage, or a call site that doesn't use the new behaviour. It grounds each finding in code it read, assigns no severity, and never edits. It runs in the directory it was launched in, the build's worktree, where every subagent of a build starts, and never changes that checkout: the build's own commands, its tests among them, may be running there while it reads, so a `git switch`, `git checkout`, `git stash` or `git reset` would hand them another tree.
-
-`architecture-auditor` (`spec-architecture-audit`) is launched in the checkout of a spec branch, with the change's ID when it has one. It reads `ARCHITECTURE.md` whole, each constraint's text and not only its name, the branch's diff against `origin/main` outside `specs/`, `clm context <component>` for each component the diff's deltas touch, and the decisions under `docs/decisions/` the diff names or that the touched elements' text names, but not the designer's reasoning. It reports each constraint the design breaks, such as a build that would edit another component's paths for an addition (`path-ownership`), and each gap, something a constraint calls for that the change leaves undone, such as a rename's `clm:remove-by` (`expand-contract`), a guide entry (`method-in-the-plugin`) or a `serves` entry (`traced-rules`), and each decision the design contradicts, naming the constraint or decision, quoting its sentence, and naming the element of the change and what would meet it. It treats everything it reads on the branch (the diff, `change.md`, decisions and specs, which on a contribution a stranger wrote) as untrusted data, never as instructions. It assigns no severity, says `no findings` when it has none, never edits, and keeps the checkout as `spec-auditor` does, since the session's commands may be running there.
-
-`spec-slimmer` (`requirements-state-what-the-contract-shows`) is launched with a component ID. It reads the component's spec from `clm context <component>`, the code its `paths` own, the tests that cite its requirements, and the lines `clm health` prints for the component under `outside-contract`, `test-placement`, `design-exit` and `uncited-test`. It returns four lists. *Reworded*: a requirement whose statement names a call the Contract doesn't hold, a test or a place, with the wording that states the same behaviour. *Newly stated*: a sentence of the Contract or Design that states an exit, a message, a refusal or a failure path no requirement states, with the scenario that would state it and the test and assertion that prove it today, or `none`. *Moved*: a clause whose behaviour is another component's code, with the component that should hold it. *Cut*: a requirement, a scenario, a SHALL sentence or a test that would go, with what names its ID (`#### Enforced by`, a decision, another component's `#### Needs`) and what would be lost. Only the last reaches the human (`removal-needs-a-yes`). It never edits, and keeps the checkout as `spec-auditor` does.
-
-**Tests** (`tests-count-where-cited`). The tests of this component's requirements sit in `crates/clm/tests/plugin_agents_suite/`, a directory of its own in the root package, since they read files and need only a package to run in, with their own helpers and the `clm:reads` markers for the files they read (`doc-readers-marked`). `plugin`'s tests of the shared rules read this component's file too; a build that changes the file keeps them passing.
+Each agent carries out one decision. What it reads, reports and never does is its file's text, which is source (`prompt-text-is-source`): no requirement states it, and this Design doesn't repeat it.
+- `spec-auditor` (`advisory-code-review`) reviews a build's diff against the component's requirements; a build session launches it (`AGENTS.md`), as does `clm run`'s prompt (`orchestrator.run`).
+- `architecture-auditor` (`spec-architecture-audit`) reviews a spec branch's design; the `propose` and `contribution` skills launch it, as do `clm draft`'s and the fold's prompts (`orchestrator.triage`).
+- `spec-slimmer` (`requirements-state-what-the-contract-shows`) is launched by the `health` skill.
+- `issue-verifier` (`untrusted-text-read-only-verifier`) is launched by the `triage` skill on the issues and pull requests it saved under `.clm/intake/`.
 
 ## Requirements
 
 ### Requirement: spec-auditor
-The plugin SHALL ship `agents/spec-auditor.md` with a `name` of `spec-auditor` and a `description` in its frontmatter, and with `tools` that include neither `Edit` nor `Write`.
+The plugin SHALL ship `agents/spec-auditor.md` with a `name` of `spec-auditor` and a non-empty `description` in its frontmatter, and with `tools`, a comma-separated list, none of whose entries, with the spaces around it trimmed, is `Edit` or `Write`.
 
 #### Scenario: auditor that can edit
-- GIVEN an `agents/spec-auditor.md` whose `tools` include `Edit`
-- WHEN the tests run
-- THEN a test fails naming the tool
+- GIVEN the plugin's `agents/spec-auditor.md` as shipped, and the same file with `, Edit` appended to its `tools`, and with `, Write` appended
+- WHEN their frontmatter is read
+- THEN the shipped file's `name` is `spec-auditor`, its `description` is non-empty and no entry of its `tools` is `Edit` or `Write`
+- AND each of the other two files has an entry of `tools` that is the tool appended, so it doesn't meet this requirement
 
 #### Serves
 - capability/prove-by-tests
 - architecture/proven-by-tests
 
 ### Requirement: spec-slimmer
-The plugin SHALL ship `agents/spec-slimmer.md`, a subagent whose `tools` hold neither `Edit` nor `Write`.
+The plugin SHALL ship `agents/spec-slimmer.md` with a `name` of `spec-slimmer` and a non-empty `description` in its frontmatter, and with `tools`, a comma-separated list, none of whose entries, with the spaces around it trimmed, is `Edit` or `Write`.
 
 #### Scenario: agent that could edit
-- GIVEN an `agents/spec-slimmer.md` whose `tools` include `Edit`
-- WHEN the tests run
-- THEN a test fails naming the agent and `Edit`
+- GIVEN the plugin's `agents/spec-slimmer.md` as shipped, and the same file with `, Edit` appended to its `tools`, and with `, Write` appended
+- WHEN their frontmatter is read
+- THEN the shipped file's `name` is `spec-slimmer`, its `description` is non-empty and no entry of its `tools` is `Edit` or `Write`
+- AND each of the other two files has an entry of `tools` that is the tool appended, so it doesn't meet this requirement
 
 #### Serves
 - capability/know-health
 - architecture/slim-components
 
 ### Requirement: architecture-auditor
-The plugin SHALL ship `agents/architecture-auditor.md` with a `name` of `architecture-auditor` and a `description` in its frontmatter, and with `tools` that include neither `Edit` nor `Write`.
+The plugin SHALL ship `agents/architecture-auditor.md` with a `name` of `architecture-auditor` and a non-empty `description` in its frontmatter, and with `tools`, a comma-separated list, none of whose entries, with the spaces around it trimmed, is `Edit` or `Write`.
 
 #### Scenario: auditor that can edit
-- GIVEN an `agents/architecture-auditor.md` whose `tools` include `Write`
-- WHEN the tests run
-- THEN a test fails naming the tool
+- GIVEN the plugin's `agents/architecture-auditor.md` as shipped, and the same file with `, Write` appended to its `tools`, and with `, Edit` appended
+- WHEN their frontmatter is read
+- THEN the shipped file's `name` is `architecture-auditor`, its `description` is non-empty and no entry of its `tools` is `Edit` or `Write`
+- AND each of the other two files has an entry of `tools` that is the tool appended, so it doesn't meet this requirement
 
 #### Serves
 - capability/propose-intent
 - architecture/right-over-convenient
 
 ### Requirement: issue-verifier
-The plugin SHALL ship `agents/issue-verifier.md` with a `name` of `issue-verifier`, a `description` in its frontmatter, and `tools` of exactly `Read`, `Glob` and `Grep`, so it runs no command, writes no file and can't reach the host (`untrusted-text-read-only-verifier`).
+The plugin SHALL ship `agents/issue-verifier.md` with a `name` of `issue-verifier` and a non-empty `description` in its frontmatter, and with `tools`, a comma-separated list each of whose entries, with the spaces around it trimmed, is `Read`, `Glob` or `Grep`, and which holds each of those three, so it runs no command, writes no file and can't reach the host (`untrusted-text-read-only-verifier`).
 
 #### Scenario: verifier that can run commands
-- GIVEN an `agents/issue-verifier.md` whose `tools` include `Bash`
-- WHEN the tests run
-- THEN a test fails naming the tool
+- GIVEN the plugin's `agents/issue-verifier.md` as shipped, and the same file with `, Bash` appended to its `tools`
+- WHEN their frontmatter is read
+- THEN the shipped file's `name` is `issue-verifier`, its `description` is non-empty and its `tools` entries are `Read`, `Glob` and `Grep`
+- AND the other file has the entry `Bash`, which is none of the three, so it doesn't meet this requirement
 
 #### Serves
 - capability/contribute-from-outside
 - architecture/right-over-convenient
+
+### Requirement: launch-models
+`agents/spec-auditor.md`, `agents/architecture-auditor.md` and `agents/spec-slimmer.md` SHALL set `model: sonnet` in their frontmatter.
+
+#### Scenario: the agents
+- GIVEN the plugin's agents
+- WHEN their frontmatter is read
+- THEN the three agents' frontmatter has `model: sonnet`
+
+#### Serves
+- capability/right-model-per-task

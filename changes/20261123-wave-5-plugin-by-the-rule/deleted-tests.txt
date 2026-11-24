@@ -1,0 +1,7 @@
+DELETE crates/clm/tests/plugin_suite/main.rs::skills_point_at_the_guide	plugin/method-pointers is removed: a scan of skill and agent text for guide pages (prompt-text-is-source) (needs the human's yes)
+DELETE crates/clm/tests/plugin_suite/main.rs::shim_names_no_windows_target	plugin/shim-targets no longer states that the shim's text names no Windows target and no clm.exe; the four targets are matched by shim_maps_each_target_in_one_assignment
+DELETE crates/clm/tests/plugin_suite/main.rs::launch_models	plugin/launch-models moves to plugin.agents, whose build writes the test there
+DELETE plugin-panel/test/typecheck.test.ts::the declarations are the panel\	type-check's vendor and first-line clauses cut (needs the human's yes)
+DELETE plugin-panel/test/inspector.test.ts::no waiting field: without `waiting_on`, or with it, nothing says waiting	component-inspector's waiting clause cut
+DELETE plugin-panel/test/inspector.test.ts::a press reruns nothing the pane already holds this generation	repeats panel.test.ts::a press changes no run the pane holds for this generation, so no clm command runs again
+DELETE plugin-panel/test/agents.test.ts::clear and resume empty the list; quitting does not	repeats agents.test.ts::session.end empties the list on clear and resume only; the rows tick while one runs
