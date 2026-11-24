@@ -1,0 +1,16 @@
+DELETE crates/clm-web/tests/no_scheduled.rs::worker_holds_no_scheduled_handler	reads worker.rs's text; no-scheduled-event is removed
+DELETE crates/clm-web/tests/no_scheduled.rs::the_worker_builds_for_wasm	a third wasm build; no-scheduled-event is removed and the export tests build the module
+DELETE crates/clm-web/tests/live_export.rs::exports_the_live_class	reads Cargo.toml and lib.rs text; the scenario is cut and builds_for_wasm shows the export
+DELETE crates/clm-web/tests/replica_export.rs::exports_the_replica_class	reads Cargo.toml and lib.rs text; the scenario is cut and builds_for_wasm_with_the_class shows the export
+DELETE crates/clm-web/tests/sign_in.rs::the_build_assets_are_never_served_directly	the sentence is cut; reserved_paths.rs::the_invited_list shows it with a session and without
+DELETE crates/clm-web/tests/deploy.rs::the_worker_reads_the_build_time_assets_through_its_binding	reads wrangler.toml and worker.rs text and proves no clause of invited-sign-in
+DELETE crates/clm-web-platform/tests/shared_layer.rs::one_copy	shared-layer is removed: its scenario scanned src/ file names
+DELETE crates/clm-web-platform/tests/unix_time.rs::scenario_times_github_gives	unix-time moves to ledger/record-times; clm-ledger's build writes the test against clm_ledger::unix_time
+DELETE crates/clm-web-platform/tests/unix_time.rs::scenario_text_that_isnt_such_a_time	same: moved to ledger/record-times
+DELETE crates/clm-web-platform/tests/unix_time.rs::each_field_is_bounded_and_a_leap_second_counts	same: its cases become cases of ledger/record-times' two moved scenarios
+DELETE crates/clm-web-replica/tests/class.rs::the_class_is_defined	reads the crate's source text for `#[durable_object]`; the class's export is web.worker/replica-class-export's
+DELETE crates/clm-web-replica/tests/class.rs::no_source_names_a_cache	source-text scan; web.worker/cache-is-disposable's isolation test scans the same src
+DELETE crates/clm-web-review/tests/keys.rs::same_as_the_cli	moved to web.worker.platform/fingerprint-from-listings (scenario "same as the CLI" moved by name)
+DELETE crates/clm-web-review/tests/keys.rs::truncated_listing_has_no_fingerprint	moved to web.worker.platform/fingerprint-from-listings (scenario "either listing truncated")
+DELETE crates/clm-web-review/tests/approve.rs::nothing_named	moved to web.worker's branch-route requirement (scenario "nothing named" moved by name), proven there through the real router
+DELETE crates/clm-web-live/tests/wasm.rs::needs_no_getrandom	guards a Design choice no caller observes (no getrandom, no worker without durable); builds-for-wasm states neither
