@@ -836,11 +836,6 @@ fn guard_allows_an_implicit_push_it_cannot_decide() {
     // req:plugin.hooks.guard/push-guard@dabbe399
     let dir = TempDir::new().unwrap();
     assert_eq!(
-        guard(&bash_in_opt("git push", None)),
-        Decision::Allow,
-        "no cwd"
-    );
-    assert_eq!(
         guard(&bash_in_opt("git push", Some(dir.path()))),
         Decision::Allow,
         "not a repository"

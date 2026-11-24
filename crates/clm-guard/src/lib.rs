@@ -7,7 +7,7 @@ mod push;
 mod release;
 mod shell;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub use clm_agent_harness::Decision;
@@ -100,7 +100,13 @@ fn judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets, env:
     let Some(command) = event.command.as_deref() else {
         return Decision::Allow;
     };
-    judge_command(command, event.cwd.as_deref().map(Path::new), budgets, env)
+    // An event with no `cwd` runs in the guard's own working directory, and in none when
+    // that is gone (`approve-guard`).
+    let cwd = match event.cwd {
+        Some(cwd) => Some(PathBuf::from(cwd)),
+        None => std::env::current_dir().ok(),
+    };
+    judge_command(command, cwd.as_deref(), budgets, env)
 }
 
 /// The rules, whatever the agent harness: judges `command` run from `cwd`, loading the
