@@ -16,7 +16,7 @@ const AZ: &str = concat!("\"a", "z\"");
 
 #[test]
 fn no_other_crate_holds_az() {
-    // req:host/git-through-layer@6c8b70b2
+    // req:host/git-through-layer@fec307ef
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let (mut expected, mut scanned) = (0, 0);
     let mut found = Vec::new();
@@ -47,7 +47,7 @@ fn holds_az(text: &str) -> bool {
 
 #[test]
 fn the_az_matcher_sees_every_use() {
-    // req:host/git-through-layer@6c8b70b2
+    // req:host/git-through-layer@fec307ef
     assert!(holds_az(concat!(
         "clm_git::run(&dir, \"a",
         "z\", &args, o)"
@@ -59,7 +59,7 @@ fn the_az_matcher_sees_every_use() {
 
 #[test]
 fn no_other_crate_calls_gh() {
-    // req:host/git-through-layer@6c8b70b2
+    // req:host/git-through-layer@fec307ef
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let (mut expected, mut scanned) = (0, 0);
     let mut found = Vec::new();
@@ -192,7 +192,7 @@ fn names_gh(text: &str) -> bool {
 
 #[test]
 fn the_release_guard_lookup_only() {
-    // req:host/git-through-layer@6c8b70b2
+    // req:host/git-through-layer@fec307ef
     let hooks = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -211,7 +211,7 @@ fn the_release_guard_lookup_only() {
 
 #[test]
 fn a_run_of_gh_is_caught() {
-    // req:host/git-through-layer@6c8b70b2
+    // req:host/git-through-layer@fec307ef
     let one_line = concat!("clm_git::run(&dir, \"g", "h\", &args, options)");
     let split = concat!(
         "let _ = tx.send(clm_git::run(\n",
@@ -252,7 +252,7 @@ fn a_run_of_gh_is_caught() {
 
 #[test]
 fn the_matchers_see_split_renamed_and_globbed_calls() {
-    // req:host/git-through-layer@6c8b70b2
+    // req:host/git-through-layer@fec307ef
     assert!(calls_gh(concat!("let x = clm_git", "::gh(root, &[]);")));
     assert!(calls_gh(concat!("clm_git ", ":: gh(root, &[]);")));
     assert!(calls_gh(concat!(
