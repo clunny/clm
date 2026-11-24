@@ -13,8 +13,8 @@ The records that say what was approved, checked and landed, as facts in git that
 - `writer(root, env)`: this clone's identity, creating it on first use.
 - `append(root, entry, env)`: commit the entry to the writer's branch and push it, returning `Appended { record, pushed }`. An `entry` (`Entry`) is a record's `Body`, given a fresh `id`, the writer and the time, or a `Signed` record `sign` returned. `append_all(root, entries, env)`: several entries in one commit and one push, returning one `Appended` per entry.
 - `fold(root)`: the state, a `Fold` holding `records` (every record once, by `at` and then `id`), `approvals` by fingerprint, `checks` by code key, `lands` by commit, `subscriptions` (the live push subscriptions by `id`, each with its `writer`, `at`, `endpoint`, `p256dh` and `auth`), `proposals` (the open web proposals by `id`), `answers` (the open answers by item), `comments` and `change_requests` by branch (`web-proposals-as-ledger-records`, `web-review-feedback-as-ledger-records`), `efforts` (the effort records by `id`), `decisions` (the capability decisions by capability), `verifications` and `mutations` (the slow-test results and the mutation passes by commit, newest first), `lines` (each record's JSON object as read, by `id`) and `warnings` (each line or ledger it skipped). `fold_records(sources)`: the same fold over `(ledger, records.jsonl text)` pairs already read, which the build with default features off offers too.
-- On a `Fold`: `cleared(request)` (whether a `changes_requested` record is cleared at its fingerprint, the one rule `land.approval` and `web.worker` hold by: `request-cleared`) and, in the default build, `cleared_at(root, rev, request)` (the same rule, counting in a repository signed at `rev` only an approval whose signature checks: `request-cleared`), `timed_lands(n)` (the last `n` timed lands as `TimedLand { commit, at, check_seconds, steps, recheck, recheck_files }`, each step a `TimedStep { name, seconds, selected_by }`: `landed-times`, `landed-recheck`) and `unresolved_reds(chain)` (the red `verified` results nothing has since cleared: `verified-record`).
-- `effort_id(session, branch)` (an `effort` record's `id`), `code_key(root, rev)` (a commit's tree with the doc-only paths left out, hashed), `code_key_with(root, rev, path, from)` (`rev`'s code key with `path`'s entry as it is in `from`, which `land` reads to count a `clm.toml` whose settings are unchanged as checked), `doc_only(path)` (whether `code_key` leaves a path out, which `check.affected` reads so its selection and the code key agree), `legacy_doc_only(path)` (the doc-only list as it was when the `landed` records without a `code_key` were written: `legacy-doc-only`), `person(writer)` (the person part of a `<person>/<clone>` writer) and `slug(name)` (a name slugged as `writer` slugs git's `user.name`, which `land.approval` and `verify` slug commit authors with: `person-slug`).
+- On a `Fold`: `cleared(request)` (whether a `changes_requested` record is cleared at its fingerprint, the one rule `land.approval` and `web.worker` hold by: `request-cleared`) and, in the default build, `cleared_at(root, rev, request)` (the same rule, counting in a repository signed at `rev` only an approval whose signature checks: `request-cleared`), in every build `carries_sig(id)` and `cleared_by_sig(request)` (whether a record's line as read carries a non-empty `sig`, and `cleared` counting only an approval whose line does, for a caller that can check no signature: `cleared-by-a-signed-line`), `timed_lands(n)` (the last `n` timed lands as `TimedLand { commit, at, check_seconds, steps, recheck, recheck_files }`, each step a `TimedStep { name, seconds, selected_by }`: `landed-times`, `landed-recheck`) and `unresolved_reds(chain)` (the red `verified` results nothing has since cleared: `verified-record`).
+- `effort_id(session, branch)` (an `effort` record's `id`), `code_key(root, rev)` (a commit's tree with the doc-only paths left out, hashed), `code_key_with(root, rev, path, from)` (`rev`'s code key with `path`'s entry as it is in `from`, which `land` reads to count a `clm.toml` whose settings are unchanged as checked), `doc_only(path)` (whether `code_key` leaves a path out, which `check.affected` reads so its selection and the code key agree), `legacy_doc_only(path)` (the doc-only list as it was when the `landed` records without a `code_key` were written: `legacy-doc-only`), `person(writer)` (the person part of a `<person>/<clone>` writer), `change_ids(paths)` (the live change IDs a branch's added or modified paths name, sorted, which an `approved` record's `change` and a `landed` record's `changes` are named by: `change-ids`), `rfc3339(secs, millis)` and `unix_time(text)` (a record's `at` written, and an RFC 3339 time read: `record-times`) and `slug(name)` (a name slugged as `writer` slugs git's `user.name`, which `land.approval` and `verify` slug commit authors with: `person-slug`).
 - `verify(root, tip, since, review)`: the audit `clm ledger verify` makes, of `tip`'s first-parent chain, returning its findings, each a `Finding { rule, commit, message }`. `on_main(root)`: those findings for `main` as violations, for `clm check` to report. `compact(root, env)`: what `clm ledger compact` does, returning `Compacted { removed, warnings }`. `show(fold)`: the lines `clm ledger show` prints.
 - For signed repositories (`signed-ledger-records`): `signed(root, rev)` (whether `rev`'s tree holds `docs/allowed_signers`), `sign(root, body, namespace, env)` (the body as a record with its `id`, `writer` and `at` filled in, signed with the person's key, as `Signed { record, sig }`, whose `line()` is the JSON object `append` writes), `signed_by(root, rev, line, namespace)` (whether a record's line as read, a JSON object such as `Fold::lines` holds, has a `sig` that is a valid signature by a key `rev`'s `docs/allowed_signers` lists for the line's writer's person) and `signed_message(line)` (the bytes a signature is over).
 
@@ -996,3 +996,49 @@ The fold, `fold` and `fold_records` alike, SHALL parse `mutated` records and hol
 #### Serves
 - architecture/expand-contract
 - architecture/git-is-truth
+
+### Requirement: record-times
+`clm_ledger::rfc3339(secs, millis)` SHALL write the instant `secs` Unix seconds and `millis` milliseconds (below 1000) after it as `YYYY-MM-DDTHH:MM:SS.mmmZ`, the form a record's `at` is written in, and the records `append` writes SHALL take their `at` from it. `clm_ledger::unix_time(text)` SHALL give the Unix seconds of the instant an RFC 3339 date-time names, `YYYY-MM-DD`, `T` or `t`, `HH:MM:SS`, an optional fraction of a second, which it drops, and `Z`, `z` or an offset `+HH:MM` or `-HH:MM`, which it counts; and SHALL give none for any other text: a non-digit where a digit goes, a month, day, hour (past 23), minute (past 59) or second (past 60) that doesn't exist, February's 29th counting only in a leap year, an offset hour past 23 or minute past 59, no offset, text after the offset, or an instant before 1970. Both SHALL build with the crate's default features off (`ledger-builds-for-wasm`).
+
+#### Scenario: times GitHub gives
+- GIVEN the texts `2026-10-01T10:00:00Z`, `2026-10-01T12:00:00+02:00`, `2026-10-01t08:30:00.75-01:30`, `2026-10-01T10:00:00z` and `2026-10-01T10:00:00-00:00`, and `2028-02-29T00:00:00Z`, `2000-02-29T00:00:00Z`, `1970-01-01T00:00:00Z` and the leap second `2026-10-01T09:59:60Z`
+- WHEN `clm_ledger::unix_time` reads each
+- THEN each of the first five gives the Unix seconds of 10:00:00 UTC on 2026-10-01, the next three those of midnight UTC on 2028-02-29, 951782400 and 0, and the leap second those of 10:00:00 UTC on 2026-10-01
+
+#### Scenario: text that isn't such a time
+- GIVEN the texts `2026-10-01T12:00:00`, `2026-10-01T12:00:00+02:00x`, `2026-10-01T12:00:00Zx`, `2026-1a-01T12:00:00Z`, `2026-02-30T12:00:00Z`, `2026-02-29T12:00:00Z`, `2026-10-01T12:00:00+24:00`, `2026-10-01T24:00:00Z`, `2026-10-01T12:00:00+2:00`, `2026-10-01T12:00:00.Z`, `2026-10-01`, `1969-12-31T23:59:59Z`, `2026-13-01T12:00:00Z`, `2026-00-01T12:00:00Z`, `2026-10-00T12:00:00Z`, `2026-04-31T12:00:00Z`, `2026-10-01T12:60:00Z`, `2026-10-01T12:00:61Z`, `2026-10-01T12:00:00+02:60`, `2026-10-01T12:00:00+0200`, `2026-10-01 12:00:00Z`, `+026-10-01T12:00:00Z`, `2026-10-01T12:00:00.5x5Z`, `2100-02-29T00:00:00Z` and `1970-01-01T00:00:00+00:01`
+- WHEN `clm_ledger::unix_time` reads each
+- THEN each gives none
+
+#### Scenario: a record's time
+- GIVEN the instants 0 with 0 milliseconds, 951782400 with 5, and 1800000000 with 999
+- WHEN `clm_ledger::rfc3339` writes each and `clm_ledger::unix_time` reads what it wrote
+- THEN they are `1970-01-01T00:00:00.000Z`, `2000-02-29T00:00:00.005Z` and `2027-01-15T08:00:00.999Z`, and each reads back as its seconds
+
+#### Serves
+- capability/follow-from-browser
+- architecture/reuse-first
+
+### Requirement: cleared-by-a-signed-line
+`clm-ledger` SHALL offer, with its default features off as with them on, `Fold::carries_sig(id)`, true exactly when the fold read a line for the record `id` (`Fold::lines`) whose `sig` is a non-empty string, and `Fold::cleared_by_sig(request)`, true exactly when an `approved` record that `cleared` counts for the request (`request-cleared`) is one whose line carries such a `sig`. Neither SHALL check a signature: a line can carry a `sig` that `signed_by` refuses, which only `cleared_at` tells apart.
+
+#### Scenario: a signature carried, not checked
+- GIVEN a `changes_requested` record `r` by `alice/web` at `f`, and in turn as the only approval: one for `f` by `alice/1a2b3c4d` whose `clears` holds `r`'s `id`, with no `sig`; the same with `sig` `""`; the same with `sig` `"x"`, which no key verifies; and one for `f` by `dana/9f9f9f9f` whose `clears` holds `r`'s `id`, with `sig` `"x"`
+- WHEN `carries_sig` runs on the approval's `id` and `cleared_by_sig` on `r` in each fold, with default features off as with them on
+- THEN `carries_sig` is false, false, true and true, and `cleared_by_sig` false, false, true and false
+
+#### Serves
+- capability/approve-intent
+- architecture/signed-ledger-records
+
+### Requirement: change-ids
+`clm-ledger` SHALL offer, with its default features off as with them on, `change_ids(paths)`: for the paths a branch adds or modifies, the `<id>` of each that is `changes/<id>/change.md` with `<id>` one non-empty path component other than `archive`, in ascending order of their bytes, each once. An `approved` record's `change` is the first of them, or null when there is none, and a `landed` record's `changes` are all of them.
+
+#### Scenario: the IDs a branch's paths name
+- GIVEN the paths `changes/x-y/change.md`, `changes/x/change.md`, `changes/x/change.md` again, `changes/archive/z/change.md`, `changes/archive/change.md`, `changes/w/deltas/change.md`, `changes//change.md`, `changes/v/notes.md` and `specs/a/SPEC.md`
+- WHEN `change_ids` runs on them, with default features off as with them on
+- THEN it gives `x` and then `x-y`
+
+#### Serves
+- capability/approve-intent
+- architecture/reuse-first
