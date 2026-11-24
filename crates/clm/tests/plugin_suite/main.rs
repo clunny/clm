@@ -92,8 +92,21 @@ fn codex_package() {
     );
     // Both packages run the same shim.
     assert!(plugin().join("bin/clm").is_file());
-    let claude = fs::read_to_string(plugin().join("hooks/hooks.json")).unwrap();
-    assert!(claude.contains("bin/clm"), "{claude}");
+    for hooks in ["hooks/hooks.json", "hooks/codex.json"] {
+        let wired = json(&plugin().join(hooks));
+        let commands: Vec<&str> = wired["hooks"]
+            .as_object()
+            .unwrap()
+            .values()
+            .flat_map(|groups| groups.as_array().unwrap())
+            .flat_map(|g| g["hooks"].as_array().unwrap())
+            .map(|h| h["command"].as_str().unwrap())
+            .collect();
+        assert!(!commands.is_empty(), "{hooks}");
+        for command in commands {
+            assert!(command.contains("/bin/clm\" hook "), "{hooks}: {command}");
+        }
+    }
 }
 
 #[test]
@@ -1004,6 +1017,10 @@ fn shim_leaves_nothing_behind() {
     let nocurl = path_without_curl(&shim);
     let out = shim.run(&["status"], &[("PATH", nocurl.to_str().unwrap())]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("with curl"),
+        "the failure is curl's: {out:?}"
+    );
     assert_eq!(shim.cache_entries(), Vec::<String>::new());
     // An archive holding no `clm`, with a matching checksum.
     let shim = Shim::new();

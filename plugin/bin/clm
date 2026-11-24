@@ -7,7 +7,7 @@ if [ -n "${CLM_BIN:-}" ]; then
   exec "$CLM_BIN" "$@"
 fi
 
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+root=$(CDPATH= cd -- "$(dirname -- "$0" 2>/dev/null)/.." 2>/dev/null && pwd -P)
 
 tmp=
 cache=
@@ -48,7 +48,8 @@ fi
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/clm/$version"
 # Each target is one `target=<target>` assignment, which the release's prepare step reads
 # (shim-targets). Any other platform has no prebuilt binary.
-case "$(uname -s)-$(uname -m)" in
+system=$(uname -s 2>/dev/null) machine=$(uname -m 2>/dev/null)
+case "$system-$machine" in
   Linux-x86_64) target=x86_64-unknown-linux-musl ;;
   Linux-aarch64) target=aarch64-unknown-linux-musl ;;
   Darwin-x86_64) target=x86_64-apple-darwin ;;
@@ -63,7 +64,7 @@ if [ ! -x "$bin" ]; then
     skipped=1
     fail "$@"
   fi
-  reason="there's no prebuilt clm for $(uname -s) $(uname -m)"
+  reason="there's no prebuilt clm for $system $machine"
   [ -n "$target" ] || fail "$@"
   asset="clm-$target.tar.gz"
   reason="can't create $cache"
