@@ -14,7 +14,8 @@ use crate::shell::command::Command;
 pub(crate) enum Reach {
     /// It names `main`, or pushes every branch.
     Explicit,
-    /// It names no branch, or only `HEAD`, from a checkout on `main`.
+    /// It names no branch, or names `HEAD` or `@` among its refspecs, from a checkout on
+    /// `main`.
     OnMain,
     /// It names no branch, and git says the branch pushes to `main` (`@{push}`).
     PushesTo(String),
@@ -56,7 +57,10 @@ impl Reach {
                                   whether the push reaches `main`"
                 .to_string(),
             Reach::OnMain => {
-                format!("{lead}{checkout} is on `main`, so a push without a branch pushes `main`")
+                format!(
+                    "{lead}{checkout} is on `main`, so a push without a branch, or of `HEAD` \
+                     or `@`, pushes `main`"
+                )
             }
             Reach::PushesTo(to) => {
                 format!("{lead}the branch of {checkout} pushes to `main` (`@{{push}}` is `{to}`)")
@@ -283,14 +287,17 @@ pub fn reach<'a>(
     if let Some(variable) = set_by_variable {
         return settle(Reach::SetByVariable(variable), lost);
     }
+    // A named refspec without its leading `+`.
+    let names = refspecs
+        .iter()
+        .filter(|r| named(r))
+        .map(|r| r.strip_prefix('+').unwrap_or(r));
     let push = Push {
         bare,
-        head_only: refspecs.iter().all(|r| matches!(*r, "HEAD" | "@")),
-        branches: refspecs
-            .iter()
-            .filter(|r| named(r) && !matches!(**r, "HEAD" | "@"))
+        head: bare || names.clone().any(is_head),
+        branches: names
+            .filter(|r| !is_head(r))
             .map(|r| {
-                let r = r.strip_prefix('+').unwrap_or(r);
                 r.strip_prefix("refs/heads/")
                     .or_else(|| r.strip_prefix("heads/"))
                     .unwrap_or(r)
@@ -308,12 +315,19 @@ fn named(refspec: &str) -> bool {
     !refspec.contains([':', '*', '$', '`'])
 }
 
+/// Whether a named refspec, without its leading `+`, is `HEAD` or `@` (git's name for
+/// `HEAD`), for which git pushes the current branch.
+fn is_head(refspec: &str) -> bool {
+    matches!(refspec, "HEAD" | "@")
+}
+
 /// A push with no refspec or a named one, as its queries judge it.
 struct Push<'a> {
     /// It has no refspec.
     bare: bool,
-    /// It has no refspec, or only `HEAD` and `@`.
-    head_only: bool,
+    /// It has no refspec, or a refspec that is `HEAD` or `@`, with or without a leading
+    /// `+`, whatever other refspecs it has: git then pushes the current branch.
+    head: bool,
     /// The branches its named refspecs other than `HEAD` and `@` name.
     branches: Vec<&'a str>,
 }
@@ -388,7 +402,7 @@ impl Query<'_> {
     /// How a push with no refspec or a named one reaches `main`, by asking git;
     /// `Err(Reach::Unanswered)` when a query runs out of the budget.
     fn reach(&self, push: &Push) -> Result<Option<Reach>, Reach> {
-        if push.head_only
+        if push.head
             && self
                 .ask(&["symbolic-ref", "-q", "HEAD"])?
                 .as_deref()
