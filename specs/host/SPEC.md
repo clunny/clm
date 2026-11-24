@@ -163,10 +163,6 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - WHEN the matcher for other crates and the `clm-guard` call counter each read them
 - THEN both report a `gh` call in each, and the counter reports none in `t == "gh"` or in `prerun_within(&dir, "gh")`
 
-#### Needs
-- clm/no-watch-crate
-- plugin.hooks.guard/git-through-layer
-
 #### Serves
 - architecture/host-adapters
 

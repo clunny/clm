@@ -1,0 +1,6 @@
+DELETE crates/clm-hooks/tests/says_component.rs::string_literals_hold_no_old_word	plugin.hooks/says-component is removed: the per-crate scan of string literals for retired words (wave 1's yes)
+DELETE crates/clm-hooks/tests/says_component.rs::scanner_spots_old_words_across_lines	plugin.hooks/says-component is removed: the unit test of that scan's scanner
+DELETE crates/clm-hooks/tests/git_layer.rs::runs_git_and_gh_only_through_the_layer	plugin.hooks/git-through-layer is removed: vcs/one-git-layer reads clm-hooks/src for every call it looked for, and clm-hooks bounds no call
+DELETE crates/clm-guard/tests/git_layer.rs::runs_git_and_gh_only_through_the_layer	plugin.hooks.guard/git-through-layer is removed: vcs/one-git-layer reads every crate for the processes it starts, and push-guard's and release-run-lookup's budgets are proven by behaviour
+DELETE crates/clm-guard/tests/guard.rs::nothing_shortens_the_hooks_budgets	plugin.hooks.guard/hook-budgets no longer states that nothing changes the hook's budgets: the test scanned crates/clm/src and crates/clm-guard/src text
+DELETE crates/clm-guard/tests/guard.rs::the_hook_judges_with_the_hooks_budgets	plugin.hooks.guard/hook-budgets' scenario now states the behaviour, proven by guard.rs::the_guard_and_the_hook_judge_with_the_hooks_budgets; the test read lib.rs's function bodies
