@@ -166,7 +166,7 @@ fn bash_in_opt(command: &str, cwd: Option<&Path>) -> String {
 
 #[test]
 fn a_branch_that_pushes_to_main() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     let dir = TempDir::new().unwrap();
     let work = tracking(dir.path(), "impl/x/b", Some("main"));
     let why = blocks_push(&bash_in("git -c push.default=upstream push", &work));
@@ -205,7 +205,7 @@ fn a_branch_that_pushes_to_main() {
 
 #[test]
 fn only_push_and_remote_settings_reach_the_queries() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     let dir = TempDir::new().unwrap();
     let work = tracking(&dir.path().join("a"), "impl/x/b", Some("main"));
     // A setting outside `push.`, `remote.` and `branch.` isn't passed to git: one that
@@ -225,7 +225,7 @@ fn only_push_and_remote_settings_reach_the_queries() {
 
 #[test]
 fn another_checkouts_git_directory() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     checkout_on(&dir.path().join("m"), "main");
@@ -242,7 +242,7 @@ fn another_checkouts_git_directory() {
 
 #[test]
 fn pushing_branches_that_do_not_reach_main() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     // pushing other branches
     let dir = TempDir::new().unwrap();
     let own = tracking(&dir.path().join("own"), "impl/x/b", Some("impl/x/b"));
@@ -264,7 +264,7 @@ fn pushing_branches_that_do_not_reach_main() {
 #[test]
 fn merging_into_main_through_the_host() {
     // req:plugin.hooks.guard/host-routes-guard@1e827c83
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     // merging into main through the host
     for command in [
         "git push origin 'refs/heads/*:heads/*'",
@@ -306,7 +306,7 @@ fn reading_or_merging_elsewhere_through_the_host() {
 
 #[test]
 fn guard_asks_to_approve() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     // approving: the reason names the rule and the command
     let why = asks_cmd("clm approve spec/x");
     for needle in ["humans-review-intent", "`clm approve spec/x`"] {
@@ -330,7 +330,7 @@ fn guard_asks_to_approve() {
 
 #[test]
 fn guard_ignores_review_word() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     // review is no command
     for command in [
         "clm review x",
@@ -345,7 +345,7 @@ fn guard_ignores_review_word() {
 
 #[test]
 fn guard_leaves_landing_and_labels_alone() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     for command in [
         // landing
         "clm land spec/x",
@@ -372,7 +372,7 @@ fn guard_leaves_landing_and_labels_alone() {
 
 #[test]
 fn guard_asks_through_cargo_run() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     // approving through cargo run: the guard doesn't work out which package or binary runs,
     // or which tokens reach it (`guard-asks-any-cargo-run`).
     for command in [
@@ -413,7 +413,7 @@ fn guard_asks_through_cargo_run() {
 
 #[test]
 fn guard_leaves_cargo_running_something_else_alone() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     // cargo running something else
     for command in [
         "cargo run -q -p clm -- land spec/x",
@@ -440,7 +440,7 @@ fn guard_leaves_cargo_running_something_else_alone() {
 
 #[test]
 fn guard_lets_a_block_win_over_ask() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     // approval combined with a push to main
     let why = blocks(&bash("clm approve spec/x && git push origin main"));
     assert!(why.contains("guard-blocks-push-to-main"), "{why}");
@@ -450,7 +450,7 @@ fn guard_lets_a_block_win_over_ask() {
 
 #[test]
 fn guard_allows_every_other_event() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     let edit = serde_json::json!({
         "tool_name": "Edit",
         "tool_input": { "new_string": "clm approve spec/x" },
@@ -615,18 +615,20 @@ fn options_before_the_subcommand() {
 
 #[test]
 fn guard_blocks_pushing_to_main() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     blocks_push(&bash("git push origin HEAD:main"));
 }
 
 #[test]
 fn guard_blocks_other_ways_to_reach_main() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     for command in [
         "git push --force origin main",
         "git push origin +main",
         "git push origin impl/x/b:refs/heads/main",
         "git -C ../w push origin --delete main",
+        // `--config-env`'s value is no subcommand.
+        "git --config-env a=B push origin main",
         "git push --mirror origin",
         "git push --all origin",
         "FOO=1 env git push origin HEAD:main",
@@ -640,17 +642,20 @@ fn guard_blocks_other_ways_to_reach_main() {
 
 #[test]
 fn guard_blocks_an_implicit_push_from_main() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
     for command in ["git push", "git push origin HEAD", "git push -u origin"] {
         blocks_push(&bash_in_opt(command, Some(dir.path())));
     }
+    // or from a directory `sub` of one
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    blocks_push(&bash_in_opt("git push", Some(&dir.path().join("sub"))));
 }
 
 #[test]
 fn guard_allows_pushing_other_branches() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     for command in [
         "git push -u origin impl/x/b",
         "git push --force-with-lease origin impl/x/b",
@@ -690,7 +695,7 @@ fn guard_allows_pushing_other_branches() {
 
 #[test]
 fn guard_names_a_cd_it_cannot_follow() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     // cd into a directory the command creates
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -768,7 +773,7 @@ fn guard_names_a_cd_it_cannot_follow() {
 
 #[test]
 fn guard_suggests_an_explicit_branch_for_an_implicit_push() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     // implicit push from main
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -790,7 +795,7 @@ fn guard_suggests_an_explicit_branch_for_an_implicit_push() {
 
 #[test]
 fn guard_reads_push_options_and_redirections_as_what_they_are() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     // An option's value isn't the remote or a refspec, wherever the option sits.
     assert_eq!(
         guard(&bash("git push origin --repo main impl/x/b")),
@@ -812,11 +817,61 @@ fn guard_reads_push_options_and_redirections_as_what_they_are() {
     ] {
         blocks_push(&bash_in_opt(command, Some(dir.path())));
     }
+    // a push of @: git's name for `HEAD`, from a checkout on `main`
+    let why = blocks_push(&bash_in("git push origin @", dir.path()));
+    assert!(why.contains("HEAD:<branch>"), "{why}");
+}
+
+#[test]
+fn settings_in_any_case() {
+    // req:plugin.hooks.guard/push-guard@0b2df744
+    // A setting's name is read without regard to case, as git reads it.
+    let dir = TempDir::new().unwrap();
+    let work = tracking(dir.path(), "impl/x/b", Some("main"));
+    for command in [
+        "git -c PUSH.DEFAULT=upstream push",
+        "git -c REMOTE.origin.PUSH=HEAD:main push",
+    ] {
+        blocks_push(&bash_in(command, &work));
+    }
+}
+
+#[test]
+fn a_refspec_in_a_variable() {
+    // req:plugin.hooks.guard/push-guard@0b2df744
+    // A refspec is judged as written: only a destination written as `main` reaches it.
+    let dir = TempDir::new().unwrap();
+    checkout_on(dir.path(), "main");
+    for command in [
+        "git push origin $B",
+        "git push origin HEAD:$B",
+        "for b in x; do git push origin $b; done",
+    ] {
+        allows(&bash_in(command, dir.path()));
+    }
+    blocks_push(&bash_in("git push origin $B:main", dir.path()));
+}
+
+#[test]
+fn a_dash_c_glob() {
+    // req:plugin.hooks.guard/push-guard@0b2df744
+    // The walk yields a `-C` glob expanded as bash expands it: one match is the directory,
+    // several are tokens of their own, and a quoted or glued one stands as bash leaves it.
+    let dir = TempDir::new().unwrap();
+    checkout_on(dir.path(), "impl/x/b");
+    checkout_on(&dir.path().join("m"), "main");
+    for plain in ["x1", "x2"] {
+        fs::create_dir(dir.path().join(plain)).unwrap();
+    }
+    blocks_push(&bash_in("git -C m* push", dir.path()));
+    for command in ["git -C 'm*' push", "git -C x* push", "git -Cm* push"] {
+        allows(&bash_in(command, dir.path()));
+    }
 }
 
 #[test]
 fn guard_blocks_matching_and_wildcard_refspecs_that_reach_main() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     for command in [
         "git push origin :",
         "git push --force origin refs/heads/*:refs/heads/*",
@@ -833,7 +888,7 @@ fn guard_blocks_matching_and_wildcard_refspecs_that_reach_main() {
 
 #[test]
 fn guard_allows_an_implicit_push_it_cannot_decide() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     let dir = TempDir::new().unwrap();
     assert_eq!(
         guard(&bash_in_opt("git push", Some(dir.path()))),
@@ -852,7 +907,7 @@ fn scratch_tracking(dir: &Path) -> std::path::PathBuf {
 
 #[test]
 fn a_repository_not_under_clm() {
-    // req:plugin.hooks.guard/push-guard-scoped-to-clm@099183ec
+    // req:plugin.hooks.guard/push-guard-scoped-to-clm@df0ec07d
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     for command in [
@@ -874,7 +929,7 @@ fn a_repository_not_under_clm() {
 
 #[test]
 fn a_scratch_repository_inside_a_checkout_under_clm() {
-    // req:plugin.hooks.guard/push-guard-scoped-to-clm@099183ec
+    // req:plugin.hooks.guard/push-guard-scoped-to-clm@df0ec07d
     let dir = TempDir::new().unwrap();
     let work = tracking(dir.path(), "impl/x/b", Some("impl/x/b"));
     scratch_on(&work.join("s"), "main");
@@ -885,7 +940,7 @@ fn a_scratch_repository_inside_a_checkout_under_clm() {
 
 #[test]
 fn a_clm_repository_in_a_subdirectory() {
-    // req:plugin.hooks.guard/push-guard-scoped-to-clm@099183ec
+    // req:plugin.hooks.guard/push-guard-scoped-to-clm@df0ec07d
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     fs::create_dir_all(work.join("tool/specs")).unwrap();
@@ -914,7 +969,7 @@ fn a_clm_repository_in_a_subdirectory() {
 
 #[test]
 fn a_push_whose_repository_the_guard_cannot_tell() {
-    // req:plugin.hooks.guard/push-guard-scoped-to-clm@099183ec
+    // req:plugin.hooks.guard/push-guard-scoped-to-clm@df0ec07d
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     for command in [
@@ -927,12 +982,16 @@ fn a_push_whose_repository_the_guard_cannot_tell() {
         "git -c core.worktree=. push origin main",
         "git -c core.workTree=. push origin main",
         "git -c core.bare=false push origin main",
+        // a work tree set in any case
+        "git -c Core.Worktree=. push origin main",
+        "git -c CORE.BARE=false push origin main",
         "git -C missing push origin main",
         "cd nowhere && git push origin main",
     ] {
         blocks_push(&bash_in(command, &work));
     }
-    // No `cwd`, and a `cwd` in no git repository.
+    // No `cwd`, judged from the guard's own working directory, this repository's, and a
+    // `cwd` in no git repository.
     blocks_push(&bash_in_opt("git push origin main", None));
     let outside = TempDir::new().unwrap();
     blocks_push(&bash_in("git push origin main", outside.path()));
@@ -984,7 +1043,7 @@ fn guard_blocks_moving_main_through_the_api() {
 
 #[test]
 fn guard_allows_prose_about_pushing() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     for command in [
         r#"gh pr create --title t --body "never run git push origin main""#,
         r#"git commit -m "explain git push origin main""#,
@@ -996,7 +1055,7 @@ fn guard_allows_prose_about_pushing() {
 
 #[test]
 fn asks_for_capability_decisions() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     // deciding: a review decision on a capability is the human's
     for command in [
         "clm capabilities decide x --value high --decision keep",
@@ -1019,7 +1078,7 @@ fn asks_for_capability_decisions() {
 
 #[test]
 fn capabilities_reading_not_asked() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     for command in [
         "clm capabilities",
         "clm capabilities x",
@@ -1608,7 +1667,7 @@ fn the_call_reads_the_settings_from_its_environment() {
 
 #[test]
 fn guard_command_asks_with_the_reason() {
-    // req:plugin.hooks.guard/approve-guard@0d27c2be
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
     let event = |c: &str| {
         serde_json::json!({ "tool_name": "Bash", "tool_input": { "command": c } }).to_string()
     };
@@ -1988,6 +2047,133 @@ fn a_rerun_with_no_directory_makes_no_lookup() {
     assert!(!calls.exists(), "gh was called: {:?}", take_calls(&calls));
 }
 
+/// Puts the process's working directory back when it drops, a panic included.
+struct Cwd(std::path::PathBuf);
+
+impl Drop for Cwd {
+    fn drop(&mut self) {
+        let _ = std::env::set_current_dir(&self.0);
+    }
+}
+
+/// `clm hook guard` on `command` in an event with no `cwd`, the guard running in `dir`, or
+/// in a directory that has been removed when `dir` is `None`, with `path` as `PATH`: its
+/// exit code, stdout and stderr. The working directory is the process's, so it is moved
+/// only under the exclusive spawn lock, as `ProcessEnv` sets variables.
+fn guard_with_no_cwd(dir: Option<&Path>, command: &str, path: &str) -> (u8, String, String) {
+    let event = bash_in_opt(command, None);
+    let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+    let vars = [
+        ("PATH", path),
+        ("GIT_CONFIG_GLOBAL", "/dev/null"),
+        ("GIT_CONFIG_NOSYSTEM", "1"),
+    ];
+    let _set = ProcessEnv::set(vars.iter());
+    let _home = Cwd(std::env::current_dir().unwrap());
+    let gone = TempDir::new().unwrap();
+    match dir {
+        Some(dir) => std::env::set_current_dir(dir).unwrap(),
+        None => {
+            std::env::set_current_dir(gone.path()).unwrap();
+            fs::remove_dir(gone.path()).unwrap();
+        }
+    }
+    let lookup = |name: &str| std::env::var(name).ok();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_guard::guard_command(Vec::<String>::new(), &event, &lookup, &mut out, &mut err);
+    (
+        code,
+        String::from_utf8(out).unwrap(),
+        String::from_utf8(err).unwrap(),
+    )
+}
+
+#[test]
+fn an_event_with_no_cwd() {
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
+    // The guard's own working directory stands for the event's `cwd`, for every rule.
+    let fake = TempDir::new().unwrap();
+    let calls = fake.path().join("calls");
+    let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
+    let repo = TempDir::new().unwrap();
+    checkout_on(repo.path(), "main");
+    let (code, _, err) = guard_with_no_cwd(Some(repo.path()), "git push", &path);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("guard-blocks-push-to-main"), "{err}");
+    let (code, out, err) = guard_with_no_cwd(Some(repo.path()), "gh run rerun 42", &path);
+    assert_eq!((code, out.as_str(), err.as_str()), (0, "", ""));
+    let here = repo.path().canonicalize().unwrap();
+    let calls = take_calls(&calls);
+    assert!(
+        calls.iter().any(|c| c.starts_with("repo view --json url|"))
+            && calls.iter().any(|c| c.starts_with("api ")),
+        "{calls:?}"
+    );
+    for call in &calls {
+        let dir = call.split('|').nth(1).unwrap();
+        assert_eq!(Path::new(dir), here, "{call}");
+    }
+}
+
+#[test]
+fn a_guard_with_no_directory() {
+    // req:plugin.hooks.guard/approve-guard@5e09fed8
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
+    // The walk starts with no checkout: only an absolute `cd` or `-C` sets one, a push left
+    // with none counts as under CLM and asks git nothing, and a re-run's lookups all fail.
+    let fake = TempDir::new().unwrap();
+    let calls = fake.path().join("calls");
+    let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
+    let repo = TempDir::new().unwrap();
+    checkout_on(repo.path(), "main");
+    // Quoted, so a temporary directory holding a space or a glob character stays one word.
+    let m = format!("'{}'", repo.path().display());
+    let cases = [
+        (
+            "git push origin main".to_string(),
+            2,
+            "guard-blocks-push-to-main",
+        ),
+        ("git push".to_string(), 0, ""),
+        ("gh run rerun 42".to_string(), 2, "humans-cut-releases"),
+        (
+            format!("cd {m} && git push"),
+            2,
+            "guard-blocks-push-to-main",
+        ),
+        (format!("git -C {m} push"), 2, "guard-blocks-push-to-main"),
+    ];
+    for (command, code, rule) in cases {
+        let (got, out, err) = guard_with_no_cwd(None, &command, &path);
+        assert_eq!(got, code, "{command}: {err}");
+        assert!(out.is_empty(), "{command}: {out}");
+        assert!(err.contains(rule), "{command}: {err}");
+        if code == 0 {
+            assert!(err.is_empty(), "{command}: {err}");
+        }
+    }
+    assert!(!calls.exists(), "gh was called: {:?}", take_calls(&calls));
+    // The last absolute `-C` sets the checkout and a relative one after it joins it, and a
+    // push it sets in a repository not under CLM isn't under CLM.
+    let scratch = TempDir::new().unwrap();
+    scratch_on(&scratch.path().join("s"), "main");
+    let top = format!("'{}'", scratch.path().display());
+    for (command, code) in [
+        (format!("git -C {top} -C {m} push"), 2),
+        (format!("git -C {m} -C {top} -C s push origin main"), 0),
+        (format!("git -C {m} -C {top} -C s push"), 0),
+    ] {
+        let (got, _, err) = guard_with_no_cwd(None, &command, &path);
+        assert_eq!(got, code, "{command}: {err}");
+    }
+    // The `defects` setting is the guard's own directory's: a report under `backlog` files
+    // no issue, so nothing is asked.
+    let backlog = clm_repo(Some("defects = \"backlog\"\n"));
+    let report = "clm defect --title x <<'EOF'\nr\nEOF";
+    let answer = guard_with_no_cwd(Some(backlog.path()), report, &path);
+    assert_eq!(answer, (0, String::new(), String::new()));
+}
+
 /// A shell line printing `url` as `gh repo view --json url` would. A URL's `//` sits apart
 /// from the JSON's braces: `clm-coverage` reads a test's end by counting braces outside a
 /// `//` comment, so a test holding both on one line would never end.
@@ -2029,7 +2215,7 @@ fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
 
 #[test]
 fn guard_command_blocks_pushing_to_main() {
-    // req:plugin.hooks.guard/push-guard@dabbe399
+    // req:plugin.hooks.guard/push-guard@0b2df744
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "git push origin HEAD:main" },
@@ -2065,7 +2251,7 @@ fn guard_in(cwd: &Path, command: &str, env: &[(&str, &str)]) -> (Option<i32>, St
 
 #[test]
 fn guard_asks_before_filing_a_defect() {
-    // req:plugin.hooks.guard/defect-approval@4c044d8e
+    // req:plugin.hooks.guard/defect-approval@d7bcf2ca
     let nowhere = TempDir::new().unwrap();
     let report = "clm defect --title \"x\" <<'EOF'\nThe gate misfired.\nEOF";
     // asking: no settings, so `defects` is `ask`.
@@ -2127,6 +2313,12 @@ fn guard_asks_before_filing_a_defect() {
             "env {set}: {reason}"
         );
     }
+    // With no settings at all, the command's own `off` stands for the setting too.
+    let command = format!("CLM_DEFECTS=off {report}");
+    assert_eq!(
+        guard_in(nowhere.path(), &command, &[]),
+        (Some(0), String::new())
+    );
     // Other `clm` commands, and prose naming `clm defect`, aren't filing.
     for command in [
         "clm check",
@@ -2146,7 +2338,7 @@ fn guard_asks_before_filing_a_defect() {
 
 #[test]
 fn guard_ignores_a_defect_report_body() {
-    // req:plugin.hooks.guard/defect-approval@4c044d8e
+    // req:plugin.hooks.guard/defect-approval@d7bcf2ca
     let nowhere = TempDir::new().unwrap();
     let quoting = "clm approve spec/x\ngit push origin main";
     // quoting a blocked command, under each form of the heredoc operator.
@@ -2195,7 +2387,7 @@ fn guard_ignores_a_defect_report_body() {
 
 #[test]
 fn guard_block_wins_over_a_defect_ask() {
-    // req:plugin.hooks.guard/defect-approval@4c044d8e
+    // req:plugin.hooks.guard/defect-approval@d7bcf2ca
     let nowhere = TempDir::new().unwrap();
     // block wins: the push guard's block wins over the defect's ask.
     let (code, reason) = guard_in(
@@ -2220,7 +2412,7 @@ fn guard_block_wins_over_a_defect_ask() {
 
 #[test]
 fn guard_quotes_the_defect_report_it_asks_about() {
-    // req:plugin.hooks.guard/defect-approval@4c044d8e
+    // req:plugin.hooks.guard/defect-approval@d7bcf2ca
     let nowhere = TempDir::new().unwrap();
     let command = "clm defect --title \"x\" --component gate <<'EOF'\nThe gate misfired.\nEOF";
     let (code, reason) = guard_in(nowhere.path(), command, &[]);
@@ -2264,7 +2456,7 @@ fn guard_quotes_the_defect_report_it_asks_about() {
 
 #[test]
 fn guard_refuses_a_defect_report_it_cannot_show() {
-    // req:plugin.hooks.guard/defect-approval@4c044d8e
+    // req:plugin.hooks.guard/defect-approval@d7bcf2ca
     let nowhere = TempDir::new().unwrap();
     for command in [
         "clm defect --title x < report.md",
