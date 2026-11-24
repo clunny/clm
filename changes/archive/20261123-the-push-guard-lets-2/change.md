@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-push-guard-lets-a-push-through-whose-settings-come-by-git-config-count]
 ---
 
