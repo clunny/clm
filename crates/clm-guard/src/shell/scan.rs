@@ -36,11 +36,16 @@ pub(crate) struct Segment {
     /// Its words, with the quotes and backslashes that quote removed and its redirections
     /// (`>f`, `2>&1`, `<<EOF` and a bare operator's target) left out.
     pub tokens: Vec<String>,
+    /// For each token, its glob pattern when a `*`, `?` or `[` in it stood outside quotes:
+    /// the token with each quoted wildcard and each backslash escaped (`guard-checkout`).
+    pub globs: Vec<Option<String>>,
     pub sep: Sep,
     /// The bodies of the heredocs it opened, in order.
     pub bodies: Vec<String>,
     /// The text of each substitution inside its double quotes, between `$(` and the
-    /// matching `)` (`guard-quoted-substitutions`), outermost only.
+    /// matching `)` or between backticks, with a backtick's escapes removed
+    /// (`guard-quoted-substitutions`), and of each in its unquoted heredoc bodies
+    /// (`guard-heredocs`), outermost only.
     pub subs: Vec<String>,
     /// The words of its here-strings, with their quotes removed (`guard-here-strings`).
     pub herestrings: Vec<String>,
@@ -96,10 +101,12 @@ struct Scan {
     unbalanced: bool,
 }
 
-/// A word as scanned, and whether it holds a redirection operator outside quotes.
+/// A word as scanned, whether it holds a redirection operator outside quotes, and its glob
+/// pattern when it holds a `*`, `?` or `[` outside quotes.
 struct Word {
     text: String,
     redirect: bool,
+    glob: Option<String>,
 }
 
 /// The quote the scan is inside.
@@ -145,6 +152,11 @@ struct Scanner<'a> {
     subs: Vec<String>,
     /// Whether a backtick substitution is open.
     tick: bool,
+    /// The current word's glob pattern so far, whether a wildcard in it stood outside
+    /// quotes, and how much of the word it mirrors.
+    pattern: String,
+    glob: bool,
+    noted: usize,
 }
 
 impl<'a> Scanner<'a> {
@@ -164,6 +176,9 @@ impl<'a> Scanner<'a> {
             start: 0,
             subs: Vec::new(),
             tick: false,
+            pattern: String::new(),
+            glob: false,
+            noted: 0,
         }
     }
 
@@ -203,6 +218,18 @@ impl<'a> Scanner<'a> {
                             width = text.len() - i;
                         }
                     },
+                    // A backtick opens a substitution to the next one not escaped.
+                    (Quote::Double, '`') => match backtick(text, i + 1) {
+                        Some(end) => {
+                            self.word.push_str(&text[i..=end]);
+                            self.subs.push(unescape(&text[i + 1..end], "$`\\\""));
+                            width = end + 1 - i;
+                        }
+                        None => {
+                            self.word.push_str(&text[i..]);
+                            width = text.len() - i;
+                        }
+                    },
                     // Only `\'` and `\\` lose their backslash.
                     (Quote::Ansi, '\\') if next.is_some() => {
                         let n = next.unwrap_or_default();
@@ -214,9 +241,12 @@ impl<'a> Scanner<'a> {
                     }
                     _ => self.word.push(c),
                 }
+                self.note(true);
                 i += width;
                 continue;
             }
+            // A character a backslash escapes is quoted.
+            let escaped = quotes && c == '\\';
             match c {
                 '\'' if quotes => {
                     quote = Some(Quote::Single);
@@ -322,6 +352,7 @@ impl<'a> Scanner<'a> {
                     self.started = true;
                 }
             }
+            self.note(escaped);
             i += width;
         }
         self.end_segment(text.len(), Sep::Newline);
@@ -351,15 +382,35 @@ impl<'a> Scanner<'a> {
         self.redirect = true;
     }
 
+    /// Mirrors the word's characters not yet noted into its glob pattern: a quoted `*`, `?`,
+    /// `[` or `]`, and every backslash, escaped, so only the characters that stood outside
+    /// quotes match as wildcards.
+    fn note(&mut self, quoted: bool) {
+        for c in self.word[self.noted..].chars() {
+            if c == '\\' || (quoted && "*?[]".contains(c)) {
+                self.pattern.push('\\');
+            } else if !quoted && "*?[".contains(c) {
+                self.glob = true;
+            }
+            self.pattern.push(c);
+        }
+        self.noted = self.word.len();
+    }
+
     fn end_word(&mut self) {
+        self.note(false);
+        let pattern = std::mem::take(&mut self.pattern);
         if self.started || !self.word.is_empty() {
             self.words.push(Word {
                 text: std::mem::take(&mut self.word),
                 redirect: self.redirect,
+                glob: self.glob.then_some(pattern),
             });
         }
         self.started = false;
         self.redirect = false;
+        self.glob = false;
+        self.noted = 0;
     }
 
     /// Ends the segment at `at`, by `sep`; the next starts after the separator.
@@ -432,7 +483,8 @@ impl<'a> Scanner<'a> {
             .iter()
             .map(|d| Segment {
                 text: text[d.start..d.end.max(d.start)].trim().to_string(),
-                tokens: tokens(&d.words),
+                tokens: tokens(&d.words).iter().map(|w| w.text.clone()).collect(),
+                globs: tokens(&d.words).iter().map(|w| w.glob.clone()).collect(),
                 sep: d.sep,
                 bodies: Vec::new(),
                 subs: d.subs.clone(),
@@ -444,7 +496,14 @@ impl<'a> Scanner<'a> {
         for h in &self.heredocs {
             // The segment holding the operator: the last that starts at or before it.
             if let Some(s) = self.done.iter().rposition(|d| d.start <= h.op) {
-                segments[s].bodies.push(text[h.start..h.end].to_string());
+                let body = &text[h.start..h.end];
+                segments[s].bodies.push(body.to_string());
+                // The shell runs an unquoted body's substitutions as it sends it.
+                let rest = text[h.op + 2..].strip_prefix('-');
+                let quoted = heredoc_word(rest.unwrap_or(&text[h.op + 2..])).is_none_or(|w| w.1);
+                if !quoted {
+                    segments[s].subs.extend(body_substitutions(body));
+                }
             }
         }
         let mut heredocs = self.heredocs;
@@ -503,6 +562,7 @@ fn substitution(text: &str, from: usize) -> Option<(usize, Vec<Heredoc>)> {
                 heredocs.extend(inner);
                 width = end + 1 - i;
             }
+            (Some(Quote::Double), '`') => width = backtick(text, i + 1)? + 1 - i,
             (Some(_), _) => {}
             (None, '\'') => quote = Some(Quote::Single),
             (None, '"') => quote = Some(Quote::Double),
@@ -545,9 +605,70 @@ fn substitution(text: &str, from: usize) -> Option<(usize, Vec<Heredoc>)> {
     None
 }
 
+/// The text of each substitution in an unquoted heredoc's `body`: each `$(` to its matching
+/// `)`, and each backtick not escaped by a backslash to the next one, its `\$`, `` \` ``
+/// and `\\` unescaped (`guard-heredocs`). One that never closes runs nothing.
+fn body_substitutions(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while let Some(c) = body[i..].chars().next() {
+        let next = body[i + c.len_utf8()..].chars().next();
+        i += match (c, next) {
+            ('\\', Some(n)) => 1 + n.len_utf8(),
+            ('$', Some('(')) => match substitution(body, i + 2) {
+                Some((end, _)) => {
+                    out.push(body[i + 2..end].to_string());
+                    end + 1 - i
+                }
+                None => break,
+            },
+            ('`', _) => match backtick(body, i + 1) {
+                Some(end) => {
+                    out.push(unescape(&body[i + 1..end], "$`\\"));
+                    end + 1 - i
+                }
+                None => break,
+            },
+            _ => c.len_utf8(),
+        };
+    }
+    out
+}
+
+/// The offset of the backtick that closes a backtick substitution whose text starts at
+/// `from`: the next one not escaped by a backslash; `None` when there is none.
+fn backtick(text: &str, from: usize) -> Option<usize> {
+    let mut i = from;
+    while let Some(c) = text[i..].chars().next() {
+        match c {
+            '`' => return Some(i),
+            '\\' => i += 1 + text[i + 1..].chars().next().map_or(0, char::len_utf8),
+            _ => i += c.len_utf8(),
+        }
+    }
+    None
+}
+
+/// `text` with the backslash before each of `chars` removed, as the shell removes it from a
+/// backtick substitution's text before it runs it.
+fn unescape(text: &str, chars: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut it = text.chars().peekable();
+    while let Some(c) = it.next() {
+        match it.peek() {
+            Some(&n) if c == '\\' && chars.contains(n) => {
+                out.push(n);
+                it.next();
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// A segment's arguments: its words without its redirections, nor the target of an
 /// operator written alone (`> f`, `<< EOF`).
-fn tokens(words: &[Word]) -> Vec<String> {
+fn tokens(words: &[Word]) -> Vec<&Word> {
     let mut out = Vec::new();
     let mut target = false;
     for w in words {
@@ -558,7 +679,7 @@ fn tokens(words: &[Word]) -> Vec<String> {
             target = w.text.ends_with(['<', '>', '&']) || w.text.ends_with("<<-");
             continue;
         }
-        out.push(w.text.clone());
+        out.push(w);
     }
     out
 }

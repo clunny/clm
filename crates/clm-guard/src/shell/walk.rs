@@ -66,18 +66,147 @@ struct Place {
 }
 
 impl Place {
-    /// The place `command` runs in: moved by its own `env -C` or `sudo -D`, and set
+    /// The place `command`, whose tokens' glob patterns are `globs`, runs in: moved by its
+    /// own `env -C` or `sudo -D`, each value's glob expanded from this place, and set
     /// outright, so no `cd` is lost, by an absolute one.
-    fn moved(&self, command: &Command) -> Place {
-        let absolute = command.chdir.iter().any(|d| Path::new(d).is_absolute());
+    fn moved(&self, command: &Command, globs: &[Option<String>]) -> Place {
+        let mut dir = self.dir.clone();
+        let mut absolute = false;
+        for d in &command.chdir {
+            let pattern = d.token.and_then(|t| globs.get(t).cloned().flatten());
+            let value = match pattern.map(|p| glob::matches(self.dir.as_deref(), &p)) {
+                Some(found) if found.len() == 1 => found[0].clone(),
+                _ => d.value.to_string(),
+            };
+            if Path::new(&value).is_absolute() {
+                absolute = true;
+                dir = Some(PathBuf::from(value));
+            } else {
+                dir = dir.map(|dir| dir.join(value));
+            }
+        }
         Place {
-            dir: moved(&self.dir, command),
+            dir,
             lost: self.lost.clone().filter(|_| !absolute),
         }
     }
 }
 
-/// The pieces of `command` to judge, in order, starting at the event's `cwd`.
+/// What a `cd` does to the checkout, as bash reads it (`guard-checkout`).
+enum Cd {
+    /// It moves to the directory, absolute or not.
+    To(PathBuf, bool),
+    /// It fails, or the guard can't tell where it goes from no checkout: the checkout stays.
+    Stays,
+    /// The guard can't follow it: the checkout goes back to where the walk started.
+    Resets,
+}
+
+/// Reads a `cd` with `args`, whose glob patterns are `globs`, from the checkout `dir`: its
+/// options up to and including a `--`, then its directory. A `$`, `~` or backtick resets
+/// it, a glob is expanded, a bad option, a second directory or one that isn't there makes
+/// it fail, and no directory or `-` resets it.
+fn read_cd(args: &[String], globs: &[Option<String>], dir: Option<&Path>) -> Cd {
+    let mut k = 0;
+    let mut bad = false;
+    while let Some(a) = args.get(k).filter(|a| a.starts_with('-') && *a != "-") {
+        k += 1;
+        if a == "--" {
+            break;
+        }
+        bad |= !a[1..].chars().all(|c| matches!(c, 'L' | 'P' | 'e'));
+    }
+    let Some(word) = args.get(k) else {
+        return if bad { Cd::Stays } else { Cd::Resets };
+    };
+    if word.contains(['$', '~', '`']) {
+        return Cd::Resets;
+    }
+    let mut to = word.clone();
+    let mut extra = args.len() > k + 1;
+    if let Some(pattern) = globs.get(k).cloned().flatten() {
+        match glob::matches(dir, &pattern).as_slice() {
+            [one] => to = one.clone(),
+            [] => {}
+            _ => extra = true,
+        }
+    }
+    if bad || extra {
+        return Cd::Stays;
+    }
+    if to == "-" {
+        return Cd::Resets;
+    }
+    let absolute = Path::new(&to).is_absolute();
+    let to = match dir {
+        Some(dir) => dir.join(&to),
+        None if absolute => PathBuf::from(to),
+        None => return Cd::Stays,
+    };
+    if to.is_dir() {
+        Cd::To(to, absolute)
+    } else {
+        Cd::Stays
+    }
+}
+
+/// `tokens`, a segment's tokens with glob patterns `globs`, as bash passes them to `git`
+/// (`guard-checkout`): each `-C` value before git's subcommand that holds a glob, and each
+/// glued `-C<value>` that does, replaced by its matches from `dir`, sorted, or kept as
+/// written when there is none.
+fn git_globs(
+    command: &Command,
+    tokens: &[String],
+    globs: &[Option<String>],
+    dir: Option<&Path>,
+) -> Vec<String> {
+    if !command.is("git") {
+        return tokens.to_vec();
+    }
+    let mut k = tokens.len() - command.args.len();
+    let mut out = tokens[..k].to_vec();
+    let expanded = |at: usize| {
+        let found = globs
+            .get(at)
+            .cloned()
+            .flatten()
+            .map(|p| glob::matches(dir, &p))
+            .unwrap_or_default();
+        if found.is_empty() {
+            vec![tokens[at].clone()]
+        } else {
+            found
+        }
+    };
+    while let Some(t) = tokens.get(k) {
+        let valued = matches!(
+            t.as_str(),
+            "-C" | "-c" | "--git-dir" | "--work-tree" | "--namespace" | "--config-env"
+        );
+        if valued && k + 1 < tokens.len() {
+            out.push(t.clone());
+            if t == "-C" {
+                out.extend(expanded(k + 1));
+            } else {
+                out.push(tokens[k + 1].clone());
+            }
+            k += 2;
+        } else if t.starts_with("-C") {
+            out.extend(expanded(k));
+            k += 1;
+        } else if t.starts_with('-') {
+            out.push(t.clone());
+            k += 1;
+        } else {
+            break;
+        }
+    }
+    out.extend_from_slice(&tokens[k..]);
+    out
+}
+
+/// The pieces of `command` to judge, in order, starting at `cwd`, the directory the guard
+/// starts from, or with no checkout when it has none.
 pub(crate) fn walk(command: &str, cwd: Option<&Path>) -> Vec<Judged> {
     let mut judged = Vec::new();
     let start = Place {
@@ -100,12 +229,12 @@ fn collect(segments: &[Segment], cwd: Option<&Path>, place: Place, out: &mut Vec
     let mut scopes: Vec<Place> = Vec::new();
     let mut backtick: Option<Place> = None;
     for (i, segment) in segments.iter().enumerate() {
-        let tokens = command::expand(&segment.tokens);
+        let (tokens, globs) = command::expand(&segment.tokens, &segment.globs);
         let command = command::parse(&tokens);
-        let here = place.moved(&command);
+        let here = place.moved(&command, &globs);
         out.push(Judged {
             text: segment.text.clone(),
-            tokens: tokens.clone(),
+            tokens: git_globs(&command, &tokens, &globs, here.dir.as_deref()),
             checkout: here.dir.clone(),
             lost: here.lost.clone(),
             piped: segment.sep.pipes(),
@@ -132,11 +261,11 @@ fn collect(segments: &[Segment], cwd: Option<&Path>, place: Place, out: &mut Vec
             let mut k = i;
             while segments[k].sep.pipes() && k + 1 < segments.len() {
                 k += 1;
-                let tokens = command::expand(&segments[k].tokens);
+                let (tokens, globs) = command::expand(&segments[k].tokens, &segments[k].globs);
                 let later = command::parse(&tokens);
                 if segments[k].bodies.is_empty() && later.reads_stdin() {
                     for body in &segment.bodies {
-                        run(body, place.moved(&later), out);
+                        run(body, place.moved(&later, &globs), out);
                     }
                     break;
                 }
@@ -160,23 +289,24 @@ fn collect(segments: &[Segment], cwd: Option<&Path>, place: Place, out: &mut Vec
                 Sep::Backtick if opens => written.push_str("...`"),
                 _ => {}
             }
-            let follows = |a: &String| a != "-" && !a.contains(['$', '~', '`']);
-            let to = match command.args {
-                [to] if !opens && follows(to) => place.dir.as_ref().map(|d| d.join(to)),
-                _ => None,
+            let read = if opens {
+                Cd::Resets
+            } else {
+                let globs = &globs[tokens.len() - command.args.len()..];
+                read_cd(command.args, globs, place.dir.as_deref())
             };
-            place = match to {
+            place = match read {
                 // A relative `cd` from a checkout the guard fell back to is no surer than it.
-                Some(to) if to.is_dir() => Place {
-                    lost: place.lost.filter(|_| !command.args[0].starts_with('/')),
+                Cd::To(to, absolute) => Place {
+                    lost: place.lost.filter(|_| !absolute),
                     dir: Some(to),
                 },
                 // A `cd` that fails leaves the shell where it was, and `;` pushes from there.
-                Some(_) => Place {
+                Cd::Stays => Place {
                     dir: place.dir,
                     lost: Some(written),
                 },
-                None => Place {
+                Cd::Resets => Place {
                     dir: cwd.map(Path::to_path_buf),
                     lost: Some(written),
                 },
@@ -198,13 +328,242 @@ fn collect(segments: &[Segment], cwd: Option<&Path>, place: Place, out: &mut Vec
     }
 }
 
-/// `dir` moved by the command's own `env -C` or `sudo -D`.
-fn moved(dir: &Option<PathBuf>, command: &Command) -> Option<PathBuf> {
-    let mut dir = dir.clone()?;
-    for d in &command.chdir {
-        dir.push(d);
+/// Bash's default globbing, for a `cd`'s directory and an `env -C`, `sudo -D` or `git -C`
+/// value (`guard-checkout`): `*`, `?` and `[...]` (with `[!...]`, `[^...]`, ranges and
+/// `[[:class:]]`), matched per path component, a wildcard never matching `/`, a leading `.`
+/// matched only when the pattern writes it, an unclosed `[` taken literally and a
+/// backslash-escaped character matched as itself.
+mod glob {
+
+    use std::path::{Path, PathBuf};
+
+    /// The paths `pattern` matches on the file system, as bash writes them (relative when the
+    /// pattern is), sorted by their bytes as bash sorts them in the C locale. A relative pattern
+    /// with no `base` to read from matches nothing.
+    pub(crate) fn matches(base: Option<&Path>, pattern: &str) -> Vec<String> {
+        let (root, rest, mut found) = match pattern.strip_prefix('/') {
+            Some(rest) => (PathBuf::from("/"), rest, vec!["/".to_string()]),
+            None => match base {
+                Some(base) => (base.to_path_buf(), pattern, vec![String::new()]),
+                None => return Vec::new(),
+            },
+        };
+        let components: Vec<&str> = rest.split('/').collect();
+        for (k, component) in components.iter().enumerate() {
+            if component.is_empty() {
+                // `a//b`, or a trailing `/`, which only a directory matches.
+                if k + 1 == components.len() {
+                    found.retain(|f| root.join(f).is_dir());
+                    for f in &mut found {
+                        f.push('/');
+                    }
+                }
+                continue;
+            }
+            let parts = parse(component);
+            let wild = parts.iter().any(|p| !matches!(p, Part::Lit(_)));
+            let mut next = Vec::new();
+            for f in &found {
+                if wild {
+                    let Ok(entries) = std::fs::read_dir(root.join(f)) else {
+                        continue;
+                    };
+                    for entry in entries.flatten() {
+                        // A name that isn't UTF-8 still counts toward the matches.
+                        let name = entry.file_name();
+                        let name = name.to_string_lossy();
+                        if matches_name(&parts, &name) {
+                            next.push(join(f, &name));
+                        }
+                    }
+                } else {
+                    let literal: String = parts
+                        .iter()
+                        .filter_map(|p| match p {
+                            Part::Lit(c) => Some(*c),
+                            _ => None,
+                        })
+                        .collect();
+                    let path = join(f, &literal);
+                    if root.join(&path).symlink_metadata().is_ok() {
+                        next.push(path);
+                    }
+                }
+            }
+            found = next;
+        }
+        found.sort();
+        found
     }
-    Some(dir)
+
+    /// `name` under the written path `f`.
+    fn join(f: &str, name: &str) -> String {
+        match f {
+            "" => name.to_string(),
+            f if f.ends_with('/') => format!("{f}{name}"),
+            f => format!("{f}/{name}"),
+        }
+    }
+
+    /// One element of a path component's pattern.
+    #[derive(Debug, PartialEq)]
+    enum Part {
+        Lit(char),
+        /// `*`
+        Any,
+        /// `?`
+        One,
+        /// `[...]`: negated, and its items.
+        Class(bool, Vec<Item>),
+    }
+
+    /// One item of a bracket expression.
+    #[derive(Debug, PartialEq)]
+    enum Item {
+        Char(char),
+        Range(char, char),
+        Named(String),
+    }
+
+    /// A path component's pattern, read as bash reads it.
+    fn parse(component: &str) -> Vec<Part> {
+        let chars: Vec<char> = component.chars().collect();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while let Some(&c) = chars.get(i) {
+            i += 1;
+            out.push(match c {
+                '\\' => match chars.get(i) {
+                    Some(&n) => {
+                        i += 1;
+                        Part::Lit(n)
+                    }
+                    None => Part::Lit('\\'),
+                },
+                '*' => Part::Any,
+                '?' => Part::One,
+                '[' => match class(&chars, i) {
+                    Some((part, next)) => {
+                        i = next;
+                        part
+                    }
+                    None => Part::Lit('['),
+                },
+                c => Part::Lit(c),
+            });
+        }
+        out
+    }
+
+    /// The bracket expression whose text starts at `j`, just after its `[`, and the index after
+    /// its `]`; `None` when it never closes, so the `[` is a literal.
+    fn class(chars: &[char], mut j: usize) -> Option<(Part, usize)> {
+        let negated = matches!(chars.get(j), Some('!' | '^'));
+        j += usize::from(negated);
+        let mut items = Vec::new();
+        let mut first = true;
+        loop {
+            let &c = chars.get(j)?;
+            if c == ']' && !first {
+                return Some((Part::Class(negated, items), j + 1));
+            }
+            first = false;
+            if c == '[' && chars.get(j + 1) == Some(&':') {
+                let name: String = chars[j + 2..].iter().collect();
+                if let Some(end) = name.find(":]") {
+                    items.push(Item::Named(name[..end].to_string()));
+                    j += 2 + name[..end].chars().count() + 2;
+                    continue;
+                }
+            }
+            let (low, after) = literal(chars, j)?;
+            j = after;
+            if chars.get(j) == Some(&'-') && chars.get(j + 1).is_some_and(|&n| n != ']') {
+                let (high, after) = literal(chars, j + 1)?;
+                items.push(Item::Range(low, high));
+                j = after;
+            } else {
+                items.push(Item::Char(low));
+            }
+        }
+    }
+
+    /// The character at `j` in a bracket expression, a backslash escaping the next, and the
+    /// index after it.
+    fn literal(chars: &[char], j: usize) -> Option<(char, usize)> {
+        match chars.get(j)? {
+            '\\' => chars.get(j + 1).map(|&c| (c, j + 2)),
+            &c => Some((c, j + 1)),
+        }
+    }
+
+    /// Whether `name`, an entry of a directory, matches `parts`: a leading `.` only when the
+    /// pattern writes it.
+    fn matches_name(parts: &[Part], name: &str) -> bool {
+        if name.starts_with('.') && parts.first() != Some(&Part::Lit('.')) {
+            return false;
+        }
+        let name: Vec<char> = name.chars().collect();
+        matches_from(parts, &name)
+    }
+
+    /// Whether `name` matches `parts`, backtracking only to the last `*`, so it takes time in
+    /// proportion to their lengths' product however many `*` the pattern holds.
+    fn matches_from(parts: &[Part], name: &[char]) -> bool {
+        let (mut p, mut n) = (0, 0);
+        // The last `*` and the name's position it was tried at.
+        let mut star: Option<(usize, usize)> = None;
+        while n < name.len() {
+            let one = match parts.get(p) {
+                Some(Part::Any) => {
+                    star = Some((p, n));
+                    p += 1;
+                    continue;
+                }
+                Some(Part::One) => true,
+                Some(Part::Lit(c)) => name[n] == *c,
+                Some(Part::Class(negated, items)) => {
+                    items.iter().any(|item| holds(item, name[n])) != *negated
+                }
+                None => false,
+            };
+            if one {
+                p += 1;
+                n += 1;
+            } else if let Some((s, at)) = star {
+                p = s + 1;
+                n = at + 1;
+                star = Some((s, at + 1));
+            } else {
+                return false;
+            }
+        }
+        parts[p..].iter().all(|part| *part == Part::Any)
+    }
+
+    /// Whether bracket item `item` holds `c`.
+    fn holds(item: &Item, c: char) -> bool {
+        match item {
+            Item::Char(x) => c == *x,
+            Item::Range(low, high) => (*low..=*high).contains(&c),
+            Item::Named(name) => match name.as_str() {
+                "alpha" => c.is_ascii_alphabetic(),
+                "digit" => c.is_ascii_digit(),
+                "alnum" => c.is_ascii_alphanumeric(),
+                "upper" => c.is_ascii_uppercase(),
+                "lower" => c.is_ascii_lowercase(),
+                "space" => c.is_ascii_whitespace() || c == '\x0b',
+                "blank" => c == ' ' || c == '\t',
+                "punct" => c.is_ascii_punctuation(),
+                "xdigit" => c.is_ascii_hexdigit(),
+                "cntrl" => c.is_ascii_control(),
+                "graph" => c.is_ascii_graphic(),
+                "print" => c.is_ascii_graphic() || c == ' ',
+                "word" => c.is_ascii_alphanumeric() || c == '_',
+                _ => false,
+            },
+        }
+    }
 }
 
 #[cfg(test)]
@@ -227,7 +586,176 @@ mod tests {
         }
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    /// The `git` piece of `command`, walked from `cwd`.
+    fn git_piece(command: &str, cwd: Option<&Path>) -> Judged {
+        walk(command, cwd)
+            .into_iter()
+            .find(|j| j.command().is("git"))
+            .unwrap()
+    }
+
+    /// A directory holding the empty directories `names`.
+    fn tree(names: &[&str]) -> tempfile::TempDir {
+        let dir = tempfile::TempDir::new().unwrap();
+        for name in names {
+            std::fs::create_dir_all(dir.path().join(name)).unwrap();
+        }
+        dir
+    }
+
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    #[test]
+    fn globbing_matches_as_bash_does() {
+        let dir = tree(&["m", "x1", "x2", "xa", ".hid", "-Cm", "a[b", "a*b", "sub/y1"]);
+        let at = |p: &str| glob::matches(Some(dir.path()), p);
+        assert_eq!(at("x*"), ["x1", "x2", "xa"]);
+        assert_eq!(at("x?"), ["x1", "x2", "xa"]);
+        assert_eq!(at("x[0-9]"), ["x1", "x2"]);
+        assert_eq!(at("x[!0-9]"), ["xa"]);
+        assert_eq!(at("x[^12]"), ["xa"]);
+        assert_eq!(at("x[[:digit:]]"), ["x1", "x2"]);
+        assert_eq!(at("x[[:alpha:]]"), ["xa"]);
+        assert_eq!(at("[m]"), ["m"]);
+        assert_eq!(at("*1"), ["x1"]);
+        assert_eq!(at("x*1*"), ["x1"]);
+        assert_eq!(at("*x*"), ["x1", "x2", "xa"]);
+        // A leading `.` only when the pattern writes it.
+        assert!(!at("*").contains(&".hid".to_string()));
+        assert_eq!(at(".h*"), [".hid"]);
+        // An unclosed `[` is a literal.
+        assert_eq!(at("a[*"), ["a[b"]);
+        // An escaped wildcard is a literal.
+        assert_eq!(at("a\\*?"), ["a*b"]);
+        // Per path component; a wildcard never matches `/`.
+        assert_eq!(at("s*/y*"), ["sub/y1"]);
+        assert!(at("s*y1").is_empty());
+        assert_eq!(at("m/../x[12]"), ["m/../x1", "m/../x2"]);
+        // A glued `-C` value globs as the whole word.
+        assert_eq!(at("-Cm*"), ["-Cm"]);
+        // Absolute patterns read from the root; relative ones need a base.
+        let absolute = format!("{}/x[a]", dir.path().display());
+        assert_eq!(
+            glob::matches(None, &absolute),
+            [absolute.replace("[a]", "a")]
+        );
+        assert!(glob::matches(None, "x*").is_empty());
+        assert!(at("nothing*").is_empty());
+        // Many wildcards against a long name end at once.
+        let long = tree(&[&"a".repeat(200)]);
+        let many = format!("{}b", "*a".repeat(30));
+        assert!(glob::matches(Some(long.path()), &many).is_empty());
+    }
+
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    #[test]
+    fn no_directory_to_start_from() {
+        let dir = tree(&["m"]);
+        let m = dir.path().join("m");
+        for command in [
+            format!("cd {} && git push", m.display()),
+            format!("env -C {} git push", m.display()),
+            format!("cd gone; cd {} && git push", m.display()),
+        ] {
+            let git = git_piece(&command, None);
+            assert_eq!(git.checkout.as_deref(), Some(m.as_path()), "{command}");
+        }
+        let git = git_piece("cd m && git push", None);
+        assert_eq!(git.checkout, None);
+        assert_eq!(git.lost.as_deref(), Some("cd m"));
+        assert_eq!(git_piece("env -C m git push", None).checkout, None);
+        // A relative glob stays as written.
+        assert_eq!(
+            git_piece("git -C m* push", None).tokens,
+            ["git", "-C", "m*", "push"]
+        );
+    }
+
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    #[test]
+    fn git_c_globs_yield_every_match() {
+        let dir = tree(&["m", "x1", "x2"]);
+        let at = |command: &str| git_piece(command, Some(dir.path())).tokens;
+        assert_eq!(at("git -C x* push"), ["git", "-C", "x1", "x2", "push"]);
+        assert_eq!(at("git -C m* push"), ["git", "-C", "m", "push"]);
+        assert_eq!(
+            at("/usr/bin/git -C [m] push"),
+            ["/usr/bin/git", "-C", "m", "push"]
+        );
+        assert_eq!(
+            at("git --config-env a=B -C m* push"),
+            ["git", "--config-env", "a=B", "-C", "m", "push"]
+        );
+        // A glued `-C` globs as the whole word: no entry starts with `-C`.
+        assert_eq!(at("git -Cm* push"), ["git", "-Cm*", "push"]);
+        // Quoted, none, or after the subcommand: as written.
+        assert_eq!(at("git -C 'm*' push"), ["git", "-C", "m*", "push"]);
+        assert_eq!(at("git -C z* push"), ["git", "-C", "z*", "push"]);
+        assert_eq!(at("git log -C m*"), ["git", "log", "-C", "m*"]);
+        // `env -S` splits its value but globs nothing in it.
+        assert_eq!(
+            at("env -S 'git -C m* push'"),
+            ["env", "git", "-C", "m*", "push"]
+        );
+        // From the segment's checkout.
+        let deeper = format!("cd {} && git -C ../x* push", dir.path().join("m").display());
+        assert_eq!(
+            git_piece(&deeper, None).tokens,
+            ["git", "-C", "../x1", "../x2", "push"]
+        );
+        let glued = tree(&["-Cm"]);
+        assert_eq!(
+            git_piece("git -Cm* push", Some(glued.path())).tokens,
+            ["git", "-Cm", "push"]
+        );
+    }
+
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    #[test]
+    fn a_cd_reads_its_options_and_globs_as_bash_does() {
+        let dir = tree(&["m", "x1", "x2", ".hid", "a[b"]);
+        let checkout = |command: &str| git_piece(command, Some(dir.path())).checkout.unwrap();
+        let m = dir.path().join("m");
+        for command in [
+            "cd -P m; git push",
+            "cd -LPe m; git push",
+            "cd -- m; git push",
+            "cd m*; git push",
+            "cd [m]; git push",
+            "cd [!x.a]; git push",
+            "cd m; cd ../x*; git push",
+            "cd m; cd m x; git push",
+            "cd m; cd -x .; git push",
+            "cd m; cd -@ .; git push",
+            "cd m; cd -x; git push",
+            "env -C m* git push",
+            "sudo -D [m] git push",
+        ] {
+            assert_eq!(checkout(command), m, "{command}");
+        }
+        assert_eq!(checkout("cd .h*; git push"), dir.path().join(".hid"));
+        assert_eq!(checkout("cd a[b; git push"), dir.path().join("a[b"));
+        // A quoted glob is the word as written; none there, so the `cd` fails.
+        assert_eq!(checkout("cd 'm*'; git push"), dir.path());
+        assert_eq!(checkout("cd m\\*; git push"), dir.path());
+        // Several matches, or a file, fail the `cd`.
+        assert_eq!(checkout("cd x*; git push"), dir.path());
+        std::fs::write(dir.path().join("f"), "").unwrap();
+        assert_eq!(checkout("cd f; git push"), dir.path());
+        // `$`, `~` and backticks reset, unexpanded, before any glob.
+        for command in ["cd m; cd $D*; git push", "cd m; cd ~/m*; git push"] {
+            assert_eq!(checkout(command), dir.path(), "{command}");
+        }
+        // No directory, or `-`, resets too.
+        for command in [
+            "cd m; cd; git push",
+            "cd m; cd -; git push",
+            "cd m; cd -P; git push",
+        ] {
+            assert_eq!(checkout(command), dir.path(), "{command}");
+        }
+    }
+
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn a_quoted_heredoc_is_sent_as_written() {
         assert_eq!(
@@ -236,7 +764,7 @@ mod tests {
         );
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn an_unquoted_heredoc_is_sent_as_written_only_without_expansions() {
         assert_eq!(
@@ -261,7 +789,7 @@ mod tests {
         );
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn a_dash_heredoc_loses_its_leading_tabs() {
         assert_eq!(
@@ -270,7 +798,7 @@ mod tests {
         );
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn the_last_redirection_wins() {
         assert_eq!(
@@ -285,12 +813,15 @@ mod tests {
             inputs("clm defect < f <<< x <<'EOF'\nr\nEOF", "clm"),
             [heredoc("r", true)]
         );
+        // another descriptor
         assert_eq!(inputs("clm defect 3< f", "clm"), [Stdin::Own]);
+        assert_eq!(inputs("clm defect 3<<'EOF'\nr\nEOF", "clm"), [Stdin::Own]);
+        assert_eq!(inputs("clm defect 0< f", "clm"), [Stdin::File]);
         assert_eq!(inputs("clm defect 0<&3", "clm"), [Stdin::File]);
         assert_eq!(inputs("clm defect <> f", "clm"), [Stdin::File]);
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn other_sources() {
         assert_eq!(inputs("clm defect < r.md", "clm"), [Stdin::File]);
@@ -302,7 +833,7 @@ mod tests {
         assert_eq!(inputs("cat r.md; clm defect", "clm"), [Stdin::Own]);
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn a_heredoc_inside_a_substitution_belongs_to_its_own_piece() {
         let walked = walk("git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n)\"", None);
@@ -316,7 +847,7 @@ mod tests {
         assert_eq!(of("cat"), Some(heredoc("msg", true)));
     }
 
-    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    // req:plugin.hooks.guard.shell/guard-standard-input@a171c29b
     #[test]
     fn a_script_and_a_body_judged_as_commands_keep_their_own_input() {
         assert_eq!(
