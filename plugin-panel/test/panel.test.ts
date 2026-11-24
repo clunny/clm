@@ -520,6 +520,11 @@ describe('superseded-draw', () => {
     const found = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'x aborted' })
     found.fs.stat = path => (path === SHIM ? Promise.resolve({ kind: 'file' as const }) : cut())
     await expect(runClm(found, ['view', 'flight'], '/work/repo')).rejects.toThrow(/aborted$/)
+    // Installed from the plugin cache, a cut-short listing of the shims is no `clm` on PATH.
+    const cached = fake({ root: '/cache/clm-panel/0.6.0', files: [], dirs: ['/work/repo'], answer: () => ok('chart') })
+    cached.fs.list = cut
+    await expect(runClm(cached, ['view', 'flight'], '/work/repo')).rejects.toThrow(/aborted$/)
+    expect(cached.calls).toEqual([])
   })
 
   // req:plugin.panel/view-command-in-chat@abfcbb20

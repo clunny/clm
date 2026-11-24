@@ -43,7 +43,9 @@ export function startRun(
 ): AgentRun[] {
   if (list.some(a => a.id === r.id)) return resumed(list, r.id)
   const key = normalised(r.description)
-  const earlier = key === '' ? 0 : list.filter(a => normalised(a.description) === key).length
+  // Only the runs the list keeps once this one joins count toward its round.
+  const kept = list.slice(-(MAX_RUNS - 1))
+  const earlier = key === '' ? 0 : kept.filter(a => normalised(a.description) === key).length
   const entry = runEntry(r.prompt)
   const run: AgentRun = {
     id: r.id,

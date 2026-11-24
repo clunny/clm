@@ -95,7 +95,11 @@ export async function clmCommand($: Host): Promise<string> {
   if (await exists($, sibling, 'file')) return sibling
   const own = root.slice(root.lastIndexOf('/') + 1)
   const versions = join(parent(parent(root)), 'clm')
-  const listed = await $.fs.list(versions).catch(() => [])
+  // A listing cut short is no answer: the draw it served ends, as at any other cut-short call.
+  const listed = await $.fs.list(versions).catch((e: unknown) => {
+    if (isAborted(e)) throw e
+    return []
+  })
   const names = listed
     .filter(e => e.kind === 'dir')
     .map(e => e.name)

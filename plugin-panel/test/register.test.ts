@@ -96,6 +96,9 @@ function world() {
     agents: async (): Promise<{ id: string; status: string }[]> => [],
     stop: ok(''),
     fetch: async (): Promise<Process> => ok(''),
+    originMain: true,
+    // A `clm` run answered by the test, before the defaults.
+    clm: (_argv: readonly string[]): Process | undefined => undefined,
     hooks: [] as { event: string; match?: Record<string, unknown>; hook: Hook }[],
   }
   const files = new Set([SHIM, `${REPO}/specs/SPEC.md`])
@@ -107,7 +110,9 @@ function world() {
         const line = argv.join(' ')
         w.calls.push(line)
         if (line === 'git fetch --quiet origin') return w.fetch()
-        if (argv[0] === 'git') return ok(`${w.commit}\n`)
+        if (argv[0] === 'git') return w.originMain ? ok(`${w.commit}\n`) : { exitCode: 1, stdout: '', stderr: '' }
+        const own = w.clm(argv)
+        if (own) return own
         if (argv[1] === 'build') return w.stop
         if (argv[1] === 'machine') return ok('')
         if (argv[2] === 'queue') {
@@ -185,7 +190,7 @@ async function setup() {
       await flush()
       const root = await hook('ui.render', m => m.component === 'Pane')($, { surface, props: { bodyColumns: columns } })
       await flush()
-      return { lines: linesOf(root), buttons: buttons(root) }
+      return { root, lines: linesOf(root), buttons: buttons(root) }
     },
     /** Presses the button labelled `label`, or whose label text is `label`. */
     async press(label: string) {
@@ -330,6 +335,106 @@ describe('views-panel', () => {
     p.w.fetch = async () => ok('')
     await p.turnEnds(360_000)
     expect((await p.draw()).lines.some(l => l.startsWith('⚠ fetch failed'))).toBe(false)
+  })
+
+  // req:plugin.panel/views-panel@76d63404
+  // req:plugin.panel/queue-tab@edf50f3e
+  test('the pane draws each surface, a kept tab, the checkout without origin/main and a failing clm', async () => {
+    const p = await setup()
+    await p.view('')
+    // Coloured as the escapes say.
+    const texts = (n: unknown): El[] => (isEl(n) ? [...(n.tag === 'Text' ? [n] : []), ...n.children.flatMap(texts)] : [])
+    const terminal = await p.draw('terminal', 80)
+    const colours = (root: unknown) => texts(root).filter(t => t.children.includes('running')).map(t => t.props.color)
+    expect(colours(terminal.root)).toEqual(['blue', 'yellow'])
+    // On the desktop, Spec is an SVG and Queue its ANSI chart at the pane width.
+    await p.press('Spec')
+    const desktop = await p.draw('desktop', 90)
+    expect(p.views()).toContain(`${SHIM} view spec --at origin/main --format svg`)
+    expect(JSON.stringify(desktop.root)).toContain('"tag":"Svg"')
+    await p.press('Queue')
+    const queue = await p.draw('desktop', 90)
+    expect(p.views()).toContain(`${SHIM} view queue --at origin/main --format ansi --width 90`)
+    expect(colours(queue.root)).toEqual(['blue', 'yellow'])
+    // A tab kept by an earlier panel reads as Queue.
+    const kept = await setup()
+    await kept.view('')
+    atoms.values.set('clm-panel/tab', 'capabilities')
+    const { buttons } = await kept.draw()
+    expect(buttons.filter(b => typeof b.props.label === 'string' && b.props.variant).map(b => b.props.label)).toEqual([
+      'Queue',
+      'Spec',
+      'Flight',
+      'Blockers',
+      'Drain',
+      'Stop now',
+    ])
+    expect(buttons.find(b => b.props.label === 'Queue')?.props.variant).toBe('primary')
+    expect(kept.views().at(-1)).toContain(' view queue ')
+    // No origin/main: the checkout's view.
+    const bare = await setup()
+    bare.w.originMain = false
+    await bare.view('')
+    await bare.draw()
+    expect(bare.views()).toContain(`${SHIM} view queue --format ansi --width 80`)
+    // A failing clm shows its stderr.
+    const failing = await setup()
+    failing.w.clm = argv => (argv[1] === 'view' ? { exitCode: 1, stdout: '', stderr: 'violations: 2' } : undefined)
+    await failing.view('')
+    expect((await failing.draw()).lines).toContain('violations: 2')
+  })
+
+  // req:plugin.panel/views-panel@76d63404
+  test("a press of a component's line, Contract, Close or Dismiss runs no clm the pane has run since its latest redraw", async () => {
+    const p = await setup()
+    const node = (id: string) => ({
+      node: id,
+      parent: null,
+      title: id.toUpperCase(),
+      status: 'active',
+      owners: [],
+      depends_on: [],
+      current: 1,
+      behind: 0,
+      unbuilt: 0,
+      obsolete: 0,
+      total: 1,
+      oversized: false,
+      contract: `${id} does one thing.`,
+      changes: [],
+      backlog: [],
+    })
+    p.w.clm = argv => {
+      if (argv[2] === 'spec' && argv.includes('json')) {
+        return ok(JSON.stringify({ view: 'spec', at: { rev: 'origin/main' }, nodes: [node('r'), node('a')] }))
+      }
+      if (argv[2] === 'flight' && argv.includes('json')) return ok(JSON.stringify({ view: 'flight', nodes: [], changes: [] }))
+      if (argv[2] === 'spec') return ok(`origin/main ${p.w.commit}\nr  active\n└─ a  active\n`)
+      return undefined
+    }
+    await p.view('')
+    await p.spawn('b1', 'build git', 'loop run build:git\nGo.', 0)
+    await p.turnEnds(1_000, { agentId: 'b1', reason: 'max_turns' })
+    await p.draw()
+    // Dismiss on the Queue tab.
+    const queued = p.w.calls.length
+    await p.press('Dismiss')
+    expect((await p.draw()).lines.join('\n')).not.toContain('build git')
+    expect(p.w.calls.slice(queued).filter(c => c.startsWith(`${SHIM} view`))).toEqual([])
+    // On the Spec tab: press `a`, `r`, Contract, Close.
+    await p.press('Spec')
+    await p.draw()
+    const before = p.views().length
+    await p.press('└─ a  active')
+    expect((await p.draw()).lines.some(l => l.startsWith('a  A'))).toBe(true)
+    expect(p.views().length).toBe(before + 1)
+    const selected = p.views().length
+    await p.press('r  active')
+    await p.press('Contract')
+    expect((await p.draw()).lines).toContain('r does one thing.')
+    await p.press('Close')
+    expect((await p.draw()).lines.some(l => l.startsWith('r  R'))).toBe(false)
+    expect(p.views().length).toBe(selected)
   })
 })
 

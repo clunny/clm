@@ -135,6 +135,11 @@ describe('runs', () => {
     // A new run described `first` counts no dropped run toward its round.
     const again = startRun(list, { id: 'b0', type: 'Explore', description: 'first', model: 'claude-opus-5-5', prompt: 'x', at: 301_000 })
     expect(again.at(-1)).toMatchObject({ id: 'b0', round: 1 })
+    // The spawn that drops the oldest run counts it toward no round either.
+    const full = started(...Array.from({ length: 200 }, (_, i): [string, string, string] => [`c${i}`, i === 0 ? 'oldest' : `run ${i}`, 'x']))
+    const next = startRun(full, { id: 'c200', type: 'Explore', description: 'oldest', model: 'claude-opus-5-5', prompt: 'x', at: 300_000 })
+    expect(next.map(r => r.id)).not.toContain('c0')
+    expect(next.at(-1)).toMatchObject({ id: 'c200', round: 1 })
     const row = text(queueLines(CHART, again, 301_000))
     const at = row.findIndex(l => /● first$/.test(l))
     expect(at).toBeGreaterThan(0)
