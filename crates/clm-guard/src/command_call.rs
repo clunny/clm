@@ -18,11 +18,17 @@ pub struct GuardArgs {
 }
 
 /// The command line `guard_command` parses: the command's own arguments, without its name.
+/// Its description is the one the root's parser gives `clm hook guard`, so the help reads the
+/// same whichever prints it.
 #[derive(Parser)]
 #[command(
     name = "clm hook guard",
     bin_name = "clm hook guard",
-    no_binary_name = true
+    no_binary_name = true,
+    about = "PreToolUse: exit 2 with the reason when a Bash command would cut a release or push \
+             to `main`; print the `ask` decision when it would run `clm approve`, or file a CLM \
+             defect as an issue",
+    long_about = None
 )]
 struct Line {
     #[command(flatten)]
@@ -33,9 +39,9 @@ struct Line {
 /// name, judging `event`, the text on standard input, with `env` as the environment. Writes
 /// what the command prints to `out` and `err` and returns its exit status: the agent
 /// harness's rendering of the decision (`guard-per-agent-harness`), 1 for an agent harness
-/// it doesn't know or when a stream fails (`guard-fails-open`), and 2 for arguments it can't
-/// parse. The guard places each command by its event's `cwd`, so it takes no repository
-/// root.
+/// it doesn't know (`guard-fails-open`), and 2 for arguments it can't parse or when a write
+/// to either stream fails. The guard places each command by its event's `cwd`, so it takes
+/// no repository root.
 pub fn guard_command<I, T>(
     args: I,
     event: &str,
@@ -52,9 +58,9 @@ where
         Err(e) => write!(out, "{}", e.render()).map(|()| 0),
         Ok(Line { args }) => run(&args, event, env, out, err),
     };
-    // A stream that fails leaves the hook's answer unread, so it blocks nothing
-    // (`guard-fails-open`).
-    written.unwrap_or(1)
+    // A stream that fails leaves the answer unwritten: 2, so the call's caller can't take it
+    // for an answer that let the command through (`commands-in-crate`).
+    written.unwrap_or(2)
 }
 
 /// Judges `event` for the agent harness `args` names and writes what the hook prints.
@@ -65,9 +71,10 @@ fn run(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> io::Result<u8> {
-    // Exit 1 is no block for Claude Code or Codex (`guard-fails-open`).
+    // Exit 1 is no block for any agent harness (`guard-fails-open`), its failed write
+    // included.
     let Some(agent_harness) = AgentHarness::from_name(&args.agent_harness) else {
-        writeln!(err, "unknown agent harness `{}`", args.agent_harness)?;
+        let _ = writeln!(err, "unknown agent harness `{}`", args.agent_harness);
         return Ok(1);
     };
     let rendered = guard_hook_in(agent_harness, event, env);

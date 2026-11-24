@@ -1157,14 +1157,14 @@ fn other_pipes_are_allowed() {
 
 #[test]
 fn the_hooks_budgets_are_twenty_and_thirty_seconds() {
-    // req:plugin.hooks.guard/hook-budgets@991e0eaf
+    // req:plugin.hooks.guard/hook-budgets@60ab39c0
     assert_eq!(Budgets::HOOK.push, Duration::from_secs(20));
     assert_eq!(Budgets::HOOK.lookup, Duration::from_secs(30));
 }
 
 #[test]
 fn the_guard_and_the_hook_judge_with_the_hooks_budgets() {
-    // req:plugin.hooks.guard/hook-budgets@991e0eaf
+    // req:plugin.hooks.guard/hook-budgets@60ab39c0
     use clm_agent_harness::{AgentHarness::ClaudeCode, render};
     let dir = TempDir::new().unwrap();
     let w = dir.path().join("w");
@@ -1438,7 +1438,7 @@ fn hook_args(args: &[&str], event: &str, env: &[(&str, &str)]) -> Output {
 
 #[test]
 fn the_call_prints_and_exits_as_the_hook_does() {
-    // req:plugin.hooks.guard/commands-in-crate@136dbe76
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
     let repo = clm_repo(None);
     // A block: the reason on the error stream, a line of its own, and exit 2.
     let push = bash_in("git push origin main", repo.path());
@@ -1484,7 +1484,7 @@ fn the_call_prints_and_exits_as_the_hook_does() {
 
 #[test]
 fn the_call_returns_2_on_arguments_it_cant_parse() {
-    // req:plugin.hooks.guard/commands-in-crate@136dbe76
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
     // An option it doesn't have, `--root` among them, since it takes no repository root (the
     // guard places each command by its event's `cwd`); the test's process goes on after each.
     for (args, named) in [
@@ -1501,8 +1501,79 @@ fn the_call_returns_2_on_arguments_it_cant_parse() {
 }
 
 #[test]
+fn the_call_prints_its_help() {
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
+    let description = "PreToolUse: exit 2 with the reason when a Bash command would cut a \
+                       release or push to `main`; print the `ask` decision when it would run \
+                       `clm approve`, or file a CLM defect as an issue";
+    for flag in ["--help", "-h"] {
+        let out = hook_args(&["guard", flag], &bash("clm approve spec/x"), &[]);
+        assert_eq!(out.status.code(), Some(0), "{flag}: {out:?}");
+        assert!(out.stderr.is_empty(), "{flag}: {out:?}");
+        let help = String::from_utf8(out.stdout).unwrap();
+        assert_eq!(help.lines().next(), Some(description), "{flag}: {help}");
+        assert!(
+            help.contains("Usage: clm hook guard [OPTIONS]"),
+            "{flag}: {help}"
+        );
+        let option = help
+            .lines()
+            .find(|l| l.contains("--agent-harness <AGENT_HARNESS>"))
+            .unwrap_or_else(|| panic!("{flag}: {help}"));
+        assert!(option.contains("[default: claude-code]"), "{flag}: {help}");
+    }
+}
+
+/// A stream whose every write fails.
+struct Broken;
+
+impl std::io::Write for Broken {
+    fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::other("broken"))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Err(std::io::Error::other("broken"))
+    }
+}
+
+#[test]
+fn a_stream_that_fails_returns_2() {
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
+    let repo = clm_repo(None);
+    let ask = bash("clm approve spec/x");
+    let block = bash_in("git push origin HEAD:main", repo.path());
+    let lookup = |name: &str| std::env::var(name).ok();
+    let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+    let mut buffer = Vec::new();
+    let code = clm_guard::guard_command(
+        Vec::<String>::new(),
+        &ask,
+        &lookup,
+        &mut Broken,
+        &mut buffer,
+    );
+    assert_eq!(code, 2, "an ask on a failing output stream");
+    let code = clm_guard::guard_command(
+        Vec::<String>::new(),
+        &block,
+        &lookup,
+        &mut buffer,
+        &mut Broken,
+    );
+    assert_eq!(code, 2, "a block on a failing error stream");
+    // An agent harness it doesn't know returns 1, its failed write included.
+    let unknown = ["--agent-harness", "nope"];
+    let code = clm_guard::guard_command(unknown, &ask, &lookup, &mut buffer, &mut Broken);
+    assert_eq!(
+        code, 1,
+        "an unknown agent harness on a failing error stream"
+    );
+}
+
+#[test]
 fn the_call_reads_the_settings_from_its_environment() {
-    // req:plugin.hooks.guard/commands-in-crate@136dbe76
+    // req:plugin.hooks.guard/commands-in-crate@4b058acb
     // A report the guard can't show is refused under `ask`, and let through under
     // `backlog`, which only the lookup holds, not this process's environment.
     let nowhere = TempDir::new().unwrap();

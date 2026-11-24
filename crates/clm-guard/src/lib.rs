@@ -77,7 +77,7 @@ pub fn guard(event: &str) -> Decision {
 }
 
 /// `PreToolUse`: refuses a `Bash` command that would cut a release or move `main`, and
-/// has the human confirm one that runs `clm approve` (`approve-in-session`), or files a CLM
+/// has the human confirm one that runs `clm approve` (`approval-policy`), or files a CLM
 /// defect as an issue. A block wins over an ask. Git queries and `gh` lookups spend `budgets`.
 pub fn guard_within(event: &str, budgets: &Budgets) -> Decision {
     judge_event(
@@ -162,7 +162,7 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env)
     }
     // `clm defect` reads `CLM_DEFECTS` from its own environment, which the segment can set.
     // Loaded once, and only when a segment runs `clm defect` without its own value, as
-    // `clm-hooks`' `settings` loads them, under `env`.
+    // `clm defect` loads them, under `env`.
     let asks_by_settings = std::cell::OnceCell::new();
     let files_issue = |j: &&Judged| {
         runs_defect(&j.tokens)
