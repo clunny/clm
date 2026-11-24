@@ -101,7 +101,7 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env)
     // looked up might be one.
     let reruns: Vec<_> = judged
         .iter()
-        .filter_map(|j| release::rerun(&j.tokens, &j.command(), j.checkout.as_deref()))
+        .flat_map(|j| release::reruns(&j.tokens, &j.command(), j.checkout.as_deref()))
         .collect();
     if judged.iter().any(|j| release::cuts_release(&j.tokens))
         || release::reruns_release(&reruns, budgets.lookup)

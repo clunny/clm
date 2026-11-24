@@ -263,7 +263,7 @@ fn pushing_branches_that_do_not_reach_main() {
 
 #[test]
 fn merging_into_main_through_the_host() {
-    // req:plugin.hooks.guard/host-routes-guard@8750869f
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
     // req:plugin.hooks.guard/push-guard@dabbe399
     // merging into main through the host
     for command in [
@@ -289,7 +289,7 @@ fn merging_into_main_through_the_host() {
 
 #[test]
 fn reading_or_merging_elsewhere_through_the_host() {
-    // req:plugin.hooks.guard/host-routes-guard@8750869f
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
     // reading or merging elsewhere through the host
     for command in [
         "gh api -X POST repos/o/r/merges -f base=impl/x/b -f head=main",
@@ -472,7 +472,7 @@ fn guard_allows_every_other_event() {
 
 #[test]
 fn guard_blocks_cutting_releases() {
-    // req:plugin.hooks.guard/release-guard@6e589859
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
     for command in [
         // dispatching a release
         "gh workflow run release.yml -f version=0.2.0",
@@ -503,6 +503,9 @@ fn guard_blocks_cutting_releases() {
         "gh workflow run --ref main release.yml",
         "gh workflow run --ref main --json release.yml",
         "gh workflow run -f version=1 Release",
+        "gh workflow run -f -r release.yml",
+        "gh workflow run --json release.yml",
+        "gh workflow run -- site.yml",
         // dispatching the site
         "gh workflow run site.yml",
         "gh workflow run .github/workflows/Site.YAML",
@@ -528,7 +531,7 @@ fn guard_blocks_cutting_releases() {
 
 #[test]
 fn guard_allows_reading_releases_and_runs() {
-    // req:plugin.hooks.guard/release-guard@6e589859
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
     for command in [
         // reading releases
         "gh release list",
@@ -551,9 +554,63 @@ fn guard_allows_reading_releases_and_runs() {
         "gh release -R o/r view v0.1.0",
         "gh release --repo o/r list",
         "gh workflow --repo o/r view release.yml",
+        // a value of `--ref` or `-r` that names a release workflow is no workflow argument
+        "gh workflow run --ref release ci.yml",
+        "gh workflow run -r site ci.yml",
+        "gh workflow run --ref=release ci.yml",
     ] {
         assert_eq!(guard(&bash(command)), Decision::Allow, "{command}");
     }
+}
+
+#[test]
+fn methods_as_gh_reads_them() {
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
+    for command in [
+        "gh api -XPOST repos/o/r/releases",
+        "gh api --method=post repos/o/r/releases",
+        "gh api -X GET -X POST repos/o/r/releases",
+    ] {
+        let why = blocks(&bash(command));
+        assert!(why.contains("humans-cut-releases"), "{command}: {why}");
+    }
+    allows(&bash("gh api -X get repos/o/r/releases"));
+}
+
+#[test]
+fn a_gh_call_behind_a_prefix() {
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
+    for command in [
+        "sudo gh release create v1",
+        "/usr/local/bin/gh release create v1",
+        "GH_TOKEN=x nohup gh release create v1",
+        "sudo -u gh gh release create v1",
+        "env -C /src/gh gh release create v1",
+    ] {
+        let why = blocks(&bash(command));
+        assert!(why.contains("humans-cut-releases"), "{command}: {why}");
+    }
+}
+
+#[test]
+fn a_gh_merge_behind_a_prefix() {
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
+    blocks_push(&bash("sudo gh pr merge 3 --squash"));
+}
+
+#[test]
+fn options_before_the_subcommand() {
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
+    for command in [
+        "gh workflow --ref x run release.yml",
+        "gh workflow -f a=b run release.yml",
+        "gh release --notes x create v1",
+    ] {
+        let why = blocks(&bash(command));
+        assert!(why.contains("humans-cut-releases"), "{command}: {why}");
+    }
+    let why = blocks_push(&bash("gh pr --body x merge 3"));
+    assert!(!why.contains("humans-cut-releases"), "{why}");
 }
 
 #[test]
@@ -901,7 +958,7 @@ fn a_push_whose_repository_the_guard_cannot_tell() {
 
 #[test]
 fn the_hosts_routes_outside_clm() {
-    // req:plugin.hooks.guard/host-routes-guard@8750869f
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     blocks_push(&bash_in("gh pr merge 3 --squash", &work));
@@ -913,7 +970,7 @@ fn the_hosts_routes_outside_clm() {
 
 #[test]
 fn guard_blocks_moving_main_through_the_api() {
-    // req:plugin.hooks.guard/host-routes-guard@8750869f
+    // req:plugin.hooks.guard/host-routes-guard@1e827c83
     blocks_push(&bash(
         "gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc",
     ));
@@ -1501,7 +1558,7 @@ fn guard_command_asks_with_the_reason() {
 
 #[test]
 fn guard_command_blocks_dispatching_a_release() {
-    // req:plugin.hooks.guard/release-guard@6e589859
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "gh workflow run release.yml -f version=0.2.0" },
@@ -1579,7 +1636,7 @@ fn take_calls(calls: &Path) -> Vec<String> {
 
 #[test]
 fn guard_blocks_rerunning_a_release_run() {
-    // req:plugin.hooks.guard/release-guard@6e589859
+    // req:plugin.hooks.guard/release-guard@1c7c5dad
     // req:plugin.hooks.guard/release-run-lookup@3024a9da
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
@@ -1671,6 +1728,20 @@ fn guard_blocks_rerunning_a_release_run() {
         let (code, why) = guard(command);
         assert_eq!(code, Some(2), "{command}: {why}");
     }
+    // an ID the guard can't know fails its lookup with no `gh` call, and a word that is no
+    // ID is nothing to look up
+    take_calls(&calls);
+    for command in [
+        "gh run rerun $RUN",
+        "gh run rerun --job $JOB",
+        "gh run rerun `cat id`",
+    ] {
+        let (code, why) = guard(command);
+        assert_eq!(code, Some(2), "{command}: {why}");
+        assert!(why.contains("humans-cut-releases"), "{command}: {why}");
+    }
+    assert_eq!(guard("gh run rerun abc"), (Some(0), String::new()));
+    assert_eq!(take_calls(&calls), Vec::<String>::new());
     let no_gh = TempDir::new().unwrap();
     let path = no_gh.path().to_str().unwrap();
     for command in ["gh run rerun 42", "gh run rerun --job 901"] {
