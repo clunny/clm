@@ -907,6 +907,9 @@ ts_selection() {
   ts_tests=()
   for f in ${code[@]+"${code[@]}"}; do
     case $f in
+      # A vitest test file is neither kind: StrykerJS's instrumentation of one moves a hoisted
+      # `vi.mock` call out of the module's top level and fails its first run.
+      *.test.ts | *.test.tsx) continue ;;
       web/src/*.ts | web/src/*.tsx) [ -n "$ts_dir" ] || ts_dir=web ;;
       plugin-panel/*.ts | plugin-panel/*.tsx) [ -n "$ts_dir" ] || ts_dir=plugin-panel ;;
       *) continue ;;
