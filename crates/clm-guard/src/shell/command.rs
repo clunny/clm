@@ -170,8 +170,9 @@ pub fn expand(tokens: &[String], globs: &[Option<String>]) -> (Vec<String>, Vec<
         out.extend(split.before.map(String::from));
         patterns.extend(split.before.map(|_| None));
         for segment in crate::shell::scan::segments(split.value) {
+            // `env` splits the value but expands no glob in it.
+            patterns.extend(segment.tokens.iter().map(|_| None));
             out.extend(segment.tokens);
-            patterns.extend(segment.globs);
         }
         out.extend_from_slice(&tokens[split.end..]);
         patterns.extend_from_slice(&globs[split.end.min(globs.len())..]);

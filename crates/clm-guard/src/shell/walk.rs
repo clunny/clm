@@ -369,10 +369,11 @@ mod glob {
                         continue;
                     };
                     for entry in entries.flatten() {
+                        // A name that isn't UTF-8 still counts toward the matches.
                         let name = entry.file_name();
-                        let Some(name) = name.to_str() else { continue };
-                        if matches_name(&parts, name) {
-                            next.push(join(f, name));
+                        let name = name.to_string_lossy();
+                        if matches_name(&parts, &name) {
+                            next.push(join(f, &name));
                         }
                     }
                 } else {
@@ -506,19 +507,38 @@ mod glob {
         matches_from(parts, &name)
     }
 
+    /// Whether `name` matches `parts`, backtracking only to the last `*`, so it takes time in
+    /// proportion to their lengths' product however many `*` the pattern holds.
     fn matches_from(parts: &[Part], name: &[char]) -> bool {
-        let Some((part, rest)) = parts.split_first() else {
-            return name.is_empty();
-        };
-        match part {
-            Part::Any => (0..=name.len()).any(|k| matches_from(rest, &name[k..])),
-            Part::One => !name.is_empty() && matches_from(rest, &name[1..]),
-            Part::Lit(c) => name.first() == Some(c) && matches_from(rest, &name[1..]),
-            Part::Class(negated, items) => name.first().is_some_and(|&c| {
-                items.iter().any(|item| holds(item, c)) != *negated
-                    && matches_from(rest, &name[1..])
-            }),
+        let (mut p, mut n) = (0, 0);
+        // The last `*` and the name's position it was tried at.
+        let mut star: Option<(usize, usize)> = None;
+        while n < name.len() {
+            let one = match parts.get(p) {
+                Some(Part::Any) => {
+                    star = Some((p, n));
+                    p += 1;
+                    continue;
+                }
+                Some(Part::One) => true,
+                Some(Part::Lit(c)) => name[n] == *c,
+                Some(Part::Class(negated, items)) => {
+                    items.iter().any(|item| holds(item, name[n])) != *negated
+                }
+                None => false,
+            };
+            if one {
+                p += 1;
+                n += 1;
+            } else if let Some((s, at)) = star {
+                p = s + 1;
+                n = at + 1;
+                star = Some((s, at + 1));
+            } else {
+                return false;
+            }
         }
+        parts[p..].iter().all(|part| *part == Part::Any)
     }
 
     /// Whether bracket item `item` holds `c`.
@@ -542,53 +562,6 @@ mod glob {
                 "word" => c.is_ascii_alphanumeric() || c == '_',
                 _ => false,
             },
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        /// A directory holding `names`, each an empty directory.
-        fn tree(names: &[&str]) -> tempfile::TempDir {
-            let dir = tempfile::TempDir::new().unwrap();
-            for name in names {
-                std::fs::create_dir_all(dir.path().join(name)).unwrap();
-            }
-            dir
-        }
-
-        // req:plugin.hooks.guard.shell/guard-checkout@38729032
-        #[test]
-        fn globbing_matches_as_bash_does() {
-            let dir = tree(&["m", "x1", "x2", "xa", ".hid", "-Cm", "a[b", "a*b", "sub/y1"]);
-            let at = |p: &str| matches(Some(dir.path()), p);
-            assert_eq!(at("x*"), ["x1", "x2", "xa"]);
-            assert_eq!(at("x?"), ["x1", "x2", "xa"]);
-            assert_eq!(at("x[0-9]"), ["x1", "x2"]);
-            assert_eq!(at("x[!0-9]"), ["xa"]);
-            assert_eq!(at("x[^12]"), ["xa"]);
-            assert_eq!(at("x[[:digit:]]"), ["x1", "x2"]);
-            assert_eq!(at("x[[:alpha:]]"), ["xa"]);
-            assert_eq!(at("[m]"), ["m"]);
-            // A leading `.` only when the pattern writes it.
-            assert!(!at("*").contains(&".hid".to_string()));
-            assert_eq!(at(".h*"), [".hid"]);
-            // An unclosed `[` is a literal.
-            assert_eq!(at("a[*"), ["a[b"]);
-            // An escaped wildcard is a literal.
-            assert_eq!(at("a\\*?"), ["a*b"]);
-            // Per path component; a wildcard never matches `/`.
-            assert_eq!(at("s*/y*"), ["sub/y1"]);
-            assert!(at("s*y1").is_empty());
-            assert_eq!(at("m/../x[12]"), ["m/../x1", "m/../x2"]);
-            // A glued `-C` value globs as the whole word.
-            assert_eq!(at("-Cm*"), ["-Cm"]);
-            // Absolute patterns read from the root; relative ones need a base.
-            let absolute = format!("{}/x[a]", dir.path().display());
-            assert_eq!(matches(None, &absolute), [absolute.replace("[a]", "a")]);
-            assert!(matches(None, "x*").is_empty());
-            assert!(at("nothing*").is_empty());
         }
     }
 }
@@ -628,6 +601,49 @@ mod tests {
             std::fs::create_dir_all(dir.path().join(name)).unwrap();
         }
         dir
+    }
+
+    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    #[test]
+    fn globbing_matches_as_bash_does() {
+        let dir = tree(&["m", "x1", "x2", "xa", ".hid", "-Cm", "a[b", "a*b", "sub/y1"]);
+        let at = |p: &str| glob::matches(Some(dir.path()), p);
+        assert_eq!(at("x*"), ["x1", "x2", "xa"]);
+        assert_eq!(at("x?"), ["x1", "x2", "xa"]);
+        assert_eq!(at("x[0-9]"), ["x1", "x2"]);
+        assert_eq!(at("x[!0-9]"), ["xa"]);
+        assert_eq!(at("x[^12]"), ["xa"]);
+        assert_eq!(at("x[[:digit:]]"), ["x1", "x2"]);
+        assert_eq!(at("x[[:alpha:]]"), ["xa"]);
+        assert_eq!(at("[m]"), ["m"]);
+        assert_eq!(at("*1"), ["x1"]);
+        assert_eq!(at("x*1*"), ["x1"]);
+        assert_eq!(at("*x*"), ["x1", "x2", "xa"]);
+        // A leading `.` only when the pattern writes it.
+        assert!(!at("*").contains(&".hid".to_string()));
+        assert_eq!(at(".h*"), [".hid"]);
+        // An unclosed `[` is a literal.
+        assert_eq!(at("a[*"), ["a[b"]);
+        // An escaped wildcard is a literal.
+        assert_eq!(at("a\\*?"), ["a*b"]);
+        // Per path component; a wildcard never matches `/`.
+        assert_eq!(at("s*/y*"), ["sub/y1"]);
+        assert!(at("s*y1").is_empty());
+        assert_eq!(at("m/../x[12]"), ["m/../x1", "m/../x2"]);
+        // A glued `-C` value globs as the whole word.
+        assert_eq!(at("-Cm*"), ["-Cm"]);
+        // Absolute patterns read from the root; relative ones need a base.
+        let absolute = format!("{}/x[a]", dir.path().display());
+        assert_eq!(
+            glob::matches(None, &absolute),
+            [absolute.replace("[a]", "a")]
+        );
+        assert!(glob::matches(None, "x*").is_empty());
+        assert!(at("nothing*").is_empty());
+        // Many wildcards against a long name end at once.
+        let long = tree(&[&"a".repeat(200)]);
+        let many = format!("{}b", "*a".repeat(30));
+        assert!(glob::matches(Some(long.path()), &many).is_empty());
     }
 
     // req:plugin.hooks.guard.shell/guard-checkout@38729032
@@ -675,6 +691,11 @@ mod tests {
         assert_eq!(at("git -C 'm*' push"), ["git", "-C", "m*", "push"]);
         assert_eq!(at("git -C z* push"), ["git", "-C", "z*", "push"]);
         assert_eq!(at("git log -C m*"), ["git", "log", "-C", "m*"]);
+        // `env -S` splits its value but globs nothing in it.
+        assert_eq!(
+            at("env -S 'git -C m* push'"),
+            ["env", "git", "-C", "m*", "push"]
+        );
         // From the segment's checkout.
         let deeper = format!("cd {} && git -C ../x* push", dir.path().join("m").display());
         assert_eq!(
@@ -716,6 +737,10 @@ mod tests {
         // A quoted glob is the word as written; none there, so the `cd` fails.
         assert_eq!(checkout("cd 'm*'; git push"), dir.path());
         assert_eq!(checkout("cd m\\*; git push"), dir.path());
+        // Several matches, or a file, fail the `cd`.
+        assert_eq!(checkout("cd x*; git push"), dir.path());
+        std::fs::write(dir.path().join("f"), "").unwrap();
+        assert_eq!(checkout("cd f; git push"), dir.path());
         // `$`, `~` and backticks reset, unexpanded, before any glob.
         for command in ["cd m; cd $D*; git push", "cd m; cd ~/m*; git push"] {
             assert_eq!(checkout(command), dir.path(), "{command}");
