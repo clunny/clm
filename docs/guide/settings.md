@@ -96,7 +96,7 @@ Optional `mutate_jobs`: the most requirements the pass judges at once. `clm veri
 - **Unset** (the default, 1): a pass uses one core and the least memory, and takes as long as its requirements one after another.
 - **Set higher**: a large pass takes a fraction of the time, at the cost of memory and disk for each requirement at once, and your tests must pass beside each other.
 
-Optional `mutate_minutes`: the longest a pass runs. When it is reached, `clm verify` stops your command, records the verdicts it wrote and names the requirements it didn't reach, which the next pass judges first.
+Optional `mutate_minutes`: the longest a pass runs. When it is reached, `clm verify` stops your command, records the verdicts it wrote and names the requirements it didn't reach, which the next pass judges first. A requirement two passes in a row left, whether they were stopped, reached this limit or your command failed on it, gets a `bug` item, `backlog/unjudged-<component>-<commit>.md`; it doesn't make the requirement read as not built, and a build settles it by mending what kept the pass from judging it.
 
 - **Unset** (the default): a pass runs until it has judged everything due; after a land that touched many tests that can take hours.
 - **Set**: `main` is verified within a bounded time after each run, and a large pass is spread over several runs.
