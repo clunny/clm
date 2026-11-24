@@ -20,6 +20,9 @@ pub(crate) enum Reach {
     PushesTo(String),
     /// It names no branch, or only `HEAD`, and a configured push refspec sends to `main`.
     Configured(String),
+    /// It names no branch, or only `HEAD`, and a `--config-env` option, as written, takes a
+    /// setting that could move where it goes from the environment, which the guard can't read.
+    FromEnvironment(String),
     /// It names no branch, or only `HEAD`, and git didn't answer within the budget.
     Unanswered,
 }
@@ -53,6 +56,10 @@ impl Reach {
             Reach::Configured(refspec) => {
                 format!("{lead}a configured push refspec sends to `main` (`{refspec}`)")
             }
+            Reach::FromEnvironment(option) => format!(
+                "{lead}`{option}` takes a setting from the environment, which the guard can't \
+                 read, and that setting could send the push to `main`"
+            ),
         };
         Some(format!(
             "clm: {test}. Push your branch explicitly: `git push origin HEAD:<branch>`."
@@ -112,6 +119,9 @@ pub fn reach<'a>(
     // decide where a push goes are passed to the queries.
     let mut dirs: Vec<&str> = Vec::new();
     let mut options: Vec<String> = Vec::new();
+    // The first `--config-env` option, as written, whose setting could move where a push of
+    // the current branch goes; no `--config-env` option is passed to the queries.
+    let mut from_environment: Option<String> = None;
     // Whether the segment names another git directory or work tree, so the guard can't tell
     // which repository it reaches (`push-guard`).
     let mut elsewhere = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]
@@ -127,8 +137,10 @@ pub fn reach<'a>(
                 i += 1;
             }
             "-c" => {
-                elsewhere |= value.is_some_and(moves_repository);
-                if let Some(v) = value.filter(|v| decides_push(v)) {
+                // A `-c` setting's name is the part before its first `=`.
+                let name = value.map(|v| v.split('=').next().unwrap_or_default());
+                elsewhere |= name.is_some_and(moves_repository);
+                if let Some(v) = value.filter(|_| name.is_some_and(decides_push)) {
                     options.extend(["-c".to_string(), v.to_string()]);
                 }
                 i += 1;
@@ -138,9 +150,19 @@ pub fn reach<'a>(
                 options.extend(value.map(|v| format!("{t}={v}")));
                 i += 1;
             }
-            // Their values are no subcommand (`push-guard`). A `--config-env` setting isn't read
-            // from the environment, so it isn't passed to the queries.
-            "--namespace" | "--config-env" => i += 1,
+            // Its value is no subcommand (`push-guard`).
+            "--namespace" => i += 1,
+            "--config-env" => {
+                if let Some(v) = value {
+                    let written = format!("{t} {v}");
+                    config_env(&mut elsewhere, &mut from_environment, v, written);
+                }
+                i += 1;
+            }
+            _ if t.starts_with("--config-env=") => {
+                let v = &t["--config-env=".len()..];
+                config_env(&mut elsewhere, &mut from_environment, v, t.to_string());
+            }
             _ if t.starts_with("--git-dir=") || t.starts_with("--work-tree=") => {
                 elsewhere = true;
                 options.push(t.to_string())
@@ -209,27 +231,44 @@ pub fn reach<'a>(
     if !(bare || matches!(refspecs, ["HEAD" | "@"])) {
         return None;
     }
+    // Decided without asking git, which couldn't see the setting either.
+    if let Some(option) = from_environment {
+        return settle(Reach::FromEnvironment(option), lost);
+    }
     let reach = query.as_ref()?.reach(bare).unwrap_or_else(Some)?;
     settle(reach, lost)
 }
 
-/// Whether a `-c` setting moves the repository: `core.worktree` or `core.bare`.
-fn moves_repository(setting: &str) -> bool {
-    let name = setting.split('=').next().unwrap_or_default();
+/// Reads a `--config-env` option's `value`, `<name>=<variable>`, its name being the part
+/// before its last `=`: one naming `core.worktree` or `core.bare` names another work tree
+/// (`elsewhere`), and the first whose name may move where a push goes is kept, as
+/// `written`, in `from_environment`. Neither is passed to the queries, since the guard can't
+/// read the variable.
+fn config_env(
+    elsewhere: &mut bool,
+    from_environment: &mut Option<String>,
+    value: &str,
+    written: String,
+) {
+    let name = value.rsplit_once('=').map_or(value, |(name, _)| name);
+    *elsewhere |= moves_repository(name);
+    if from_environment.is_none() && decides_push(name) {
+        *from_environment = Some(written);
+    }
+}
+
+/// Whether a setting's `name` moves the repository: `core.worktree` or `core.bare`.
+fn moves_repository(name: &str) -> bool {
     ["core.worktree", "core.bare"]
         .iter()
         .any(|n| name.eq_ignore_ascii_case(n))
 }
 
-/// Whether a `-c` setting may move where a push goes, and so is passed to the queries:
-/// those under `push.`, `remote.` and `branch.`. The command hasn't been allowed yet, so
-/// no other setting of it reaches git.
-fn decides_push(setting: &str) -> bool {
-    let name = setting
-        .split('=')
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+/// Whether a setting's `name` may move where a push goes: those under `push.`, `remote.`
+/// and `branch.`. Only such `-c` settings are passed to the queries: the command hasn't been
+/// allowed yet, so no other setting of it reaches git.
+fn decides_push(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
     ["push.", "remote.", "branch."]
         .iter()
         .any(|p| name.starts_with(p))
