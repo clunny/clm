@@ -1233,7 +1233,7 @@ const WHOLE_LINE_REFUSED: &str = "nothing in it ran";
 
 #[test]
 fn a_block_says_the_whole_command_line_was_refused() {
-    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    // req:plugin.hooks.guard/block-refuses-whole-command@050af7ab
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     for command in [
@@ -1248,7 +1248,7 @@ fn a_block_says_the_whole_command_line_was_refused() {
 
 #[test]
 fn two_refusing_rules_say_it_once() {
-    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    // req:plugin.hooks.guard/block-refuses-whole-command@050af7ab
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     let why = blocks(&bash_in(
@@ -1262,8 +1262,23 @@ fn two_refusing_rules_say_it_once() {
 }
 
 #[test]
+fn an_ask_the_agent_harness_refuses() {
+    // req:plugin.hooks.guard/block-refuses-whole-command@050af7ab
+    let event = bash("git commit -m m && clm approve spec/x");
+    for name in ["codex", "none"] {
+        let out = hook_args(&["guard", "--agent-harness", name], &event, &[]);
+        assert_eq!(out.status.code(), Some(2), "{name}: {out:?}");
+        let err = String::from_utf8(out.stderr).unwrap();
+        assert!(err.contains("own terminal"), "{name}: {err}");
+        assert_eq!(err.matches(WHOLE_LINE_REFUSED).count(), 1, "{name}: {err}");
+        let last = err.lines().last().unwrap();
+        assert!(last.contains(WHOLE_LINE_REFUSED), "{name}: {err}");
+    }
+}
+
+#[test]
 fn allowed_and_asked_commands_carry_no_such_line() {
-    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    // req:plugin.hooks.guard/block-refuses-whole-command@050af7ab
     allows(&bash("git commit -m m && clm land impl/x"));
     let why = asks_cmd("clm approve spec/x");
     assert!(!why.contains(WHOLE_LINE_REFUSED), "{why}");
@@ -1271,7 +1286,7 @@ fn allowed_and_asked_commands_carry_no_such_line() {
 
 #[test]
 fn a_push_to_main_under_codex_is_blocked() {
-    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    // req:plugin.hooks.guard/guard-per-agent-harness@1ce86c3d
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     let out = guard_hook(
@@ -1284,7 +1299,7 @@ fn a_push_to_main_under_codex_is_blocked() {
 
 #[test]
 fn an_approve_under_codex_says_to_use_the_humans_terminal() {
-    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    // req:plugin.hooks.guard/guard-per-agent-harness@1ce86c3d
     let out = guard_hook(
         clm_agent_harness::AgentHarness::Codex,
         &bash("clm approve spec/x"),
@@ -1295,7 +1310,7 @@ fn an_approve_under_codex_says_to_use_the_humans_terminal() {
 
 #[test]
 fn claude_code_is_unchanged_and_other_events_pass() {
-    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    // req:plugin.hooks.guard/guard-per-agent-harness@1ce86c3d
     use clm_agent_harness::AgentHarness::ClaudeCode;
     let out = guard_hook(ClaudeCode, &bash("clm approve spec/x"));
     assert_eq!(out.exit_code, 0);

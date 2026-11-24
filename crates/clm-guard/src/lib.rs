@@ -33,11 +33,22 @@ pub fn guard_hook(agent_harness: AgentHarness, event: &str) -> Rendered {
 /// `guard_hook` with `env` as the environment the settings load with; the `git` and `gh`
 /// the guard asks inherit the process's.
 fn guard_hook_in(agent_harness: AgentHarness, event: &str, env: Env) -> Rendered {
-    render(
-        agent_harness,
-        &judge_event(agent_harness, event, &Budgets::HOOK, env),
-    )
+    let decision = judge_event(agent_harness, event, &Budgets::HOOK, env);
+    let mut rendered = render(agent_harness, &decision);
+    // An agent harness that can't confirm refuses an ask, which cancels the whole command as
+    // a block does: the line follows what the agent harness adds (`block-refuses-whole-command`).
+    if matches!(decision, Decision::Ask(_)) && rendered.exit_code == 2 {
+        rendered.stderr = format!("{}\n{WHOLE_LINE_REFUSED}", rendered.stderr);
+    }
+    rendered
 }
+
+/// The line that ends every refusal: Claude Code, and an agent harness that refuses an ask,
+/// cancel the whole tool call on exit 2, while each reason speaks only of the part it judged
+/// (`block-refuses-whole-command`).
+const WHOLE_LINE_REFUSED: &str = "clm: the whole command line was refused and nothing in it \
+    ran, the commands chained before and after the refused part included; run again any of \
+    them you still need.";
 
 /// The environment the guard reads, as a lookup.
 type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
@@ -176,14 +187,7 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env)
         );
     }
     if !reasons.is_empty() {
-        // Claude Code cancels the whole tool call on exit 2, while each reason speaks only
-        // of the part it judged (`block-refuses-whole-command`).
-        reasons.push(
-            "clm: the whole command line was refused and nothing in it ran, the commands \
-             chained before and after the refused part included; run again any of them you \
-             still need."
-                .to_string(),
-        );
+        reasons.push(WHOLE_LINE_REFUSED.to_string());
         return Decision::Block(reasons.join("\n"));
     }
     let mut asks: Vec<String> = judged
