@@ -80,7 +80,7 @@ const root = (name: string) => ({ root: name, kind: 'node', state: 'claimed', wa
 const blockersJson = (roots: object[]) => ok(JSON.stringify({ view: 'blockers', roots }))
 const BLOCKERS = blockersJson([root('gate'), root('host')])
 
-describe('node-inspector', () => {
+describe('component-inspector', () => {
   // req:plugin.panel/component-inspector@d5852e70
   test("each node line of the Spec chart is pressable, by position, with the same text and colours", () => {
     const { lines, inspector } = chartLines({ tab: 'spec', chart: SPEC_CHART, own: SPEC, selected: null, unfolded: [] })

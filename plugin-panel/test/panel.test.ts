@@ -355,6 +355,17 @@ describe('views-panel', () => {
     expect(ansiLines('\x1b[38;2;255;0;34ma\x1b[0m \x1b]8;;https://x\x1b\\link\x1b]8;;\x1b\\')).toEqual([
       [{ text: 'a' }, { text: ' ' }, { text: 'link' }],
     ])
+    // A 256-colour and a background colour are dropped; bright and dim are drawn.
+    expect(ansiLines('\x1b[38;5;196ma\x1b[0m\x1b[41mb\x1b[0m\x1b[91mc\x1b[0m\x1b[2md\x1b[0m')).toEqual([
+      [{ text: 'a' }, { text: 'b' }, { text: 'c', color: 'redBright' }, { text: 'd', dim: true }],
+    ])
+    // Any other control sequence, and an escape with intermediate bytes, go whole.
+    expect(ansiLines('\x1b[?25lfoo')).toEqual([[{ text: 'foo' }]])
+    expect(ansiLines('a\x1b(Bb')).toEqual([[{ text: 'a' }, { text: 'b' }]])
+    expect(ansiLines('a\x1b7b')).toEqual([[{ text: 'a' }, { text: 'b' }]])
+    for (const line of ansiLines('\x1b[?25lfoo\na\x1b(Bb\n\x1b[38;2;1;2;3ma\x1b[0m \x1b]8;;u\x07link\x1b]8;;\x07')) {
+      expect(line.map(s => s.text).join('')).not.toMatch(/\x1b|\[|\]|\(/)
+    }
   })
 
   test('a failure with nothing on stderr still says something', async () => {
@@ -479,6 +490,22 @@ describe('superseded-draw', () => {
     const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'x aborted' })
     expect(await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)).toBeNull()
     expect(await unlessSuperseded(() => hasOriginMain($, '/work/repo'), null)).toBeNull()
+  })
+
+  // req:plugin.panel/superseded-draw@a8a6cbb7
+  test('a draw whose every call Claude Code cut short, its directory check among them, rejects', async () => {
+    const cut = (): Promise<never> => Promise.reject(new Error(`clm-panel: $.fs.stat aborted`))
+    const $: Host = {
+      plugin: { root: PANEL },
+      process: { run: cut },
+      fs: { stat: cut, list: cut },
+    }
+    await expect(runClm($, ['view', 'flight'], '/work/repo')).rejects.toThrow(/aborted$/)
+    expect(await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)).toBeNull()
+    // The shim found, only the run and the directory check cut short.
+    const found = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'x aborted' })
+    found.fs.stat = path => (path === SHIM ? Promise.resolve({ kind: 'file' as const }) : cut())
+    await expect(runClm(found, ['view', 'flight'], '/work/repo')).rejects.toThrow(/aborted$/)
   })
 
   test('another failure of clm still shows why it could not start', async () => {

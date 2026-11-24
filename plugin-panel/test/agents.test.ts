@@ -227,6 +227,13 @@ describe('cost and formatting', () => {
     expect(modelName('claude-opus-5-5[1m]')).toBe('Opus 5.5')
     expect(modelName('claude-haiku-4-5-20251001')).toBe('Haiku 4.5')
     expect(modelName('mystery')).toBe('mystery')
+    // An ID that reads empty so is `—`.
+    for (const id of ['', 'claude-', '[1m]']) expect(modelName(id)).toBe('—')
+    // The older form, wherever `claude-` stands: the date is no version.
+    expect(modelName('claude-3-5-sonnet-20241022')).toBe('Sonnet 3.5')
+    expect(modelName('claude-3-opus-20240229')).toBe('Opus 3')
+    expect(modelName('us.anthropic.claude-3-5-sonnet-20241022-v2:0')).toBe('Sonnet 3.5')
+    expect(modelName('claude-3-haiku-20240307')).toBe('Haiku 3')
     expect([850, 85_000, 1_300_000].map(fmtTokens)).toEqual(['850', '85k', '1.3M'])
     expect([999.6, 999_600, 1_000_000].map(fmtTokens)).toEqual(['1k', '1.0M', '1.0M'])
     expect([4, 9.996, 12.34].map(fmtCost)).toEqual(['$4.00', '$10.0', '$12.3'])

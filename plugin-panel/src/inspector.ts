@@ -22,7 +22,7 @@ type SpecNode = {
   obsolete: number
   total: number
   oversized: boolean
-  /** `view/node-detail`: its Contract's text, its live changes and its backlog items. */
+  /** `view/component-detail`: its Contract's text, its live changes and its backlog items. */
   contract?: string
   changes?: { change: string; status: string; current: number; total: number; complete: boolean }[]
   backlog?: { slug: string; kind: string; title: string }[]
@@ -181,7 +181,7 @@ export function chartLines(input: ChartInput): Chart {
   const n = 'error' in spec ? spec : spec.items.find(s => s.node === selected)
   if (n === undefined) return { lines }
   const inspector = inspect(selected, n, flight)
-  // A `clm` from before `view/node-detail` gives none of the detail: nothing to say, not "none".
+  // A `clm` from before `view/component-detail` gives none of the detail: nothing to say, not "none".
   if ('error' in n || !n.changes || !n.backlog || n.contract === undefined) return { lines, inspector }
   return { lines, inspector, detail: detail(n, input.contract === true, input.columns ?? NaN) }
 }

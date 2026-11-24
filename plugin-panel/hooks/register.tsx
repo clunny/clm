@@ -163,9 +163,10 @@ export const register: Register = on => {
     if ((await $.ui.panes()).some(p => p.id === PANE_ID)) startTimer($)
     else stopTimer()
     const started = await next(e)
-    // A reload keeps the runs; one the engine no longer lists will never finish.
-    const listed = await $.agent.list()
-    await update($, agents, list => reconcile(list, listed))
+    // A reload keeps the runs; one the engine no longer lists will never finish. When the engine
+    // can't list its agents, the runs stay as they were.
+    const listed = await listAgents($)
+    if (listed !== undefined) await update($, agents, list => reconcile(list, listed))
     await reconcileRuns($)
     // While a run is running or waiting the rows tick each second: `now` changes, `clm` doesn't run.
     tick?.cancel()
@@ -283,7 +284,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
   const args = viewArgs(shown, e.surface, e.props.bodyColumns, atOrigin)
   const clm = (argv: string[]) =>
     cachedRun(runs, viewKey(gen, argv), () => $.session.cwd().then(cwd => runClm($, argv, cwd)))
-  // The JSON models beside an ANSI chart, so its lines can be pressed (`node-inspector`),
+  // The JSON models beside an ANSI chart, so its lines can be pressed (`component-inspector`),
   // started with it.
   const chosen = await read($, selected)
   const models = modelRuns(shown, e.surface, chosen, atOrigin)
@@ -355,8 +356,11 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
           label={LABELS[t]}
           variant={t === shown ? 'primary' : 'secondary'}
           onPress={() => {
-            // A tab change redraws: `clm view` runs again even for a tab shown before.
-            void update($, tab, () => t).then(() => update($, generation, n => n + 1))
+            // A tab change redraws: `clm view` runs again even for a tab shown before, and a stop
+            // button's error goes, as at every redraw.
+            void update($, tab, () => t)
+              .then(() => update($, stopError, () => ''))
+              .then(() => update($, generation, n => n + 1))
           }}
         />
       ))}

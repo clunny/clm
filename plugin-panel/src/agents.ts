@@ -303,11 +303,17 @@ export const windowOf = (model: string): number => (/haiku/i.test(model) ? 200_0
 
 const ctxPct = (a: AgentRun): number => Math.min(100, Math.round((a.contextTokens / windowOf(a.model)) * 100))
 
-/** A model ID as people say it: `claude-opus-5-5` is `Opus 5.5`. */
+/** The older form, `claude-<major>[-<minor>]-<family>-<date>`, wherever `claude-` stands in the ID. */
+const OLDER = /claude-(\d+)(?:-(\d{1,2}))?-(fable|mythos|opus|sonnet|haiku)-\d/i
+/** The family followed by its version: `opus-5-5`. */
+const NEWER = /(fable|mythos|opus|sonnet|haiku)-(\d+)(?:-(\d{1,2})(?!\d))?/i
+
+/** A model ID as people say it: `claude-opus-5-5` is `Opus 5.5`, `claude-3-opus-20240229` is `Opus 3`. */
 export function modelName(id: string): string {
-  const m = /(fable|mythos|opus|sonnet|haiku)-(\d+)(?:-(\d{1,2})(?!\d))?/i.exec(id)
-  if (!m) return id.replace(/^claude-/, '').replace(/\[.*\]$/, '') || '—'
-  const [, family = '', major = '', minor] = m
+  const older = OLDER.exec(id)
+  const newer = older ? null : NEWER.exec(id)
+  const [family, major, minor] = older ? [older[3], older[1], older[2]] : newer ? [newer[1], newer[2], newer[3]] : []
+  if (family === undefined || major === undefined) return id.replace(/^claude-/, '').replace(/\[.*\]$/, '') || '—'
   return `${family.charAt(0).toUpperCase()}${family.slice(1).toLowerCase()} ${major}${minor ? `.${minor}` : ''}`
 }
 
