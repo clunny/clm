@@ -11,40 +11,45 @@ serves: [capability/follow-from-browser, capability/see-project-state, capabilit
 
 ## Contract
 The views of `web`'s browser app, modules under `web/src/views/`, each with its Vitest tests beside it, which `web/src/main.ts` imports and wires to the page:
-- the render functions of the pages: the spec graph (`graph.ts`) and its inspector (`inspector.ts`), Spec PRs (`pr.ts`) with the full document (`full-document.ts`), Build (`implementation.ts`), Backlog (`backlog.ts`), Capabilities (`capabilities.ts`), Architecture (`architecture.ts`), Home (`home.ts`, `home-waiting-on-you`) and a backlog item's page (`backlog-item-page`), with the answer buttons both draw (`answer-buttons`). Each takes the Worker's responses it draws from and the callbacks for what the page does (post, load again, navigate), and returns the page's DOM;
-- what they share with `web`'s shell: the Worker API's types (`types.ts`) and fetch helpers (`api.ts`), the hash routes (`route.ts`), DOM building (`dom.ts`), sanitised Markdown (`markdown.ts`), the one-field forms (`forms.ts`), times (`time.ts`) and word marks (`diff.ts`);
-- the fixtures the views' tests and `web`'s end-to-end tests draw from (`fixtures.ts`).
+- the pages' render calls, each taking the Worker's responses it draws from and the callbacks for what the page does (post, load again, navigate, close) and returning the page's DOM: the spec graph (`graph.ts`: `layoutGraph`, which lays a `spec` model out and answers asynchronously; `renderGraph`, which starts from a pan and zoom (`Viewport`) its caller gives and reports each change of it; and `queueStates`, `ringGraph` and `traceEdges`, which take an implementation state's queue states and a selection into a drawn graph in place) and its inspector (`inspector.ts`); Spec PRs (`pr.ts`) and the full document (`full-document.ts`), whose call answers a handle that steps through the changes and gives and restores its place across a redraw; Build (`implementation.ts`); Backlog and a backlog item's page (`backlog.ts`, with `waiting`, the items waiting on a person); Capabilities (`capabilities.ts`, with `decide`, which posts a decision through the `post` its caller gives and loads the report again through its caller) and Architecture (`architecture.ts`); Home (`home.ts`, with `homeCount`, the count Home is badged with); and the answer buttons Home and an item's page both draw (`answers.ts`: `answerButtons`, `offered` and the `Answering` they take);
+- what they share with `web`'s shell: the Worker API's types (`types.ts`); the one module for requests to the Worker (`api.ts`: `get`, with options for a background refresh, a `fresh` delivery and an answer not to keep, `post`, `send`, `apiBase`, and the failures `SignedOut`, `Offline` and `HttpError`, which carries the status and a preparing share); the hash routes (`route.ts`: `parseRoute`, `href`, `reviewHref` and `reviewPath`); DOM building (`dom.ts`); sanitised Markdown (`markdown.ts`); the one-field forms (`forms.ts`); times (`time.ts`) and word marks (`diff.ts`);
+- the fixtures the views' tests and `web`'s end-to-end tests draw from (`fixtures.ts`), shaped as the Worker's responses are.
 
 ## Design
-The modules import nothing of `web`'s outside `web/src/views/`, since an import of `web`'s code from here would need `depends_on: [web]`, a cycle with `web`'s dependency on this component (`check/undeclared-imports`). What a page needs of the app (the responses on screen, what the user set, posting and loading again) comes in through its parameters. `web/src/styles.css`, which styles every page, stays `web`'s: a stylesheet is no import. The build that makes this component moves the modules from `web/src/` and `web/test/fixtures.ts` here, keeping their tests, and re-points the tests' markers at this component's requirement IDs, `web`'s end-to-end tests among them. Graph layout uses ELK (`elkjs`, layered, edges from dependent to dependency) and word-level diffs use `diff` (jsdiff). The mockups in `web`'s `assets/mockups/` are the reference for layout, colour, type and interaction, as `web`'s Design says.
+The modules import nothing of `web`'s outside `web/src/views/`, since an import of `web`'s code from here would need `depends_on: [web]`, a cycle with `web`'s dependency on this component (`check/undeclared-imports`). What a page needs of the app (the responses on screen, what the user set) comes in through its parameters, and what it does goes out through its callbacks: the pages draw and call, and `web`'s shell routes, posts, loads again and redraws (`web/approve-by-branch`, `web/review-in-the-browser`, `web/backlog-in-the-browser`, `web/answer-from-app`). `decide` is the one call here that posts, through the `post` its caller gives. `web/src/styles.css`, which styles every page and picks a list's table or its cards by the window's width, stays `web`'s: a stylesheet is no import. Graph layout uses ELK (`elkjs`, layered, edges from dependent to dependency) and word-level diffs use `diff` (jsdiff). The mockups in `web`'s `assets/mockups/` are the reference for layout, colour, type and interaction, as `web`'s Design says.
 
 **Views.**
-- *Home* (`home-waiting-on-you`): what waits on the person, where a repo opens: the spec branches whose review needs it and has no approval of the branch's fingerprint, from the spec-branch list and each branch's review; the `question` items with `choices` and the `human-task` items, each with its answer buttons (`answer-buttons`); the capabilities and architectural constraints the reports flag; and the other `question` items, each marked to be answered in a session. Each entry links to its page. A section with nothing in it is left out, and a Home with nothing says nothing waits.
-- *Spec graph*: an SVG of components and `depends_on` edges, each component drawn inside its parent's box, the root's children inside the root. Each component card shows its status (active or unbuilt), its requirements as a bar segmented by coverage state (current green, behind amber, unbuilt sky) with `n/m` current of total and `✕n` obsolete markers when there are any, and its owners; once the implementation state has arrived, a component that isn't `converged` is ringed in its queue state's colour and names the state. A component the `spec` model marks `oversized` carries `⚠` in its card's label and an amber outline, unless a queue-state ring colours it, as `view`'s SVG draws it (`oversized-is-a-state`, `oversized-component`); a component whose `oversized` is absent or `false` carries neither. The legend has one entry per colour the graph uses, naming its meanings on the graph. A selected PR rings its touched components and highlights their edges. Selecting a component draws the edges from the components that depend on it in one colour and the edges to the components it depends on in another, two colours that mean nothing else, and dims the other edges (`edge-direction`); the legend names both. It also opens the inspector over the graph, never beside it: a drawer from the right edge on desktop, as wide as 640 px or 90% of the window, whichever is less, and a bottom sheet on phones, closed by its × button, by Escape or by selecting the component again (`inspector-overlay`). The inspector holds the component's contract, dependencies, changes in open PRs, work in flight and backlog items, each item linking to its page.
-- *Spec PRs*: a spec branch's review, which this component's requirements call a PR and its views label "PR" whether or not the host has a page for it (`spec-branch-review`). The list is the Worker's spec-branch list (`GET .../branches`): each `spec/*` branch by name, with its page's number and title, linking out to the page, when it has one. Each entry opens the branch's review, routed by the branch name as one encoded segment (`#/<owner>/<repo>/prs/spec%2Fx`, so `spec/x/graph` and `.../full/<path>` stay unambiguous), while requests to the Worker keep its slashes (`/branches/spec/x/review`), loaded from `GET .../branches/{branch}/review`, with Document and Graph tabs and Approve intent. Its header shows "needs review" (`gate/needs-review`), who approved it (each `approved` record's writer and time from the review's `approvals`, or "not approved"), "checked" or "not checked" from `checked`, and a link to the page when there is one (`spec-branch-review`). Approve posts to `POST .../branches/{branch}/approve` (`approve-by-branch`, `approve-button`); on success it loads the review again, so the approval shown is the ledger's, and a 409 is the Worker's answer when the branch's fingerprint isn't the one sent. In a signed repository, the review's `signed` (`signed-approvals`, `web-approve-off-when-signed`), the note beside Approve, in the Approve bar (pinned above the tab bar on phones), shows the command `clm approve <branch>` with a copy button. The header's approvals are drawn neutral rather than green, each marked "signed" (sky: `clm land` will check it) or "unsigned, doesn't count" (rose) from its `signed`. A signed approval is one `clm land` checks, so the app never calls it counted. A 422 `signed` means the repository became signed after the review was drawn, so the note appears once the review is loaded again. The note shows offline too. **Request changes** (`request-changes`, `web-review-feedback-as-ledger-records`) sits beside Approve, in the Approve bar on phones: it opens a one-field form for the request's text and posts to `POST .../branches/{branch}/request-changes`. It works in a signed repository, where Approve doesn't, since a request withholds a land rather than granting one. The header draws each held request in rose, naming the person part of the writer as the activity feed names actors; a request that isn't held is drawn with the comments under the intent, dimmed. Request changes isn't disabled by an approval or by an earlier request: a second request by the same person is another text. A 403, a reader without write access, says so and leaves the button enabled. **Comments** (`comment-on-review`): the Document tab's intent and each requirement card carry a Comment control that opens a one-field form and posts to `POST .../branches/{branch}/comments`. A 422 shows the Worker's `error` under the form and keeps it. The Document tab shows the intent, then per component each changed element as a card with a couple of dimmed lines of context and word marks, then an impact summary, decisions and backlog edits. **Open in full** shows a changed file whole, as it reads at the head, with unchanged text dimmed, long unchanged runs folded, every change marked and numbered, and an outline marking where they are. It opens scrolled to the first change. ↑/↓ and `j`/`k` step through the changes, and a switch shows changes inline, after or before.
-- *Implementation* (Build): counts (pending components by state: claimed, ready and blocked; live changes; requirements still to make current), then a switch between **In flight** and **Blockers**. In flight shows the `flight` view (`implementation-view`); a branch's pull request shows "checked" or "not checked" from `pages`, and nothing while the response's `pages` doesn't yet say. Blockers shows the `blockers` view (`blockers-view`) with the chain to each held-up component. An activity feed (`activity-feed`) names the branch of a land or an approval.
-- *Backlog*: each item opens its page (`backlog-item-page`) at `#/<owner>/<repo>/backlog/<slug>`: its title, kind, priority, components, origin, the requirements it blocks, what holds it, the answers given and its answer buttons, then its body. A **Waiting on you** row first (`backlog-view`, `requirement-blocks`), then columns by kind (bug, question, deferred, idea). An item something holds (`propose-claims`, `backlog-taken`) carries a mark from the implementation state's `taken`; a bare claim is a live `propose/<slug>` claim. The backlog is drawn from the snapshot first and takes the marks when the implementation state arrives, as the graph takes its rings. The sidebar and tab bar badge the number of items waiting. **New proposal** (`propose-from-backlog`, `web-proposals-as-ledger-records`): a button above the columns opens a form with a title and an intent (plain text or Markdown), posting `/nodes` `[]` to `POST .../proposals`: the draft that takes the item up decides its components, as a session filing an item does; a 422 shows which field the Worker's `error` names and keeps the form. A row **Proposed** sits between Waiting on you and the columns; **Withdraw** sends `DELETE .../proposals/{id}`.
-- *Capabilities* (`review-capability-cost`): every capability's cost and its review, drawn from the Worker's `GET .../capabilities` (`web.worker/capabilities`), which has no history, so commits, questions answered, blocking and sizes are absent and the views say to run `clm capabilities <slug>` for them. The list (`capabilities-list`) keeps the report's order, by cost, highest first; narrower than 900 px each capability is a card with a bar for its share of the costliest. A capability opens its page (`capability-page`) at `#/<owner>/<repo>/capabilities/<slug>`, with its entry in full from the report's `text`, then the sections in `clm capabilities <slug>`'s order, then the decision buttons (`decide-buttons`). A decision is posted to `POST .../capabilities/<slug>/decide` (`web.worker/decide`) with the capability's version as shown (a page drawn again meanwhile keeps the buttons off), and the report is loaded again from the Worker with `?fresh=` and a random delivery, so the Worker reads the ledgers anew rather than its minute-old copy. On another 422 (the capability left the tip, or its specs don't load) the page shows the tip as it is now. A 401 shows the sign-in page. When the report's `signed` is true, a note says this repository counts only records signed with the reviewer's SSH key and gives `clm capabilities decide <slug> --value high|medium|low --decision keep|cut|redesign|accept`.
-- *Architecture* (`review-capability-cost`, `docs/decisions/architecture-review.md`): every architectural constraint, whether it is held and what it costs, with its review, drawn from the Worker's `GET .../architecture` (`web.worker/architecture`). It is a view of its own, after Capabilities in the sidebar and the tab bar, not a tab inside Capabilities. Its cost is a second split, apart from the capabilities', and the view says so. The list (`architecture-list`) keeps the report's order, by cost, highest first; narrower than 900 px each entry is a card. An entry opens its page (`architecture-page`) at `#/<owner>/<repo>/architecture/<slug>`, with its entry in full from the report's `text`, then the decision buttons (`architecture-decide-buttons`), which post to `POST .../architecture/<slug>/decide` (`web.worker/architecture-decide`) and load the report again as a capability's buttons do. While the report's `indexing` is true, each enforcing rule's state is drawn as unknown, and the view says coverage is still indexing.
+- *Home* (`home-waiting-on-you`): what waits on the person, where a repo opens, from the snapshot, the spec branches' reviews that have arrived, the implementation state's answers and the two reports; each entry links to its page.
+- *Spec graph* (`graph-view`, `oversized-component`, `edge-direction`, `zoom-at-pointer`): an SVG of components and `depends_on` edges, each component drawn inside its parent's box, the root's children at the top level and the canvas labelled `<root> · root`, marked as `view`'s SVG marks them (`oversized-is-a-state`). The graph doesn't wait for the implementation state: the rings, and the inspector's work in flight, are taken in place when it arrives, so the graph keeps its pan and zoom. Selecting a component opens its inspector (`inspector`, `inspector-pending`, `inspector-overlay`), which `web` lays over the graph.
+- *Spec PRs* (`spec-branch-review`): a spec branch's review, which this component's requirements call a PR and its views label "PR" whether or not the host has a page for it, with Document and Graph tabs (`review-intent-first`, `pr-document`) and the Approve bar: Approve intent (`approve-button`, `signed-approvals`, `web-approve-off-when-signed`) and Request changes (`request-changes`, `web-review-feedback-as-ledger-records`). Request changes works in a signed repository, where Approve doesn't, since a request withholds a land rather than granting one, and an approval or an earlier request doesn't disable it: a second request by the same person is another text. In a signed repository the header's approvals are drawn neutral rather than green, each marked by whether `clm land` will check it, so the app never calls one counted. Comments (`comment-on-review`) sit under their targets. **Open in full** (`full-document`) shows a changed file whole.
+- *Implementation* (Build): counts, then a switch between **In flight**, the `flight` view (`implementation-view`, `queue-states`), and **Blockers**, the `blockers` view (`blockers-view`), beside the activity feed (`activity-feed`).
+- *Backlog* (`backlog-view`, `backlog-taken`, `requirement-blocks`, `propose-claims`): drawn from the snapshot first, taking the marks when the implementation state arrives, as the graph takes its rings. **New proposal** (`propose-from-backlog`, `web-proposals-as-ledger-records`) has no picker of components: the draft that takes the item up decides them, as a session filing an item does. Each item opens its page (`backlog-item-page`), with its answer buttons (`answer-buttons`).
+- *Capabilities* (`review-capability-cost`, `capabilities-list`, `capability-page`, `decide-buttons`): drawn from the Worker's `GET .../capabilities` (`web.worker/capabilities`), which has no history, so commits, questions answered, blocking and sizes are absent and the views say to run `clm capabilities <slug>` for them.
+- *Architecture* (`architecture-list`, `architecture-page`, `architecture-decide-buttons`, `docs/decisions/architecture-review.md`): a view of its own, not a tab inside Capabilities, drawn from the Worker's `GET .../architecture` (`web.worker/architecture`) with the Capabilities view's pieces. Its cost is a second split, apart from the capabilities'.
+
+**Forms.** The comment, request and proposal forms keep what was typed in one store of drafts, keyed by the scope their caller gives, so the redraws a refresh makes keep an open form and its text; a draft is taken out while it is sent and put back when the send doesn't go through.
 
 **Size** (`slim-components`). This component's code budget is 90,000 tokens, above the default, because every page of the one app draws from the same types, DOM helpers and fixtures, which a split into pages would leave in a shared layer as large as any page.
 
 **Markdown** (`repo-markdown`). Every text the app shows from the repository (a component's contract, an intent, a requirement, a backlog item's body, a capability's or a constraint's statement and entry, a decision) goes through `markdown.ts`, which renders it with `marked` and sanitises it with DOMPurify, since anyone who can open a PR writes it and it is shown where the session cookie can approve. Only IDs, slugs and titles are drawn as plain text.
 
-**Tests.** This component's tests draw a view, or call `api.ts`, with the Worker faked, under `web/src/views/`, and cite only its requirements. What the built app shows in a browser, under `web`'s stylesheet and routes, is `web`'s to state and its browser tests' to prove (`web/cost-views-in-the-browser` and its neighbours).
-
 ## Requirements
 
 ### Requirement: full-document
-The PR view SHALL open any changed file whole, as it reads at the PR's head, with every change marked and numbered, scrolled to its first change, with controls to step to the next and previous change.
+The PR view SHALL open any changed file whole, as it reads at the PR's head, with every change marked and numbered and its first change current, with controls to step to the next and previous change, each step scrolling the change it goes to into view. ↑ and ↓, and `j` and `k`, SHALL step to the next and the previous change, except while the focus is in a field, and stepping SHALL stop at the first and the last. A run of more than 3 unchanged paragraphs SHALL fold to its first and last, with `⋯ <n> unchanged paragraphs` for the `<n>` it hides, which opens it. An outline SHALL list the file's headings and mark those followed by a change before the next heading, and a heading tapped SHALL go to the first change after it. A switch SHALL show the changes inline, as after or as before, still numbered. A file added whole SHALL be one change, and a file with no change SHALL read `No changes`. Given the place its caller kept from an earlier drawing, it SHALL go back to the change whose text is the same, else to the change of the same number, the last when there are fewer.
 
 #### Scenario: open at first change
 - GIVEN a PR whose component spec changes a Design paragraph and a later requirement
 - WHEN the reviewer opens that component in full
 - THEN the Design change is in view and marked as change 1 of 2, and "next" brings the requirement into view
 
+#### Scenario: stepping and folding
+- GIVEN a file with two changes separated by 6 unchanged paragraphs and headed `## Design` and `### Requirement: r`, a file added whole, and a file with no change
+- WHEN each is opened in full, and in the first `j` is pressed three times, `k` once, `j` once with the focus in a text field, the fold is tapped, the switch is set to after and then to before, `### Requirement: r` is tapped in the outline, and it is drawn again with the place it gave
+- THEN the first reads `Change 2 of 2` after the third `j` and `Change 1 of 2` after the `k`, the `j` in the field steps nothing, the run reads `⋯ 4 unchanged paragraphs` until tapped and then shows them all, after and before each show one side still numbered, the outline marks both headings and the tap goes to change 2, and the redraw opens at the same change; the added file reads `Change 1 of 1`; and the unchanged one reads `No changes`
+
 ### Requirement: graph-view
-The graph view SHALL draw every component and `depends_on` edge, each component inside its parent, with each component's status, owners and requirements as the `view` component's `spec` model gives them: a bar segmented by coverage state, current green, behind amber and unbuilt sky, with `<current>/<total>`, and the obsolete count when there is one. Once the implementation state has arrived, it SHALL ring each component that isn't `converged` in the colour of the queue state the `flight` model gives it and name that state on the card. It SHALL mark the components a selected PR touches.
+The graph view SHALL draw every component and `depends_on` edge, each component inside its parent, with each component's status, owners and requirements as the `view` component's `spec` model gives them: a bar segmented by coverage state, current green, behind amber and unbuilt sky, with `<current>/<total>`, and the obsolete count when there is one. While the snapshot's coverage is indexing, each card SHALL read `indexing <n>%`, the share done, in place of its counts, with no segment in its bar; a component with no requirements SHALL draw an empty bar and `0/0`. The root SHALL NOT be drawn as a card or box: its ID labels the canvas as `<root> · root`. An edge to a component the model doesn't hold SHALL be left out. Once the implementation state has arrived with complete coverage, the graph SHALL ring each component that isn't `converged` in the colour of the queue state the `flight` model gives it, `ready` sky, `claimed` amber, `blocked` rose and any other state the muted colour, and name that state on the card; it SHALL take the rings in place when the state arrives or changes, a component no longer pending losing its ring, and draw none while the implementation state's coverage is indexing. The legend SHALL name each colour the graph uses with its meanings: `active · current` green, `unbuilt · ready` sky, `behind · claimed` amber, `obsolete · blocked` rose, `touched by PR` in the accent, and `→ depends on`, with `other queue state` in the muted colour only while a ring uses it. It SHALL mark the components a selected PR touches. Selecting a card or a box SHALL report that component to its caller, and selecting the component its caller gives as selected SHALL report none. The graph SHALL start from the pan and zoom its caller gives, and report each change of them.
 
 #### Scenario: touched node
 - GIVEN a repo with components `a` and `b`, where `b` depends on `a`, and a PR touching `b`
@@ -66,12 +71,37 @@ The graph view SHALL draw every component and `depends_on` edge, each component 
 - WHEN the graph is shown and the implementation state has arrived
 - THEN `a`'s card carries the `claimed` ring, drawn in amber, and names `claimed`; `b`'s carries the `blocked` ring, drawn in rose, and names `blocked`; and `c`'s has no ring and names no queue state
 
+#### Scenario: indexing
+- GIVEN a snapshot whose coverage is `indexing` with `done` 0.4 and whose component `a` has 1 requirement, and a complete snapshot whose component `z` has none
+- WHEN each graph is shown
+- THEN `a` reads `indexing 40%`, not `1/1`, and its bar holds no segment; and `z` draws an empty bar and `0/0`
+
+#### Scenario: rings arrive and change
+- GIVEN a drawn graph of `a`, `b` and `c`, and implementation states in turn: one whose coverage is indexing with `a` `claimed`; one with `a` `claimed`, `b` `converged` and `c` `parked`; and one with `a` `blocked` and nothing else pending
+- WHEN each is taken into the drawn graph in turn
+- THEN the first rings nothing; the second rings `a` amber, `b` not at all and `c` in the muted colour named `parked`, and the legend shows `other queue state`; and the third rings `a` rose, `c` not at all, and the legend no longer shows `other queue state`
+
+#### Scenario: legend
+- GIVEN a graph with no selection, no ring in the muted colour and no oversized component
+- WHEN it is shown
+- THEN its legend reads, in order, `active · current` green, `unbuilt · ready` sky, `behind · claimed` amber, `obsolete · blocked` rose, `touched by PR` in the accent, and `→ depends on`
+
+#### Scenario: root and missing ends
+- GIVEN a `spec` model whose root is `clm`, with component `a` depending on `b` and on `x`, which the model doesn't hold
+- WHEN the graph is shown
+- THEN the canvas is labelled `clm · root`, no card or box is drawn for `clm`, and the only edge is from `a` to `b`
+
+#### Scenario: selection and viewport
+- GIVEN a nested component `check` with child `check.drift`, and a graph drawn with `check` given as selected and the pan and zoom `x` 10, `y` 20 at 1.5 times
+- WHEN `check`'s box is selected, then `check.drift`'s card, and then the graph is panned
+- THEN the stage is drawn at 10, 20 and 1.5 times, the graph reports none, then `check.drift`, and the pan is reported with the new place
+
 #### Needs
 - check.coverage/state-names
 - view/spec-view
 
 ### Requirement: implementation-view
-The implementation view SHALL show the `view` component's `flight` model: the pending components in its order, each with the state `queue_from_refs` gives it, for a claimed component its last push and when the claim lapses, for a component whose branch has a page that page and whether the ledger holds a `checked` record for its head's code key, for a blocked component the backlog items marked as waiting on a human and the requirements it waits on (`requirement-needs`), each shown as its ID followed by ` on ` and the components the queue names in that blocker's `components` (`orchestrator/queue-from-refs`), in the order given, separated by `, ` and each linked to its component's entry, never to the component the first part of the ID names; a requirement blocker that carries no `components`, as in a view stored before the queue gave them, SHALL be shown as its ID alone, with no link, and its pending requirements by state, showing no `waiting` state and reading no `waiting_on` field (`needs-alone-order`), and taking a requirement's blockers from its `blocked_by` and `waits_on`, never from `needs_pending`; then the live changes in the model's groups and order, each with its requirements current of those it adds or modifies, and `complete` where it applies.
+The implementation view SHALL show the `view` component's `flight` model (`view/flight-view`). First its counts: the pending components, with `<n> <state>` for each state the totals give, `claimed`, `ready` and `blocked` first in that order (`queue-states`); the live changes; and the requirements still to make current. Then the pending components in the model's order, each with its queue state; for a claimed component, its last push, the time its claim lapses less the response's `expiry_hours`, and how long until the claim lapses, or `lapsed` once it has; for a component whose `impl/<id>` branch has a page in the response's `pages`, that page's number linking to it and `checked` or `not checked` from its `checked`, or nothing about the check while `pages` doesn't say; its pending requirements by state, each followed by what blocks it, the items in its `blocked_by` and the requirements in its `waits_on`; and for each entry of its `blocked_by`, the item or the requirement, then, for a requirement with a non-empty `components`, ` on ` and each of those components in the order given, separated by `, `, each linking to that component's entry, never to the component the first part of the ID names (`orchestrator/queue-from-refs`). A requirement blocker without `components`, as in a view stored before the queue gave them, SHALL be shown as its ID alone, with no link. An item blocker of kind `question` or `human-task` SHALL be marked as waiting on you. Then the live changes, in the model's groups and order, each with its requirements current of those it adds or modifies, and `complete` where it applies. With no pending component it SHALL say `Nothing is pending: every component is up to its spec.`, and with no live change `No live changes.`. Times SHALL be drawn against the clock its caller gives, so they stay current between redraws: a time past reads `just now` under a minute, and otherwise `<m> min`, under an hour, `<h> h`, under 48 hours, or `<d> d`, followed by `ago`, and a time ahead of the clock, as from a clock stepped back, reads `just now`; how long until a lapse reads `<h> h`, `<h> h <m> m` or, under an hour, `<m> min`.
 
 #### Scenario: claimed node
 - GIVEN a pending component claimed by a branch last pushed an hour ago
@@ -98,33 +128,53 @@ The implementation view SHALL show the `view` component's `flight` model: the pe
 - WHEN the view is shown
 - THEN `a` links to page #7 and shows it as checked
 
-#### Scenario: waits on
-- GIVEN a pending component `a` whose only pending requirement `a/x` has `waits_on` `["b/y"]`, an empty `blocked_by` and no `needs_pending` field
+#### Scenario: unchecked or unknown page
+- GIVEN component `a` whose branch's page #7 has `checked` false, and component `b` whose branch's page #8 has no `checked`
 - WHEN the view is shown
-- THEN `a/x` shows as blocked by `b/y`, and no source file under `web/src` or `web/test` names `needs_pending`
+- THEN `a` shows `#7` and `not checked`, and `b` shows `#8` and nothing about the check
+
+#### Scenario: waits on
+- GIVEN a pending component `a` whose only pending requirement `a/x` has `waits_on` `["b/y"]` and an empty `blocked_by`
+- WHEN the view is shown
+- THEN `a/x` shows as blocked by `b/y`
 
 #### Scenario: a blocker pending on another component than its ID names
 - GIVEN a `flight` model in which component `b` is `blocked` by the requirement `b/gone` with `components` `[c, d]`, and component `e` by the requirement `a/x` with no `components`
 - WHEN the implementation view is drawn
 - THEN `b`'s entry reads `Blocked by b/gone on c, d`, `c` and `d` each linking to its own entry and nothing linking to `b`'s, and `e`'s entry reads `Blocked by a/x` with no link
 
+#### Scenario: counts and empty
+- GIVEN a `flight` model whose totals give 2 pending components, `ready` 1 and `claimed` 1, 3 live changes and 5 requirements to do; and one with no pending component and no live change
+- WHEN each view is shown
+- THEN the first's counts read `2`, `1 claimed, 1 ready`, `3` and `5`; and the second says `Nothing is pending: every component is up to its spec.` and `No live changes.`
+
+#### Scenario: times
+- GIVEN the clock at `t`, a response whose `expiry_hours` is 4, and claims lapsing at `t` + 3 h 20 min, at `t` + 12 min and at `t` − 1 s
+- WHEN the view is shown, and drawn again with the clock an hour later
+- THEN the first reads last push `40 min ago` and lapses in `3 h 20 m`, the second lapses in `12 min`, and the third reads `lapsed`; drawn again, the first reads `1 h ago` and lapses in `2 h 20 m`; and times 10 s, 38 min, 1 h and 3 days past read `just now`, `38 min ago`, `1 h ago` and `3 d ago`, and one 5 minutes ahead reads `just now`
+
 #### Needs
 - orchestrator/queue-from-refs
 - replica/implementation-ledger
 
 ### Requirement: activity-feed
-The implementation view SHALL list the repo's recent pushes, claims (creations of `impl/*` branches), lands and approvals, newest first: pushes and claims from GitHub's repo events, lands and approvals from the ledger's `landed` and `approved` records.
+The implementation view SHALL list the repo's recent pushes, claims (creations of `impl/*` branches), lands and approvals, newest first: pushes and claims from GitHub's repo events, lands and approvals from the ledger's `landed` and `approved` records. A push SHALL read `Pushed to <ref>`, a claim `Claimed <ref>`, a land `<actor> landed <ref>`, an approval `<actor> approved <ref>`, and an entry of any other kind `<kind> <ref>`, each with how long ago, and its actor when it has one. With no entry the feed SHALL say `No recent activity.`
 
 #### Scenario: approval shows
 - GIVEN a ledger holding an `approved` record for the branch `spec/x` at 10:00 and repo events holding a push at 10:05
 - WHEN the view is shown
 - THEN the feed lists the push, then the approval of `spec/x`
 
+#### Scenario: what each reads
+- GIVEN an activity list holding a claim of `impl/a`, a land of `spec/x` by `alice`, an entry of kind `merge` on `main`, and, apart, an empty list
+- WHEN each feed is shown
+- THEN the first reads `Claimed impl/a`, `alice landed spec/x` and `merge main`, each with how long ago, the land's with `alice`; and the second says `No recent activity.`
+
 #### Needs
 - replica/implementation-ledger
 
 ### Requirement: backlog-view
-The backlog view SHALL show every backlog item grouped by kind, with its title, components and slug, each linking to its page (`backlog-item-page`), and SHALL filter by component. It SHALL list `question` and `human-task` items first, under "Waiting on you", each with the requirements it blocks.
+The backlog view SHALL show every backlog item with its title, components and slug, each linking to its page (`backlog-item-page`). It SHALL list `question` and `human-task` items first, under "Waiting on you", each with the requirements it blocks; then the other items in columns by kind, `Bugs`, `Deferred` and `Ideas`, then a column for each other kind, named by the kind, in the order the backlog first gives it. It SHALL filter by component, Waiting on you included, with a filter that lists `all` and each component an item names, sorted.
 
 #### Scenario: filter
 - GIVEN items on components `a` and `b`
@@ -141,11 +191,16 @@ The backlog view SHALL show every backlog item grouped by kind, with its title, 
 - WHEN the view is shown and `dark-mode` is tapped
 - THEN the page at `#/o/a/backlog/dark-mode` is shown
 
+#### Scenario: other kinds and the filter
+- GIVEN a `bug` item on `b`, an `idea` item on `a`, an item of kind `chore` on `a`, and a `question` item on `b`
+- WHEN the view is shown, its filter's `a` is tapped, and the view is drawn filtered to `a`
+- THEN the columns read `Bugs`, `Deferred`, `Ideas` and `chore`, in that order, the filter lists `all`, `a` and `b`, the tap reports `a` to its caller, and filtered the `question` item is gone from Waiting on you and the `bug` item from `Bugs`
+
 #### Needs
 - model/parse-backlog
 
 ### Requirement: blockers-view
-The implementation view SHALL have a Blockers switch that shows the `view` component's `blockers` model in its order: each root blocker with its weight and the components it holds up, those that wait on the human marked as waiting on you, each component linking to its entry in the In flight list.
+The implementation view SHALL have a switch between `In flight` and `Blockers`, which shows the `view` component's `blockers` model in its order: each root blocker with its state, its weight and the components it holds up, a component held up through others followed by ` via ` and those components joined by ` › `, the roots that wait on the human marked as waiting on you. Each held-up component, and a root that is a component, SHALL link to its entry in the In flight list; any other root is shown by its name. With no root it SHALL say nothing is blocked.
 
 #### Scenario: blocker weight
 - GIVEN components `b` and `c`, each with one pending requirement, which needs `a/x`, uncited on claimed component `a`, and component `d` whose only pending requirement is blocked by `backlog/q` of kind `question`
@@ -157,28 +212,38 @@ The implementation view SHALL have a Blockers switch that shows the `view` compo
 - WHEN the Blockers switch is shown
 - THEN it says nothing is blocked
 
+#### Scenario: chain
+- GIVEN a `blockers` model whose root `a`, a component, holds up `d` via `b` and `c`
+- WHEN the Blockers switch is shown and `d` is tapped
+- THEN `d` reads `d via b › c`, `a` links to its entry, and the tap asks its caller to show In flight at `d`'s entry
+
 #### Serves
 - capability/see-project-state
 
 ### Requirement: queue-states
-The implementation view SHALL know exactly the queue states `ready`, `claimed` and `blocked` (`builds-in-subagents`, `needs-alone-order`), and SHALL NOT read a component's `paths` from the `flight` model.
+The implementation view SHALL label the queue states `ready`, `claimed` and `blocked` (`builds-in-subagents`, `needs-alone-order`), give the totals' states in the order `claimed`, `ready`, `blocked`, any other after them, and show any other state, `waiting` included, by its name with no label of its own; the graph SHALL ring such a state in the colour of a state the app doesn't know (`graph-view`). Neither SHALL read a component's `paths` from the `flight` model.
 
 #### Scenario: no interactive or waiting state
-- GIVEN the web app's source
-- WHEN the tests run
-- THEN the implementation view's state order is `claimed`, `ready`, `blocked`, neither its state labels nor the graph's state colours hold `waiting`, and no source file under `web/src` names an `interactive` state, `waiting_on` or `Needs an interactive session`
+- GIVEN a `flight` model whose totals hold one `blocked`, one `ready`, one `claimed` and one `waiting` component, the last `w`
+- WHEN the implementation view and the graph are drawn
+- THEN the totals read `1 claimed, 1 ready, 1 blocked, 1 waiting`, `w` shows `waiting` with no label of its own, and `w`'s ring is the colour of a state the app doesn't know
 
 #### Serves
 - capability/see-project-state
 - architecture/component-reconciliation
 
 ### Requirement: review-intent-first
-The PR view SHALL show the PR's `## Intent` section first, above the per-node changes, next to the approve button.
+The PR view SHALL show the PR's `## Intent` section first, above the per-node changes, next to the approve button; for a change with no `## Intent` section, its whole intent there; and for a branch with no change, `This change has no change.md.`
 
 #### Scenario: intent first
 - GIVEN a spec PR whose `change.md` has an `## Intent` section
 - WHEN the reviewer opens the PR
 - THEN the view shows that section first, above the per-node changes, next to the approve button
+
+#### Scenario: no intent section
+- GIVEN a review whose change has no `## Intent` section, and a review with no change
+- WHEN each is shown
+- THEN the first shows its whole intent first, above the per-node changes, and the second says `This change has no change.md.` there
 
 #### Serves
 - capability/approve-intent
@@ -186,25 +251,17 @@ The PR view SHALL show the PR's `## Intent` section first, above the per-node ch
 - architecture/humans-review-intent
 
 ### Requirement: spec-branch-review
-The PR list SHALL list the `spec/*` branches the Worker's branch list gives, each by name with its page's number and title when it has a page, and SHALL open each branch's review, routed by branch name and loaded from the Worker's branch review. The review's header SHALL show "needs review" when the review's top-level `review` is true, whether or not it has a `change`, and nothing for it otherwise, the writer and time of each approval the review lists, or "not approved" when it lists none, "checked" or "not checked", and a link to the page when there is one, and SHALL show no labels. Under the header, above the review's components, it SHALL list each line of the review's `cuts` as the Worker gives it, under the heading `Cuts`, and show no such heading for a review with none, so a person approving in the app reads what the branch removes before they tap Approve (`removal-needs-a-yes`). The PR list SHALL list nothing but the spec branches: no lands to review. The app SHALL request no `/pulls` route of the Worker.
-
-#### Serves
-- capability/follow-from-browser
-- capability/approve-intent
-
-#### Needs
-- web.worker.review/spec-branches
-- web.worker.review/pr-review
+The PR list SHALL list the `spec/*` branches the Worker's branch list gives, each by name with its page's number and title when it has a page, or say `No spec branches.` when it gives none, and SHALL link each to its review by the link its caller gives for the branch, routed by branch name as one encoded segment, whose Worker path keeps the name's slashes (`hash-routes`). The review's header SHALL show the branch's name; "needs review" when the review's top-level `review` is true, whether or not it has a `change`, and nothing for it otherwise; the writer and time of each approval the review lists, or "not approved" when it lists none; "checked" or "not checked"; a link to the page when there is one; the branch's components, what its change resolves, and `<branch> → <base>`; and SHALL show no labels. Under the header, above the review's components, it SHALL list each line of the review's `cuts` as the Worker gives it, under the heading `Cuts`, and show no such heading for a review with none, so a person approving in the app reads what the branch removes before they tap Approve (`removal-needs-a-yes`). A review with no component change SHALL say `No component changes.` The PR list SHALL list nothing but the spec branches: no lands to review.
 
 #### Scenario: branch without a page
 - GIVEN the branch list holds `spec/a` with page #7 "Add a" and `spec/b` with no page
-- WHEN the PR list is shown and `spec/b` is opened
-- THEN both are listed, `spec/a` with #7 and "Add a", and `spec/b`'s review is loaded from `/branches/spec/b/review` and shows no page link
+- WHEN the PR list is shown and `spec/b`'s review is drawn
+- THEN both are listed, `spec/a` with #7 and "Add a", `spec/b`'s review is routed at `#/o/a/prs/spec%2Fb` with the Worker path `branches/spec/b`, and its review shows no page link
 
 #### Scenario: approved by
 - GIVEN `spec/x`'s review lists an approval by `clunny/web` and says `checked` false
 - WHEN its review is shown
-- THEN the header names `clunny/web` with the approval's time and says "not checked", and no request went to a `/pulls` route
+- THEN the header names `clunny/web` with the approval's time and says "not checked"
 
 #### Scenario: needs review without a change
 - GIVEN `spec/arch`'s review with `review` true and no `change`, and `spec/plain`'s with `review` false and a `change`
@@ -216,13 +273,26 @@ The PR list SHALL list the `spec/*` branches the Worker's branch list gives, eac
 - WHEN each review is shown
 - THEN `spec/x`'s shows `Cuts` with that line above its components, and `spec/plain`'s shows no `Cuts` heading
 
+#### Scenario: empty
+- GIVEN a branch list with no branch; and `spec/x`'s review against `main` changing no component, whose change resolves `crash`; and `spec/y`'s, changing `a` and `b`
+- WHEN the list and each review are shown
+- THEN the list says `No spec branches.`; `spec/x`'s header shows `resolves crash` and `spec/x → main`, and its document says `No component changes.`; and `spec/y`'s header names `a` and `b`
+
+#### Serves
+- capability/follow-from-browser
+- capability/approve-intent
+
+#### Needs
+- web.worker.review/spec-branches
+- web.worker.review/pr-review
+
 ### Requirement: approve-button
-Approve intent SHALL send one approve request per tap and none while one is in flight, and once the Worker accepts it SHALL read Approved and stay disabled. It SHALL be disabled offline, for a review without a fingerprint, and for a review that already shows an approval, which it SHALL read from the review's approvals, never from a label.
+Approve intent SHALL call its caller's approve once per tap and not again until the review is drawn anew. Drawn as accepted by its caller, or for a review whose `approvals` list one, it SHALL read Approved and be disabled, except in a signed repository (`signed-approvals`), reading an approval from the review's approvals, never from a label. It SHALL be disabled offline and for a review without a fingerprint.
 
 #### Scenario: one request, then approved
 - GIVEN a spec branch's review, online, with a fingerprint and no approval
-- WHEN Approve is tapped twice in quick succession and the Worker accepts the first request
-- THEN exactly one approve request was sent, and the button reads Approved and is disabled
+- WHEN Approve is tapped twice in quick succession, and the review is drawn again as accepted
+- THEN the approve callback was called once, the button was disabled after the first tap, and drawn again it reads Approved and is disabled
 
 #### Scenario: disabled
 - GIVEN a review with no fingerprint, a review that already shows an approval, and a review with a fingerprint shown offline
@@ -235,7 +305,7 @@ Approve intent SHALL send one approve request per tap and none while one is in f
 - architecture/approval-policy
 
 ### Requirement: pr-document
-The Document tab SHALL show, per touched component, every changed requirement, Contract, Design, frontmatter and asset the review gives, each with whether it was added, modified or removed, its text with word marks between before and after and a couple of dimmed lines of context from its file, and a link to its file in full; an HTML asset previewed in a sandboxed frame with no permissions; then each decision the review gives with what it says, and the backlog edits.
+The Document tab SHALL show, per touched component, every changed requirement, Contract, Design, frontmatter and asset the review gives, each with whether it was added, modified or removed, its text with word marks between before and after and a couple of dimmed lines of context from its file, and a link to its file in full; an HTML asset previewed in a sandboxed frame with no permissions; then an impact summary, giving the number of components touched, the requirements as `<n> added`, `<n> modified` and `<n> removed` for each that has any, or `none`, and the number of Contracts and of Designs changed; then each decision the review gives with what it says, the backlog edits, and a list of the changed files, each linking to it in full.
 
 #### Scenario: modified requirement, asset and decision
 - GIVEN a review that modifies requirement `n/r` by adding the word `quickly`, adds asset `assets/m.html` to `n` and adds decision `d`
@@ -246,6 +316,11 @@ The Document tab SHALL show, per touched component, every changed requirement, C
 - GIVEN a review whose changes touch the root component `clm`, component `n` and component `m.n`
 - WHEN the Document tab is shown
 - THEN their links open `specs/SPEC.md`, `specs/n/SPEC.md` and `specs/m/n/SPEC.md` in full
+
+#### Scenario: impact
+- GIVEN a review touching `n`, which adds two requirements, removes one and changes its Contract, and `m`, which changes nothing but its frontmatter; and a review that changes no requirement
+- WHEN each Document tab is shown
+- THEN the first's impact reads 2 components touched, `2 added, 1 removed`, 1 Contract and 0 Designs, and its files list links each document the review holds in full; and the second's requirements read `none`
 
 #### Serves
 - capability/follow-from-browser
@@ -299,7 +374,7 @@ Once the implementation state has arrived with a complete marker index, the comp
 - view/flight-view
 
 ### Requirement: signed-approvals
-When a spec branch's review says `signed`, the PR view SHALL draw Approve disabled, never reading "Approved", with a note beside it that the repository counts only approvals signed with the reviewer's SSH key and the command `clm approve <branch>` for that branch; SHALL mark each approval in the header "signed" or "unsigned, doesn't count" from its `signed`; and SHALL say "no signed approval" when it lists approvals and none is signed. An approve answered 422 with `error` `signed` SHALL load the review again from the Worker. When the review says `signed` false or doesn't say, the view SHALL show neither the note nor the marks.
+When a spec branch's review says `signed`, the PR view SHALL draw Approve disabled, never reading "Approved", with a note beside it, online or offline, that the repository counts only approvals signed with the reviewer's SSH key and the command `clm approve <branch>` for that branch; SHALL mark each approval in the header "signed" or "unsigned, doesn't count" from its `signed`; and SHALL say "no signed approval" when it lists approvals and none is signed. When the review says `signed` false or doesn't say, the view SHALL show neither the note nor the marks.
 
 #### Serves
 - capability/follow-from-browser
@@ -318,33 +393,43 @@ When a spec branch's review says `signed`, the PR view SHALL draw Approve disabl
 - WHEN the PR view is drawn
 - THEN the header marks `dana/9f9f9f9f` "signed" and doesn't say "no signed approval"
 
-#### Scenario: became signed
-- GIVEN `spec/x`'s review drawn with `signed` false and fingerprint `f1`, and a Worker that answers the approve with 422 and `error` `signed`, and then the review with `signed` true
-- WHEN the reviewer taps Approve
-- THEN the review is requested again and the note shows `clm approve spec/x`
-
 #### Scenario: unsigned repository
 - GIVEN `spec/x`'s review with `signed` false, a fingerprint and no approvals, and another review with no `signed` field
 - WHEN each PR view is drawn online
 - THEN Approve is enabled and no note or approval mark shows
 
+#### Scenario: signed offline
+- GIVEN `spec/x`'s review with `signed` true and no approvals
+- WHEN the PR view is drawn offline
+- THEN the note shows `clm approve spec/x` and the header says "not approved"
+
 ### Requirement: propose-from-backlog
-The Backlog view SHALL offer New proposal: a form with a title and an intent, and no picker of components, that posts an object with `/title`, `/body` and `/nodes` `[]` to the Worker's proposals route once per tap and none while one is in flight, on success closes and asks for the implementation state again, on a 409 says the title is taken and keeps the form, and on a 422 shows the answer's reason. It SHALL list the implementation state's `proposals` under Proposed, between Waiting on you and the columns, each with its title, the person part of its proposer and its time and a note that the next build files it, with Withdraw on those whose `mine` is true, which sends one `DELETE` for the proposal's `id` and then asks for the implementation state again. Both SHALL be disabled offline.
+The Backlog view SHALL offer New proposal: a form with a title and an intent, and no picker of components, that calls its caller's propose with the trimmed title and intent once per tap and not again while it runs; with no title it SHALL call nothing and say `Give it a title first.`. When the call answers that it went through the form SHALL close, and otherwise show under the form the reason it gives, or `Not sent: offline.` when it fails, keeping the form and its text. What was typed into an open New proposal form SHALL survive the redraws a refresh makes, until it is sent or cancelled, kept apart for each repository the snapshot names (`web.worker/snapshot-names-its-repo`). It SHALL list the implementation state's `proposals` under Proposed, between Waiting on you and the columns, each with its title, the person part of its proposer and its time and a note that the next build files it, and show no Proposed row before the implementation state arrives or when it lists none; those whose `mine` is true SHALL carry Withdraw, which calls its caller's withdraw with the proposal's `id` once per tap and, when that is refused, shows under the proposal the reason it gives, or `Not withdrawn: offline.` when it fails, and can be tapped again. Both SHALL be disabled offline.
 
 #### Scenario: proposed
-- GIVEN the Backlog of `o/a` online, and a Worker that answers the proposal with 200 and then lists it in `proposals` by `alice/web`
-- WHEN the user opens New proposal, enters the title "Export CSV" and the intent "Let me export.", and submits twice in quick succession
-- THEN exactly one request posted `/title` `"Export CSV"`, `/body` `"Let me export."` and `/nodes` `[]`, the form holds no picker of components, the form closed, and Proposed lists "Export CSV" with `alice` and the note
+- GIVEN the Backlog of `o/a` online, and a propose callback that answers that it went through, and then an implementation state listing the proposal in `proposals` by `alice/web`
+- WHEN the user opens New proposal, enters the title "Export CSV" and the intent "Let me export.", and submits twice in quick succession, and the view is drawn with that implementation state
+- THEN the callback was called once, with "Export CSV" and "Let me export.", the form holds no picker of components, the form closed, and Proposed lists "Export CSV" with `alice` and the note
 
 #### Scenario: title taken
-- GIVEN a Worker that answers the proposal with 409
+- GIVEN a propose callback that answers "That title is taken: choose another."
 - WHEN the user submits
-- THEN the form stays open saying the title is taken
+- THEN the form stays open with its text, showing that reason
 
 #### Scenario: withdraw
 - GIVEN Proposed listing `p1` by `alice/web` with `mine` true and `p2` by `bob/web` with `mine` false
 - WHEN the view is shown and `p1`'s Withdraw is tapped
-- THEN `p2` shows no Withdraw, one `DELETE` went to `/api/repos/o/a/proposals/p1`, and the implementation state was requested again
+- THEN `p2` shows no Withdraw, and the withdraw callback was called once, with `p1`
+
+#### Scenario: refusals and empties
+- GIVEN New proposal open with an empty title; Proposed listing `p1` with `mine` true and a withdraw callback that answers "Not withdrawn (500)."; and the view drawn before the implementation state arrives, and with an implementation state listing no proposal
+- WHEN the proposal is submitted, and `p1`'s Withdraw is tapped twice, once after the refusal shows
+- THEN the propose callback isn't called and the form says `Give it a title first.`; `p1` shows "Not withdrawn (500)." and the second tap calls withdraw again; and neither of the last two shows a Proposed row
+
+#### Scenario: draft kept
+- GIVEN New proposal open in `o/a`'s Backlog with the title "Export" typed
+- WHEN the view is drawn again, then `o/b`'s Backlog is drawn, then the form is cancelled in `o/a`
+- THEN the redraw shows the form open with "Export", `o/b`'s shows the New proposal button and no form, and after the cancel `o/a`'s shows no form
 
 #### Serves
 - capability/keep-a-backlog
@@ -353,19 +438,35 @@ The Backlog view SHALL offer New proposal: a form with a title and an intent, an
 
 #### Needs
 - web.worker/proposals
+- web.worker/snapshot-names-its-repo
 
 ### Requirement: comment-on-review
-The PR view's Document tab SHALL carry a Comment control on the intent and on each requirement card that posts `{"fingerprint": <the review's fingerprint>, "target": <null for the intent, the requirement's ID for a card>, "text"}` to the Worker's comments route for the branch, once per tap and none while one is in flight, and loads the review again on success. It SHALL draw each entry of the review's `comments` under its target, the intent for a null target or a requirement the review shows no card for, with the person part of its writer and its time, marked "on an earlier version" when `current` is false, and each entry of `change_requests` whose `held` is false under the intent the same way, marked "since approved" when `current` is true. A review without the two fields SHALL be read as having none. Comment SHALL be disabled offline and when the review has no fingerprint.
+The PR view's Document tab SHALL carry a Comment control on the intent and on each requirement card, which opens a one-field form that calls its caller's comment with the target, null for the intent or the requirement's ID for a card, and the trimmed text, once per tap and not again while it runs; an empty text SHALL call nothing and say `Write something first.`. When the call answers that it went through the form SHALL close, and otherwise show under the form the reason it gives, or `Not sent: offline.` when it fails, keeping the form and its text. What was typed into an open Comment or Request changes form SHALL survive the redraws a refresh makes, until it is sent or cancelled, kept apart for each review its caller names, so another repository's branch of the same name has its own. It SHALL draw each entry of the review's `comments` under its target, the intent for a null target or for a requirement the review shows no card for, there marked `on <id>`, with the person part of its writer and its time, marked "on an earlier version" when `current` is false, and each entry of `change_requests` whose `held` is false under the intent the same way, marked "since approved" when `current` is true. A review without the two fields SHALL be read as having none. Comment SHALL be disabled offline and when the review has no fingerprint.
 
 #### Scenario: comment on a requirement
-- GIVEN `spec/x`'s review with fingerprint `f1`, which modifies `n/r`, and a Worker that answers the comment with 200 and then the review with a comment on `n/r` by `alice/web` at `f1`
-- WHEN the reviewer taps Comment on `n/r`'s card, enters "Name the rule" and submits
-- THEN one request posted `{"fingerprint": "f1", "target": "n/r", "text": "Name the rule"}` to `/branches/spec/x/comments`, and `n/r`'s card shows the comment by `alice`
+- GIVEN `spec/x`'s review with fingerprint `f1`, which modifies `n/r`, a comment callback that answers that it went through, and then the review with a comment on `n/r` by `alice/web` at `f1`
+- WHEN the reviewer taps Comment on `n/r`'s card, enters "Name the rule" and submits, and the view is drawn with that review
+- THEN the callback was called once, with `n/r` and "Name the rule", and `n/r`'s card shows the comment by `alice`
 
 #### Scenario: earlier version
 - GIVEN a review with fingerprint `f2` whose `comments` holds one at `f1` with `current` false and target `null`, and whose `change_requests` holds one at `f2` with `current` true and `held` false
 - WHEN the Document tab is shown
 - THEN the comment is drawn under the intent, marked "on an earlier version", and the request under it, marked "since approved"
+
+#### Scenario: no card for it
+- GIVEN a review whose `comments` holds a current comment on `n/gone`, a requirement the review shows no card for
+- WHEN the Document tab is shown
+- THEN the comment is drawn under the intent, marked `on n/gone`
+
+#### Scenario: refused
+- GIVEN a comment callback that answers "Not sent: the Worker refused the text.", and, apart, one that fails
+- WHEN a comment is submitted in each, and an empty one is submitted
+- THEN the first shows that reason under the form and the second `Not sent: offline.`, each keeping the form and its text; and the empty one calls nothing and says `Write something first.`
+
+#### Scenario: draft kept
+- GIVEN `spec/x`'s review drawn for scope `/api/repos/o/a/branches/spec/x`, with "Name it" typed into the intent's Comment form and "Split" into Request changes' form
+- WHEN the review is drawn again for that scope, then drawn for the scope `/api/repos/o/b/branches/spec/x`
+- THEN the first redraw shows both forms open with their text, and the second shows neither form open
 
 #### Serves
 - capability/approve-intent
@@ -377,17 +478,12 @@ The PR view's Document tab SHALL carry a Comment control on the intent and on ea
 - web.worker.review/review-feedback
 
 ### Requirement: request-changes
-The PR view SHALL offer Request changes beside Approve, in the Approve bar on phones, which takes a text and posts `{"fingerprint": <the review's fingerprint>, "text"}` to the Worker's request-changes route for the branch, once per tap and none while one is in flight; on success it SHALL load the review again, and on a 409 say the branch changed since the review was shown and load the review again, as Approve does. The header SHALL show each entry of `change_requests` whose `held` is true as changes requested by the person part of its writer, with its time and text, and say the branch won't land until the author pushes a change or the requester approves. Request changes SHALL be disabled offline and when the review has no fingerprint, and enabled in a signed repository, after an approval and after an earlier request.
+The PR view SHALL offer Request changes in the Approve bar, beside Approve, which opens a one-field form that calls its caller's request with the trimmed text once per tap and not again while it runs, answering and keeping its draft as a comment's form does (`comment-on-review`). The header SHALL show each entry of `change_requests` whose `held` is true as changes requested by the person part of its writer, with its time and text, and say the branch won't land until the author pushes a change or the requester approves. Request changes SHALL be disabled offline and when the review has no fingerprint, and enabled in a signed repository, after an approval and after an earlier request.
 
 #### Scenario: requested
-- GIVEN `spec/x`'s review with fingerprint `f1` and `signed` true, online, and a Worker that answers the request with 200 and then the review with a held request by `alice/web`
-- WHEN the reviewer taps Request changes, enters "Split it" and submits twice in quick succession
-- THEN exactly one request posted `{"fingerprint": "f1", "text": "Split it"}` to `/branches/spec/x/request-changes`, and the header says changes requested by `alice` with "Split it"
-
-#### Scenario: branch moved
-- GIVEN the review drawn with fingerprint `f1`, and a Worker that answers the request with 409 and the review with fingerprint `f2`
-- WHEN the reviewer submits a request
-- THEN the status says the branch changed since the review was shown, and the review on screen is the one with fingerprint `f2`
+- GIVEN `spec/x`'s review with fingerprint `f1` and `signed` true, online, a request callback that answers that it went through, and then the review with a held request by `alice/web`
+- WHEN the reviewer taps Request changes, enters "Split it" and submits twice in quick succession, and the view is drawn with that review
+- THEN the callback was called once, with "Split it", and the header says changes requested by `alice` with "Split it"
 
 #### Scenario: disabled
 - GIVEN a review with no fingerprint, and a review with a fingerprint shown offline
@@ -404,7 +500,7 @@ The PR view SHALL offer Request changes beside Approve, in the Approve bar on ph
 - web.worker.review/review-feedback
 
 ### Requirement: capabilities-list
-The Capabilities view SHALL list every capability of the Worker's report in its order, marking each with an unsettled flag ⚑, with a "⚑ only" filter that shows only those. At 900 px and wider it SHALL be a table of the capability's slug and statement, its cost (`≈$`, work tokens and reviews), its unsettled workarounds, "Live without?" from its `overlap`, and its latest decision; narrower, one card per capability with the same facts. Choosing a capability SHALL open its page.
+The Capabilities view SHALL list every capability of the Worker's report in its order, marking each with an unsettled flag ⚑, with a "⚑ only" filter that shows only those. It SHALL draw both a table, of the capability's slug and statement, its cost (`≈$`, work tokens and reviews), its unsettled workarounds, "Live without?" from its `overlap`, and its latest decision, and one card per capability with the same facts and a bar for its share of the costliest; which of them shows is `web`'s (`web/cost-views-in-the-browser`). Choosing a capability SHALL open its page. Dollars SHALL read to the cent under $10 and to the tenth from $10; tokens as a whole number under a thousand, then in thousands as `<n>k`, then in millions to the tenth as `<n>M`; a capability with no decision `never decided`; "Live without?" `all its rules only here`, or `<k> of <n> rules only here; also <id> (<k>)` for each entry it shares rules with; and the view SHALL note the unattributed and architecture-only costs. With no capability it SHALL say `No capabilities: CAPABILITIES.md holds none.`, and with none shown under "⚑ only" `No capability is flagged.`
 
 #### Serves
 - capability/review-capability-cost
@@ -418,8 +514,13 @@ The Capabilities view SHALL list every capability of the Worker's report in its 
 - WHEN the view is shown
 - THEN `b` comes before `a`, only `a` is marked ⚑, and with "⚑ only" on only `a` is listed
 
+#### Scenario: figures and empties
+- GIVEN a report whose `b` costs $9.00 and 900,000 work tokens, shares one of its two rules with `other`, and was never decided, whose `c` costs $12.34 and 1,300,000 tokens with all its rules its own, and whose unattributed cost is $1 and architecture-only cost $2; a report with no capability; and one whose capabilities none is flagged
+- WHEN each is shown, the last with "⚑ only" on
+- THEN `b` reads `≈$9.00`, `900k tok`, `1 of 2 rules only here; also other (1)` and `never decided`, `c` reads `≈$12.3` and `1.3M tok` and `all its rules only here`, and the note gives `≈$1.00` and `≈$2.00`; the second says `No capabilities: CAPABILITIES.md holds none.`; and the third `No capability is flagged.`
+
 ### Requirement: capability-page
-A capability's page SHALL show, in this order: its entry in full, the report's `text` rendered as Markdown (`repo-markdown`), in place of its statement and why we need it; what it costs; its workarounds, each a `<details>` whose summary is its title and whose body is its text, can we live without it from its `overlap`, its rules collapsed, and its decisions, with a line saying to run `clm capabilities <slug>` for its commits, questions answered, blocking and size, which the Worker's report doesn't hold.
+A capability's page SHALL show, in this order: its entry in full, the report's `text` rendered as Markdown (`repo-markdown`), in place of its statement and why we need it; what it costs; its workarounds, each a `<details>` whose summary is its title and whose body is its text, can we live without it from its `overlap`, its rules collapsed, and its decisions, with a line saying to run `clm capabilities <slug>` for its commits, questions answered, blocking and size, which the Worker's report doesn't hold. The page of a slug the report doesn't hold SHALL say `The report holds no capability <slug>.`
 
 #### Serves
 - capability/review-capability-cost
@@ -434,8 +535,13 @@ A capability's page SHALL show, in this order: its entry in full, the report's `
 - WHEN its page is shown
 - THEN the sections come in that order, the entry shows `clm land` as code and the scenario `s`, the workaround's summary reads "Judge ignores pipes" and its body "Builds pipe output.", and the page names `clm capabilities x`
 
+#### Scenario: unknown slug
+- GIVEN a report that holds no capability `nope`
+- WHEN `nope`'s page is shown
+- THEN it says `The report holds no capability nope.`
+
 ### Requirement: decide-buttons
-A capability's page SHALL offer a value (high, medium or low) and Keep, Cut, Redesign and Accept as is, in a 2×2 grid below 900 px. A tap SHALL post `{"version", "value", "decision"}` to the Worker's decide route with the capability's version as shown, one request per tap and none while one is in flight, and then load the report again from the Worker, never the copy kept for offline use: on 200 the page SHALL show the new decision, and on 409 say the capability changed since it was shown. The buttons SHALL be disabled offline, before a value is chosen and when the report's `signed` is true; when it is, a note SHALL give `clm capabilities decide <slug> --value high|medium|low --decision keep|cut|redesign|accept`, as it SHALL after a 422 whose `error` is `signed`, giving the Worker's `command`.
+A capability's page SHALL offer a value (high, medium or low), the chosen one pressed, and Keep, Cut, Redesign and Accept as is. A tap SHALL post `{"version", "value", "decision"}` to the Worker's decide route with the capability's version as shown, through the `post` its caller gives, one request per tap and none while one is in flight, a page drawn again meanwhile included, and then load the report again through its caller: on 200 the page SHALL show the new decision, and on 409 say the capability changed since it was shown. On a 422 whose `error` isn't `signed` it SHALL say `Not decided (422): the Worker refused the <error>.` and load the report again; on any other failure say `Not decided (<status>).` and load nothing; when the post can't be sent, say `Offline: decide when back online.`; when the session has ended, call its caller's sign-out and say `Signed out. Sign in again to decide.`; and when the report can't be loaded again, add `Its report could not be loaded again: Reload.` The buttons SHALL be disabled offline, before a value is chosen and when the report's `signed` is true; when it is, a note SHALL give `clm capabilities decide <slug> --value high|medium|low --decision keep|cut|redesign|accept`, as it SHALL after a 422 whose `error` is `signed`, which gives the Worker's `command` in its place, the page then showing that one command only.
 
 #### Serves
 - capability/review-capability-cost
@@ -451,17 +557,27 @@ A capability's page SHALL offer a value (high, medium or low) and Keep, Cut, Red
 - THEN exactly one request posted `{"version": "v", "value": "low", "decision": "cut"}` to `/capabilities/x/decide`, the report was asked for again, and the page shows the decision
 
 #### Scenario: moved
-- GIVEN the page drawn at version `v`, and a Worker that answers the decision with 409 and the report with `x` at version `w`
+- GIVEN the page drawn at version `v`, and a Worker that answers the decision with 409
 - WHEN a decision is tapped
-- THEN the page says the capability changed since it was shown, and the page on screen is `x` at `w`
+- THEN the page says the capability changed since it was shown, and the report was asked for again
 
 #### Scenario: disabled
 - GIVEN a page offline, a page with no value chosen, and a page whose report has `signed` true
 - WHEN each is shown
 - THEN the decision buttons are disabled in all three, and the signed one's note gives `clm capabilities decide x --value high|medium|low --decision keep|cut|redesign|accept`
 
+#### Scenario: refused
+- GIVEN a Worker that answers a decision 422 with `error` `capability`; one that answers 502; a post that can't be sent; a session that has ended; and a Worker that answers 409 and then fails the report
+- WHEN a decision is tapped in each
+- THEN the first says `Not decided (422): the Worker refused the capability.` and the report was asked for again; the second says `Not decided (502).` and the report wasn't; the third says `Offline: decide when back online.`; the fourth called the sign-out once and says `Signed out. Sign in again to decide.`; and the fifth ends with `Its report could not be loaded again: Reload.`
+
+#### Scenario: in flight
+- GIVEN a page with value low chosen, drawn while a decision from it is in flight; and a signed report's page, after a 422 `signed` whose `command` is `clm capabilities decide x --value low --decision cut`
+- WHEN each is shown, and in the first `medium` is tapped
+- THEN the first's decision buttons are disabled, `low` is pressed, and the tap reports `medium` to its caller; and the second shows that command once and no other
+
 ### Requirement: architecture-list
-The Architecture view SHALL be a view of its own, listed after Capabilities in the sidebar as Architecture and in the tab bar as Arch. It SHALL list every entry of the Worker's architecture report in its order, marking each flagged one ⚑, with a "⚑ only" filter that shows only those, and a note that an entry's cost is its enforcing rules' share, counted apart from the capabilities'. At 900 px and wider it SHALL be a table of the entry's slug and statement, its proof (`held <c>/<n>`, amber when `c` is less than `n`, ` + untested` after it when it also holds `#### Untested`, or `untested` alone), its cost (`≈$`, work tokens and reviews), its unsettled workarounds, "Live without?" from its `overlap`, and its latest decision; narrower, one card per entry with the same facts. While the report's `indexing` is true, the proof SHALL read `? / <n>` and the note SHALL say coverage is still indexing. Choosing an entry SHALL open its page.
+The Architecture view SHALL list every entry of the Worker's architecture report in its order, marking each flagged one ⚑, with a "⚑ only" filter that shows only those, and a note that an entry's cost is its enforcing rules' share, counted apart from the capabilities'. It SHALL draw both a table, of the entry's slug and statement, its proof (`held <c>/<n>`, amber when `c` is less than `n`, ` + untested` after it when it also holds `#### Untested`, or `untested` alone; `held 0/0` for an entry with neither a rule nor `#### Untested`), its cost (`≈$`, work tokens and reviews), its unsettled workarounds, "Live without?" from its `overlap`, and its latest decision, and one card per entry with the same facts; which of them shows is `web`'s (`web/cost-views-in-the-browser`). While the report's `indexing` is true, or while a rule's state is unknown, the proof SHALL read `? / <n>`, and while it is indexing the note SHALL say coverage is still indexing. Choosing an entry SHALL open its page.
 
 #### Serves
 - capability/review-capability-cost
@@ -475,18 +591,18 @@ The Architecture view SHALL be a view of its own, listed after Capabilities in t
 - WHEN the view is shown
 - THEN `e` comes before `g`, `e` is marked ⚑ and shows `held 1/2` in amber, `g` shows `untested`, and with "⚑ only" on only `e` is listed
 
-#### Scenario: its own view
-- GIVEN a repo on screen at 1280 px
-- WHEN the sidebar is shown
-- THEN Architecture is listed after Capabilities, and choosing it opens `#/<owner>/<repo>/architecture`
-
 #### Scenario: indexing
 - GIVEN a report whose `indexing` is true
 - WHEN the view is shown
 - THEN `e`'s proof reads `? / 2` and the note says coverage is still indexing
 
+#### Scenario: unknown and empty proofs
+- GIVEN a report not indexing, whose `e` has two rules, one with `current` null, and whose `z` has no rule and no `#### Untested`
+- WHEN the view is shown
+- THEN `e`'s proof reads `? / 2` and `z`'s `held 0/0`, not amber
+
 ### Requirement: architecture-page
-An architectural constraint's page SHALL show, in this order: its entry in full, the report's `text` rendered as Markdown (`repo-markdown`), in place of its statement and its `#### Untested` text; whether it is held, each enforcing rule with its state (current in green, pending in amber, unknown while the report is indexing); what it costs, saying it is counted apart from the capabilities; its workarounds, each a `<details>` as on a capability's page; can we live without it from its `overlap`; and its decisions; then the decision buttons (`architecture-decide-buttons`).
+An architectural constraint's page SHALL show, in this order: its entry in full, the report's `text` rendered as Markdown (`repo-markdown`), in place of its statement and its `#### Untested` text; whether it is held, each enforcing rule with its state (current in green, pending in amber, unknown while the report is indexing or while the rule's state isn't known), or `No rule enforces it.` for an entry with none; what it costs, saying it is counted apart from the capabilities'; its workarounds, each a `<details>` as on a capability's page; can we live without it from its `overlap`; and its decisions; then the decision buttons (`architecture-decide-buttons`).
 
 #### Serves
 - capability/review-capability-cost
@@ -501,8 +617,13 @@ An architectural constraint's page SHALL show, in this order: its entry in full,
 - WHEN its page is shown
 - THEN the sections come in that order, the entry holds "Partly judgement.", `a/x` is drawn current and `a/y` pending, and the workaround's summary reads "Gate misfires"
 
+#### Scenario: no rule
+- GIVEN entry `u`, enforced by no rule
+- WHEN its page is shown
+- THEN it says `No rule enforces it.`
+
 ### Requirement: architecture-decide-buttons
-An architectural constraint's page SHALL offer the value and decision buttons `decide-buttons` describes, laid out as there, posting `{"version", "value", "decision"}` to the Worker's architecture decide route with the entry's version as shown, one request per tap and none while one is in flight, then loading the architecture report again from the Worker, never the copy kept for offline use: on 200 the page SHALL show the new decision, and on 409 say the entry changed since it was shown. The buttons SHALL be disabled offline, before a value is chosen and when the report's `signed` is true; then, and after a 422 whose `error` is `signed`, a note SHALL give `clm architecture decide <slug> --value high|medium|low --decision keep|cut|redesign|accept`, or the Worker's `command`.
+An architectural constraint's page SHALL offer the value and decision buttons `decide-buttons` describes, posting `{"version", "value", "decision"}` to the Worker's architecture decide route with the entry's version as shown, one request per tap and none while one is in flight, then loading the architecture report again through its caller and answering each outcome as a capability's buttons do: on 200 the page SHALL show the new decision, and on 409 say the entry changed since it was shown. The buttons SHALL be disabled offline, before a value is chosen and when the report's `signed` is true; then, and after a 422 whose `error` is `signed`, a note SHALL give `clm architecture decide <slug> --value high|medium|low --decision keep|cut|redesign|accept`, or the Worker's `command`.
 
 #### Serves
 - capability/review-capability-cost
@@ -523,29 +644,34 @@ An architectural constraint's page SHALL offer the value and decision buttons `d
 - THEN the decision buttons are disabled and the note gives `clm architecture decide e --value high|medium|low --decision keep|cut|redesign|accept`
 
 ### Requirement: says-architectural-constraint
-Every file under `web/src/` SHALL call an entry of `ARCHITECTURE.md` an architectural constraint, on screen and in comments, and none SHALL hold the old term (the word `architecture` followed by the word `requirement`, singular or plural, in any case). With no entries the Architecture view SHALL say `No architectural constraints: ARCHITECTURE.md holds none.`; with entries and none shown under "⚑ only", `No architectural constraint is flagged.`; and the page of a slug the report doesn't hold, `The report holds no architectural constraint <slug>.`
+The Architecture view SHALL call an entry of `ARCHITECTURE.md` an architectural constraint: its table's first column SHALL be headed `Constraint`. With no entries the Architecture view SHALL say `No architectural constraints: ARCHITECTURE.md holds none.`; with entries and none shown under "⚑ only", `No architectural constraint is flagged.`; and the page of a slug the report doesn't hold, `The report holds no architectural constraint <slug>.`
 
 #### Scenario: an empty report
 - GIVEN an architecture report with no entries
 - WHEN the Architecture view is shown
 - THEN it says `No architectural constraints: ARCHITECTURE.md holds none.`
 
-#### Scenario: the shipped app
-- GIVEN the repository
-- WHEN the web app's tests run
-- THEN no file under `web/src/` holds the old term
+#### Scenario: the list's heading
+- GIVEN an architecture report with entries, none flagged, and no entry `nope`
+- WHEN the Architecture view is shown, then with "⚑ only" on, and `nope`'s page is shown
+- THEN the table's first column is headed `Constraint`, the filtered view says `No architectural constraint is flagged.`, and the page says `The report holds no architectural constraint nope.`
 
 #### Serves
 - architecture/plain-terms
 - capability/follow-from-browser
 
 ### Requirement: says-component
-The text the web app shows SHALL say component and components, never the old words, as `component-words` defines them: its headings, labels, filters, notes and counts (the graph's and the repository header's component count, the Implementation view's `Components` section and `Pending components` stat, the backlog's component filter and picker, the PR view's `Components touched` and its note when no component changed, the inspector's empty note, and the capability and architecture pages' cost note, `a component's cost is split by its rules' share`). The JSON fields it reads and sends, CSS classes, element IDs and `data-` attributes, and the imports of Node.js modules are data or code, and keep their names (`component-words`). A test reads the string literals and template text in `web/src/` but its tests and fails naming the file, the line and the word for each old word `component-words` doesn't keep.
+The views SHALL say component and components where their text names one, never the old words `component-words` defines: the Implementation view's `Components` section, `Pending components` stat and `Nothing is pending: every component is up to its spec.`, the backlog's `Component` filter and its `<n> items across <m> components`, the PR view's `Components touched` and `No component changes.`, and the capability and architecture pages' and the Capabilities list's notes that a cost is split by the share of a component's rules.
 
 #### Scenario: the Implementation view
 - GIVEN a snapshot with two pending components
 - WHEN the Implementation view renders
 - THEN it shows the heading `Components` and the stat `Pending components`, and no shown text holds an old word
+
+#### Scenario: the other views
+- GIVEN a backlog of 3 items on 2 components, a review touching 2 components and one changing none, a capabilities report and an architecture report
+- WHEN the Backlog, each review, the Capabilities list, a capability's page and a constraint's page are drawn
+- THEN the Backlog shows the filter `Component` and `3 items across 2 components`, the reviews show `Components touched` and `No component changes.`, each cost note says a cost is split by the share of a component's rules, and no shown text holds an old word
 
 #### Serves
 - architecture/plain-terms
@@ -571,23 +697,18 @@ The graph view SHALL mark each component whose `spec` model entry has `oversized
 - THEN `a`'s card shows `⚠` and the `blocked` ring in rose
 
 ### Requirement: says-new-state-words
-No file under `web/src/`, its tests included, SHALL hold the old name `plain-terms-renames` gives for the component status `unbuilt` as a word of its own, nor the old name it gives for the backlog kind `workaround` in the forms `clm/retired-terms` lists it, after `clm` and a space or as `kind: <old name>`, matched as `clm/retired-terms` matches; the latter as a plain English word is free. The app SHALL show a component's status as the `spec` model gives it and map no other word to `unbuilt`: the model writes `unbuilt` and reads the old word only from files (`renamed-words-still-load`), so it never hands the app the old word. The doc comment on the type of a capability's open workaround flags SHALL call one `A workaround flag open on a capability`. A test that needs either old word SHALL build it from pieces, so the word never appears whole in the file.
+The app SHALL show a component's status as the `spec` model gives it and map no other word to `unbuilt`: the model writes `unbuilt` and reads the old word only from files (`renamed-words-still-load`), so it never hands the app the old word.
 
 #### Scenario: an unbuilt component
 - GIVEN a snapshot whose `spec` model gives component `b` the status `unbuilt`
 - WHEN the inspector opens on `b`
 - THEN its header names the status `unbuilt`
 
-#### Scenario: the shipped app
-- GIVEN the repository
-- WHEN the web app's tests run
-- THEN no file under `web/src/` holds the first old name as a word of its own or the second in either listed form, and a line using the second as a plain English word passes
-
 #### Serves
 - architecture/plain-terms
 
 ### Requirement: zoom-at-pointer
-Zooming the graph SHALL keep the point under the pointer where it is on screen: the wheel zooms around the pointer, a pinch around the midpoint between the two pointers, and the zoom buttons around the canvas's centre. The zoom's limits SHALL be unchanged.
+Zooming the graph SHALL keep the point under the pointer where it is on screen: the wheel zooms around the pointer, a pinch around the midpoint between the two pointers, and the zoom buttons around the canvas's centre. The zoom SHALL stay between 0.3 and 3 times. Fit SHALL scale the graph to the canvas's width, never above 1 times, centred across it, and a graph given no pan and zoom SHALL open fitted. A drag on the canvas, off the cards and boxes, SHALL pan it.
 
 #### Scenario: wheel over a card
 - GIVEN the spec graph with node `b`'s card under the pointer
@@ -599,12 +720,17 @@ Zooming the graph SHALL keep the point under the pointer where it is on screen: 
 - WHEN the person taps Zoom in
 - THEN that point of `a`'s card is still at the canvas's centre
 
+#### Scenario: fit and pan
+- GIVEN a graph whose stage is twice as wide as its canvas, and one half as wide
+- WHEN each is shown with no pan and zoom given, the first is zoomed in and out far past each end, then Fit is tapped, and the canvas is dragged 30 px right
+- THEN the first opens at 0.5 times, its zoom stops at 3 and at 0.3 times, Fit brings it back to 0.5, and the drag moves it 30 px right; and the second opens at 1 times, centred across its canvas
+
 #### Serves
 - capability/follow-from-browser
 - architecture/ui-quality
 
 ### Requirement: home-waiting-on-you
-The Home view SHALL list, in this order, each section left out when empty: **Review**, each spec branch whose review has `review` true and no approval in `approvals`, by name, linking to its review; **Answer**, each `question` item with `choices` and each `human-task` item, by title, linking to its page, with its answer buttons (`answer-buttons`); **Flagged**, each capability and architectural constraint whose report entry has `flagged` true, linking to its page; and **Answer in a session**, each other `question` item, linking to its page and saying it is answered in a `/clm:triage` session. Review counts only the reviews that have arrived. A Home with every section empty SHALL say nothing waits on the person. The number of entries in Review and Answer SHALL be the count the sidebar and tab bar badge Home with.
+The Home view SHALL list, in this order, each section left out when empty: **Review**, each spec branch whose review has `review` true and no approval in `approvals`, by name, linking to its review; **Answer**, each `question` item with `choices` and each `human-task` item, by title, linking to its page, with its answer buttons (`answer-buttons`); **Flagged**, each capability and architectural constraint whose report entry has `flagged` true, linking to its page; and **Answer in a session**, each other `question` item, linking to its page and saying it is answered in a `/clm:triage` session. Review counts only the reviews that have arrived. A Home with every section empty SHALL say nothing waits on the person. Its crumb SHALL name the repository as the snapshot names it, `<owner>/<repo>` (`web.worker/snapshot-names-its-repo`). The number of entries in Review and Answer SHALL be the count it gives its caller for Home's badge (`web/home-first`).
 
 #### Scenario: what waits
 - GIVEN repo `o/a` with spec branches `spec/x`, whose review needs review and has no approval, and `spec/y`, whose review needs review and has one; question `q` with choices `yes` and `no`; question `r` with none; `human-task` `h`; and a capabilities report flagging `c`
@@ -616,11 +742,17 @@ The Home view SHALL list, in this order, each section left out when empty: **Rev
 - WHEN Home is shown
 - THEN it says nothing waits on the person and lists no section
 
+#### Scenario: the crumb
+- GIVEN a snapshot of `o/a`
+- WHEN Home is shown
+- THEN its crumb reads `o/a`
+
 #### Serves
 - capability/follow-from-browser
 
 #### Needs
 - replica/snapshot-backlog-text
+- web.worker/snapshot-names-its-repo
 
 ### Requirement: backlog-item-page
 A backlog item's page, at `#/<owner>/<repo>/backlog/<slug>`, SHALL show its title, kind, priority, components, origin when it has one, the requirements it blocks, what holds it (`backlog-taken`), each open answer to it with the person part of its writer and its time, and its answer buttons (`answer-buttons`), then its body rendered as Markdown (`repo-markdown`). A slug the snapshot's backlog doesn't hold SHALL show that the item isn't in the backlog, with a link to the Backlog.
@@ -644,17 +776,17 @@ A backlog item's page, at `#/<owner>/<repo>/backlog/<slug>`, SHALL show its titl
 - web.worker/answers
 
 ### Requirement: answer-buttons
-A `question` item with `choices` SHALL offer one button per choice, in their order, and a `human-task` item one button, Done, which sends `done`; no other item SHALL offer any. A tap SHALL post `/answer` to `POST .../backlog/{slug}/answer` once, and none while one is in flight, then ask for the implementation state again, so the answer shows from the response's `answers`. The button of an answer the person gave (an answer whose `mine` is true) SHALL be drawn chosen, and tapping another SHALL replace it. A 422 or a 404 SHALL show why under the buttons and keep them enabled. The buttons SHALL be disabled offline.
+A `question` item with `choices` SHALL offer one button per choice, in their order, and a `human-task` item one button, Done, which sends `done`; no other item SHALL offer any, a `question` with no `choices` and an item of another kind that has `choices` included. A tap SHALL call the item's answer callback once with the item's slug and the choice's value, and not again while it runs, and SHALL show under the buttons the reason the callback gives, or `Not sent: offline.` when it fails, keeping the buttons enabled. The button of an answer the person gave (an answer to the item whose `mine` is true) SHALL be drawn chosen, and no button for another person's answer. The buttons SHALL be disabled offline.
 
 #### Scenario: answered
-- GIVEN item `q` with choices `yes` and `no`, online, and a Worker that answers 200 and then lists the answer `yes` by `alice/web` with `mine` true
-- WHEN `yes` is tapped twice in quick succession
-- THEN exactly one request posted `/answer` `"yes"` to `/api/repos/o/a/backlog/q/answer`, the implementation state was requested again, and `yes` is drawn chosen
+- GIVEN item `q` with choices `yes` and `no`, online, and an answer callback that answers that it went through, and then an implementation state listing the answer `yes` by `alice/web` with `mine` true, and `no` by `bob/web` with `mine` false
+- WHEN `yes` is tapped twice in quick succession, and the buttons are drawn with that state
+- THEN the callback was called once, with `q` and `yes`, and `yes` is drawn chosen and `no` isn't
 
 #### Scenario: done
 - GIVEN `human-task` item `h`
 - WHEN its page is shown and Done is tapped
-- THEN one request posted `/answer` `"done"` to `h`'s route
+- THEN the answer callback was called once, with `h` and `done`
 
 #### Scenario: offline
 - GIVEN item `q` with choices, offline
@@ -685,35 +817,40 @@ When a component is selected, the graph SHALL draw each edge from a component th
 - capability/see-project-state
 
 ### Requirement: inspector-overlay
-The component inspector SHALL open over the graph, never narrowing it: on desktop a drawer along the right edge at most 640 px wide and 90% of the window, scrolling within the window's height; on phones a bottom sheet. It SHALL close on its × button, on Escape and on selecting the selected component again, which also clears the selection, and its backlog items SHALL link to their pages.
-
-#### Scenario: desktop
-- GIVEN a 1280 px wide viewport on the graph
-- WHEN a component is selected
-- THEN the graph's canvas is as wide as before, the inspector overlaps it from the right edge and is at most 640 px wide, and Escape closes it
+The component inspector SHALL call its caller's close on its × button and on Escape while it is on the page, and not after it has left the page, and its backlog items SHALL link to their pages by the links its caller gives, drawn as plain text without them.
 
 #### Scenario: an item from the inspector
-- GIVEN component `a` with backlog item `dark-mode`
-- WHEN `a` is selected and `dark-mode` is tapped in the inspector
-- THEN the page at `#/o/a/backlog/dark-mode` is shown
+- GIVEN component `a` with backlog item `dark-mode`, and item links of the form `#/o/a/backlog/<slug>`
+- WHEN `a`'s inspector is shown
+- THEN `dark-mode` links to `#/o/a/backlog/dark-mode`
+
+#### Scenario: closing
+- GIVEN `a`'s inspector on the page, and another inspector drawn and then taken off the page
+- WHEN its × is tapped, then Escape is pressed
+- THEN `a`'s close was called once for the × and once for Escape, and the other inspector's not at all
 
 #### Serves
 - capability/see-project-state
 
 ### Requirement: repo-markdown
-Every text the app shows from the repository that the Worker gives as Markdown (a component's contract, a change's intent, a requirement's text, a backlog item's body, and a capability's or constraint's statement and `text`) SHALL be rendered as Markdown and sanitised before it reaches the page, in the lists and on the pages alike.
+Every text the app shows from the repository that the Worker gives as Markdown (a component's contract, a change's intent, a requirement's text, a backlog item's body, and a capability's or constraint's statement and `text`) SHALL be rendered as Markdown and sanitised before it reaches the page, in the lists and on the pages alike: script elements, event-handler attributes and `javascript:` links SHALL be dropped.
 
 #### Scenario: code in a statement
 - GIVEN a capabilities report whose capability `x` has the statement ``Run `clm land` <img src=x onerror=alert(1)>``
 - WHEN the list and `x`'s page are shown
 - THEN each shows `clm land` in a `code` element, no backtick, and no `onerror` attribute
 
+#### Scenario: what sanitising drops
+- GIVEN the Markdown `**bold** <script>alert(1)</script> [x](javascript:alert(1)) <a href="https://e" onclick="alert(1)">e</a>`
+- WHEN it is rendered
+- THEN `bold` is in a `strong` element, and no `script` element, `onclick` attribute or `javascript:` link is left
+
 #### Serves
 - capability/follow-from-browser
 - capability/see-project-state
 
 ### Requirement: worker-requests
-The views' requests to the Worker SHALL go through one module. A request answered 401 SHALL be sent once more, since a parallel request may have refreshed the session, and a second 401 SHALL report the person signed out; a `GET` that ends so SHALL also forget every answer kept for offline use. A successful `GET`'s answer SHALL be kept for offline use, unless its caller asks for it not to be, and no failed one. When the network fails, a `GET` that isn't a background refresh SHALL return the answer kept for that path with the time it was fetched, or report offline when none is kept. A `GET` made with `fresh` SHALL append `fresh=<delivery>` to its query and keep its answer under the path without it. A `GET` the Worker refuses SHALL fail carrying the HTTP status. A `POST` or `DELETE` SHALL send its body as JSON with `content-type: application/json`.
+The views' requests to the Worker SHALL go through one module. A request answered 401 SHALL be sent once more, since a parallel request may have refreshed the session, and a second 401 SHALL report the person signed out; a `GET` that ends so SHALL also forget every answer kept for offline use. A successful `GET`'s answer SHALL be kept for offline use, unless its caller asks for it not to be, and no failed one. When the network fails, a `GET` that isn't a background refresh SHALL return the answer kept for that path with the time it was fetched, or report offline when none is kept. A `GET` answered with a 5xx other than a 503 whose body is `{"preparing": <share>}` SHALL do the same, returning the kept answer with its time when it isn't a background refresh and one is kept, and otherwise fail carrying the status; a 503 `{"preparing": <share>}` SHALL fail carrying the status and the share. A `GET` made with `fresh` SHALL append `fresh=<delivery>` to its query, after `&` when the path already has one, and keep its answer under the path without it. Any other `GET` the Worker refuses SHALL fail carrying the HTTP status. A `POST` or `DELETE` SHALL send its body as JSON with `content-type: application/json`.
 
 #### Scenario: one 401, then answered
 - GIVEN a Worker that answers a `GET` 401 and then 200
@@ -744,6 +881,36 @@ The views' requests to the Worker SHALL go through one module. A request answere
 - GIVEN a Worker that answers a `GET` 404
 - WHEN the request is made
 - THEN it fails carrying the status 404, and nothing is kept
+
+#### Scenario: busy Worker
+- GIVEN an answer kept for `/p`, and a Worker that answers 502; then one that answers 503 `{"preparing": 0.4}`; and a path `/q?x=1` asked with `fresh` `d1`
+- WHEN `/p` is asked, and asked as a background refresh, while the Worker answers 502, then asked while it answers 503, and `/q?x=1` is asked
+- THEN the first returns the kept answer, the background refresh fails carrying 502, the third fails carrying 503 and the share 0.4, and the last goes to `/q?x=1&fresh=d1`
+
+#### Serves
+- capability/follow-from-browser
+
+### Requirement: inspector
+The component inspector SHALL show, for the selected component: its ID, with its status and `<current>/<total>` as the `spec` model gives them, or `indexing <n>%` while the snapshot's coverage is indexing; its title; its dependencies; its owners, as `Owned by <owners>`; each open spec branch whose review its caller has given that changes it, by name, with each element it changes and whether it is added, modified or removed; its contract as Markdown (`repo-markdown`); each change that touches it, with its status or `complete`, and its requirements current of total, or `coverage indexing` while the change's count isn't known; its work in flight (`inspector-pending`), reading `Loading work in flight…` until the implementation state arrives; and its backlog items, each by slug, kind and title. A section with nothing to show SHALL say so: `No open PR changes it.`, `Not in this snapshot.` for a component the snapshot's components lack, `No change touches it.` and `None.`
+
+#### Scenario: what it shows
+- GIVEN component `n`, `unbuilt` with 1 of 2 current, titled "N", depending on `a`, owned by `@x`, with contract `**Calls**`, changed by `spec/x`'s review (its Contract modified, its Design added, `n/r` added) and not by `spec/y`'s, touched by change `c1` (applied, 1 of 2 current) and change `c2` (count unknown), with backlog item `later`; and component `m`, which no review, change or item touches, absent from the snapshot's components
+- WHEN `n`'s inspector is shown before the implementation state arrives, and `m`'s after it
+- THEN `n`'s reads `unbuilt · 1/2`, "N", `a`, `Owned by @x`, `spec/x` with its Contract modified, its Design added and `n/r` added, and no `spec/y`, `Calls` in bold, `c1` with `1/2 requirements current` and `c2` with `coverage indexing`, `Loading work in flight…`, and `later`; and `m`'s says `No open PR changes it.`, `Not in this snapshot.`, `No change touches it.` and `None.`
+
+#### Serves
+- capability/see-project-state
+
+#### Needs
+- view/spec-view
+
+### Requirement: hash-routes
+The views' routes SHALL read as `#/<owner>/<repo>/<view>`, where the view is `graph`, `prs`, `build`, `backlog`, `capabilities` or `architecture`, and any other view, or none, reads as `graph`. Under `prs`, a branch given as one encoded segment SHALL name that branch's review when it starts `spec/`, followed by `graph` for its Graph tab or `full/<path>` for a file in full, the review's Document tab otherwise; any other branch reads as the PR list. `capabilities/<slug>`, `architecture/<slug>` and `backlog/<slug>` SHALL name a capability's, an architectural constraint's and a backlog item's page. A segment whose escape is malformed SHALL be read as written. The link the views make for a route SHALL read back as that route, and a review's Worker path SHALL be `branches/<branch>`, the name's slashes kept.
+
+#### Scenario: routes
+- GIVEN the routes `#/o/a/prs/spec%2Fx/full/specs/n/SPEC.md`, `#/o/a/prs/spec%2Fx/graph`, `#/o/a/nope`, `#/o/a/prs/main`, `#/o/a/backlog/later` and `#/o/a/capabilities/%E0%A4`
+- WHEN each is read, and the links made for each route read are read back
+- THEN the first names `o`, `a`, the review of `spec/x` and the file `specs/n/SPEC.md`, the second `spec/x`'s Graph tab, the third the graph, the fourth the PR list, the fifth `later`'s page, and the sixth the capability `%E0%A4`; each link reads back as its route; and `spec/x`'s Worker path is `branches/spec/x`
 
 #### Serves
 - capability/follow-from-browser
