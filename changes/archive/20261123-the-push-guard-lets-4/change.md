@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-push-guard-lets-git-push-origin-head-branch-from-main-reach]
 ---
 
