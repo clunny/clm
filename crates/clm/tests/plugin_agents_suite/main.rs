@@ -1,4 +1,4 @@
-//! The plugin's four read-only subagents under `plugin/agents/`.
+//! The plugin's four subagents under `plugin/agents/`, none with `Edit` or `Write`.
 // clm:reads plugin/agents/**
 
 use std::fs;
@@ -61,7 +61,8 @@ fn agent_gaps(agent: &str, fm: &serde_yaml::Value) -> Vec<String> {
     gaps
 }
 
-/// Check `agent`'s file as shipped, then with each editing tool added to its tools.
+/// Check `agent`'s file as shipped, then with each editing tool added to its tools, and
+/// with its name changed and its description emptied, so each check is seen to fail.
 fn check_read_only_agent(agent: &str) {
     let fm = frontmatter(&plugin().join(format!("agents/{agent}.md")));
     assert_eq!(agent_gaps(agent, &fm), Vec::<String>::new());
@@ -73,6 +74,18 @@ fn check_read_only_agent(agent: &str) {
             [format!("{agent}: may not have `{tool}`")]
         );
     }
+    let mut renamed = fm.clone();
+    renamed["name"] = "other".into();
+    assert_eq!(
+        agent_gaps(agent, &renamed),
+        [format!("{agent}: name must be `{agent}`")]
+    );
+    let mut undescribed = fm.clone();
+    undescribed["description"] = "".into();
+    assert_eq!(
+        agent_gaps(agent, &undescribed),
+        [format!("{agent}: needs a description")]
+    );
 }
 
 #[test]
