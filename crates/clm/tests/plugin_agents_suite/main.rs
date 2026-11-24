@@ -41,14 +41,14 @@ fn agent_tools(fm: &serde_yaml::Value) -> Vec<String> {
         .collect()
 }
 
-/// What an agent's frontmatter lacks: tools that leave out `Edit` and `Write`, and, when
-/// `named`, its `name` and a `description`. One line per gap, naming the agent.
-fn agent_gaps(agent: &str, fm: &serde_yaml::Value, named: bool) -> Vec<String> {
+/// What an agent's frontmatter lacks: its `name`, a non-empty `description`, and tools that
+/// leave out `Edit` and `Write`. One line per gap, naming the agent.
+fn agent_gaps(agent: &str, fm: &serde_yaml::Value) -> Vec<String> {
     let mut gaps = Vec::new();
-    if named && fm["name"] != agent {
+    if fm["name"] != agent {
         gaps.push(format!("{agent}: name must be `{agent}`"));
     }
-    if named && !fm["description"].as_str().is_some_and(|d| !d.is_empty()) {
+    if !fm["description"].as_str().is_some_and(|d| !d.is_empty()) {
         gaps.push(format!("{agent}: needs a description"));
     }
     let tools = agent_tools(fm);
@@ -62,14 +62,14 @@ fn agent_gaps(agent: &str, fm: &serde_yaml::Value, named: bool) -> Vec<String> {
 }
 
 /// Check `agent`'s file as shipped, then with each editing tool added to its tools.
-fn check_read_only_agent(agent: &str, named: bool) {
+fn check_read_only_agent(agent: &str) {
     let fm = frontmatter(&plugin().join(format!("agents/{agent}.md")));
-    assert_eq!(agent_gaps(agent, &fm, named), Vec::<String>::new());
+    assert_eq!(agent_gaps(agent, &fm), Vec::<String>::new());
     for tool in ["Edit", "Write"] {
         let mut editing = fm.clone();
         editing["tools"] = format!("{}, {tool}", fm["tools"].as_str().unwrap()).into();
         assert_eq!(
-            agent_gaps(agent, &editing, named),
+            agent_gaps(agent, &editing),
             [format!("{agent}: may not have `{tool}`")]
         );
     }
@@ -77,20 +77,20 @@ fn check_read_only_agent(agent: &str, named: bool) {
 
 #[test]
 fn spec_auditor() {
-    // req:plugin.agents/spec-auditor@b26c149a
-    check_read_only_agent("spec-auditor", true);
+    // req:plugin.agents/spec-auditor@3a5b1a67
+    check_read_only_agent("spec-auditor");
 }
 
 #[test]
 fn spec_slimmer() {
-    // req:plugin.agents/spec-slimmer@473b4f4e
-    check_read_only_agent("spec-slimmer", false);
+    // req:plugin.agents/spec-slimmer@eb082984
+    check_read_only_agent("spec-slimmer");
 }
 
 #[test]
 fn architecture_auditor() {
-    // req:plugin.agents/architecture-auditor@0378b82a
-    check_read_only_agent("architecture-auditor", true);
+    // req:plugin.agents/architecture-auditor@3eef0a5d
+    check_read_only_agent("architecture-auditor");
 }
 
 /// What `issue-verifier` asks of the verifier's tools: exactly `Read`, `Glob` and `Grep`.
@@ -112,7 +112,7 @@ fn verifier_tool_gaps(fm: &serde_yaml::Value) -> Vec<String> {
 
 #[test]
 fn issue_verifier() {
-    // req:plugin.agents/issue-verifier@070e9c3e
+    // req:plugin.agents/issue-verifier@fd670af4
     let fm = frontmatter(&plugin().join("agents/issue-verifier.md"));
     assert_eq!(fm["name"], "issue-verifier");
     assert!(fm["description"].as_str().is_some_and(|d| !d.is_empty()));
@@ -124,4 +124,16 @@ fn issue_verifier() {
         verifier_tool_gaps(&running),
         ["issue-verifier: may not have `Bash`"]
     );
+}
+
+#[test]
+fn launch_models() {
+    // req:plugin.agents/launch-models@5c6cd1bd
+    for agent in ["spec-auditor", "architecture-auditor", "spec-slimmer"] {
+        let fm = frontmatter(&plugin().join(format!("agents/{agent}.md")));
+        assert_eq!(
+            fm["model"], "sonnet",
+            "{agent}: frontmatter must set model: sonnet"
+        );
+    }
 }
