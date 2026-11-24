@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [plugin-hooks-guard-s-paths-still-name-a-test-file-its-build-deletes]
 ---
 
