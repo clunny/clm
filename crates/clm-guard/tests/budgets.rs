@@ -77,7 +77,7 @@ fn all_gone(pids: &Path, count: usize) {
 
 #[test]
 fn queries_and_lookups_that_outlast_their_budget_block() {
-    // req:plugin.hooks.guard/push-guard@2b88b434
+    // req:plugin.hooks.guard/push-guard@d1b155d4
     // req:plugin.hooks.guard/release-guard@1c7c5dad
     // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     let original = std::env::var("PATH").unwrap();

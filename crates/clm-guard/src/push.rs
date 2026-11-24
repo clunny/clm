@@ -23,6 +23,9 @@ pub(crate) enum Reach {
     /// It names no branch, or only `HEAD`, and a `--config-env` option, as written, takes a
     /// setting that could move where it goes from the environment, which the guard can't read.
     FromEnvironment(String),
+    /// It names no branch, or only `HEAD`, and the segment assigns this variable, which sets
+    /// configuration the guard doesn't read (`CONFIG_VARIABLES`).
+    SetByVariable(&'static str),
     /// It names no branch, or only `HEAD`, and git didn't answer within the budget.
     Unanswered,
 }
@@ -60,12 +63,26 @@ impl Reach {
                 "{lead}`{option}` takes a setting from the environment, which the guard can't \
                  read, and that setting could send the push to `main`"
             ),
+            Reach::SetByVariable(variable) => format!(
+                "{lead}the command sets `{variable}`, which gives git configuration the guard \
+                 doesn't read, and that configuration could send the push to `main`"
+            ),
         };
         Some(format!(
             "clm: {test}. Push your branch explicitly: `git push origin HEAD:<branch>`."
         ))
     }
 }
+
+/// The variables that set git configuration the guard doesn't read, in the order a reason
+/// names the first the segment assigns (`push-guard`). Each can also set `core.worktree` or
+/// `core.bare`, and none is passed to the queries.
+const CONFIG_VARIABLES: [&str; 4] = [
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+];
 
 /// Whether a refspec's destination reaches `main`: `main`, `heads/main`, `refs/heads/main`,
 /// empty (`:` pushes every matching branch), or a wildcard that can match `main`. The
@@ -122,11 +139,16 @@ pub fn reach<'a>(
     // The first `--config-env` option, as written, whose setting could move where a push of
     // the current branch goes; no `--config-env` option is passed to the queries.
     let mut from_environment: Option<String> = None;
-    // Whether the segment names another git directory or work tree, so the guard can't tell
-    // which repository it reaches (`push-guard`).
-    let mut elsewhere = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]
-        .iter()
-        .any(|n| command.assigned(n).is_some());
+    // The first variable the segment assigns that sets configuration the guard doesn't read.
+    let set_by_variable = CONFIG_VARIABLES
+        .into_iter()
+        .find(|n| command.assigned(n).is_some());
+    // Whether the segment names another git directory or work tree, or may through such a
+    // variable, so the guard can't tell which repository it reaches (`push-guard`).
+    let mut elsewhere = set_by_variable.is_some()
+        || ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]
+            .iter()
+            .any(|n| command.assigned(n).is_some());
     let mut i = 0;
     while let Some(t) = args.get(i).map(String::as_str) {
         let value = args.get(i + 1).map(String::as_str);
@@ -234,6 +256,9 @@ pub fn reach<'a>(
     // Decided without asking git, which couldn't see the setting either.
     if let Some(option) = from_environment {
         return settle(Reach::FromEnvironment(option), lost);
+    }
+    if let Some(variable) = set_by_variable {
+        return settle(Reach::SetByVariable(variable), lost);
     }
     let reach = query.as_ref()?.reach(bare).unwrap_or_else(Some)?;
     settle(reach, lost)
