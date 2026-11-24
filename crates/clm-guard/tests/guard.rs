@@ -1221,6 +1221,12 @@ fn the_guard_and_the_hook_judge_with_the_hooks_budgets() {
             rendered.stdout,
             "{event}"
         );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let expected = match rendered.stderr.as_str() {
+            "" => String::new(),
+            reason => format!("{reason}\n"),
+        };
+        assert_eq!(stderr, expected, "{event}");
     }
 }
 
@@ -1301,6 +1307,9 @@ fn an_approve_under_codex_says_to_use_the_humans_terminal() {
     );
     assert_eq!(out.exit_code, 2, "{out:?}");
     assert!(out.stderr.contains("own terminal"), "{out:?}");
+    // with the line `block-refuses-whole-command` adds to an ask it gives as a refusal
+    let last = out.stderr.lines().last().unwrap();
+    assert!(last.contains(WHOLE_LINE_REFUSED), "{out:?}");
 }
 
 #[test]
@@ -1516,6 +1525,12 @@ fn the_call_prints_its_help() {
             .find(|l| l.contains("--agent-harness <AGENT_HARNESS>"))
             .unwrap_or_else(|| panic!("{flag}: {help}"));
         assert!(option.contains("[default: claude-code]"), "{flag}: {help}");
+        assert!(
+            option.contains(
+                "The agent harness running the hook: `claude-code` (the default), `codex` or `none`"
+            ),
+            "{flag}: {help}"
+        );
     }
 }
 
