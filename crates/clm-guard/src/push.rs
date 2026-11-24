@@ -138,7 +138,8 @@ pub fn reach<'a>(
                 options.extend(value.map(|v| format!("{t}={v}")));
                 i += 1;
             }
-            "--namespace" => i += 1,
+            // Their values are no subcommand, and they don't move where a push goes.
+            "--namespace" | "--config-env" => i += 1,
             _ if t.starts_with("--git-dir=") || t.starts_with("--work-tree=") => {
                 elsewhere = true;
                 options.push(t.to_string())
@@ -160,9 +161,17 @@ pub fn reach<'a>(
         .into_iter()
         .filter_map(|n| command.assigned(n).map(|v| (n, OsStr::new(v))))
         .collect();
-    let query = checkout.map(|checkout| {
-        let mut checkout = checkout.to_path_buf();
-        for dir in &dirs {
+    // With no checkout from the walk (the guard's own directory is gone), the push's own
+    // last absolute `-C` gives one, and the directories after it join it (`approve-guard`).
+    let start = match checkout {
+        Some(checkout) => Some((checkout.to_path_buf(), &dirs[..])),
+        None => dirs
+            .iter()
+            .rposition(|d| Path::new(d).is_absolute())
+            .map(|k| (PathBuf::from(dirs[k]), &dirs[k + 1..])),
+    };
+    let query = start.map(|(mut checkout, dirs)| {
+        for dir in dirs {
             checkout.push(dir);
         }
         Query {
