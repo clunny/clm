@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-push-guard-lets-a-push-reach-main-through-include-path-matching-or-a-mapped-branch]
 ---
 

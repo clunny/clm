@@ -18,15 +18,20 @@ pub(crate) enum Reach {
     OnMain,
     /// It names no branch, and git says the branch pushes to `main` (`@{push}`).
     PushesTo(String),
-    /// It names no branch, or only `HEAD`, and a configured push refspec sends to `main`.
+    /// It names no branch, or a named one, and a configured push refspec sends to `main`.
     Configured(String),
-    /// It names no branch, or only `HEAD`, and a `--config-env` option, as written, takes a
-    /// setting that could move where it goes from the environment, which the guard can't read.
-    FromEnvironment(String),
-    /// It names no branch, or only `HEAD`, and the segment assigns this variable, which sets
-    /// configuration the guard doesn't read (`CONFIG_VARIABLES`).
+    /// It names this branch, whose upstream is `main`, under this `push.default`, `upstream`
+    /// or `tracking`.
+    Upstream(String, String),
+    /// It names no branch, and this setting, as `<key>=<value>`, pushes every branch.
+    EveryBranch(String),
+    /// It names no branch, or a named one, and a `--config-env` or include option, as
+    /// written, takes a setting the guard can't read that could move where it goes.
+    Unreadable(String),
+    /// It names no branch, or a named one, and the segment assigns this variable, which
+    /// sets configuration the guard doesn't read (`CONFIG_VARIABLES`).
     SetByVariable(&'static str),
-    /// It names no branch, or only `HEAD`, and git didn't answer within the budget.
+    /// It names no branch, or a named one, and git didn't answer within the budget.
     Unanswered,
 }
 
@@ -59,9 +64,23 @@ impl Reach {
             Reach::Configured(refspec) => {
                 format!("{lead}a configured push refspec sends to `main` (`{refspec}`)")
             }
-            Reach::FromEnvironment(option) => format!(
-                "{lead}`{option}` takes a setting from the environment, which the guard can't \
-                 read, and that setting could send the push to `main`"
+            Reach::Upstream(branch, mode) => {
+                let alias = if mode == "tracking" {
+                    ", the old name of `upstream`"
+                } else {
+                    ""
+                };
+                format!(
+                    "{lead}the branch `{branch}`'s upstream is `main`, and git pushes it there \
+                     under `push.default={mode}`{alias}"
+                )
+            }
+            Reach::EveryBranch(setting) => {
+                format!("{lead}`{setting}` makes git push every branch, `main` among them")
+            }
+            Reach::Unreadable(option) => format!(
+                "{lead}`{option}` takes a setting the guard can't read, and that setting could \
+                 send the push to `main`"
             ),
             Reach::SetByVariable(variable) => format!(
                 "{lead}the command sets `{variable}`, which gives git configuration the guard \
@@ -136,9 +155,9 @@ pub fn reach<'a>(
     // decide where a push goes are passed to the queries.
     let mut dirs: Vec<&str> = Vec::new();
     let mut options: Vec<String> = Vec::new();
-    // The first `--config-env` option, as written, whose setting could move where a push of
-    // the current branch goes; no `--config-env` option is passed to the queries.
-    let mut from_environment: Option<String> = None;
+    // The first `--config-env` or include option, as written, whose setting could move where
+    // a push goes and which the guard can't read; none of them is passed to the queries.
+    let mut unreadable: Option<String> = None;
     // The first variable the segment assigns that sets configuration the guard doesn't read.
     let set_by_variable = CONFIG_VARIABLES
         .into_iter()
@@ -165,6 +184,9 @@ pub fn reach<'a>(
                 if let Some(v) = value.filter(|_| name.is_some_and(decides_push)) {
                     options.extend(["-c".to_string(), v.to_string()]);
                 }
+                if let Some(v) = value.filter(|_| name.is_some_and(includes)) {
+                    unreadable.get_or_insert_with(|| format!("{t} {v}"));
+                }
                 i += 1;
             }
             "--git-dir" | "--work-tree" => {
@@ -177,13 +199,13 @@ pub fn reach<'a>(
             "--config-env" => {
                 if let Some(v) = value {
                     let written = format!("{t} {v}");
-                    config_env(&mut elsewhere, &mut from_environment, v, written);
+                    config_env(&mut elsewhere, &mut unreadable, v, written);
                 }
                 i += 1;
             }
             _ if t.starts_with("--config-env=") => {
                 let v = &t["--config-env=".len()..];
-                config_env(&mut elsewhere, &mut from_environment, v, t.to_string());
+                config_env(&mut elsewhere, &mut unreadable, v, t.to_string());
             }
             _ if t.starts_with("--git-dir=") || t.starts_with("--work-tree=") => {
                 elsewhere = true;
@@ -249,44 +271,80 @@ pub fn reach<'a>(
     {
         return settle(Reach::Explicit, None);
     }
+    // Only a push with no refspec or a named one goes where settings say.
     let bare = refspecs.is_empty();
-    if !(bare || matches!(refspecs, ["HEAD" | "@"])) {
+    if !bare && !refspecs.iter().any(|r| named(r)) {
         return None;
     }
     // Decided without asking git, which couldn't see the setting either.
-    if let Some(option) = from_environment {
-        return settle(Reach::FromEnvironment(option), lost);
+    if let Some(option) = unreadable {
+        return settle(Reach::Unreadable(option), lost);
     }
     if let Some(variable) = set_by_variable {
         return settle(Reach::SetByVariable(variable), lost);
     }
-    let reach = query.as_ref()?.reach(bare).unwrap_or_else(Some)?;
+    let push = Push {
+        bare,
+        head_only: refspecs.iter().all(|r| matches!(*r, "HEAD" | "@")),
+        branches: refspecs
+            .iter()
+            .filter(|r| named(r) && !matches!(**r, "HEAD" | "@"))
+            .map(|r| {
+                let r = r.strip_prefix('+').unwrap_or(r);
+                r.strip_prefix("refs/heads/")
+                    .or_else(|| r.strip_prefix("heads/"))
+                    .unwrap_or(r)
+            })
+            .collect(),
+    };
+    let reach = query.as_ref()?.reach(&push).unwrap_or_else(Some)?;
     settle(reach, lost)
 }
 
+/// Whether a refspec is named: `HEAD`, `@` or a branch's name, which git may map through
+/// `remote.<name>.push` or the branch's upstream. One holding a `:`, a `*` or an expansion
+/// is judged as written.
+fn named(refspec: &str) -> bool {
+    !refspec.contains([':', '*', '$', '`'])
+}
+
+/// A push with no refspec or a named one, as its queries judge it.
+struct Push<'a> {
+    /// It has no refspec.
+    bare: bool,
+    /// It has no refspec, or only `HEAD` and `@`.
+    head_only: bool,
+    /// The branches its named refspecs other than `HEAD` and `@` name.
+    branches: Vec<&'a str>,
+}
+
 /// Reads a `--config-env` option's `value`, `<name>=<variable>`, its name being the part
-/// before its last `=`: one naming `core.worktree` or `core.bare` names another work tree
+/// before its last `=`: one that may move the repository names another work tree
 /// (`elsewhere`), and the first whose name may move where a push goes is kept, as
-/// `written`, in `from_environment`. Neither is passed to the queries, since the guard can't
-/// read the variable.
-fn config_env(
-    elsewhere: &mut bool,
-    from_environment: &mut Option<String>,
-    value: &str,
-    written: String,
-) {
+/// `written`, in `unreadable`. Neither is passed to the queries, since the guard can't read
+/// the variable.
+fn config_env(elsewhere: &mut bool, unreadable: &mut Option<String>, value: &str, written: String) {
     let name = value.rsplit_once('=').map_or(value, |(name, _)| name);
     *elsewhere |= moves_repository(name);
-    if from_environment.is_none() && decides_push(name) {
-        *from_environment = Some(written);
+    if unreadable.is_none() && (decides_push(name) || includes(name)) {
+        *unreadable = Some(written);
     }
 }
 
-/// Whether a setting's `name` moves the repository: `core.worktree` or `core.bare`.
+/// Whether a setting's `name` may move the repository: `core.worktree`, `core.bare`, or an
+/// include, whose file can set either.
 fn moves_repository(name: &str) -> bool {
-    ["core.worktree", "core.bare"]
-        .iter()
-        .any(|n| name.eq_ignore_ascii_case(n))
+    includes(name)
+        || ["core.worktree", "core.bare"]
+            .iter()
+            .any(|n| name.eq_ignore_ascii_case(n))
+}
+
+/// Whether a setting's `name` includes a config file, which can set any setting:
+/// `include.path` or `includeIf.<condition>.path`, without regard to ASCII case.
+fn includes(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.starts_with("include.") || name.starts_with("includeif.")
 }
 
 /// Whether a setting's `name` may move where a push goes: those under `push.`, `remote.`
@@ -327,26 +385,66 @@ impl Query<'_> {
         matches!(found, Ok(Some(out)) if out.is_empty())
     }
 
-    /// How a push with no refspec (`bare`) or only `HEAD` reaches `main`, by asking git;
+    /// How a push with no refspec or a named one reaches `main`, by asking git;
     /// `Err(Reach::Unanswered)` when a query runs out of the budget.
-    fn reach(&self, bare: bool) -> Result<Option<Reach>, Reach> {
-        if self.ask(&["symbolic-ref", "-q", "HEAD"])?.as_deref() == Some("refs/heads/main") {
+    fn reach(&self, push: &Push) -> Result<Option<Reach>, Reach> {
+        if push.head_only
+            && self
+                .ask(&["symbolic-ref", "-q", "HEAD"])?
+                .as_deref()
+                .map(str::trim)
+                == Some("refs/heads/main")
+        {
             return Ok(Some(Reach::OnMain));
         }
-        let configured = self.ask(&["config", "--get-regexp", r"^remote\..*\.push$"])?;
-        if let Some(refspec) = configured
-            .iter()
-            .flat_map(|out| out.lines())
-            .filter_map(|line| line.split_once(' ').map(|(_, v)| v.trim()))
-            .find(|v| reaches_main(v))
-        {
-            return Ok(Some(Reach::Configured(refspec.to_string())));
+        let settings = self.settings()?;
+        let values = |key: String| {
+            settings
+                .iter()
+                .filter(move |(k, _)| *k == key)
+                .map(|(_, v)| v.as_str())
+        };
+        let of = |section: &'static str, var: &'static str| {
+            settings
+                .iter()
+                .filter(move |(k, _)| k.starts_with(section) && k.ends_with(var))
+        };
+        if let Some((_, refspec)) = of("remote.", ".push").find(|(_, v)| reaches_main(v)) {
+            return Ok(Some(Reach::Configured(refspec.clone())));
         }
-        // Only `push.default` and a configured refspec move where a bare `HEAD` goes.
-        if !bare {
+        let default = || values("push.default".to_string());
+        if let Some(mode) = default().find(|v| matches!(*v, "upstream" | "tracking"))
+            && let Some(branch) = push.branches.iter().find(|b| {
+                values(format!("branch.{b}.merge"))
+                    .any(|v| matches!(v, "main" | "heads/main" | "refs/heads/main"))
+            })
+        {
+            return Ok(Some(Reach::Upstream(branch.to_string(), mode.to_string())));
+        }
+        // Only `push.default` and a configured refspec move where a bare `HEAD` or a named
+        // branch goes.
+        if !push.bare {
             return Ok(None);
         }
+        if default().any(|v| v == "matching") {
+            return Ok(Some(Reach::EveryBranch(
+                "push.default=matching".to_string(),
+            )));
+        }
+        let mirrors = |v: &str| {
+            !["false", "no", "off", "0"]
+                .iter()
+                .any(|f| v.eq_ignore_ascii_case(f))
+        };
+        if let Some((key, value)) = of("remote.", ".mirror").find(|(_, v)| mirrors(v)) {
+            let setting = match value.as_str() {
+                "" => key.clone(),
+                value => format!("{key}={value}"),
+            };
+            return Ok(Some(Reach::EveryBranch(setting)));
+        }
         let to = self.ask(&["rev-parse", "--symbolic-full-name", "@{push}"])?;
+        let to = to.map(|to| to.trim().to_string());
         let to_main = |to: &String| {
             to.strip_prefix("refs/remotes/")
                 .and_then(|r| r.strip_suffix("/main"))
@@ -355,7 +453,24 @@ impl Query<'_> {
         Ok(to.filter(to_main).map(Reach::PushesTo))
     }
 
-    /// The query's trimmed output; `Ok(None)` when it fails, which decides nothing, and
+    /// The settings query's entries, as key and value, every one of a key in the order git
+    /// prints them; a setting with no value has an empty one. A failed query, as when no
+    /// setting matches, has none.
+    fn settings(&self) -> Result<Vec<(String, String)>, Reach> {
+        let pattern = r"^(push\.default|remote\..*\.(push|mirror)|branch\..*\.merge)$";
+        let out = self.ask(&["config", "-z", "--get-regexp", pattern])?;
+        Ok(out
+            .iter()
+            .flat_map(|out| out.split('\0'))
+            .filter(|entry| !entry.is_empty())
+            .map(|entry| {
+                let (key, value) = entry.split_once('\n').unwrap_or((entry, ""));
+                (key.to_string(), value.to_string())
+            })
+            .collect())
+    }
+
+    /// The query's output as it printed it; `Ok(None)` when it fails, which decides nothing, and
     /// `Err(Reach::Unanswered)` when it outlasts the budget or the budget is spent before
     /// it starts, which `run_within` reports alike.
     fn ask(&self, args: &[&str]) -> Result<Option<String>, Reach> {
@@ -367,7 +482,7 @@ impl Query<'_> {
         };
         let limit = self.budget.remaining();
         match clm_git::run_within(&self.checkout, "git", &all, options, limit) {
-            Ok(out) => Ok(Some(String::from_utf8_lossy(&out).trim().to_string())),
+            Ok(out) => Ok(Some(String::from_utf8_lossy(&out).into_owned())),
             Err(clm_git::Error::TimedOut { .. }) => Err(Reach::Unanswered),
             Err(_) => Ok(None),
         }
