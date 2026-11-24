@@ -24,3 +24,5 @@ resolves: [the-push-guard-lets-a-push-through-whose-settings-come-by-git-s]
 ## Constraints
 
 Edge cases and workarounds: none. The subcommand is already found past `--config-env`'s value (`push-guard` as it stands), so the new case reads options the guard already walks. A `--config-env` after the subcommand is a `git push` option git rejects, so only those before it count.
+
+Settled by the builder check: the new case needs no git query, so it decides with no checkout too, before any query and spending none of the budget; the reason quotes the first such option as written (`--config-env=PUSH.DEFAULT=U`); a `--config-env` value with no `=`, which git refuses, matches no name.
