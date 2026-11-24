@@ -13,14 +13,19 @@ tmp=
 cache=
 # No binary: say how to get one, and exit 1. A hook exits 0 instead, so a missing binary
 # never breaks a session, and stays silent except at session start, which says the guard
-# is off (say-guard-is-off): SessionStart's stdout reaches Claude's context. A hook also
-# marks the failure, so for the next hour hooks skip the download instead of retrying it
-# on every tool call.
+# is off (say-guard-is-off): SessionStart's stdout reaches Claude's context. A hook that
+# tried the download also marks the failure, so for the next hour hooks skip the download
+# instead of retrying it on every tool call; one that skipped it leaves the mark alone, so
+# the hour ends. The mark is removed and written anew with `touch`, which can fail without
+# ending the script, as a failed redirection on `:` would under dash.
 fail() {
-  [ -n "$tmp" ] && rm -rf "$tmp"
+  [ -n "$tmp" ] && rm -rf "$tmp" 2>/dev/null
   install="cargo install --git https://github.com/clunny/clm --tag v${version:-<version>} clm"
   if [ "${1:-}" = hook ]; then
-    [ -d "$cache" ] && : > "$cache/.unavailable"
+    if [ -z "${skipped:-}" ] && [ -n "$cache" ] && [ -d "$cache" ]; then
+      rm -f "$cache/.unavailable" 2>/dev/null
+      touch "$cache/.unavailable" 2>/dev/null
+    fi
     if [ "${2:-}" = session-start ]; then
       echo "clm: no clm binary ($reason), so the CLM state and the guard on \`clm approve\` are unavailable. Install it with: $install, and set CLM_BIN."
     fi
@@ -33,9 +38,13 @@ fail() {
 }
 
 version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-  "$root/.claude-plugin/plugin.json" | head -n 1)
+  "$root/.claude-plugin/plugin.json" 2>/dev/null | head -n 1)
 reason="can't read the version from $root/.claude-plugin/plugin.json"
 [ -n "$version" ] || fail "$@"
+reason="XDG_CACHE_HOME and HOME are both unset or empty"
+if [ -z "${XDG_CACHE_HOME:-}" ] && [ -z "${HOME:-}" ]; then
+  fail "$@"
+fi
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/clm/$version"
 # Each target is one `target=<target>` assignment, which the release's prepare step reads
 # (shim-targets). Any other platform has no prebuilt binary.
@@ -51,16 +60,18 @@ bin="$cache/clm"
 if [ ! -x "$bin" ]; then
   reason="a recent download failed"
   if [ "${1:-}" = hook ] && [ -n "$(find "$cache/.unavailable" -mmin -60 2>/dev/null)" ]; then
+    skipped=1
     fail "$@"
   fi
   reason="there's no prebuilt clm for $(uname -s) $(uname -m)"
   [ -n "$target" ] || fail "$@"
   asset="clm-$target.tar.gz"
   reason="can't create $cache"
-  mkdir -p "$cache" || fail "$@"
+  mkdir -p "$cache" 2>/dev/null || fail "$@"
   # Download into a temporary directory inside the cache, so the final move is atomic and
   # an interrupted download never leaves a bad binary.
-  tmp=$(mktemp -d "$cache/.download.XXXXXX") || fail "$@"
+  reason="can't write to $cache"
+  tmp=$(mktemp -d "$cache/.download.XXXXXX" 2>/dev/null) || fail "$@"
   reason="can't download $asset for v$version with curl"
   url="https://github.com/clunny/clm/releases/download/v$version"
   for file in "$asset" "$asset.sha256"; do
@@ -74,8 +85,8 @@ if [ ! -x "$bin" ]; then
   fi
   reason="$asset holds no clm"
   tar xzf "$tmp/$asset" -C "$tmp" clm >/dev/null 2>&1 && [ -f "$tmp/clm" ] || fail "$@"
-  chmod +x "$tmp/clm" && mv -f "$tmp/clm" "$bin" || fail "$@"
-  rm -rf "$tmp" "$cache/.unavailable"
+  chmod +x "$tmp/clm" 2>/dev/null && mv -f "$tmp/clm" "$bin" 2>/dev/null || fail "$@"
+  rm -rf "$tmp" "$cache/.unavailable" 2>/dev/null
 fi
 
 exec "$bin" "$@"

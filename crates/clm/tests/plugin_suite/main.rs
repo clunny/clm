@@ -1,8 +1,6 @@
 //! The plugin under `plugin/`: its package, hooks, skills, agent and `bin/clm` shim.
-// clm:reads docs/guide/**
-// clm:reads docs/spec-format.md
 // clm:reads plugin/skills/**
-// clm:reads plugin/agents/**
+// clm:reads plugin/commands/**
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -47,11 +45,20 @@ fn assert_workspace_version(manifest: &Value, plugin: &str) {
 
 #[test]
 fn package() {
-    // req:plugin/package@c9c402a7
+    // req:plugin/package@ce03107e
     let market = json(&repo().join(".claude-plugin/marketplace.json"));
-    let listed = market["plugins"].as_array().unwrap();
-    assert_eq!(listed[0]["name"], "clm", "{market}");
-    assert_eq!(listed[0]["source"], "./plugin");
+    // two plugins: `clm`, then `clm-panel`, and no other.
+    let listed: Vec<(&str, &str)> = market["plugins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (p["name"].as_str().unwrap(), p["source"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        listed,
+        [("clm", "./plugin"), ("clm-panel", "./plugin-panel")],
+        "{market}"
+    );
     let manifest = json(&plugin().join(".claude-plugin/plugin.json"));
     assert_eq!(manifest["name"], "clm");
     assert_workspace_version(&manifest, "plugin");
@@ -59,7 +66,7 @@ fn package() {
 
 #[test]
 fn codex_package() {
-    // req:plugin/codex-package@88f0c401
+    // req:plugin/codex-package@32fd657b
     // clm:reads .agents/plugins/marketplace.json
     // clm:reads plugin/.codex-plugin/plugin.json
     let market = json(&repo().join(".agents/plugins/marketplace.json"));
@@ -68,6 +75,7 @@ fn codex_package() {
         .iter()
         .find(|p| p["name"] == "clm")
         .expect("clm listed");
+    assert_eq!(clm["source"]["source"], "local", "{market}");
     assert_eq!(clm["source"]["path"], "./plugin", "{market}");
     let manifest = json(&plugin().join(".codex-plugin/plugin.json"));
     assert_eq!(manifest["name"], "clm");
@@ -90,7 +98,7 @@ fn codex_package() {
 
 #[test]
 fn manifest_owner() {
-    // req:plugin/manifest-owner@17c45976
+    // req:plugin/manifest-owner@6e020597
     let manifest = json(&plugin().join(".claude-plugin/plugin.json"));
     assert_eq!(manifest["author"]["name"], "Christopher Lunny");
     assert_eq!(manifest["license"], "MIT");
@@ -100,7 +108,7 @@ fn manifest_owner() {
 
 #[test]
 fn hooks_wired() {
-    // req:plugin/hooks-wired@fe0e2818
+    // req:plugin/hooks-wired@f14fccf0
     let hooks = json(&plugin().join("hooks/hooks.json"));
     let commands = |event: &str, matcher: Option<&str>| -> Vec<String> {
         hooks["hooks"][event]
@@ -122,6 +130,17 @@ fn hooks_wired() {
         [format!("{launcher}session-start")]
     );
     assert_eq!(commands("Stop", None), [format!("{launcher}autosync")]);
+    // autosync bounded
+    let stop: Vec<&Value> = hooks["hooks"]["Stop"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|g| g["hooks"].as_array().unwrap().iter())
+        .collect();
+    assert_eq!(stop.len(), 1, "{hooks}");
+    assert_eq!(stop[0]["timeout"], 30, "{hooks}");
+    // no hooks module in clm
+    assert!(hooks.get("modules").is_none(), "{hooks}");
 }
 
 #[test]
@@ -170,6 +189,16 @@ fn frontmatter(path: &Path) -> serde_yaml::Value {
     serde_yaml::from_str(yaml).unwrap()
 }
 
+/// Whether a markdown file exists with a non-empty `description` in its frontmatter.
+fn described(file: &Path) -> bool {
+    fs::read_to_string(file).ok().is_some_and(|text| {
+        text.strip_prefix("---\n")
+            .and_then(|rest| rest.split_once("\n---\n"))
+            .and_then(|(yaml, _)| serde_yaml::from_str::<serde_yaml::Value>(yaml).ok())
+            .is_some_and(|fm| fm["description"].as_str().is_some_and(|d| !d.is_empty()))
+    })
+}
+
 /// The skills `skills` lists, and no others.
 const SKILLS: [&str; 10] = [
     "build",
@@ -188,14 +217,7 @@ const SKILLS: [&str; 10] = [
 fn skill_gaps(dir: &Path) -> Vec<String> {
     let mut gaps = Vec::new();
     for skill in SKILLS {
-        let file = dir.join(skill).join("SKILL.md");
-        let described = fs::read_to_string(&file).ok().is_some_and(|text| {
-            text.strip_prefix("---\n")
-                .and_then(|rest| rest.split_once("\n---\n"))
-                .and_then(|(yaml, _)| serde_yaml::from_str::<serde_yaml::Value>(yaml).ok())
-                .is_some_and(|fm| fm["description"].as_str().is_some_and(|d| !d.is_empty()))
-        });
-        if !described {
+        if !described(&dir.join(skill).join("SKILL.md")) {
             gaps.push(format!(
                 "{skill}: skills/{skill}/SKILL.md has no description"
             ));
@@ -216,7 +238,7 @@ fn skill_gaps(dir: &Path) -> Vec<String> {
 
 #[test]
 fn skills() {
-    // req:plugin/skills@69efdd01
+    // req:plugin/skills@43f0b337
     assert_eq!(skill_gaps(&plugin().join("skills")), Vec::<String>::new());
     // skill without a description
     let tmp = TempDir::new().unwrap();
@@ -257,84 +279,48 @@ fn skills() {
     );
 }
 
-/// The pages `clm guide` prints: `docs/guide/<page>.md`, `index` for its README, and
-/// `spec-format` for `docs/spec-format.md`.
-fn guide_pages() -> Vec<String> {
-    let mut pages: Vec<String> = fs::read_dir(repo().join("docs/guide"))
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-        .filter_map(|name| name.strip_suffix(".md").map(str::to_owned))
-        .map(|page| {
-            if page == "README" {
-                "index".to_owned()
-            } else {
-                page
-            }
-        })
-        .collect();
-    pages.push("spec-format".to_owned());
-    // `constraints` is generated from the carried entries of `ARCHITECTURE.md`
-    // (`init/guide-constraints-page`).
-    pages.push("constraints".to_owned());
-    pages.sort();
-    pages
-}
-
-/// What `method-pointers` asks of every skill and agent: each `clm guide <page>` it names
-/// is one of `pages`. One line per gap naming the file and text.
-fn guide_gaps(name: &str, text: &str, pages: &[String]) -> Vec<String> {
-    let mut gaps: Vec<String> = Vec::new();
-    for (at, needle) in text.match_indices("clm guide ") {
-        let page: String = text[at + needle.len()..]
-            .chars()
-            .take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-')
-            .collect();
-        if !page.is_empty() && !pages.contains(&page) {
-            gaps.push(format!(
-                "{name}: names `clm guide {page}`, no such page {page}"
-            ));
-        }
+/// What `view-command` asks of a plugin's `commands/` directory, one line per gap naming
+/// the command.
+fn command_gaps(dir: &Path) -> Vec<String> {
+    if described(&dir.join("view.md")) {
+        Vec::new()
+    } else {
+        vec!["view: commands/view.md has no description".to_owned()]
     }
-    gaps
 }
 
 #[test]
-fn skills_point_at_the_guide() {
-    // req:plugin/method-pointers@3c5ff1a8
-    let pages = guide_pages();
-    let mut files: Vec<PathBuf> = fs::read_dir(plugin().join("skills"))
-        .unwrap()
-        .map(|entry| entry.unwrap().path().join("SKILL.md"))
-        .collect();
-    files.extend(
-        fs::read_dir(plugin().join("agents"))
-            .unwrap()
-            .map(|entry| entry.unwrap().path()),
+fn view_command() {
+    // req:plugin/view-command@3a0c7ead
+    assert_eq!(
+        command_gaps(&plugin().join("commands")),
+        Vec::<String>::new()
     );
-    assert!(files.len() > SKILLS.len(), "{files:?}");
-    for file in &files {
-        let text = fs::read_to_string(file).unwrap();
-        assert_eq!(
-            guide_gaps(&file.display().to_string(), &text, &pages),
-            Vec::<String>::new()
-        );
-    }
-    // a page that doesn't exist
-    let gaps = guide_gaps("skills/x/SKILL.md", "Run `clm guide no-such-page`.", &pages);
-    assert!(
-        gaps.len() == 1
-            && gaps[0].contains("no-such-page")
-            && gaps[0].contains("skills/x/SKILL.md"),
-        "{gaps:?}"
-    );
-    // `index` is the guide's README, and `constraints` is generated.
-    for page in ["index", "constraints", "spec-format"] {
-        assert!(pages.contains(&page.to_owned()), "{pages:?}");
-        assert!(guide_gaps("x", &format!("Run `clm guide {page}`."), &pages).is_empty());
-    }
-    assert!(!pages.contains(&"README".to_owned()), "{pages:?}");
-    assert!(guide_gaps("x", "Run `clm guide <page>`.", &pages).is_empty());
-    assert!(guide_gaps("x", "Run `clm guide spec-format`.", &pages).is_empty());
+    // command without a description: missing, then without one, then with an empty one.
+    let tmp = TempDir::new().unwrap();
+    let gap = |dir: &Path| {
+        let gaps = command_gaps(dir);
+        assert!(gaps.len() == 1 && gaps[0].starts_with("view:"), "{gaps:?}");
+    };
+    gap(tmp.path());
+    fs::write(
+        tmp.path().join("view.md"),
+        "---\nargument-hint: x\n---\nbody\n",
+    )
+    .unwrap();
+    gap(tmp.path());
+    fs::write(
+        tmp.path().join("view.md"),
+        "---\ndescription: \"\"\n---\nbody\n",
+    )
+    .unwrap();
+    gap(tmp.path());
+    fs::write(
+        tmp.path().join("view.md"),
+        "---\ndescription: x\n---\nbody\n",
+    )
+    .unwrap();
+    assert!(command_gaps(tmp.path()).is_empty());
 }
 
 #[test]
@@ -453,21 +439,62 @@ impl Shim {
     }
 
     fn run(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
+        self.run_unset(args, env, &[])
+    }
+
+    /// Runs the shim with `env` set and the variables `unset` removed, after the harness's own.
+    fn run_unset(&self, args: &[&str], env: &[(&str, &str)], unset: &[&str]) -> Output {
         let path = format!(
             "{}:{}",
             self.path("fakebin").display(),
             std::env::var("PATH").unwrap()
         );
-        Command::new(self.path("plugin/bin/clm"))
+        let mut command = Command::new(self.path("plugin/bin/clm"));
+        command
             .args(args)
             .env("PATH", path)
             .env("SHIM_TEST", self.dir.path())
             .env("XDG_CACHE_HOME", self.path("cache"))
             .env_remove("CLM_BIN")
-            .envs(env.iter().copied())
-            .stdin(Stdio::null())
-            .output()
+            .envs(env.iter().copied());
+        for name in unset {
+            command.env_remove(name);
+        }
+        command.stdin(Stdio::null()).output().unwrap()
+    }
+
+    /// The version's cache directory.
+    fn version_cache(&self) -> PathBuf {
+        self.path("cache/clm/9.9.9")
+    }
+
+    /// Ages the record of a failed download to `minutes` ago.
+    fn age_mark(&self, minutes: u64) {
+        let ago = std::time::SystemTime::now() - std::time::Duration::from_secs(minutes * 60);
+        fs::File::open(self.version_cache().join(".unavailable"))
             .unwrap()
+            .set_modified(ago)
+            .unwrap();
+    }
+
+    /// When the record of a failed download was last written.
+    fn mark_time(&self) -> std::time::SystemTime {
+        fs::metadata(self.version_cache().join(".unavailable"))
+            .unwrap()
+            .modified()
+            .unwrap()
+    }
+
+    /// The names the version's cache directory holds, sorted.
+    fn cache_entries(&self) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(self.version_cache())
+            .map(|dir| {
+                dir.map(|e| e.unwrap().file_name().into_string().unwrap())
+                    .collect()
+            })
+            .unwrap_or_default();
+        names.sort();
+        names
     }
 
     fn read(&self, rel: &str) -> String {
@@ -489,7 +516,7 @@ impl Shim {
 
 #[test]
 fn shim_first_use_downloads_once() {
-    // req:plugin/binary-shim@38609dbc
+    // req:plugin/binary-shim@48d0adf8
     let shim = Shim::new();
     shim.serve(false);
     for _ in 0..2 {
@@ -520,7 +547,7 @@ fn shim_first_use_downloads_once() {
 
 #[test]
 fn shim_bad_checksum_caches_nothing() {
-    // req:plugin/binary-shim@38609dbc
+    // req:plugin/binary-shim@48d0adf8
     let shim = Shim::new();
     shim.serve(true);
     let out = shim.run(&["status"], &[]);
@@ -531,7 +558,7 @@ fn shim_bad_checksum_caches_nothing() {
 
 #[test]
 fn shim_without_a_release_says_how_to_install() {
-    // req:plugin/binary-shim@38609dbc
+    // req:plugin/binary-shim@48d0adf8
     let shim = Shim::new();
     fs::remove_dir(shim.path("assets")).unwrap();
     let out = shim.run(&["status"], &[]);
@@ -562,8 +589,15 @@ fn shim_without_a_release_says_how_to_install() {
 /// having cached nothing, with one line saying the guard is off and how to install `tag`.
 fn session_start_says_the_guard_is_off(shim: &Shim, tag: &str) {
     let out = shim.run(&["hook", "session-start"], &[]);
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(!shim.cached());
+    says_the_guard_is_off(out, tag);
+}
+
+/// Checks a session start's output: exit 0, and on stdout one line saying the guard is off
+/// and how to install `tag`, with nothing on stderr.
+fn says_the_guard_is_off(out: Output, tag: &str) {
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stderr), "", "{out:?}");
     let said = String::from_utf8(out.stdout).unwrap();
     let install = format!("cargo install --git https://github.com/clunny/clm --tag {tag} clm");
     for words in [
@@ -583,7 +617,7 @@ fn session_start_says_the_guard_is_off(shim: &Shim, tag: &str) {
 
 #[test]
 fn shim_session_start_without_a_binary_says_the_guard_is_off() {
-    // req:plugin/binary-shim@38609dbc
+    // req:plugin/binary-shim@48d0adf8
     let shim = Shim::new();
     fs::remove_dir(shim.path("assets")).unwrap();
     session_start_says_the_guard_is_off(&shim, "v9.9.9");
@@ -595,23 +629,30 @@ fn shim_session_start_without_a_binary_says_the_guard_is_off() {
 
 #[test]
 fn shim_without_a_version_fails() {
-    // req:plugin/binary-shim@38609dbc
+    // req:plugin/binary-shim@48d0adf8
     let shim = Shim::new();
     shim.serve(false);
     fs::write(shim.path("plugin/.claude-plugin/plugin.json"), "{}\n").unwrap();
     let out = shim.run(&["status"], &[]);
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("version"));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("can't read the version"),
+        "{out:?}"
+    );
     // Hooks still never fail, and session start still says the guard is off.
     let out = shim.run(&["hook", "guard"], &[]);
-    assert_eq!((out.status.code(), out.stdout.len()), (Some(0), 0));
+    assert_eq!(
+        (out.status.code(), out.stdout.len(), out.stderr.len()),
+        (Some(0), 0, 0),
+        "{out:?}"
+    );
     session_start_says_the_guard_is_off(&shim, "v<version>");
     assert_eq!(shim.read("curl.log"), "");
 }
 
 #[test]
 fn shim_downloads_the_target_for_each_platform() {
-    // req:plugin/shim-targets@7df28173
+    // req:plugin/shim-targets@ea4177ee
     for (system, machine, target) in TARGETS {
         let shim = Shim::new();
         shim.serve(false);
@@ -636,49 +677,47 @@ fn shim_downloads_the_target_for_each_platform() {
     }
 }
 
+/// The targets `text` assigns, as `ci/release`'s prepare step matches them:
+/// `(^|[^[:alnum:]_$])target=[[:alnum:]_.-]+`, one entry per match.
+fn target_assignments(text: &str) -> Vec<&str> {
+    let mut found = Vec::new();
+    for (at, needle) in text.match_indices("target=") {
+        let before = text[..at].chars().next_back();
+        if before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$') {
+            continue;
+        }
+        let rest = &text[at + needle.len()..];
+        let end = rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')))
+            .unwrap_or(rest.len());
+        if end > 0 {
+            found.push(&rest[..end]);
+        }
+    }
+    found
+}
+
 #[test]
 fn shim_maps_each_target_in_one_assignment() {
-    // req:plugin/shim-targets@7df28173
-    // `ci/release`'s prepare step reads the shim's `target=<target>` assignments: exactly
-    // the four targets, and no others.
+    // req:plugin/shim-targets@ea4177ee
+    // no Windows target in the shim: the targets matched are exactly the four, each once.
     let shim = fs::read_to_string(plugin().join("bin/clm")).unwrap();
-    for target in release_targets() {
-        assert_eq!(
-            shim.matches(&format!("target={target}")).count(),
-            1,
-            "target={target}"
-        );
-    }
-    let assignments = shim
-        .lines()
-        .filter(|l| l.trim_start().contains(") target=") && !l.contains("target= "))
-        .count();
-    assert_eq!(assignments, release_targets().len(), "{shim}");
-}
-
-/// What `shim-targets` forbids the shim's text to name: a Windows target or `clm.exe`.
-fn windows_words(shim: &str) -> Vec<&'static str> {
-    let lower = shim.to_lowercase();
-    ["windows", "clm.exe"]
-        .into_iter()
-        .filter(|word| lower.contains(word))
-        .collect()
-}
-
-#[test]
-fn shim_names_no_windows_target() {
-    // req:plugin/shim-targets@7df28173
-    let shim = fs::read_to_string(plugin().join("bin/clm")).unwrap();
-    assert_eq!(windows_words(&shim), Vec::<&str>::new());
-    // The text fails the check when a comment names Windows in any case, or `clm.exe`.
-    assert_eq!(windows_words("# runs on WINDOWS\n"), ["windows"]);
-    assert_eq!(windows_words("exe=clm.exe\n"), ["clm.exe"]);
+    let mut matched = target_assignments(&shim);
+    matched.sort_unstable();
+    let mut expected: Vec<&str> = release_targets().into_iter().collect();
+    expected.sort_unstable();
+    assert_eq!(matched, expected, "{shim}");
+    // The pattern as the prepare step reads it.
+    assert_eq!(
+        target_assignments("a) target=x-y.z_1 ;;\nb=$target=no\nmy_target=no\n*) target= ;;"),
+        ["x-y.z_1"]
+    );
 }
 
 #[test]
 fn shim_on_an_unsupported_platform_fails() {
-    // req:plugin/binary-shim@38609dbc
-    // req:plugin/shim-targets@7df28173
+    // req:plugin/binary-shim@48d0adf8
+    // req:plugin/shim-targets@ea4177ee
     // Windows's shells (MSYS2, Cygwin and the rest) get no binary either (`no-windows-support`).
     for (system, machine) in [
         ("FreeBSD", "amd64"),
@@ -707,7 +746,7 @@ fn shim_on_an_unsupported_platform_fails() {
 
 #[test]
 fn shim_prefers_clm_bin() {
-    // req:plugin/binary-shim@38609dbc
+    // req:plugin/binary-shim@48d0adf8
     let shim = Shim::new();
     let stub = shim.path("own-clm");
     executable(
@@ -721,4 +760,333 @@ fn shim_prefers_clm_bin() {
     assert!(out.status.success(), "{out:?}");
     assert_eq!(shim.read("runs.log"), "own next --expiry 2\n");
     assert_eq!(shim.read("curl.log"), "");
+    // Its exit status is the binary's own.
+    let fails = shim.path("failing-clm");
+    executable(&fails, "#!/bin/sh\nexit 101\n");
+    let out = shim.run(
+        &["next", "--expiry", "2"],
+        &[("CLM_BIN", fails.to_str().unwrap())],
+    );
+    assert_eq!(out.status.code(), Some(101), "{out:?}");
+    // A missing file exits 127, and one that isn't executable 126, hooks included.
+    let plain = shim.path("plain-clm");
+    fs::write(&plain, "#!/bin/sh\nexit 0\n").unwrap();
+    let missing = shim.path("no-such-clm");
+    for (bin, code) in [(&missing, 127), (&plain, 126)] {
+        for args in [&["next", "--expiry", "2"][..], &["hook", "guard"]] {
+            let out = shim.run(args, &[("CLM_BIN", bin.to_str().unwrap())]);
+            assert_eq!(out.status.code(), Some(code), "{args:?} {out:?}");
+        }
+    }
+    assert_eq!(shim.read("curl.log"), "");
+    // An empty `CLM_BIN` downloads and runs the cached binary, as when it's unset.
+    shim.serve(false);
+    let out = shim.run(&["next", "--expiry", "2"], &[("CLM_BIN", "")]);
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(shim.downloads(), 1);
+    assert!(shim.cached());
+    assert_eq!(
+        shim.read("runs.log"),
+        "own next --expiry 2\ncached clm next --expiry 2\n"
+    );
+}
+
+#[test]
+fn shim_hook_after_a_failed_download() {
+    // req:plugin/binary-shim@48d0adf8
+    let shim = Shim::new();
+    fs::remove_dir(shim.path("assets")).unwrap();
+    let out = shim.run(&["hook", "guard"], &[]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(shim.downloads(), 1);
+    // The failure was 59 minutes ago: the hooks download nothing, and leave its time alone.
+    shim.age_mark(59);
+    let marked = shim.mark_time();
+    let out = shim.run(&["hook", "guard"], &[]);
+    assert_eq!(
+        (out.status.code(), out.stdout.len(), out.stderr.len()),
+        (Some(0), 0, 0),
+        "{out:?}"
+    );
+    says_the_guard_is_off(shim.run(&["hook", "session-start"], &[]), "v9.9.9");
+    assert_eq!(shim.downloads(), 1);
+    assert_eq!(shim.mark_time(), marked, "a hook that skips moves no mark");
+    // Any other command still downloads.
+    let out = shim.run(&["status"], &[]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(shim.downloads(), 2);
+    // Two minutes older than recorded, the hour is over, and the hook downloads again.
+    fs::File::open(shim.version_cache().join(".unavailable"))
+        .unwrap()
+        .set_modified(shim.mark_time() - std::time::Duration::from_secs(120))
+        .unwrap();
+    let out = shim.run(&["hook", "guard"], &[]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(shim.downloads(), 3);
+}
+
+#[test]
+fn shim_without_a_cache_directory() {
+    // req:plugin/binary-shim@48d0adf8
+    type Case<'a> = (&'a [(&'a str, &'a str)], &'a [&'a str]);
+    let cases: [Case; 3] = [
+        (&[], &["HOME", "XDG_CACHE_HOME"]),
+        (&[("XDG_CACHE_HOME", "")], &["HOME"]),
+        (&[("XDG_CACHE_HOME", ""), ("HOME", "")], &[]),
+    ];
+    for (env, unset) in cases {
+        let shim = Shim::new();
+        shim.serve(false);
+        let out = shim.run_unset(&["hook", "guard"], env, unset);
+        assert_eq!(
+            (out.status.code(), out.stdout.len(), out.stderr.len()),
+            (Some(0), 0, 0),
+            "{env:?} {unset:?}: {out:?}"
+        );
+        says_the_guard_is_off(
+            shim.run_unset(&["hook", "session-start"], env, unset),
+            "v9.9.9",
+        );
+        let out = shim.run_unset(&["status"], env, unset);
+        assert_eq!(out.status.code(), Some(1), "{env:?} {unset:?}: {out:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            err.contains("XDG_CACHE_HOME") && err.contains("HOME"),
+            "{err}"
+        );
+        assert_eq!(shim.read("curl.log"), "", "{env:?} {unset:?}");
+    }
+}
+
+#[test]
+fn shim_says_each_message_where_it_belongs() {
+    // req:plugin/binary-shim@48d0adf8
+    let shim = Shim::new();
+    fs::remove_dir(shim.path("assets")).unwrap();
+    // The session start's line on stdout, one line, nothing on stderr.
+    says_the_guard_is_off(shim.run(&["hook", "session-start"], &[]), "v9.9.9");
+    // A command's message on stderr, nothing on stdout, naming `CLM_BIN`.
+    let out = shim.run(&["status"], &[]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(out.stdout.len(), 0, "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("CLM_BIN"), "{err}");
+    // With no plugin.json to read, a hook still says nothing.
+    fs::remove_file(shim.path("plugin/.claude-plugin/plugin.json")).unwrap();
+    let out = shim.run(&["hook", "guard"], &[]);
+    assert_eq!(
+        (out.status.code(), out.stdout.len(), out.stderr.len()),
+        (Some(0), 0, 0),
+        "{out:?}"
+    );
+}
+
+/// Whether the tests run as root, for whom no permission bit refuses a write.
+fn is_root() -> bool {
+    // SAFETY: geteuid has no preconditions and can't fail.
+    unsafe { libc::geteuid() == 0 }
+}
+
+/// Sets `path`'s permission bits to `mode`.
+fn chmod(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+#[test]
+fn shim_with_a_cache_it_cannot_write() {
+    // req:plugin/binary-shim@48d0adf8
+    if is_root() {
+        return;
+    }
+    for case in ["unwritable", "read-only mark", "linked mark"] {
+        let shim = Shim::new();
+        fs::remove_dir(shim.path("assets")).unwrap();
+        let cache = shim.version_cache();
+        fs::create_dir_all(&cache).unwrap();
+        let mark = cache.join(".unavailable");
+        match case {
+            "unwritable" => chmod(&cache, 0o555),
+            "read-only mark" => {
+                fs::write(&mark, "").unwrap();
+                shim.age_mark(120);
+                chmod(&mark, 0o444);
+            }
+            _ => {
+                let closed = shim.path("closed");
+                fs::create_dir(&closed).unwrap();
+                chmod(&closed, 0o555);
+                std::os::unix::fs::symlink(closed.join("mark"), &mark).unwrap();
+                let aged = Command::new("touch")
+                    .args(["-h", "-t", "200001010000"])
+                    .arg(&mark)
+                    .status()
+                    .unwrap();
+                assert!(aged.success());
+            }
+        }
+        let quiet = |out: Output| {
+            assert_eq!(
+                (out.status.code(), out.stdout.len(), out.stderr.len()),
+                (Some(0), 0, 0),
+                "{case}: {out:?}"
+            );
+        };
+        quiet(shim.run(&["hook", "guard"], &[]));
+        says_the_guard_is_off(shim.run(&["hook", "session-start"], &[]), "v9.9.9");
+        let before = shim.downloads();
+        quiet(shim.run(&["hook", "guard"], &[]));
+        if case != "unwritable" {
+            assert_eq!(
+                before, 1,
+                "{case}: the old mark let the first hook download"
+            );
+            assert_eq!(
+                shim.downloads(),
+                1,
+                "{case}: the second hook downloads nothing"
+            );
+        }
+        let out = shim.run(&["status"], &[]);
+        assert_eq!(out.status.code(), Some(1), "{case}: {out:?}");
+        if case == "unwritable" {
+            let err = String::from_utf8_lossy(&out.stderr);
+            assert!(err.contains("can't write to"), "{case}: {err}");
+        }
+        assert!(!shim.cached(), "{case}");
+        chmod(&cache, 0o755);
+        if shim.path("closed").exists() {
+            chmod(&shim.path("closed"), 0o755);
+        }
+    }
+}
+
+/// A directory of links to the tools the shim runs, with no `curl` among them.
+fn path_without_curl(shim: &Shim) -> PathBuf {
+    let dir = shim.path("nocurl");
+    fs::create_dir(&dir).unwrap();
+    for tool in [
+        "sh",
+        "sed",
+        "head",
+        "uname",
+        "dirname",
+        "mkdir",
+        "mktemp",
+        "find",
+        "rm",
+        "tar",
+        "gzip",
+        "sha256sum",
+        "shasum",
+        "chmod",
+        "mv",
+        "touch",
+    ] {
+        let found = Command::new("sh")
+            .args(["-c", &format!("command -v {tool}")])
+            .output()
+            .unwrap();
+        let at = String::from_utf8(found.stdout).unwrap();
+        if !at.trim().is_empty() {
+            std::os::unix::fs::symlink(at.trim(), dir.join(tool)).unwrap();
+        }
+    }
+    dir
+}
+
+#[test]
+fn shim_leaves_nothing_behind() {
+    // req:plugin/binary-shim@48d0adf8
+    // No `curl` on the PATH.
+    let shim = Shim::new();
+    shim.serve(false);
+    let nocurl = path_without_curl(&shim);
+    let out = shim.run(&["status"], &[("PATH", nocurl.to_str().unwrap())]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(shim.cache_entries(), Vec::<String>::new());
+    // An archive holding no `clm`, with a matching checksum.
+    let shim = Shim::new();
+    let stage = shim.path("stage");
+    fs::create_dir(&stage).unwrap();
+    fs::write(stage.join("other"), "x").unwrap();
+    for target in release_targets() {
+        let asset = format!("clm-{target}.tar.gz");
+        let ok = Command::new("sh")
+            .args([
+                "-c",
+                &format!(
+                    "tar czf ../assets/{asset} other && cd ../assets && \
+                     (sha256sum {asset} || shasum -a 256 {asset}) > {asset}.sha256"
+                ),
+            ])
+            .current_dir(&stage)
+            .status()
+            .unwrap();
+        assert!(ok.success());
+    }
+    let out = shim.run(&["status"], &[]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("holds no clm"),
+        "{out:?}"
+    );
+    assert_eq!(shim.cache_entries(), Vec::<String>::new());
+    // A download that succeeds after a hook's failed one leaves only `clm`.
+    let shim = Shim::new();
+    fs::remove_dir(shim.path("assets")).unwrap();
+    shim.run(&["hook", "guard"], &[]);
+    assert_eq!(shim.cache_entries(), [".unavailable"]);
+    fs::create_dir(shim.path("assets")).unwrap();
+    shim.serve(false);
+    let out = shim.run(&["status"], &[]);
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(shim.cache_entries(), ["clm"]);
+}
+
+#[test]
+fn shim_bounds_each_download() {
+    // req:plugin/binary-shim@48d0adf8
+    let shim = Shim::new();
+    shim.serve(false);
+    let out = shim.run(&["status"], &[]);
+    assert!(out.status.success(), "{out:?}");
+    let curl = shim.read("curl.log");
+    assert_eq!(curl.lines().count(), 2, "{curl}");
+    for call in curl.lines() {
+        let words: Vec<&str> = call.split(' ').collect();
+        for (flag, value) in [("--connect-timeout", "10"), ("--max-time", "120")] {
+            assert!(
+                words.windows(2).any(|w| w == [flag, value]),
+                "{flag} {value} missing from {call}"
+            );
+        }
+    }
+}
+
+#[test]
+fn shim_caches_under_xdg_or_home() {
+    // req:plugin/binary-shim@48d0adf8
+    // `XDG_CACHE_HOME` set is the harness's default.
+    let shim = Shim::new();
+    shim.serve(false);
+    assert!(shim.run(&["status"], &[]).status.success());
+    assert!(shim.cached());
+    // `XDG_CACHE_HOME` unset or empty: under `HOME`.
+    for xdg in [None, Some("")] {
+        let shim = Shim::new();
+        shim.serve(false);
+        let home = shim.path("home");
+        fs::create_dir(&home).unwrap();
+        let mut env = vec![("HOME", home.to_str().unwrap())];
+        let mut unset = vec![];
+        match xdg {
+            Some(value) => env.push(("XDG_CACHE_HOME", value)),
+            None => unset.push("XDG_CACHE_HOME"),
+        }
+        let out = shim.run_unset(&["status"], &env, &unset);
+        assert!(out.status.success(), "{xdg:?}: {out:?}");
+        assert!(home.join(".cache/clm/9.9.9/clm").is_file(), "{xdg:?}");
+        assert!(!shim.cached(), "{xdg:?}");
+    }
 }
