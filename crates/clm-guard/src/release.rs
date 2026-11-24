@@ -86,8 +86,9 @@ pub(crate) struct Rerun {
     repo: Repo,
     /// The segment's own `GH_REPO=` and `GH_HOST=` assignments.
     env: Vec<(&'static str, String)>,
-    /// The checkout the segment runs in.
-    dir: PathBuf,
+    /// The checkout the segment runs in; with none (the guard's own directory is gone),
+    /// every lookup fails with no `gh` call (`approve-guard`).
+    dir: Option<PathBuf>,
 }
 
 /// The repository a re-run's lookups ask.
@@ -167,7 +168,7 @@ fn rerun(args: &[String], command: &Command, checkout: Option<&Path>) -> Option<
         .into_iter()
         .filter_map(|name| command.assigned(name).map(|v| (name, v.to_string())))
         .collect();
-    let dir = checkout.unwrap_or(Path::new(".")).to_path_buf();
+    let dir = checkout.map(Path::to_path_buf);
     Some(Rerun {
         run,
         jobs,
@@ -245,8 +246,9 @@ impl Rerun {
     }
 
     /// One `gh` call's stdout, run in the re-run's checkout with its environment; `None`
-    /// when it fails or outlasts `deadline` (`bounded-runs`). A call still running then is
-    /// killed, and once `deadline` has passed no call is started.
+    /// when it fails or outlasts `deadline` (`bounded-runs`), and with no call when the
+    /// re-run has no checkout. A call still running at `deadline` is killed, and once
+    /// `deadline` has passed no call is started.
     fn gh(&self, args: Vec<String>, deadline: Instant) -> Option<Vec<u8>> {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let env: Vec<(&str, &OsStr)> = self.env.iter().map(|(n, v)| (*n, OsStr::new(v))).collect();
@@ -255,7 +257,7 @@ impl Rerun {
             env: &env,
         };
         let limit = deadline.saturating_duration_since(Instant::now());
-        clm_git::run_within(&self.dir, "gh", &args, options, limit).ok()
+        clm_git::run_within(self.dir.as_deref()?, "gh", &args, options, limit).ok()
     }
 }
 

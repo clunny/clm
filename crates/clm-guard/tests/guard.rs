@@ -1637,7 +1637,7 @@ fn take_calls(calls: &Path) -> Vec<String> {
 #[test]
 fn guard_blocks_rerunning_a_release_run() {
     // req:plugin.hooks.guard/release-guard@1c7c5dad
-    // req:plugin.hooks.guard/release-run-lookup@3024a9da
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
@@ -1765,7 +1765,7 @@ fn guard_blocks_rerunning_a_release_run() {
 
 #[test]
 fn guard_looks_a_rerun_up_where_it_runs() {
-    // req:plugin.hooks.guard/release-run-lookup@3024a9da
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/p/q");
@@ -1857,6 +1857,41 @@ fn guard_looks_a_rerun_up_where_it_runs() {
     }
 }
 
+#[test]
+fn a_rerun_with_no_directory_makes_no_lookup() {
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
+    // a guard with no directory: it runs in a directory that has been removed, and the event
+    // has no `cwd`, so the re-run's segment has no checkout and every lookup fails
+    let fake = TempDir::new().unwrap();
+    let calls = fake.path().join("calls");
+    let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
+    let event = serde_json::json!({
+        "tool_name": "Bash",
+        "tool_input": { "command": "gh run rerun 42" },
+    })
+    .to_string();
+    let (code, err) = {
+        // The working directory is the process's, so it is moved only under the exclusive
+        // spawn lock, as `ProcessEnv` sets variables, and put back before the lock drops.
+        let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+        let _set = ProcessEnv::set([("PATH", path.as_str())].iter());
+        let home = std::env::current_dir().unwrap();
+        let gone = TempDir::new().unwrap();
+        std::env::set_current_dir(gone.path()).unwrap();
+        fs::remove_dir(gone.path()).unwrap();
+        let lookup = |name: &str| std::env::var(name).ok();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code =
+            clm_guard::guard_command(Vec::<String>::new(), &event, &lookup, &mut out, &mut err);
+        std::env::set_current_dir(home).unwrap();
+        assert!(out.is_empty(), "{out:?}");
+        (code, String::from_utf8(err).unwrap())
+    };
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("humans-cut-releases"), "{err}");
+    assert!(!calls.exists(), "gh was called: {:?}", take_calls(&calls));
+}
+
 /// A shell line printing `url` as `gh repo view --json url` would. A URL's `//` sits apart
 /// from the JSON's braces: `clm-coverage` reads a test's end by counting braces outside a
 /// `//` comment, so a test holding both on one line would never end.
@@ -1866,7 +1901,7 @@ fn echo_url(url: &str) -> String {
 
 #[test]
 fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
-    // req:plugin.hooks.guard/release-run-lookup@3024a9da
+    // req:plugin.hooks.guard/release-run-lookup@2c3b26ad
     // a repository that can't be resolved: `repo view` fails, or its `url` isn't
     // `<scheme>://<host>/<owner>/<repo>`
     let api_ci = "if [ \"$1\" = api ]; then \
