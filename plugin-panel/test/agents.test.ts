@@ -45,7 +45,7 @@ function started(...specs: [string, string, string, string?][]): AgentRun[] {
 }
 
 describe('runs', () => {
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a run is named by the first of its first five lines that is a loop run line, never its description', () => {
     expect(runEntry(PROMPT('git'))).toBe('build:git')
     expect(runEntry('loop run build:plugin.panel')).toBe('build:plugin.panel')
@@ -59,12 +59,13 @@ describe('runs', () => {
     expect(started(['a1', 'anything', PROMPT('git')])[0]?.entry).toBe('build:git')
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a description a listed run already has is the next round', () => {
     const list = started(['a1', 'build git', PROMPT('git')], ['a2', 'Build  Git!', PROMPT('git')], ['a3', 'build init', PROMPT('init')])
     expect(list.map(r => r.round)).toEqual([1, 2, 1])
   })
 
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('a spawn that resumes a listed agent keeps its run, running again', () => {
     let list = started(['b1', 'build git', PROMPT('git')])
     list = applyTool(list, 'b1', 'TodoWrite', { todos: [{ content: 'a', status: 'completed' }] })
@@ -76,12 +77,15 @@ describe('runs', () => {
     expect(list[0]?.tasks).toHaveLength(1)
   })
 
+  // req:plugin.panel/build-row-cost@8fdc23db
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('the list keeps the last 200 runs', () => {
     const list = started(...Array.from({ length: 201 }, (_, i): [string, string, string] => [`a${i}`, `run ${i}`, 'x']))
     expect(list).toHaveLength(200)
     expect(list[0]?.id).toBe('a1')
   })
 
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('after a reload a running run the engine no longer lists is dropped', () => {
     const list = started(['a1', 'one', 'x'], ['a2', 'two', 'x'], ['a3', 'three', 'x']).map(r =>
       r.id === 'a2' ? { ...r, status: 'done' as const } : r,
@@ -100,6 +104,7 @@ const usage = (input: number, output = 0, read = 0, write = 0): Usage => ({
 })
 
 describe('updates', () => {
+  // req:plugin.panel/build-rows@a8f86422
   test('each model request sets the context and adds to tokens, cost and steps', () => {
     let list = started(['a1', 'build git', PROMPT('git')])
     list = applyStep(list, 'a1', 'claude-opus-5-5', 'high', usage(100_000, 1_000, 50_000, 0))
@@ -110,6 +115,7 @@ describe('updates', () => {
     expect(list[0]?.costUsd).toBeCloseTo(0.4 + 0.02 + 0.01 + 0.04 + 0.04)
   })
 
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('the turn ends the run: done on an answer, else failed, at that time', () => {
     const list = started(['a1', 'one', 'x'], ['a2', 'two', 'x'])
     const done = applyComplete(applyStep(list, 'a1', 'claude-opus-5-5', undefined, usage(1_000)), 'a1', true, 5_000)
@@ -117,13 +123,14 @@ describe('updates', () => {
     expect(applyComplete(list, 'a2', false, 7_000)[1]).toMatchObject({ status: 'failed', endedAt: 7_000 })
   })
 
+  // req:plugin.panel/build-row-cost@8fdc23db
   test("a run that saw no step takes the turn's own usage", () => {
     const list = applyComplete(started(['a1', 'one', 'x']), 'a1', true, 1_000, { ...usage(1_000_000), model: 'claude-haiku-4-5' })
     expect(list[0]).toMatchObject({ tokens: 1_000_000, model: 'claude-haiku-4-5' })
     expect(list[0]?.costUsd).toBeCloseTo(1)
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('TodoWrite replaces the task list; k, n and the current step follow it', () => {
     const todos = [
       { content: 'one', status: 'completed' },
@@ -137,6 +144,7 @@ describe('updates', () => {
     expect(progress([])).toEqual({ k: 0, n: 0 })
   })
 
+  // req:plugin.panel/build-rows@a8f86422
   test('TaskCreate appends a pending task; TaskUpdate changes or deletes one', () => {
     let list = started(['a1', 'one', 'x'])
     list = applyTool(list, 'a1', 'TaskCreate', { subject: 'write tests' }, '1')
@@ -153,6 +161,7 @@ describe('updates', () => {
 })
 
 describe('cost and formatting', () => {
+  // req:plugin.panel/build-row-cost@8fdc23db
   test('cost is priced by the most specific row, with the sonnet row for an unknown model', () => {
     const million = usage(1_000_000)
     const reads = usage(0, 0, 1_000_000)
@@ -173,6 +182,7 @@ describe('cost and formatting', () => {
     expect(costOf('some-other-model', usage(0, 1_000_000))).toBe(15)
   })
 
+  // req:plugin.panel/build-row-cost@8fdc23db
   test("the rows price every model as effort's prices.rs does", () => {
     // Read through the compiler's `ts.sys`, as the type-check tests read files: no Node here.
     const source = ts.sys.readFile(`${ts.sys.getCurrentDirectory()}/../crates/clm-effort/src/prices.rs`)
@@ -189,11 +199,14 @@ describe('cost and formatting', () => {
     }
   })
 
+  // req:plugin.panel/build-rows@a8f86422
   test('the context window is 200k for Haiku and 1M otherwise', () => {
     expect(windowOf('claude-haiku-4-5')).toBe(200_000)
     expect(windowOf('claude-opus-5-5')).toBe(1_000_000)
   })
 
+  // req:plugin.panel/build-rows@a8f86422
+  // req:plugin.panel/build-row-cost@8fdc23db
   test('model names, tokens, cost and time read as the rows show them', () => {
     expect(modelName('claude-fable-5-1')).toBe('Fable 5.1')
     expect(modelName('claude-opus-5-5[1m]')).toBe('Opus 5.5')
@@ -260,7 +273,7 @@ function gitBuild(): AgentRun[] {
 const glyphs = (lines: Span[][]) => lines.flat().filter(s => ['●', '✓', '✗'].includes(s.text))
 
 describe('drawing', () => {
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a build is drawn under its entry line, with its facts', () => {
     const rows = between(text(queueLines(CHART, gitBuild(), 61_000)), '  build:git ', '  build:init ')
     const joined = rows.join('\n')
@@ -275,7 +288,7 @@ describe('drawing', () => {
     expect(glyphs(queueLines(CHART, gitBuild(), 61_000))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a nested subagent follows its build, indented and prefixed └, before the next node', () => {
     const list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-sonnet-5-0', prompt: 'Review.', at: 30_000 })
     const rows = between(text(queueLines(CHART, list, 61_000)), '  build:git ', '  build:init ')
@@ -286,7 +299,7 @@ describe('drawing', () => {
     expect(rows[5]).toContain('0:31')
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('children follow oldest first, indented two cells a level up to four levels', () => {
     let list = gitBuild()
     const child = (id: string, parentId: string, description: string, at: number) =>
@@ -313,14 +326,14 @@ describe('drawing', () => {
     expect(firsts.map(l => indent(l) - base)).toEqual([0, 2, 2, 4, 6, 8, 8])
   })
 
-  // req:plugin.panel/build-row-cost@5e68018b
+  // req:plugin.panel/build-row-cost@8fdc23db
   test('the totals name the most used model first', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look one', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = startRun(list, { id: 'x2', type: 'Explore', description: 'look two', model: 'claude-haiku-4-5', prompt: 'Look.', at: 11_000 })
     expect(text(queueLines(CHART, list, 61_000)).at(-1)).toMatch(/· Haiku 4\.5 ×2 · Opus 5\.5 ×1$/)
   })
 
-  // req:plugin.panel/build-row-lifecycle@f82ccf35
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('a finished build and its subagents leave the rows at once; the totals still count them', () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-opus-5-5', prompt: 'Review.', at: 30_000 })
     list = applyStep(list, 'c1', 'claude-opus-5-5', undefined, usage(10_000))
@@ -336,7 +349,7 @@ describe('drawing', () => {
     expect(glyphs(queueLines(CHART, list, 0))).toEqual([])
   })
 
-  // req:plugin.panel/build-row-lifecycle@f82ccf35
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('a failed build shows ✗ in rose and a Dismiss button, until the button is pressed', () => {
     const list = applyComplete(gitBuild(), 'b1', false, 90_000)
     const lines = queueLines(CHART, list, 0)
@@ -353,7 +366,7 @@ describe('drawing', () => {
     expect(glyphs(queueLines(CHART, resumed, 95_000))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
-  // req:plugin.panel/build-row-lifecycle@f82ccf35
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test("a failed child of a finished build takes its parent's place, at the top level under its node", () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-opus-5-5', prompt: 'Review.', at: 30_000 })
     list = applyComplete(list, 'c1', false, 80_000)
@@ -371,12 +384,13 @@ describe('drawing', () => {
     expect(under[3]).toMatch(/^ {6}└ ✗ leaf/)
   })
 
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('clearing the session draws no build row and no totals', () => {
     const list = applyComplete(gitBuild(), 'b1', false, 90_000)
     expect(queueLines(CHART, onSessionEnd(list, 'clear'), 0)).toEqual(CHART)
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a subagent that is not a build follows the chart under agents while it runs, and the totals count it', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look around', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = applyStep(list, 'x1', 'claude-haiku-4-5', undefined, usage(1_000))
@@ -394,7 +408,7 @@ describe('drawing', () => {
     expect(done.at(-1)).toMatch(/^≈\$\d+\.\d\d · 114k tokens · 1:01 · Opus 5\.5 ×1 · Haiku 4\.5 ×1$/)
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a later round of a build sits above the first under its node', () => {
     let list = applyComplete(gitBuild(), 'b1', false, 20_000)
     list = startRun(list, { id: 'b2', type: 'general-purpose', description: 'build git', model: 'claude-opus-5-5', prompt: PROMPT('git'), at: 30_000 })
@@ -405,7 +419,7 @@ describe('drawing', () => {
     expect(rows[4]).not.toContain('round')
   })
 
-  // req:plugin.panel/build-row-cost@5e68018b
+  // req:plugin.panel/build-row-cost@8fdc23db
   test('a second later the rows show a larger elapsed time, and clm has not run again', async () => {
     const at = (ms: number) => text(queueLines(CHART, gitBuild(), ms)).join('\n')
     expect(at(61_000)).toContain('1:01')
@@ -421,6 +435,7 @@ describe('drawing', () => {
     expect(runs).toBe(2)
   })
 
+  // req:plugin.panel/superseded-draw@a8a6cbb7
   test("a draw waiting on another draw's run that rejects starts its own, and caches no failure", async () => {
     const cache = new Map<string, Promise<Run>>()
     const key = viewKey(5, ['view', 'flight'])
@@ -431,6 +446,7 @@ describe('drawing', () => {
     expect(await cache.get(key)).toMatchObject({ stdout: 'own' })
   })
 
+  // req:plugin.panel/superseded-draw@a8a6cbb7
   test('draws whose every run rejects each fail after one start of their own', async () => {
     const cache = new Map<string, Promise<Run>>()
     const key = viewKey(6, ['view', 'flight'])
@@ -442,7 +458,7 @@ describe('drawing', () => {
     expect(cache.has(key)).toBe(false)
   })
 
-  // req:plugin.panel/build-row-cost@5e68018b
+  // req:plugin.panel/build-row-cost@8fdc23db
   test('a million input tokens cost the model\'s input rate', () => {
     const list = applyStep(started(['b1', 'build git', PROMPT('git')]), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
     const row = between(text(queueLines(CHART, list, 0)), '  build:git ', '  build:init ').join('\n')
@@ -450,26 +466,28 @@ describe('drawing', () => {
     expect(row).toContain('ctx 100%')
   })
 
+  // req:plugin.panel/build-rows@a8f86422
   test('an entry name the chart cut with … still finds its runs', () => {
     const cut = ansiLines('running\n  build:plugin.p…  P5\n  build:plugin     P5\nnext up\n')
     const list = startRun([], { id: 'b1', type: 'general-purpose', description: 'build panel', model: 'm', prompt: PROMPT('plugin.panel'), at: 0 })
     expect(between(text(queueLines(cut, list, 0)), '  build:plugin.p…', '  build:plugin ')[0]).toMatch(/build panel/)
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a build of a node the chart no longer lists goes under agents', () => {
     const list = startRun([], { id: 'b1', type: 'general-purpose', description: 'build web', model: 'm', prompt: PROMPT('web'), at: 0 })
     const all = text(queueLines(CHART, list, 0))
     expect(all[all.indexOf('agents') + 1]).toMatch(/build web/)
   })
 
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('a run whose parent dropped off the list is drawn at the top level', () => {
     const list = startRun([], { id: 'c1', parentId: 'gone', type: 'x', description: 'orphan', model: 'm', prompt: 'x', at: 0 })
     const all = text(queueLines(CHART, list, 0))
     expect(all[all.indexOf('agents') + 1]).toMatch(/^ +● orphan$/)
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('the rows go under their entries, then the unplaced runs under agents, then the totals', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look around', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = startRun(list, { id: 'i1', type: 'general-purpose', description: 'build init', model: 'claude-opus-5-5', prompt: PROMPT('init'), at: 20_000 })
@@ -485,6 +503,7 @@ describe('drawing', () => {
 describe('hooks events', () => {
   const spawn = { prompt: PROMPT('git'), description: 'build git', subagentType: 'general-purpose' }
 
+  // req:plugin.panel/build-rows@a8f86422
   test('agent.spawn records a started run from the event and what next answered', () => {
     const list = onSpawn([], { ...spawn, parentAgentId: 'p0' }, { agentId: 'b1', model: 'claude-opus-5-5' }, 5)
     expect(list[0]).toMatchObject({ id: 'b1', parentId: 'p0', type: 'general-purpose', entry: 'build:git', model: 'claude-opus-5-5', startedAt: 5 })
@@ -492,6 +511,7 @@ describe('hooks events', () => {
     expect(onSpawn([], spawn, { model: 'm' }, 0)).toEqual([])
   })
 
+  // req:plugin.panel/build-rows@a8f86422
   test('turn.step follows the request on its agent only; its usage model wins', () => {
     const list = onSpawn([], spawn, { agentId: 'b1', model: 'claude-opus-5-5' }, 0)
     const stepped = onStep(list, { agentId: 'b1', model: 'claude-opus-5-5', effort: 'high' }, { ...usage(1_000), model: 'claude-sonnet-5-0' })
@@ -500,6 +520,7 @@ describe('hooks events', () => {
     expect(onStep(list, { agentId: 'b1', model: 'm' }, undefined)).toEqual(list)
   })
 
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('turn.complete ends the run: done on reason answer, failed otherwise', () => {
     const list = onSpawn([], spawn, { agentId: 'b1', model: 'm' }, 0)
     expect(onComplete(list, { agentId: 'b1', reason: 'answer' }, 9)[0]).toMatchObject({ status: 'done', endedAt: 9 })
@@ -507,6 +528,7 @@ describe('hooks events', () => {
     expect(onComplete(list, { reason: 'answer' }, 9)).toEqual(list)
   })
 
+  // req:plugin.panel/build-rows@a8f86422
   test("tool.call reads a task tool's arguments beside tool and agentId, and the created task's id", () => {
     let list = onSpawn([], spawn, { agentId: 'b1', model: 'm' }, 0)
     list = onToolCall(list, { tool: 'TaskCreate', agentId: 'b1', subject: 'write tests' }, { result: { task: { id: '7', subject: 'write tests' } } })
@@ -517,7 +539,7 @@ describe('hooks events', () => {
     expect(onToolCall(list, { tool: 'TodoWrite', todos: [] }, {})).toEqual(list)
   })
 
-  // req:plugin.panel/build-row-lifecycle@f82ccf35
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('session.end empties the list on clear and resume only; the rows tick while one runs', () => {
     const list = onSpawn([], spawn, { agentId: 'b1', model: 'm' }, 0)
     expect(onSessionEnd(list, 'clear')).toEqual([])
@@ -530,7 +552,7 @@ describe('hooks events', () => {
 })
 
 describe('build-rows', () => {
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('on every surface alike the build rows go under their running entry, as the terminal draws them', () => {
     const all = text(queueLines(CHART, gitBuild(), 61_000))
     const rows = between(all, '  build:git ', '  build:init ')
@@ -545,7 +567,7 @@ describe('waiting', () => {
   const build = () => onSpawn([], spawn, { agentId: 'b1', model: 'claude-opus-5-5' }, 0)
   const rows = (list: AgentRun[], at: number) => between(text(queueLines(CHART, list, at)), '  build:git ', '  build:init ')
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a launcher prompt names its entry on its first line', () => {
     const launcher = 'loop run build:git\nRead the file `.clm/prompts/git.md` with the Read tool.'
     const list = started(['b1', 'build git', launcher])
@@ -553,7 +575,7 @@ describe('waiting', () => {
     expect(text(queueLines(CHART, list, 5_000))).not.toContain('agents')
   })
 
-  // req:plugin.panel/build-rows@84e4b711
+  // req:plugin.panel/build-rows@a8f86422
   test('a loop run line past the fifth line is no run', () => {
     const quoted = 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nloop run build:git'
     const all = text(queueLines(CHART, started(['x1', 'review', quoted]), 5_000))
@@ -561,7 +583,7 @@ describe('waiting', () => {
     expect(all).toContain('agents')
   })
 
-  // req:plugin.panel/build-row-lifecycle@f82ccf35
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('an answer while the engine lists the agent waiting leaves a waiting row whose time grows', () => {
     const list = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
     expect(list[0]).toMatchObject({ status: 'waiting' })
@@ -573,6 +595,7 @@ describe('waiting', () => {
     expect(glyphs(queueLines(CHART, list, 0))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('an answer while the agent is listed any other way finishes the run', () => {
     for (const listed of ['completed', 'running', undefined]) {
       expect(onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, listed)[0]).toMatchObject({ status: 'done', endedAt: 9_000 })
@@ -580,7 +603,7 @@ describe('waiting', () => {
     expect(onComplete(build(), { agentId: 'b1', reason: 'max_turns' }, 9_000, 'waiting')[0]?.status).toBe('failed')
   })
 
-  // req:plugin.panel/build-row-lifecycle@f82ccf35
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('a turn.start of a listed agent runs it again, drawn, keeping its tokens, dismissed or not', () => {
     let list = applyStep(build(), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
     list = onComplete(list, { agentId: 'b1', reason: 'answer' }, 9_000, 'completed')
@@ -601,6 +624,7 @@ describe('waiting', () => {
     expect(onTurnStart(list, { agentId: 'zz' })).toEqual(list)
   })
 
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('a turn.step of a waiting or done run runs it again', () => {
     const waiting = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
     expect(applyStep(waiting, 'b1', 'claude-opus-5-5', undefined, usage(10))[0]?.status).toBe('running')
@@ -610,7 +634,7 @@ describe('waiting', () => {
     expect(stepped?.endedAt).toBeUndefined()
   })
 
-  // req:plugin.panel/build-row-lifecycle@f82ccf35
+  // req:plugin.panel/build-row-lifecycle@015a4b69
   test('the 30-second reconciliation ends a waiting run the engine lists otherwise, and revives a lagging done one', () => {
     const waiting = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
     const ended = reconcileWaiting(waiting, [{ id: 'b1', status: 'completed' }], 40_000)

@@ -20,7 +20,7 @@ function options(): ts.CompilerOptions {
 }
 
 describe('type-check', () => {
-  // req:plugin.panel/type-check@16075ab7
+  // req:plugin.panel/type-check@3f377092
   test('a type error fails: the compiler, with the tsconfig and its type root, names the file and its line', () => {
     const file = panel + 'src/erring.ts'
     const source = 'export const ok = 1\nexport const bad: Missing = 2\n'
@@ -41,7 +41,7 @@ describe('type-check', () => {
     expect(ts.getPreEmitDiagnostics(program).filter(d => d.file?.fileName !== file)).toEqual([])
   })
 
-  // req:plugin.panel/type-check@16075ab7
+  // req:plugin.panel/type-check@3f377092
   test('the suite type-checks first, under a tsconfig whose one type root is declarations', () => {
     const pkg = JSON.parse(read('package.json')) as {
       scripts: { test: string }
