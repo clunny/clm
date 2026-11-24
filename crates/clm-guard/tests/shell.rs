@@ -780,6 +780,35 @@ fn guard_finds_no_heredoc_after_all() {
 }
 
 #[test]
+fn substitutions_in_an_unquoted_heredoc() {
+    // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
+    // substitutions in an unquoted heredoc
+    blocks_push(&bash("cat > f <<EOF\nnow `git push origin main`\nEOF"));
+    let why = asks(&bash("cat > f <<EOF\nnow $(clm approve spec/x)\nEOF"));
+    assert!(why.contains("humans-review-intent"), "{why}");
+    for command in [
+        "cat > f <<'EOF'\nnow `git push origin main`\nEOF",
+        "cat > f <<EOF\nnow \\`git push origin main\\`\nEOF",
+        "cat > f <<\\EOF\nnow $(git push origin main)\nEOF",
+        "cat > f <<\"EOF\"\nnow $(git push origin main)\nEOF",
+        "cat > f <<EOF\nnow \\$(git push origin main)\nEOF",
+    ] {
+        allows(&bash(command));
+    }
+    // A backtick's escaped backticks open one inside it.
+    blocks_push(&bash(
+        "cat > f <<EOF\nnow `echo \\`git push origin main\\``\nEOF",
+    ));
+    // Inside a quoted substitution too, and from the segment's checkout.
+    blocks_push(&bash(
+        "git commit -m \"$(cat <<EOF\nnow `git push origin main`\nEOF\n)\"",
+    ));
+    let dir = main_with_w();
+    allows(&bash_in("cd w && cat <<EOF\n$(git push)\nEOF", dir.path()));
+    blocks_push(&bash_in("cat <<EOF\n$(git push)\nEOF", dir.path()));
+}
+
+#[test]
 fn guard_takes_several_heredocs_in_order() {
     // req:plugin.hooks.guard.shell/guard-heredocs@df5af5e2
     // The first body is `cat`'s, the second the shell's.

@@ -458,7 +458,14 @@ impl<'a> Scanner<'a> {
         for h in &self.heredocs {
             // The segment holding the operator: the last that starts at or before it.
             if let Some(s) = self.done.iter().rposition(|d| d.start <= h.op) {
-                segments[s].bodies.push(text[h.start..h.end].to_string());
+                let body = &text[h.start..h.end];
+                segments[s].bodies.push(body.to_string());
+                // The shell runs an unquoted body's substitutions as it sends it.
+                let rest = text[h.op + 2..].strip_prefix('-');
+                let quoted = heredoc_word(rest.unwrap_or(&text[h.op + 2..])).is_none_or(|w| w.1);
+                if !quoted {
+                    segments[s].subs.extend(body_substitutions(body));
+                }
             }
         }
         let mut heredocs = self.heredocs;
@@ -558,6 +565,36 @@ fn substitution(text: &str, from: usize) -> Option<(usize, Vec<Heredoc>)> {
         i += width;
     }
     None
+}
+
+/// The text of each substitution in an unquoted heredoc's `body`: each `$(` to its matching
+/// `)`, and each backtick not escaped by a backslash to the next one, its `\$`, `` \` ``
+/// and `\\` unescaped (`guard-heredocs`). One that never closes runs nothing.
+fn body_substitutions(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while let Some(c) = body[i..].chars().next() {
+        let next = body[i + c.len_utf8()..].chars().next();
+        i += match (c, next) {
+            ('\\', Some(n)) => 1 + n.len_utf8(),
+            ('$', Some('(')) => match substitution(body, i + 2) {
+                Some((end, _)) => {
+                    out.push(body[i + 2..end].to_string());
+                    end + 1 - i
+                }
+                None => break,
+            },
+            ('`', _) => match backtick(body, i + 1) {
+                Some(end) => {
+                    out.push(unescape(&body[i + 1..end], "$`\\"));
+                    end + 1 - i
+                }
+                None => break,
+            },
+            _ => c.len_utf8(),
+        };
+    }
+    out
 }
 
 /// The offset of the backtick that closes a backtick substitution whose text starts at
