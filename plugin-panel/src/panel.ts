@@ -277,7 +277,7 @@ const COLORS = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'w
  * command (OSC, such as a hyperlink's), then any other escape up to its final character.
  */
 // eslint-disable-next-line no-control-regex
-const ESCAPE = /(\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[ -/]*[0-~])/
+const ESCAPE = /(\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\|$)|\x1b[ -/]*[0-~])/
 
 /** ANSI text as lines of styled runs: SGR escapes set the style, every other escape is dropped whole. */
 export function ansiLines(text: string): Span[][] {

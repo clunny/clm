@@ -361,6 +361,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
             void update($, tab, () => t)
               .then(() => update($, stopError, () => ''))
               .then(() => update($, generation, n => n + 1))
+              .catch(() => undefined)
           }}
         />
       ))}

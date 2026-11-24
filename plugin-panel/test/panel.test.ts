@@ -356,6 +356,8 @@ describe('views-panel', () => {
     expect(ansiLines('\x1b[?25lfoo')).toEqual([[{ text: 'foo' }]])
     expect(ansiLines('a\x1b(Bb')).toEqual([[{ text: 'a' }, { text: 'b' }]])
     expect(ansiLines('a\x1b7b')).toEqual([[{ text: 'a' }, { text: 'b' }]])
+    // An operating-system command its line never ends goes whole too.
+    expect(ansiLines('a\x1b]8;;http://x')).toEqual([[{ text: 'a' }]])
     for (const line of ansiLines('\x1b[?25lfoo\na\x1b(Bb\n\x1b[38;2;1;2;3ma\x1b[0m \x1b]8;;u\x07link\x1b]8;;\x07')) {
       expect(line.map(s => s.text).join('')).not.toMatch(/\x1b|\[|\]|\(/)
     }
