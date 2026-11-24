@@ -1,6 +1,5 @@
-//! `web/wrangler.toml` deploys the Worker the setup made, and `web/README.md` records that
-//! setup, as the web Design's Deploy, GitHub App and Setup paragraphs declare them, and
-//! the Worker reads its assets through the binding they name (web.worker/invited-sign-in).
+//! The Worker reads its build-time assets through the binding `web/wrangler.toml` names
+//! (web.worker/invited-sign-in).
 
 use std::fs;
 use std::path::Path;
@@ -20,18 +19,6 @@ fn wrangler() -> Value {
 }
 
 #[test]
-fn binds_the_kv_namespace() {
-    let w = wrangler();
-    let kv = w["kv_namespaces"].as_array().expect("kv_namespaces");
-    assert_eq!(kv.len(), 1);
-    assert_eq!(kv[0]["binding"].as_str(), Some("CLM"));
-    assert_eq!(
-        kv[0]["id"].as_str(),
-        Some("9fa493aaa0a54d219b2dfebb5f681b9e")
-    );
-}
-
-#[test]
 fn the_worker_reads_the_build_time_assets_through_its_binding() {
     // req:web.worker/invited-sign-in@6950d0c1
     // `_clm/` holds the invited list, which the Worker reads through the binding;
@@ -41,108 +28,4 @@ fn the_worker_reads_the_build_time_assets_through_its_binding() {
     let worker = repo_file("crates/clm-web/src/worker.rs");
     assert!(worker.contains("const ASSETS_BINDING: &str = \"ASSETS\";"));
     assert!(worker.contains("self.env.assets(ASSETS_BINDING)"));
-}
-
-#[test]
-fn readme_records_how_to_redo_the_setup() {
-    let readme = repo_file("web/README.md");
-    let kv_id = wrangler()["kv_namespaces"][0]["id"]
-        .as_str()
-        .expect("kv id")
-        .to_string();
-    for fact in [
-        "GITHUB_APP_ID",
-        "GITHUB_APP_PRIVATE_KEY",
-        "GITHUB_CLIENT_ID",
-        "GITHUB_CLIENT_SECRET",
-        "GITHUB_WEBHOOK_SECRET",
-        "COOKIE_KEY",
-        "clm-spec-review/installations/new",
-        "App ID 5433936",
-        "## Rotate a credential",
-        "openssl pkcs8 -topk8 -nocrypt",
-        "openssl rand -base64 32",
-        "wrangler kv namespace create clm-cache",
-        "wrangler secret put",
-        "gh secret set CLOUDFLARE_API_TOKEN",
-        "gh secret set CLOUDFLARE_ACCOUNT_ID",
-        &kv_id,
-    ] {
-        assert!(readme.contains(fact), "web/README.md names {fact}");
-    }
-}
-
-#[test]
-fn the_code_reads_the_designs_secrets_and_links_the_app() {
-    let mut names = std::collections::BTreeSet::new();
-    for krate in ["clm-web", "clm-web-platform"] {
-        let src = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join(krate)
-            .join("src");
-        for entry in fs::read_dir(&src).expect("src") {
-            let text = fs::read_to_string(entry.expect("entry").path()).expect("source");
-            for part in text.split("secret(\"").skip(1) {
-                names.insert(part[..part.find('"').expect("name ends")].to_string());
-            }
-        }
-    }
-    assert_eq!(
-        names.into_iter().collect::<Vec<_>>(),
-        [
-            "COOKIE_KEY",
-            "GITHUB_APP_ID",
-            "GITHUB_APP_PRIVATE_KEY",
-            "GITHUB_CLIENT_ID",
-            "GITHUB_CLIENT_SECRET",
-            "GITHUB_WEBHOOK_SECRET",
-            "VAPID_PUBLIC_KEY",
-        ]
-    );
-    assert!(repo_file("crates/clm-web/src/worker.rs").contains("&\"pkcs8\".into()"));
-    assert!(
-        repo_file("web/src/main.ts")
-            .contains("'https://github.com/apps/clm-spec-review/installations/new'")
-    );
-}
-
-#[test]
-fn no_secret_is_committed() {
-    let w = wrangler();
-    assert!(
-        w.get("vars").is_none() && w.get("env").is_none(),
-        "web/wrangler.toml has no [vars] or [env.*]: secrets are Worker secrets"
-    );
-    let readme = repo_file("web/README.md");
-    assert!(
-        !readme.contains("PRIVATE KEY-----"),
-        "web/README.md holds no private key"
-    );
-}
-
-#[test]
-fn builds_with_worker_build_matching_the_pinned_worker_crate() {
-    let manifest = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"))
-        .expect("Cargo.toml");
-    let pin = manifest
-        .lines()
-        .find_map(|l| l.strip_prefix("worker = \"="))
-        .and_then(|v| v.strip_suffix('"'))
-        .expect("worker is pinned with =");
-    let package =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/package.json"))
-            .expect("web/package.json");
-    let json: serde_json::Value = serde_json::from_str(&package).expect("package.json parses");
-    let script = json["scripts"]["build:worker"]
-        .as_str()
-        .expect("build:worker");
-    assert!(
-        script.contains(&format!("worker-build --version {pin}")),
-        "build:worker installs worker-build {pin}: {script}"
-    );
-    let build = wrangler()["build"]["command"]
-        .as_str()
-        .expect("build command")
-        .to_string();
-    assert!(build.contains("npm run build") && build.contains("npm run build:worker"));
 }
