@@ -99,8 +99,7 @@ fn ident(c: char) -> bool {
 /// Whether a crate outside the exempt ones runs `gh`: it names `clm-git`'s `gh`, or
 /// holds a `"gh"` literal, whatever surrounds it.
 fn calls_gh(text: &str) -> bool {
-    let text = squeezed(text);
-    names_gh(&text) || text.contains(GH)
+    names_gh(text) || squeezed(text).contains(GH)
 }
 
 /// How many `run(` or `run_within(` calls in `text`, with or without a path before them, have
@@ -113,34 +112,60 @@ fn gh_runs(text: &str) -> usize {
         .filter(|(at, _)| starts_call(&text[..*at]))
         .filter(|(at, call)| {
             let args = top_level_args(&text[at + call.len()..]);
-            args.get(1).is_some_and(|arg| *arg == GH)
+            args.get(1).is_some_and(|arg| unraw(arg) == GH)
         })
         .count()
 }
 
 /// Whether a `run(` or `run_within(` right after the squeezed text `before` is a function
 /// call: not a method (`.run(`) and not the end of a longer name (`prerun(`, `prerun_within(`,
-/// `fn run(`), though a keyword such as `return` may run into it once whitespace is gone.
+/// `fn run(`), though keywords such as `return` or `else if` may run into it once whitespace
+/// is gone.
 fn starts_call(before: &str) -> bool {
-    const KEYWORDS: [&str; 6] = ["return", "match", "if", "while", "in", "break"];
+    const KEYWORDS: [&str; 7] = ["return", "match", "if", "else", "while", "in", "break"];
     match before.chars().next_back() {
         Some('.') => false,
-        Some(c) if ident(c) => KEYWORDS.iter().any(|word| {
-            before
-                .strip_suffix(word)
-                .is_some_and(|rest| !rest.chars().next_back().is_some_and(ident))
-        }),
+        Some(c) if ident(c) => KEYWORDS
+            .iter()
+            .any(|word| before.strip_suffix(word).is_some_and(starts_call)),
         _ => true,
     }
 }
 
+/// `arg` with a raw string's `r` and `#` marks taken off, so `r#"gh"#` reads as `"gh"`.
+fn unraw(arg: &str) -> &str {
+    arg.strip_prefix('r')
+        .filter(|rest| rest.starts_with(['"', '#']))
+        .map_or(arg, |rest| rest.trim_matches('#'))
+}
+
+/// How many `#` marks open the raw string whose `r` comes just before `rest`, when one does.
+fn raw_open(rest: &[u8]) -> Option<usize> {
+    let hashes = rest.iter().take_while(|b| **b == b'#').count();
+    (rest.get(hashes) == Some(&b'"')).then_some(hashes)
+}
+
 /// The top-level arguments of the call whose list starts at `text`, just after its `(`:
-/// split at commas outside brackets, strings and character literals, up to the closing `)`.
+/// split at commas outside brackets, strings, raw strings and character literals, up to the
+/// closing `)`.
 fn top_level_args(text: &str) -> Vec<&str> {
     let bytes = text.as_bytes();
     let (mut depth, mut start, mut i) = (0usize, 0, 0);
     let mut args = Vec::new();
     while i < bytes.len() {
+        let after_ident = i > 0 && ident(char::from(bytes[i - 1]));
+        if let Some(hashes) = raw_open(&bytes[i + 1..]).filter(|_| bytes[i] == b'r' && !after_ident)
+        {
+            let close: Vec<u8> = std::iter::once(b'"')
+                .chain(std::iter::repeat_n(b'#', hashes))
+                .collect();
+            i += hashes + 2;
+            while i < bytes.len() && !bytes[i..].starts_with(&close) {
+                i += 1;
+            }
+            i += hashes + 1;
+            continue;
+        }
         match bytes[i] {
             b'"' => {
                 i += 1;
@@ -170,24 +195,30 @@ fn top_level_args(text: &str) -> Vec<&str> {
     args
 }
 
-/// Whether the squeezed `text` reaches `clm-git`'s `gh`: by the path `clm_git::gh`, or by
-/// importing `gh`, a glob or the crate under another name with `use clm_git...;`.
+/// Whether `text` reaches `clm-git`'s `gh`: by the path `clm_git::gh`, whatever whitespace
+/// splits it, or by importing `gh`, a glob or the crate under another name, with
+/// `use clm_git...;` or `extern crate clm_git as`.
 fn names_gh(text: &str) -> bool {
     const PATH: &str = concat!("clm_git", "::gh");
-    const USE: &str = "useclm_git";
-    let named = text
+    const USE: &str = "use clm_git";
+    let tight = squeezed(text);
+    let named = tight
         .match_indices(PATH)
-        .any(|(at, _)| !text[at + PATH.len()..].chars().next().is_some_and(ident));
-    let imported = text.match_indices(USE).any(|(at, _)| {
-        let rest = &text[at + USE.len()..];
+        .any(|(at, _)| !tight[at + PATH.len()..].chars().next().is_some_and(ident));
+    let spaced = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let imported = spaced.match_indices(USE).any(|(at, _)| {
+        let rest = &spaced[at + USE.len()..];
         let statement = &rest[..rest.find(';').unwrap_or(rest.len())];
-        statement.starts_with("as")
-            || statement.contains('*')
-            || statement
-                .split(|c: char| !ident(c))
-                .any(|word| word == "gh")
+        let words: Vec<&str> = statement
+            .split(|c: char| !ident(c))
+            .filter(|word| !word.is_empty())
+            .collect();
+        statement.contains('*')
+            || words.first() == Some(&"as")
+            || words.contains(&"gh")
+            || words.windows(2).any(|pair| pair == ["self", "as"])
     });
-    named || imported
+    named || imported || spaced.contains(concat!("extern crate clm_git", " as"))
 }
 
 #[test]
@@ -202,8 +233,7 @@ fn the_release_guard_lookup_only() {
     let mut runs = 0;
     for file in &files {
         let text = std::fs::read_to_string(file).unwrap();
-        let tight = squeezed(&text);
-        assert!(!names_gh(&tight), "{} calls clm-git's gh", file.display());
+        assert!(!names_gh(&text), "{} calls clm-git's gh", file.display());
         runs += gh_runs(&text);
     }
     assert_eq!(runs, 1, "clm-guard runs gh {runs} times");
@@ -242,6 +272,11 @@ fn a_run_of_gh_is_caught() {
             (format!("tok.{call}(cmd, {GH})"), 0),
             (format!("return {call}(dir, {GH})"), 1),
             (format!("{call}(['\\'', '\"'], {GH})"), 1),
+            (format!("}} else if {call}(dir, {GH}).is_ok() {{"), 1),
+            (format!("let x = begin{call}(dir, {GH})"), 0),
+            (format!("{call}(dir, r{GH})"), 1),
+            (format!("{call}(dir, r#{GH}#)"), 1),
+            (format!("{call}(r#\"a,\"b\"#, {GH})"), 1),
         ];
         for (text, runs) in cases {
             assert_eq!(gh_runs(&text), runs, "{text:?}");
@@ -261,6 +296,10 @@ fn the_matchers_see_split_renamed_and_globbed_calls() {
     )));
     assert!(calls_gh(concat!("use clm_git", " as g;")));
     assert!(calls_gh(concat!("use clm_git", "::*;")));
+    assert!(calls_gh(concat!("use clm_git", "::{self as g};")));
+    assert!(calls_gh(concat!("use clm_git", "::{gh as hub};")));
+    assert!(calls_gh(concat!("extern crate clm_git", " as g;")));
+    assert!(!calls_gh(concat!("use clm_git", "::{git as g};")));
     assert!(calls_gh(concat!("clm_git::run(root, \"g", "h\", &[], o)")));
     assert!(!calls_gh(concat!("use clm_git", "::{git, ghost};")));
     assert!(!calls_gh(concat!("clm_git", "::gh_token()")));
