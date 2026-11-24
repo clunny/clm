@@ -320,7 +320,7 @@ fn unjudged_text(ctx: &Ctx, component: &str, runs: &[Run]) -> Result<String, Err
         out.push_str(&format!("- `{id}`: {}\n", commits.join(", ")));
     }
     out.push_str(
-        "\nEach pass tried them first, so a pass that leaves them again was stopped, reached \
+        "\nEach pass after the first tried them first, so one that left them was stopped, reached \
          `mutate_minutes`, or met a mutation command that fails on their code: `clm verify`'s \
          stderr for those passes says which. Mend what keeps the pass from its verdict, then \
          delete this item.\n",

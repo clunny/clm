@@ -563,6 +563,39 @@ fn only_an_unbroken_run_of_commits_files() {
 }
 
 #[test]
+fn a_stop_keeps_an_unjudged_item_from_filing() {
+    // req:verify/files-unproven@ec5a9e04
+    let (f, _, r) = left_twice(true);
+    let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
+    let before = origin(&["rev-parse", "main"]);
+    let stop = AtomicBool::new(true);
+    let memory = f.path("no-such-meminfo");
+    let call = Call {
+        memory: &memory,
+        minute: Duration::from_secs(60),
+        grace: Duration::from_secs(10),
+        stop: &stop,
+    };
+    let out = f.due_with(&call);
+    assert_eq!(out.code, 0);
+    assert_eq!(
+        said(&out, "unproven:").as_deref(),
+        Some("unproven: not filed: stopped"),
+        "{out:?}"
+    );
+    assert_eq!(said(&out, "unjudged:"), None, "{out:?}");
+    assert_eq!(origin(&["rev-parse", "main"]), before);
+    assert_eq!(origin(&["branch", "--list", "unproven/*"]), "");
+    // Unset, the next call files it.
+    stop.store(false, std::sync::atomic::Ordering::SeqCst);
+    let out = f.due_with(&call);
+    assert!(said(&out, "unjudged: filed 1 items").is_some(), "{out:?}");
+    let short = f.git(&f.work(), &["rev-parse", "--short", &r]);
+    let path = format!("main:backlog/unjudged-a-{short}.md");
+    assert!(origin(&["show", &path]).contains("kind: bug"));
+}
+
+#[test]
 fn left_by_one_pass() {
     // req:verify/files-unproven@ec5a9e04
     let (f, _, _) = left_twice(false);
