@@ -152,8 +152,8 @@ fn read_cd(args: &[String], globs: &[Option<String>], dir: Option<&Path>) -> Cd 
 
 /// `tokens`, a segment's tokens with glob patterns `globs`, as bash passes them to `git`
 /// (`guard-checkout`): each `-C` value before git's subcommand that holds a glob, and each
-/// glued `-C<value>` that does, replaced by its matches from `dir`, sorted, or kept as
-/// written when there is none.
+/// glued `-C<value>` that does, replaced by its matches from `dir`, the checkout before the
+/// segment's own `env -C` or `sudo -D`, sorted, or kept as written when there is none.
 fn git_globs(
     command: &Command,
     tokens: &[String],
@@ -234,7 +234,9 @@ fn collect(segments: &[Segment], cwd: Option<&Path>, place: Place, out: &mut Vec
         let here = place.moved(&command, &globs);
         out.push(Judged {
             text: segment.text.clone(),
-            tokens: git_globs(&command, &tokens, &globs, here.dir.as_deref()),
+            // Bash globs every word where the shell stands, before the segment's own
+            // `env -C` or `sudo -D` changes directory.
+            tokens: git_globs(&command, &tokens, &globs, place.dir.as_deref()),
             checkout: here.dir.clone(),
             lost: here.lost.clone(),
             piped: segment.sep.pipes(),
@@ -603,7 +605,7 @@ mod tests {
         dir
     }
 
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     #[test]
     fn globbing_matches_as_bash_does() {
         let dir = tree(&["m", "x1", "x2", "xa", ".hid", "-Cm", "a[b", "a*b", "sub/y1"]);
@@ -646,7 +648,7 @@ mod tests {
         assert!(glob::matches(Some(long.path()), &many).is_empty());
     }
 
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     #[test]
     fn no_directory_to_start_from() {
         let dir = tree(&["m"]);
@@ -670,7 +672,7 @@ mod tests {
         );
     }
 
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     #[test]
     fn git_c_globs_yield_every_match() {
         let dir = tree(&["m", "x1", "x2"]);
@@ -696,7 +698,16 @@ mod tests {
             at("env -S 'git -C m* push'"),
             ["env", "git", "-C", "m*", "push"]
         );
-        // From the segment's checkout.
+        // From the checkout so far, before the segment's own `env -C` or `sudo -D`.
+        let s = tree(&["m", "s/m", "s/m2"]);
+        for command in ["env -C s git -C m* push", "sudo -D s git -C m* push"] {
+            let git = git_piece(command, Some(s.path()));
+            assert_eq!(
+                git.tokens[git.tokens.len() - 4..],
+                ["git", "-C", "m", "push"]
+            );
+            assert_eq!(git.checkout.as_deref(), Some(s.path().join("s").as_path()));
+        }
         let deeper = format!("cd {} && git -C ../x* push", dir.path().join("m").display());
         assert_eq!(
             git_piece(&deeper, None).tokens,
@@ -709,7 +720,7 @@ mod tests {
         );
     }
 
-    // req:plugin.hooks.guard.shell/guard-checkout@38729032
+    // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
     #[test]
     fn a_cd_reads_its_options_and_globs_as_bash_does() {
         let dir = tree(&["m", "x1", "x2", ".hid", "a[b"]);
