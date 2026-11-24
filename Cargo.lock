@@ -473,7 +473,6 @@ dependencies = [
  "clm-view-repo",
  "serde_json",
  "tempfile",
- "toml",
 ]
 
 [[package]]

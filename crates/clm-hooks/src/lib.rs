@@ -1,9 +1,12 @@
 //! The rules behind the plugin's hooks (`hook-logic-in-clm`). Each takes the hook's JSON
-//! event as Claude Code writes it to stdin, and treats input it can't read as nothing to do.
+//! event as its agent harness writes it to stdin, and treats input it can't read as nothing
+//! to do.
 
+use std::io::Write;
 use std::path::Path;
 
 use clm_agent_harness::{AgentHarness, parse_event};
+use clm_view_repo::NodeSize;
 
 mod command;
 mod defect;
@@ -13,23 +16,20 @@ pub use command::{DefectArgs, HookArgs, autosync_command, defect_command, sessio
 /// The environment as a lookup, as each command's call takes it.
 type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
 
-/// `SessionStart`: `clm status` for the CLM repository holding the event's `cwd`, then the
-/// rule for reporting CLM defects unless `defects` is `off` (or the settings' error), else "".
-pub fn session_start(event: &str) -> String {
-    session_start_hook(AgentHarness::ClaudeCode, event).0
-}
-
-/// `session_start` for an agent harness (`hooks-per-agent-harness`): the event's `cwd` comes
-/// from the agent harness's own parser, and the text is written the way that agent harness
-/// adds it to the session's context. The exit code is 0.
-pub fn session_start_hook(agent_harness: AgentHarness, event: &str) -> (String, i32) {
-    session_start_in(agent_harness, event, &clm_config::process_env)
-}
-
-/// `session_start_hook` with the settings read through `env`.
-fn session_start_in(agent_harness: AgentHarness, event: &str, env: Env) -> (String, i32) {
+/// `SessionStart` for an agent harness (`session-status`, `hooks-per-agent-harness`): the
+/// event's `cwd` comes from the agent harness's own parser, and the text is written the way
+/// that agent harness adds it to the session's context. The settings are read through `env`,
+/// the status is `clm status`'s given `budgets`, and what that writes to standard error goes
+/// to `err`. The exit code is 0.
+fn session_start_in(
+    agent_harness: AgentHarness,
+    event: &str,
+    env: Env,
+    err: &mut dyn Write,
+    budgets: NodeSize,
+) -> (String, i32) {
     let text = hook_cwd(agent_harness, event)
-        .map(|cwd| session_text(Path::new(&cwd), env))
+        .map(|cwd| session_text(Path::new(&cwd), env, err, budgets))
         .unwrap_or_default();
     if text.is_empty() || agent_harness != AgentHarness::Codex {
         return (text, 0);
@@ -42,12 +42,8 @@ fn session_start_in(agent_harness: AgentHarness, event: &str, env: Env) -> (Stri
     (format!("{out}\n"), 0)
 }
 
-/// `autosync` for an agent harness (`hooks-per-agent-harness`): silent, exit code 0.
-pub fn autosync_hook(agent_harness: AgentHarness, event: &str) -> (String, i32) {
-    autosync_hook_in(agent_harness, event, &clm_config::process_env)
-}
-
-/// `autosync_hook` with the settings read through `env`.
+/// `Stop` for an agent harness (`autosync-hook`, `hooks-per-agent-harness`), with the settings
+/// and the environment git is given read through `env`: silent, exit code 0.
 fn autosync_hook_in(agent_harness: AgentHarness, event: &str, env: Env) -> (String, i32) {
     if let Some(cwd) = hook_cwd(agent_harness, event) {
         autosync_in(Path::new(&cwd), env);
@@ -59,16 +55,13 @@ fn hook_cwd(agent_harness: AgentHarness, event: &str) -> Option<String> {
     parse_event(agent_harness, event).ok()?.cwd
 }
 
-fn session_text(cwd: &Path, env: Env) -> String {
+/// `clm status` for the CLM repository holding `cwd`, then the upgrade line and the rule for
+/// reporting CLM defects unless `defects` is `off` (or the settings' error), else "".
+fn session_text(cwd: &Path, env: Env, err: &mut dyn Write, budgets: NodeSize) -> String {
     let Some(root) = clm_root(cwd) else {
         return String::new();
     };
     let settings = clm_config::load(Some(root), env);
-    // Oversized nodes marked as `clm status` marks them; without settings, none.
-    let budgets = settings.as_ref().ok().map(|s| clm_view_repo::Budgets {
-        spec_tokens: s.node_size.value.spec_tokens,
-        code_tokens: s.node_size.value.code_tokens,
-    });
     let skipped = settings
         .as_ref()
         .ok()
@@ -76,9 +69,20 @@ fn session_text(cwd: &Path, env: Env) -> String {
         .unwrap_or_default();
     let (list, pairs) = (clm_init::migrations(), clm_init::supersedes());
     let reminder = upgrade::upgrade_line(clm_upgrade::pending_in(&list, &pairs, root), &skipped);
-    let Ok(status) = clm_view_repo::status(root, budgets) else {
+    // `clm status` as it prints, kept only when it succeeds.
+    let mut printed = Vec::new();
+    let code = clm_view_repo::status_command(
+        std::iter::empty::<&str>(),
+        root,
+        env,
+        &mut printed,
+        err,
+        budgets,
+    );
+    let status = match (code, String::from_utf8(printed)) {
+        (0, Ok(status)) => status,
         // The reminder stands even when the status can't be read.
-        return reminder.map(|line| line + "\n").unwrap_or_default();
+        _ => return reminder.map(|line| line + "\n").unwrap_or_default(),
     };
     let mut text = format!("CLM state (`clm status`) of this repository:\n{status}");
     if let Some(line) = reminder {
@@ -141,27 +145,18 @@ const ASK_RULE: &str = " Send the report as the body of a `<<'EOF'` heredoc on t
 file (`defect-issue`), list that report under `## CLM defects` in your PR body with the kept \
 file's path, for the human to file by hand.";
 
-/// `Stop`: pushes a snapshot of the spec work in the CLM repository holding the event's
-/// `cwd` (`autosync-policy`), unless its `autosync` setting is `false` or can't be loaded.
-/// Silent whatever happens: it runs every turn.
-pub fn autosync(event: &str) {
-    autosync_hook(AgentHarness::ClaudeCode, event);
-}
-
+/// Pushes a snapshot of the spec work in the CLM repository holding `cwd` (`autosync-policy`)
+/// with `sync`'s call of `clm autosync`, given `env`, unless the repository's `autosync`
+/// setting is `false` or can't be loaded. Silent whatever happens: it runs every turn.
 fn autosync_in(cwd: &Path, env: Env) {
     let Some(root) = clm_root(cwd) else {
         return;
     };
     if clm_config::load(Some(root), env).is_ok_and(|s| s.autosync.value) {
-        let _ = clm_sync::autosync(root);
+        let (mut out, mut err) = (std::io::sink(), std::io::sink());
+        let _ =
+            clm_sync::autosync_command(std::iter::empty::<&str>(), root, env, &mut out, &mut err);
     }
-}
-
-/// The settings for the CLM repository found from `cwd` (or none), read from this
-/// process's environment. The hooks and `clm defect` all load them this way, so they agree
-/// on the repository.
-pub fn settings(cwd: Option<&Path>) -> Result<clm_config::Settings, clm_config::Error> {
-    clm_config::load(cwd.and_then(clm_root), &clm_config::process_env)
 }
 
 /// The first of `cwd` and its ancestors with `specs/SPEC.md`, looking no higher than the

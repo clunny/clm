@@ -659,6 +659,7 @@ fn dispatch() -> ExitCode {
                     env,
                     out,
                     err,
+                    &node_size,
                 ),
                 Hook::Autosync(_) => clm_hooks::autosync_command(
                     hook_args,
