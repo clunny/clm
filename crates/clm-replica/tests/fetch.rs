@@ -60,11 +60,7 @@ fn what_is_still_to_fetch() {
     // A file carried with no text and not marked binary was read of nothing: still to fetch.
     r.apply(Change::Tip {
         sha: "111".into(),
-        files: vec![File {
-            entry: listed("src/b.rs", "100755"),
-            binary: false,
-            text: None,
-        }],
+        files: vec![File::unfetched(listed("src/b.rs", "100755"))],
         removed: Vec::new(),
     });
     assert_eq!(r.pending_fetch(), ["specs/a/SPEC.md", "src/b.rs"]);

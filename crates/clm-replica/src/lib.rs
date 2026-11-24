@@ -59,6 +59,37 @@ pub struct File {
     pub text: Option<String>,
 }
 
+impl File {
+    /// A file the source read as text (`files-a-source-gives`): held binary when its text
+    /// has a NUL byte near its start, as `git` judges it.
+    pub fn text(entry: Entry, text: impl Into<String>) -> File {
+        File {
+            entry,
+            binary: false,
+            text: Some(text.into()),
+        }
+    }
+
+    /// A blob the source says is binary: held with no text and no markers.
+    pub fn binary(entry: Entry) -> File {
+        File {
+            entry,
+            binary: true,
+            text: None,
+        }
+    }
+
+    /// A file the source read nothing of: held in the tree only, so `pending_fetch` still
+    /// lists it.
+    pub fn unfetched(entry: Entry) -> File {
+        File {
+            entry,
+            binary: false,
+            text: None,
+        }
+    }
+}
+
 /// What a source fetched for a ref it reports.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RefChange {
