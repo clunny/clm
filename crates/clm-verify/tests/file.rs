@@ -134,7 +134,7 @@ fn said(out: &Outcome, start: &str) -> Option<String> {
 
 #[test]
 fn filed_and_read_as_not_built() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.due();
@@ -187,7 +187,7 @@ fn filed_and_read_as_not_built() {
 
 #[test]
 fn already_filed() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", None);
     p.f.due();
     let filed = p.head();
@@ -198,7 +198,7 @@ fn already_filed() {
 
 #[test]
 fn reworded_since() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", Some("11111111"));
     let before = p.head();
     let out = p.f.due();
@@ -209,7 +209,7 @@ fn reworded_since() {
 
 #[test]
 fn resolved_by_a_build() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", None);
     p.f.due();
     p.sync();
@@ -226,7 +226,7 @@ fn resolved_by_a_build() {
 
 #[test]
 fn the_land_fails() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", None);
     let hook = p.f.path("origin.git/hooks/pre-receive");
     write_exec(
@@ -252,7 +252,7 @@ fn the_land_fails() {
 
 #[test]
 fn pipeline_mode_files_nothing() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("pipeline", None);
     let before = p.head();
     let out = p.f.due();
@@ -262,7 +262,7 @@ fn pipeline_mode_files_nothing() {
 
 #[test]
 fn a_commit_verification_files_nothing() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.run(&clm_verify::Request::Commit(p.found.clone()));
@@ -272,7 +272,7 @@ fn a_commit_verification_files_nothing() {
 
 #[test]
 fn a_dry_run_files_nothing() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.dry(false);
@@ -310,7 +310,7 @@ fn a_dry_run_files_nothing() {
 
 #[test]
 fn a_verification_that_ends_in_an_error_files_nothing() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", None);
     // A trigger holds, and the verify tree's lock can't be opened (a directory stands in its
     // place), so the verification ends in a failure once its settings are loaded; a filing
@@ -343,7 +343,7 @@ fn a_verification_that_ends_in_an_error_files_nothing() {
 
 #[test]
 fn stopped_before_it_files() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", None);
     let before = p.head();
     let out = due_stopped(&p, true);
@@ -368,7 +368,7 @@ fn stopped_before_it_files() {
 
 #[test]
 fn a_stop_with_nothing_current_to_file_says_nothing() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     let p = filing("local", Some("11111111"));
     let before = p.head();
     let out = due_stopped(&p, true);
@@ -379,7 +379,7 @@ fn a_stop_with_nothing_current_to_file_says_nothing() {
 
 #[test]
 fn a_filing_command_ended_by_a_signal() {
-    // req:verify/files-unproven@1f7d71f7
+    // req:verify/files-unproven@ec5a9e04
     // The land's check writes its process group and sends `SIGINT` to its own shell, as a
     // Ctrl-C at a terminal reaches every process of `clm verify`'s group.
     let p = filing_with(
@@ -423,4 +423,96 @@ fn a_filing_command_ended_by_a_signal() {
     );
     assert!(p.on_origin(&p.item()).is_some());
     no_branch_left(&p);
+}
+
+/// A clone whose `main` holds two lands `Q` and then `R`, verified green at `R`, with a
+/// `mutated` record for each: `R`'s holding `a/thing` under `left`, and `Q`'s under `left`
+/// when `q_left`, else under `killed`. Returns the fixture, `Q` and `R`.
+fn left_twice(q_left: bool) -> (Fixture, String, String) {
+    let f = Fixture::new(None);
+    let toml = format!(
+        "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nmutate = \"true\"\n",
+        f.path("bin/check").display()
+    );
+    let q = f.land(&[("clm.toml", &toml)], "Q");
+    let r = f.land(&[("crates/a/src/r.rs", "fn r() {}\n")], "R");
+    f.verified(&r, true);
+    let thing = vec!["a/thing".to_string()];
+    let body = if q_left {
+        Body::mutated(q.clone(), None, vec![], vec![], vec![]).with_left(thing.clone())
+    } else {
+        Body::mutated(q.clone(), None, thing.clone(), vec![], vec![])
+    };
+    clm_ledger::append(&f.work(), body, &f.env()).unwrap();
+    let body = Body::mutated(r.clone(), Some(q.clone()), vec![], vec![], vec![]).with_left(thing);
+    clm_ledger::append(&f.work(), body, &f.env()).unwrap();
+    (f, q, r)
+}
+
+#[test]
+fn left_by_two_passes_in_a_row() {
+    // req:verify/files-unproven@ec5a9e04
+    let (f, q, r) = left_twice(true);
+    let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
+    let short = |sha: &str| f.git(&f.work(), &["rev-parse", "--short", sha]);
+    let before = origin(&["rev-parse", "main"]);
+    let out = f.due();
+    assert!(out.line.starts_with("verify not-due"), "{}", out.line);
+    assert_eq!(out.code, 0);
+    assert_eq!(
+        said(&out, "unjudged:").as_deref(),
+        Some("unjudged: filed 1 items for 1 requirements"),
+        "{out:?}"
+    );
+    assert_eq!(said(&out, "unproven: filed"), None, "{out:?}");
+    assert_ne!(origin(&["rev-parse", "main"]), before);
+    let path = format!("backlog/unjudged-a-{}.md", short(&r));
+    let item = origin(&["show", &format!("main:{path}")]);
+    let slug = path.trim_start_matches("backlog/").trim_end_matches(".md");
+    let parsed = clm_model::parse_backlog_item(slug, &item).expect("the item parses");
+    assert_eq!(
+        parsed.frontmatter.kind,
+        clm_model::BacklogKind::Bug,
+        "{item}"
+    );
+    assert_eq!(parsed.frontmatter.nodes, vec!["a".to_string()], "{item}");
+    assert_eq!(
+        parsed.frontmatter.title,
+        "The mutation pass can't judge requirements of a"
+    );
+    assert!(parsed.frontmatter.unproven.is_empty(), "{item}");
+    assert!(item.contains("`a/thing`"), "{item}");
+    assert!(
+        item.contains(&short(&q)) && item.contains(&short(&r)),
+        "{item}"
+    );
+    assert_eq!(origin(&["branch", "--list", "unproven/*"]), "");
+    // A third pass, on a later commit `S`, that leaves it too lands nothing more.
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    f.git(&f.work(), &["reset", "-q", "--hard", "origin/main"]);
+    let s = f.land(&[("crates/a/src/s.rs", "fn s() {}\n")], "S");
+    f.verified(&s, true);
+    let body = Body::mutated(s.clone(), Some(r.clone()), vec![], vec![], vec![])
+        .with_left(vec!["a/thing".to_string()]);
+    clm_ledger::append(&f.work(), body, &f.env()).unwrap();
+    let out = f.due();
+    assert_eq!(origin(&["rev-parse", "main"]), s);
+    assert_eq!(said(&out, "unjudged:"), None, "{out:?}");
+    assert_eq!(said(&out, "unproven:"), None, "{out:?}");
+    let backlog = origin(&["ls-tree", "--name-only", "main", "backlog/"]);
+    assert_eq!(backlog, path, "{backlog}");
+}
+
+#[test]
+fn left_by_one_pass() {
+    // req:verify/files-unproven@ec5a9e04
+    let (f, _, _) = left_twice(false);
+    let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
+    let before = origin(&["rev-parse", "main"]);
+    let out = f.due();
+    assert_eq!(origin(&["rev-parse", "main"]), before);
+    assert_eq!(said(&out, "unjudged:"), None, "{out:?}");
+    assert_eq!(said(&out, "unproven:"), None, "{out:?}");
+    let backlog = origin(&["ls-tree", "--name-only", "main", "backlog/"]);
+    assert_eq!(backlog, "", "{backlog}");
 }
