@@ -526,9 +526,40 @@ fn a_push_in_a_quoted_substitution() {
     for command in [
         "git commit -m \"$(printf 'a; git push origin main')\"",
         "gh pr create --title t --body \"$(cat <<'EOF'\nclm approve spec/x\nEOF\n)\"",
+        "git commit -m \"$(cat <<'EOF'\nUse `git push origin main` or $(clm approve spec/x) here\nEOF\n)\"",
     ] {
         allows(&bash(command));
     }
+}
+
+#[test]
+fn a_push_in_a_quoted_backtick() {
+    // req:plugin.hooks.guard.shell/guard-quoted-substitutions@c092a288
+    // req:plugin.hooks.guard.shell/guard-quotes@c45ac590
+    // a push in a quoted backtick
+    for command in [
+        "echo \"`git push origin main`\"",
+        "echo \"`echo \\`git push origin main\\``\"",
+        // A backtick inside a quoted substitution opens one too.
+        "echo \"$(echo \"`git push origin main`\")\"",
+    ] {
+        blocks_push(&bash(command));
+    }
+    let why = asks(&bash("git commit -m \"x `clm approve spec/x`\""));
+    assert!(why.contains("humans-review-intent"), "{why}");
+    for command in [
+        "git commit -m \"use \\`git push origin main\\` here\"",
+        "git commit -m \"`echo \\\"a; clm approve spec/x\\\"`\"",
+        // The substitution, quotes and all, stays part of one token.
+        "git commit -m \"`echo \"a; git push origin main\"`\"",
+    ] {
+        allows(&bash(command));
+    }
+    // A backtick that never closes leaves the quotes unbalanced.
+    blocks_push(&bash("echo \"`echo x; git push origin main"));
+    // It runs before the segment's own `-C`.
+    let dir = main_with_w();
+    blocks_push(&bash_in("git -C w log \"`git push`\"", dir.path()));
 }
 
 #[test]

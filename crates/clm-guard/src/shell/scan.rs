@@ -40,7 +40,9 @@ pub(crate) struct Segment {
     /// The bodies of the heredocs it opened, in order.
     pub bodies: Vec<String>,
     /// The text of each substitution inside its double quotes, between `$(` and the
-    /// matching `)` (`guard-quoted-substitutions`), outermost only.
+    /// matching `)` or between backticks, with a backtick's escapes removed
+    /// (`guard-quoted-substitutions`), and of each in its unquoted heredoc bodies
+    /// (`guard-heredocs`), outermost only.
     pub subs: Vec<String>,
     /// The words of its here-strings, with their quotes removed (`guard-here-strings`).
     pub herestrings: Vec<String>,
@@ -198,6 +200,18 @@ impl<'a> Scanner<'a> {
                         }
                         // It never closes: the scan ends inside the double quotes, which
                         // don't balance.
+                        None => {
+                            self.word.push_str(&text[i..]);
+                            width = text.len() - i;
+                        }
+                    },
+                    // A backtick opens a substitution to the next one not escaped.
+                    (Quote::Double, '`') => match backtick(text, i + 1) {
+                        Some(end) => {
+                            self.word.push_str(&text[i..=end]);
+                            self.subs.push(unescape(&text[i + 1..end], "$`\\\""));
+                            width = end + 1 - i;
+                        }
                         None => {
                             self.word.push_str(&text[i..]);
                             width = text.len() - i;
@@ -503,6 +517,7 @@ fn substitution(text: &str, from: usize) -> Option<(usize, Vec<Heredoc>)> {
                 heredocs.extend(inner);
                 width = end + 1 - i;
             }
+            (Some(Quote::Double), '`') => width = backtick(text, i + 1)? + 1 - i,
             (Some(_), _) => {}
             (None, '\'') => quote = Some(Quote::Single),
             (None, '"') => quote = Some(Quote::Double),
@@ -543,6 +558,37 @@ fn substitution(text: &str, from: usize) -> Option<(usize, Vec<Heredoc>)> {
         i += width;
     }
     None
+}
+
+/// The offset of the backtick that closes a backtick substitution whose text starts at
+/// `from`: the next one not escaped by a backslash; `None` when there is none.
+fn backtick(text: &str, from: usize) -> Option<usize> {
+    let mut i = from;
+    while let Some(c) = text[i..].chars().next() {
+        match c {
+            '`' => return Some(i),
+            '\\' => i += 1 + text[i + 1..].chars().next().map_or(0, char::len_utf8),
+            _ => i += c.len_utf8(),
+        }
+    }
+    None
+}
+
+/// `text` with the backslash before each of `chars` removed, as the shell removes it from a
+/// backtick substitution's text before it runs it.
+fn unescape(text: &str, chars: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut it = text.chars().peekable();
+    while let Some(c) = it.next() {
+        match it.peek() {
+            Some(&n) if c == '\\' && chars.contains(n) => {
+                out.push(n);
+                it.next();
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// A segment's arguments: its words without its redirections, nor the target of an
