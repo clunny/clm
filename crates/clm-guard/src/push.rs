@@ -20,8 +20,9 @@ pub(crate) enum Reach {
     PushesTo(String),
     /// It names no branch, or a named one, and a configured push refspec sends to `main`.
     Configured(String),
-    /// It names this branch, whose upstream is `main`, under `push.default=upstream`.
-    Upstream(String),
+    /// It names this branch, whose upstream is `main`, under this `push.default`, `upstream`
+    /// or `tracking`.
+    Upstream(String, String),
     /// It names no branch, and this setting, as `<key>=<value>`, pushes every branch.
     EveryBranch(String),
     /// It names no branch, or a named one, and a `--config-env` or include option, as
@@ -63,10 +64,17 @@ impl Reach {
             Reach::Configured(refspec) => {
                 format!("{lead}a configured push refspec sends to `main` (`{refspec}`)")
             }
-            Reach::Upstream(branch) => format!(
-                "{lead}the branch `{branch}`'s upstream is `main`, and git pushes it there \
-                 under `push.default=upstream`"
-            ),
+            Reach::Upstream(branch, mode) => {
+                let alias = if mode == "tracking" {
+                    ", the old name of `upstream`"
+                } else {
+                    ""
+                };
+                format!(
+                    "{lead}the branch `{branch}`'s upstream is `main`, and git pushes it there \
+                     under `push.default={mode}`{alias}"
+                )
+            }
             Reach::EveryBranch(setting) => {
                 format!("{lead}`{setting}` makes git push every branch, `main` among them")
             }
@@ -405,13 +413,13 @@ impl Query<'_> {
             return Ok(Some(Reach::Configured(refspec.clone())));
         }
         let default = || values("push.default".to_string());
-        if default().any(|v| matches!(v, "upstream" | "tracking"))
+        if let Some(mode) = default().find(|v| matches!(*v, "upstream" | "tracking"))
             && let Some(branch) = push.branches.iter().find(|b| {
                 values(format!("branch.{b}.merge"))
                     .any(|v| matches!(v, "main" | "heads/main" | "refs/heads/main"))
             })
         {
-            return Ok(Some(Reach::Upstream(branch.to_string())));
+            return Ok(Some(Reach::Upstream(branch.to_string(), mode.to_string())));
         }
         // Only `push.default` and a configured refspec move where a bare `HEAD` or a named
         // branch goes.

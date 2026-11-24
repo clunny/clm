@@ -991,17 +991,33 @@ fn a_branch_named_without_its_destination() {
         why.contains("configured push refspec") && why.contains("HEAD:<branch>"),
         "{why}"
     );
-    for command in [
-        "git -c push.default=upstream push origin impl/x/c",
-        "git -c push.default=tracking push origin impl/x/c",
-        "git -c push.default=upstream push origin +impl/x/c",
-        "git -c push.default=upstream push origin refs/heads/impl/x/c",
-        "git -c push.default=upstream push origin impl/x/b impl/x/c",
+    for (command, mode) in [
+        (
+            "git -c push.default=upstream push origin impl/x/c",
+            "upstream",
+        ),
+        (
+            "git -c push.default=tracking push origin impl/x/c",
+            "tracking",
+        ),
+        (
+            "git -c push.default=upstream push origin +impl/x/c",
+            "upstream",
+        ),
+        (
+            "git -c push.default=upstream push origin refs/heads/impl/x/c",
+            "upstream",
+        ),
+        (
+            "git -c push.default=upstream push origin impl/x/b impl/x/c",
+            "upstream",
+        ),
     ] {
         let why = blocks_push(&bash_in(command, &work));
         assert!(
             why.contains("`impl/x/c`")
-                && why.contains("push.default=upstream")
+                && why.contains(&format!("`push.default={mode}`"))
+                && (mode == "upstream" || why.contains("old name of `upstream`"))
                 && why.contains("HEAD:<branch>"),
             "{command}: {why}"
         );
