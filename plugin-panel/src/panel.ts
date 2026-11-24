@@ -48,10 +48,14 @@ const NOT_FOUND = /ENOENT|not found|no such file/i
 export const NOT_A_REPO =
   "This directory isn't a CLM repository: no `specs/SPEC.md` here or above it, up to the git root."
 
+/** Whether `path` exists; a check Claude Code cut short rejects, so no draw reads it as an answer. */
 function exists($: Host, path: string, kind?: 'file'): Promise<boolean> {
   return $.fs.stat(path).then(
     s => kind === undefined || s.kind === kind,
-    () => false,
+    e => {
+      if (isAborted(e)) throw e
+      return false
+    },
   )
 }
 
@@ -91,7 +95,11 @@ export async function clmCommand($: Host): Promise<string> {
   if (await exists($, sibling, 'file')) return sibling
   const own = root.slice(root.lastIndexOf('/') + 1)
   const versions = join(parent(parent(root)), 'clm')
-  const listed = await $.fs.list(versions).catch(() => [])
+  // A listing cut short is no answer: the draw it served ends, as at any other cut-short call.
+  const listed = await $.fs.list(versions).catch((e: unknown) => {
+    if (isAborted(e)) throw e
+    return []
+  })
   const names = listed
     .filter(e => e.kind === 'dir')
     .map(e => e.name)
@@ -105,6 +113,7 @@ export async function clmCommand($: Host): Promise<string> {
 
 /** A `$` call the engine cut short, such as a draw's run once a newer draw replaced it. */
 const ABORTED = /\baborted$/
+const isAborted = (e: unknown): boolean => ABORTED.test(e instanceof Error ? e.message : String(e))
 
 /**
  * A pane draw's answer, or `none` when the engine aborted one of its `$` calls because a newer
@@ -115,7 +124,7 @@ export async function unlessSuperseded<T, N>(draw: () => Promise<T>, none: N): P
   try {
     return await draw()
   } catch (e) {
-    if (ABORTED.test(e instanceof Error ? e.message : String(e))) return none
+    if (isAborted(e)) return none
     throw e
   }
 }
@@ -135,10 +144,11 @@ export async function runClm($: Host, args: readonly string[], cwd: string): Pro
     }
     return run
   } catch (e) {
-    // A missing `cwd` fails the spawn as ENOENT too, so it's checked before blaming `clm`.
+    // A run cut short is no answer. A missing `cwd` fails the spawn as ENOENT too, so it's
+    // checked before blaming `clm`.
+    if (isAborted(e)) throw e
     if (!(await exists($, cwd))) return { exitCode: 127, stdout: '', stderr: sessionDirGone(cwd) }
     const why = e instanceof Error ? e.message : String(e)
-    if (ABORTED.test(why)) throw e
     if (clm === 'clm' && NOT_FOUND.test(why)) return { exitCode: 127, stdout: '', stderr: NOT_INSTALLED }
     return { exitCode: 127, stdout: '', stderr: `clm couldn't start: ${clm} in ${cwd}: ${why}` }
   }
@@ -155,7 +165,7 @@ export async function hasOriginMain($: Host, cwd: string): Promise<boolean> {
   try {
     return (await $.process.run(ORIGIN_MAIN_ARGV, { cwd })).exitCode === 0
   } catch (e) {
-    if (ABORTED.test(e instanceof Error ? e.message : String(e))) throw e
+    if (isAborted(e)) throw e
     return false
   }
 }
@@ -266,7 +276,14 @@ export type Span = { text: string; color?: string; bold?: boolean; dim?: boolean
 
 const COLORS = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
 
-/** ANSI text as lines of styled runs: SGR escapes set the style, other escapes are dropped. */
+/**
+ * Every escape sequence, tried in this order: a control sequence (CSI), an operating-system
+ * command (OSC, such as a hyperlink's), then any other escape up to its final character.
+ */
+// eslint-disable-next-line no-control-regex
+const ESCAPE = /(\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\|$)|\x1b[ -/]*[0-~])/
+
+/** ANSI text as lines of styled runs: SGR escapes set the style, every other escape is dropped whole. */
 export function ansiLines(text: string): Span[][] {
   let style: Omit<Span, 'text'> = {}
   return text
@@ -274,9 +291,8 @@ export function ansiLines(text: string): Span[][] {
     .split('\n')
     .map(line => {
       const spans: Span[] = []
-      // eslint-disable-next-line no-control-regex
-      // CSI sequences, and OSC ones (a hyperlink's ends), whose text between stays.
-      for (const part of line.split(/(\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\))/)) {
+      // The text between escapes stays.
+      for (const part of line.split(ESCAPE)) {
         const sgr = /^\x1b\[([0-9;]*)m$/.exec(part)
         if (sgr) {
           style = applySgr(style, sgr[1] ?? '')

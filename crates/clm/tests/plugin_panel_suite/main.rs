@@ -1,4 +1,4 @@
-//! The panel plugin's package under `plugin-panel/` and its entry in the marketplace.
+//! The panel plugin's package under `plugin-panel/`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,8 +9,8 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn plugin() -> PathBuf {
-    repo().join("plugin")
+fn panel() -> PathBuf {
+    repo().join("plugin-panel")
 }
 
 fn json(path: &Path) -> Value {
@@ -41,7 +41,37 @@ fn assert_workspace_version(manifest: &Value, plugin: &str) {
 
 #[test]
 fn panel_package() {
-    // req:plugin.panel/panel-package@286ccb95
+    // req:plugin.panel/panel-package@80e45fc2
+    let panel = panel();
+    let manifest = json(&panel.join(".claude-plugin/plugin.json"));
+    assert_eq!(manifest["name"], "clm-panel");
+    assert_eq!(manifest["dependencies"], serde_json::json!(["clm"]));
+    assert_eq!(manifest["author"]["name"], "Christopher Lunny");
+    assert_eq!(manifest["license"], "MIT");
+    assert_workspace_version(&manifest, "plugin-panel");
+    let package = json(&panel.join("package.json"));
+    // It runs the tests, after the type-check (`type-check`).
+    let test = package["scripts"]["test"].as_str().unwrap_or_default();
+    assert!(test.ends_with("vitest run"), "{package}");
+    assert!(panel.join("package-lock.json").is_file());
+    let npmrc = fs::read_to_string(panel.join(".npmrc")).unwrap();
+    assert!(
+        npmrc.lines().any(|l| l.trim() == "ignore-scripts=true"),
+        "{npmrc}"
+    );
+}
+
+#[test]
+fn panel_hooks_module() {
+    // req:plugin.panel/panel-package@80e45fc2
+    let panel = panel();
+    assert_eq!(
+        json(&panel.join("hooks/hooks.json")),
+        serde_json::json!({ "modules": ["./register.tsx"] })
+    );
+    assert!(panel.join("hooks/register.tsx").is_file());
+    // Held here until `plugin`'s suite asserts them (`plugin/package`, `plugin/hooks-wired`):
+    // the marketplace lists `clm` then `clm-panel`, and `clm`'s hooks file names no module.
     let market = json(&repo().join(".claude-plugin/marketplace.json"));
     let names: Vec<_> = market["plugins"]
         .as_array()
@@ -54,29 +84,9 @@ fn panel_package() {
         [("clm", "./plugin"), ("clm-panel", "./plugin-panel")],
         "{market}"
     );
-    let panel = repo().join("plugin-panel");
-    assert_eq!(
-        json(&panel.join("hooks/hooks.json")),
-        serde_json::json!({ "modules": ["./register.tsx"] })
-    );
-    assert!(panel.join("hooks/register.tsx").is_file());
     assert!(
-        json(&plugin().join("hooks/hooks.json"))
+        json(&repo().join("plugin/hooks/hooks.json"))
             .get("modules")
             .is_none()
-    );
-    let manifest = json(&panel.join(".claude-plugin/plugin.json"));
-    assert_eq!(manifest["name"], "clm-panel");
-    assert_eq!(manifest["dependencies"], serde_json::json!(["clm"]));
-    assert_workspace_version(&manifest, "plugin-panel");
-    let package = json(&panel.join("package.json"));
-    // It runs the tests, after the type-check (`type-check`).
-    let test = package["scripts"]["test"].as_str().unwrap_or_default();
-    assert!(test.ends_with("vitest run"), "{package}");
-    assert!(panel.join("package-lock.json").is_file());
-    let npmrc = fs::read_to_string(panel.join(".npmrc")).unwrap();
-    assert!(
-        npmrc.lines().any(|l| l.trim() == "ignore-scripts=true"),
-        "{npmrc}"
     );
 }

@@ -43,7 +43,9 @@ export function startRun(
 ): AgentRun[] {
   if (list.some(a => a.id === r.id)) return resumed(list, r.id)
   const key = normalised(r.description)
-  const earlier = key === '' ? 0 : list.filter(a => normalised(a.description) === key).length
+  // Only the runs the list keeps once this one joins count toward its round.
+  const kept = list.slice(-(MAX_RUNS - 1))
+  const earlier = key === '' ? 0 : kept.filter(a => normalised(a.description) === key).length
   const entry = runEntry(r.prompt)
   const run: AgentRun = {
     id: r.id,
@@ -65,7 +67,7 @@ export function startRun(
 }
 
 /** `/clear` and resume begin a new conversation: the list empties. Quitting keeps it. */
-export const resetsOn = (reason: string): boolean => reason === 'clear' || reason === 'resume'
+const resetsOn = (reason: string): boolean => reason === 'clear' || reason === 'resume'
 
 /** After a reload: a run still running or waiting whose agent the engine no longer lists won't finish. */
 export const reconcile = (list: readonly AgentRun[], listed: readonly { id: string }[]): AgentRun[] =>
@@ -303,11 +305,17 @@ export const windowOf = (model: string): number => (/haiku/i.test(model) ? 200_0
 
 const ctxPct = (a: AgentRun): number => Math.min(100, Math.round((a.contextTokens / windowOf(a.model)) * 100))
 
-/** A model ID as people say it: `claude-opus-5-5` is `Opus 5.5`. */
+/** The older form, `claude-<major>[-<minor>]-<family>-<date>`, wherever `claude-` stands in the ID. */
+const OLDER = /claude-(\d+)(?:-(\d{1,2}))?-(fable|mythos|opus|sonnet|haiku)-\d/i
+/** The family followed by its version: `opus-5-5`. */
+const NEWER = /(fable|mythos|opus|sonnet|haiku)-(\d+)(?:-(\d{1,2})(?!\d))?/i
+
+/** A model ID as people say it: `claude-opus-5-5` is `Opus 5.5`, `claude-3-opus-20240229` is `Opus 3`. */
 export function modelName(id: string): string {
-  const m = /(fable|mythos|opus|sonnet|haiku)-(\d+)(?:-(\d{1,2})(?!\d))?/i.exec(id)
-  if (!m) return id.replace(/^claude-/, '').replace(/\[.*\]$/, '') || '—'
-  const [, family = '', major = '', minor] = m
+  const older = OLDER.exec(id)
+  const newer = older ? null : NEWER.exec(id)
+  const [family, major, minor] = older ? [older[3], older[1], older[2]] : newer ? [newer[1], newer[2], newer[3]] : []
+  if (family === undefined || major === undefined) return id.replace(/^claude-/, '').replace(/\[.*\]$/, '') || '—'
   return `${family.charAt(0).toUpperCase()}${family.slice(1).toLowerCase()} ${major}${minor ? `.${minor}` : ''}`
 }
 

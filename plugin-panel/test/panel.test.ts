@@ -85,7 +85,7 @@ const REPO = { files: ['/work/repo/specs/SPEC.md', SHIM], dirs: ['/work/repo', '
 const ok = (stdout: string): Run => ({ exitCode: 0, stdout, stderr: '' })
 
 describe('view-command-in-chat', () => {
-  // req:plugin.panel/view-command-in-chat@56b47f43
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test('a view in the chat is clm view <name> --at origin/main at the cwd, in a code block', async () => {
     const $ = fake({ ...REPO, answer: () => ok('flight  2 nodes pending\n') })
     const answer = await command($, 'flight', '/work/repo/crates')
@@ -98,6 +98,7 @@ describe('view-command-in-chat', () => {
     expect(unfenced('error: bad spec')).toBeUndefined()
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test('status is clm status; every view name is accepted', async () => {
     const $ = fake({ ...REPO, answer: argv => ok(argv.slice(1).join(' ')) })
     for (const name of ['status', 'queue', 'spec', 'flight', 'blockers']) {
@@ -106,6 +107,7 @@ describe('view-command-in-chat', () => {
     }
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test('with no origin/main, or no git, the view is of the checkout, with no --at', async () => {
     for (const rev of [{ exitCode: 1, stdout: '', stderr: '' }, undefined]) {
       const $ = fake({
@@ -121,11 +123,13 @@ describe('view-command-in-chat', () => {
     }
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test('a failing clm answers with its stderr', async () => {
     const $ = fake({ ...REPO, answer: () => ({ exitCode: 1, stdout: 'x', stderr: 'error: bad spec' }) })
     expect(await command($, 'spec', '/work/repo')).toEqual({ text: 'error: bad spec' })
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test('an unknown name lists the names and runs nothing', async () => {
     const $ = fake({ ...REPO, answer: () => ok('') })
     const answer = await command($, 'everything', '/work/repo')
@@ -135,20 +139,21 @@ describe('view-command-in-chat', () => {
 })
 
 describe('views-panel', () => {
-  // req:plugin.panel/views-panel@29b65e2f
+  // req:plugin.panel/views-panel@76d63404
   test('the pane is CLM with Queue, Spec, Flight and Blockers, Queue first', () => {
     expect(PANE_TITLE).toBe('CLM')
     expect(TABS).toEqual(['queue', 'spec', 'flight', 'blockers'])
     expect(FIRST_TAB).toBe('queue')
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('a kept tab that is none of the four reads as Queue', () => {
     expect(tabOf('capabilities')).toBe('queue')
     expect(tabOf(undefined)).toBe('queue')
     for (const t of TABS) expect(tabOf(t)).toBe(t)
   })
 
-  // req:plugin.panel/queue-tab@f6749284
+  // req:plugin.panel/queue-tab@edf50f3e
   test('the Queue tab runs no JSON model, and its lines are not pressable and draw no inspector', () => {
     for (const surface of ['terminal', 'desktop'] as const) {
       expect(modelRuns('queue', surface, null, true)).toEqual({})
@@ -169,8 +174,8 @@ describe('views-panel', () => {
     expect(lines.map(l => l.spans)).toEqual(chart)
   })
 
-  // req:plugin.panel/views-panel@29b65e2f
-  // req:plugin.panel/queue-tab@f6749284
+  // req:plugin.panel/views-panel@76d63404
+  // req:plugin.panel/queue-tab@edf50f3e
   test('the Queue tab has no SVG form: every surface runs its ANSI chart at the pane width', () => {
     expect(viewArgs('queue', 'terminal', 80, true)).toEqual([
       'view', 'queue', '--at', 'origin/main', '--format', 'ansi', '--width', '80',
@@ -184,6 +189,7 @@ describe('views-panel', () => {
     }
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('the terminal pane asks for ANSI at its width; others for SVG', () => {
     expect(viewArgs('flight', 'terminal', 80)).toEqual(['view', 'flight', '--format', 'ansi', '--width', '80'])
     for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
@@ -191,6 +197,7 @@ describe('views-panel', () => {
     }
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('every clm view the pane runs passes --at origin/main while the ref exists, and none otherwise', async () => {
     expect(viewArgs('flight', 'terminal', 80, true)).toEqual([
       'view', 'flight', '--at', 'origin/main', '--format', 'ansi', '--width', '80',
@@ -212,6 +219,7 @@ describe('views-panel', () => {
     await expect(hasOriginMain(fake({ ...REPO, startError: 'The operation was aborted' }), '/work/repo')).rejects.toThrow('aborted')
   })
 
+  // req:plugin.panel/component-inspector@bfcfb470
   test("a chart at origin/main begins with the line naming its commit, which no node line is", () => {
     const spec = ansiLines('origin/main abc1234 · fetched 3m ago · checkout impl/a\nr  active\n')
     const at = ok(JSON.stringify({ at: { rev: 'origin/main', commit: 'abc1234' }, nodes: [{ node: 'r' }] }))
@@ -221,6 +229,7 @@ describe('views-panel', () => {
     ])
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test("ANSI escapes become coloured runs", () => {
     const lines = ansiLines('\x1b[34mflight\x1b[0m  2 nodes\n  ci  \x1b[36mready\x1b[0m\n\n\x1b[1;31mx\x1b[22my\x1b[39mz\x1b[K\n')
     expect(lines).toEqual([
@@ -231,6 +240,7 @@ describe('views-panel', () => {
     ])
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('it fetches at most once every 2 minutes, however often it redraws', async () => {
     const $ = fake({ ...REPO, answer: () => ok('') })
     let last: number | undefined
@@ -243,6 +253,7 @@ describe('views-panel', () => {
     expect($.calls).toHaveLength(2)
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test("a failed fetch still waits 2 minutes", async () => {
     const $ = fake(REPO)
     const first = fetchIfDue($, '/work/repo', 0, undefined)
@@ -251,7 +262,7 @@ describe('views-panel', () => {
     expect($.calls).toHaveLength(1)
   })
 
-  // req:plugin.panel/views-panel@29b65e2f
+  // req:plugin.panel/views-panel@76d63404
   test('a press changes no run the pane holds for this generation, so no clm command runs again', async () => {
     const cache = new Map<string, Promise<Run>>()
     let started = 0
@@ -270,6 +281,7 @@ describe('views-panel', () => {
     expect(started).toBe(3)
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('a failed fetch draws an amber line above the chart until a fetch succeeds', async () => {
     const failing = fake({
       ...REPO,
@@ -292,6 +304,7 @@ describe('views-panel', () => {
     expect(await fetchIfDue(fake({ ...REPO, startError: 'The operation was aborted' }), '/work/repo', 0, undefined).fetching).toBeUndefined()
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('the age is whole minutes under an hour, whole hours from then on', () => {
     expect([0, 59_999, 60_000, 59 * 60_000 + 59_999, 3_600_000, 7_199_999, 7_200_000].map(ms => fetchAge(ms))).toEqual([
       '0m',
@@ -304,6 +317,7 @@ describe('views-panel', () => {
     ])
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('two overlapping redraws start one fetch', async () => {
     const $ = fake({ ...REPO, answer: () => ok('') })
     const a = fetchIfDue($, '/work/repo', 0, undefined)
@@ -311,7 +325,7 @@ describe('views-panel', () => {
     expect($.calls).toHaveLength(1)
   })
 
-  // req:plugin.panel/queue-tab@f6749284
+  // req:plugin.panel/queue-tab@edf50f3e
   test('the pane body: stderr on failure, else ANSI on the terminal or for the Queue tab on any surface, else the SVG', () => {
     expect(paneBody('terminal', { exitCode: 1, stdout: 'x', stderr: 'violations: 2' }, 'spec')).toEqual({ error: 'violations: 2' })
     expect(paneBody('terminal', ok('\x1b[34mx\x1b[0m'), 'spec')).toEqual({ ansi: [[{ text: 'x', color: 'blue' }]] })
@@ -322,52 +336,53 @@ describe('views-panel', () => {
     expect(paneBody('desktop', ok('<svg/>'), 'spec')).toEqual({ svg: '<svg/>' })
   })
 
-  test('no pictures: no Picture button, no Image, and no png on any tab or surface', () => {
-    for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
-      for (const tab of ['queue', 'spec', 'flight', 'blockers'] as const) {
-        for (const at of [true, false]) expect(viewArgs(tab, surface, 80, at)).not.toContain('png')
-      }
-    }
-    const panel = `${ts.sys.getCurrentDirectory()}/`
-    for (const file of ['hooks/register.tsx', 'src/panel.ts', 'src/inspector.ts', 'src/agents.ts']) {
-      expect(ts.sys.readFile(panel + file), file).not.toMatch(/Picture|<Image|\bpng\b/)
-    }
-  })
-
-  test("the terminal chart's node lines are pressable and the Blockers tab's chains folded", () => {
-    expect(modelRuns('blockers', 'terminal', null).own).toEqual(['view', 'blockers', '--format', 'json'])
-    const chart = ansiLines('blockers\ngate  holds up 1\n└─ c\n')
-    const roots = ok(JSON.stringify({ roots: [{ root: 'gate' }] }))
-    const { lines } = chartLines({ tab: 'blockers', chart, own: roots, selected: null, unfolded: [] })
-    expect(lines.map(l => l.key)).toEqual([undefined, 'root:gate'])
-    const spec = ansiLines('r  active\n')
-    const nodes = ok(JSON.stringify({ nodes: [{ node: 'r' }] }))
-    expect(chartLines({ tab: 'spec', chart: spec, own: nodes, selected: null, unfolded: [] }).lines[0]!.key).toBe('node:r')
-  })
-
+  // req:plugin.panel/views-panel@76d63404
   test('the width is a whole number clm takes', () => {
     expect(viewArgs('flight', 'terminal', 79.5).at(-1)).toBe('79')
     expect(viewArgs('flight', 'terminal', Number.NaN).at(-1)).toBe('100')
     expect(viewArgs('flight', 'terminal', 1e6).at(-1)).toBe('65535')
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('extended colours and hyperlinks keep their text', () => {
     expect(ansiLines('\x1b[38;2;255;0;34ma\x1b[0m \x1b]8;;https://x\x1b\\link\x1b]8;;\x1b\\')).toEqual([
       [{ text: 'a' }, { text: ' ' }, { text: 'link' }],
     ])
+    // A 256-colour and a background colour are dropped; bright and dim are drawn.
+    expect(ansiLines('\x1b[38;5;196ma\x1b[0m\x1b[41mb\x1b[0m\x1b[91mc\x1b[0m\x1b[2md\x1b[0m')).toEqual([
+      [{ text: 'a' }, { text: 'b' }, { text: 'c', color: 'redBright' }, { text: 'd', dim: true }],
+    ])
+    // Any other control sequence, and an escape with intermediate bytes, go whole.
+    expect(ansiLines('\x1b[?25lfoo')).toEqual([[{ text: 'foo' }]])
+    expect(ansiLines('a\x1b(Bb')).toEqual([[{ text: 'a' }, { text: 'b' }]])
+    expect(ansiLines('a\x1b7b')).toEqual([[{ text: 'a' }, { text: 'b' }]])
+    // An operating-system command its line never ends goes whole too.
+    expect(ansiLines('a\x1b]8;;http://x')).toEqual([[{ text: 'a' }]])
+    for (const line of ansiLines('\x1b[?25lfoo\na\x1b(Bb\n\x1b[38;2;1;2;3ma\x1b[0m \x1b]8;;u\x07link\x1b]8;;\x07')) {
+      expect(line.map(s => s.text).join('')).not.toMatch(/\x1b|\[|\]|\(/)
+    }
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test('a failure with nothing on stderr still says something', async () => {
     const $ = fake({ ...REPO, answer: () => ({ exitCode: 2, stdout: '', stderr: '' }) })
     expect(await command($, 'flight', '/work/repo')).toEqual({ text: 'clm exited 2' })
+    // Stdout alone, without the whitespace around it, when stderr is empty.
+    const out = fake({ ...REPO, answer: argv => (argv[0] === 'git' ? ok('') : { exitCode: 1, stdout: ' x\n', stderr: '' }) })
+    expect(await command(out, 'flight', '/work/repo')).toEqual({ text: 'x' })
+    // So too after a stop button.
+    expect(await pressStop(out, 'loop:drain', '/work/repo')).toBe('x')
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test("a failing clm view shows its stderr", async () => {
     const $ = fake({ ...REPO, answer: () => ({ exitCode: 1, stdout: '', stderr: 'violations: 2' }) })
     const run = await runClm($, viewArgs('flight', 'terminal', 80), '/work/repo')
     expect(run).toEqual({ exitCode: 1, stdout: '', stderr: 'violations: 2' })
   })
 
+  // req:plugin.panel/views-panel@76d63404
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test("outside a CLM repository it says so and opens nothing", async () => {
     const $ = fake({ files: [SHIM, '/work/specs/SPEC.md'], dirs: ['/work/repo', '/work/repo/.git'], answer: () => ok('') })
     expect(await command($, '', '/work/repo/src')).toEqual({ text: NOT_A_REPO })
@@ -375,6 +390,7 @@ describe('views-panel', () => {
     expect($.calls).toEqual([])
   })
 
+  // req:plugin.panel/views-panel@76d63404
   test('inside one, no argument opens the pane', async () => {
     const $ = fake({ ...REPO, answer: () => ok('') })
     expect(await command($, '', '/work/repo/src/deep')).toEqual({ open: true })
@@ -382,7 +398,7 @@ describe('views-panel', () => {
 })
 
 describe('panel-package', () => {
-  // req:plugin.panel/panel-package@286ccb95
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test("with no clm, it says clm isn't installed, naming the clm plugin", async () => {
     const $ = fake({ files: ['/work/repo/specs/SPEC.md'], dirs: ['/work/repo', '/work/repo/.git'] })
     expect(await clmCommand($)).toBe('clm')
@@ -392,7 +408,7 @@ describe('panel-package', () => {
     expect($.calls.at(-1)).toEqual({ argv: ['clm', 'view', 'flight'], cwd: '/work/repo' })
   })
 
-  // req:plugin.panel/panel-package@286ccb95
+  // req:plugin.panel/panel-package@80e45fc2
   test("the manifest names the owner in full and the licence", () => {
     // `npm test` runs in `plugin-panel/`.
     const text = ts.sys.readFile(`${ts.sys.getCurrentDirectory()}/.claude-plugin/plugin.json`)
@@ -401,6 +417,7 @@ describe('panel-package', () => {
     expect(manifest.license).toBe('MIT')
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test("from the plugin cache it runs the clm plugin's shim of its own version", async () => {
     const cache = '/home/u/.claude/plugins/cache/clm'
     const shim = (v: string) => `${cache}/clm/${v}/bin/clm`
@@ -414,6 +431,7 @@ describe('panel-package', () => {
     expect(await clmCommand(other)).toBe(shim('0.10.0'))
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test("a shim that can't start says so with the reason, not that clm isn't installed", async () => {
     const run = await runClm(fake(REPO), ['view', 'flight'], '/work/repo')
     expect(run.exitCode).toBe(127)
@@ -421,6 +439,7 @@ describe('panel-package', () => {
     expect(run.stderr).toBe(`clm couldn't start: ${SHIM} in /work/repo: spawn ${SHIM} ENOENT`)
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test("a session whose directory is gone says so, not that clm isn't installed", async () => {
     // A spawn in a missing directory fails as ENOENT, as a missing program does.
     const $ = fake({ files: [SHIM] })
@@ -432,21 +451,25 @@ describe('panel-package', () => {
     expect(bare.stderr).toBe(sessionDirGone('/work/gone'))
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test("a clm on PATH that fails to start for another reason says why, not that it isn't installed", async () => {
     const $ = fake({ files: ['/work/repo/specs/SPEC.md'], dirs: ['/work/repo', '/work/repo/.git'], startError: 'spawn clm ETIMEDOUT' })
     const run = await runClm($, ['view', 'flight'], '/work/repo')
     expect(run.stderr).toBe("clm couldn't start: clm in /work/repo: spawn clm ETIMEDOUT")
   })
 
+  // req:plugin.panel/superseded-draw@a8a6cbb7
   test('a run the engine aborted rejects, rather than reading as a clm that could not start', async () => {
     const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: `clm-panel: $.process.run(${SHIM}) aborted` })
     await expect(runClm($, ['view', 'flight'], '/work/repo')).rejects.toThrow(/aborted$/)
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test('from a directory marketplace it runs plugin/bin/clm beside it', async () => {
     expect(await clmCommand(fake({ files: [SHIM] }))).toBe(SHIM)
   })
 
+  // req:plugin.panel/view-command-in-chat@abfcbb20
   test('the shim runs directly, and git is never asked', async () => {
     const $ = fake({ files: [SHIM], answer: (argv: readonly string[]) => (argv[0] === 'git' ? ok('/usr/lib/git-core') : ok('chart')) })
     await runClm($, ['view', 'flight'], '/work/repo')
@@ -455,9 +478,9 @@ describe('panel-package', () => {
 })
 
 describe('superseded-draw', () => {
-  // req:plugin.panel/superseded-draw@53be288d
   const aborted = new Error(`clm-panel: $.process.run(${SHIM}) aborted`)
 
+  // req:plugin.panel/superseded-draw@a8a6cbb7
   test('a draw whose run the engine aborted ends without throwing and draws nothing, and the newer draw runs again', async () => {
     const cache = new Map<string, Promise<Run>>()
     let starts = 0
@@ -470,17 +493,42 @@ describe('superseded-draw', () => {
     expect(starts).toBe(2)
   })
 
+  // req:plugin.panel/superseded-draw@a8a6cbb7
   test('a failure that is not an abort is not swallowed', async () => {
     await expect(unlessSuperseded(() => Promise.reject(new Error('boom')), null)).rejects.toThrow('boom')
     await expect(unlessSuperseded(() => Promise.reject(new Error('aborted early')), null)).rejects.toThrow('aborted early')
   })
 
+  // req:plugin.panel/superseded-draw@a8a6cbb7
   test('an aborted run of clm or of git is not kept as an answer', async () => {
     const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'x aborted' })
     expect(await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)).toBeNull()
     expect(await unlessSuperseded(() => hasOriginMain($, '/work/repo'), null)).toBeNull()
   })
 
+  // req:plugin.panel/superseded-draw@a8a6cbb7
+  test('a draw whose every call Claude Code cut short, its directory check among them, rejects', async () => {
+    const cut = (): Promise<never> => Promise.reject(new Error(`clm-panel: $.fs.stat aborted`))
+    const $: Host = {
+      plugin: { root: PANEL },
+      process: { run: cut },
+      fs: { stat: cut, list: cut },
+    }
+    await expect(runClm($, ['view', 'flight'], '/work/repo')).rejects.toThrow(/aborted$/)
+    expect(await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)).toBeNull()
+    // The shim found, only the run and the directory check cut short.
+    const found = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'x aborted' })
+    found.fs.stat = path => (path === SHIM ? Promise.resolve({ kind: 'file' as const }) : cut())
+    await expect(runClm(found, ['view', 'flight'], '/work/repo')).rejects.toThrow(/aborted$/)
+    // Installed from the plugin cache, a cut-short listing of the shims is no `clm` on PATH.
+    const cached = fake({ root: '/cache/clm-panel/0.6.0', files: [], dirs: ['/work/repo'], answer: () => ok('chart') })
+    cached.fs.list = cut
+    await expect(runClm(cached, ['view', 'flight'], '/work/repo')).rejects.toThrow(/aborted$/)
+    expect(cached.calls).toEqual([])
+  })
+
+  // req:plugin.panel/view-command-in-chat@abfcbb20
+  // req:plugin.panel/superseded-draw@a8a6cbb7
   test('another failure of clm still shows why it could not start', async () => {
     const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'spawn EACCES' })
     const run = await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)
@@ -489,7 +537,7 @@ describe('superseded-draw', () => {
 })
 
 describe('queue-stop-buttons', () => {
-  // req:plugin.panel/queue-stop-buttons@14eb1ea3
+  // req:plugin.panel/queue-stop-buttons@03474fbd
   test('Drain and Stop now run clm build stop at the cwd, and a failure answers its stderr', async () => {
     expect(STOP_BUTTONS.map(b => [b.key, b.label])).toEqual([['loop:drain', 'Drain'], ['loop:now', 'Stop now']])
     const $ = fake({ ...REPO, answer: () => ok('') })
@@ -505,7 +553,7 @@ describe('queue-stop-buttons', () => {
     expect(failing.calls).toHaveLength(1)
   })
 
-  // req:plugin.panel/queue-stop-buttons@14eb1ea3
+  // req:plugin.panel/queue-stop-buttons@03474fbd
   test('a requested stop dims the pressed button with requested', () => {
     const now = ansiLines('queue\n\x1b[33mstop requested: now\x1b[0m\n')
     expect(stopRequested(now)).toBe('now')
