@@ -333,11 +333,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
         // What isn't fetched stays to fetch: the replica lists it as pending.
         for c in &compare.changed {
             if !files.iter().any(|f| f.entry.path == c.path) {
-                files.push(File {
-                    entry: entry(c),
-                    binary: false,
-                    text: None,
-                });
+                files.push(File::unfetched(entry(c)));
             }
         }
         self.replica.apply(Change::Tip {
