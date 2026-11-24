@@ -29,8 +29,8 @@ The second half of the item: a failing command leaves its block and every block 
 ## Outcome
 
 - `ci/mutate-script`: StrykerJS is given no range of a `.test.ts` or `.test.tsx` file, which counts as neither kind of code file; new scenario *StrykerJS mutates no test file*. Every existing scenario keeps its name and outcome. `ci`'s Design says why.
-- `verify/files-unproven`: the `unjudged` items, named after the commit of the second oldest record of the requirement's unbroken run of records that left it, so later passes that leave it again file nothing more; the `unproven: filed` line counts both kinds; new scenarios *left by two passes in a row* and *left by one pass*. Every existing scenario keeps its name and outcome. `verify`'s Contract and Design say so.
-- `docs/decisions/mutation-after-land.md` gains a dated section.
+- `verify/files-unproven`: the `unjudged` items, named after the commit of the second oldest record of the requirement's unbroken run of records that left it, so later passes that leave it again file nothing more; they print `unjudged: filed <n> items for <m> requirements`, apart from the `unproven: filed` line; new scenarios *left by two passes in a row* and *left by one pass*. Every existing scenario keeps its name and outcome. `verify`'s Contract and Design say so.
+- `docs/decisions/mutation-after-land.md` gains a dated section; the guide's `settings.md` (`mutate_minutes`) and `how-it-works.md` say when an `unjudged` item is filed and what settles it.
 - The `plugin.panel` requirements the item names are judged by the next pass after `ci`'s build lands, since they are still under `left`.
 
 ## Constraints
