@@ -931,11 +931,23 @@ fn configuration_from_variables() {
             assert!(!why.contains(&format!("`{other}`")), "{command}: {why}");
         }
     }
+    // After a `cd` the guard couldn't follow, the reason quotes it.
+    let why = blocks_push(&bash_in("cd $W && GIT_CONFIG_COUNT=1 git push", &work));
+    assert!(
+        why.contains("`GIT_CONFIG_COUNT`")
+            && why.contains("`cd $W`")
+            && why.contains("fell back to"),
+        "{why}"
+    );
     allows(&bash_in(
         "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push \
          GIT_CONFIG_VALUE_0=HEAD:main git push origin impl/x/b",
         &work,
     ));
+    // Decided with no checkout, as git is asked nothing.
+    let (code, _, err) = guard_with_no_cwd(None, "GIT_CONFIG_GLOBAL=g git push", "/nonexistent");
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("`GIT_CONFIG_GLOBAL`"), "{err}");
 }
 
 #[test]

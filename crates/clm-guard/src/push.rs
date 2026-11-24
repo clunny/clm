@@ -64,9 +64,8 @@ impl Reach {
                  read, and that setting could send the push to `main`"
             ),
             Reach::SetByVariable(variable) => format!(
-                "{lead}the command sets `{variable}`, which sets configuration from the \
-                 environment that the guard can't read, and that configuration could send the \
-                 push to `main`"
+                "{lead}the command sets `{variable}`, which gives git configuration the guard \
+                 doesn't read, and that configuration could send the push to `main`"
             ),
         };
         Some(format!(
