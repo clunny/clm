@@ -3,7 +3,7 @@ title: Guard
 status: active
 owners: ["@clunny"]
 depends_on: [plugin.hooks, plugin.hooks.guard.shell, config, vcs, agent-harness]
-paths: ["crates/clm-guard/Cargo.toml", "crates/clm-guard/src/*.rs", "crates/clm-guard/tests/guard.rs", "crates/clm-guard/tests/git_layer.rs", "crates/clm-guard/tests/budgets.rs"]
+paths: ["crates/clm-guard/Cargo.toml", "crates/clm-guard/src/*.rs", "crates/clm-guard/tests/guard.rs", "crates/clm-guard/tests/budgets.rs"]
 successor: ""
 serves: [capability/guard-sessions, capability/work-from-any-agent-harness, architecture/approval-policy, architecture/land-locally, architecture/agent-harness-adapters]
 ---
