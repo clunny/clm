@@ -27,3 +27,8 @@ Edge cases and workarounds: none. A `git -C` after `cd` segments still globs fro
 ## What the requirements no longer state
 
 - `guard-checkout`: the sentence "In a segment whose command is `git` … SHALL be expanded in the same way, from the segment's checkout, …" no longer expands the glob from the checkout the segment's own `env -C` or `sudo -D` moves it to; it expands it from the checkout before them.
+
+## Open questions
+
+- The builder check read the no-start-directory sentence ("a relative glob SHALL stay as written, until an absolute `cd`, `env -C` or `sudo -D` sets one") with the modified `-C` clause as meaning `env -C /abs git -C m* push`, with no directory to start from, leaves `m*` as written, since bash globs where the shell stands. That is the intended reading; the build may prove it with a unit case.
+- The new scenario reads `plugin.hooks.guard/push-guard`, which is behind under the live change `20261123-wave-5-hooks-by-the-rule` and itself needs `guard-checkout`, so no `#### Needs` is given (it would form a cycle); what the scenario needs of it, a `-C` push from a `main` worktree blocked, is built and proven today.
