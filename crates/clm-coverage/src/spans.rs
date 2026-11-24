@@ -430,9 +430,95 @@ fn script_name(args: &str) -> String {
     else {
         return String::new();
     };
-    let body = &inner[1..];
-    body.find(quote)
-        .map_or_else(String::new, |end| body[..end].to_string())
+    script_literal(&inner[1..], quote).unwrap_or_default()
+}
+
+/// The value of a string literal whose opening `quote` comes just before `body`, read to
+/// its unescaped closing quote with its escapes as the language reads them; `None` when
+/// the line holds no closing quote or the literal an escape the language refuses, so a
+/// malformed escape names no test rather than a guess at its value. An escape whose value
+/// is a control character stays as written, so a name holds no tab or line break and a
+/// list line can still name its test.
+fn script_literal(body: &str, quote: char) -> Option<String> {
+    let mut value = String::new();
+    let mut rest = body;
+    loop {
+        let mut chars = rest.chars();
+        let c = chars.next()?;
+        if c == quote {
+            return Some(value);
+        }
+        if c != '\\' {
+            value.push(c);
+            rest = chars.as_str();
+            continue;
+        }
+        let (read, after) = script_escape(chars.as_str())?;
+        if read.is_control() {
+            value.push_str(&rest[..rest.len() - after.len()]);
+        } else {
+            value.push(read);
+        }
+        rest = after;
+    }
+}
+
+/// The character an escape reads as, `escape` being the text after its backslash, and the
+/// text after the escape; `None` for an escape the language refuses.
+fn script_escape(escape: &str) -> Option<(char, &str)> {
+    let mut chars = escape.chars();
+    let read = match chars.next()? {
+        'n' => '\n',
+        't' => '\t',
+        'r' => '\r',
+        'b' => '\u{8}',
+        'f' => '\u{c}',
+        'v' => '\u{b}',
+        // A legacy octal escape, which strict code (as modules and classes are) refuses.
+        '0' if chars.as_str().starts_with(|c: char| c.is_ascii_digit()) => return None,
+        '0' => '\0',
+        '1'..='9' => return None,
+        'x' => {
+            let (code, after) = hex(chars.as_str(), 2)?;
+            return Some((char::from_u32(code)?, after));
+        }
+        'u' => {
+            let (code, after) = script_unit(chars.as_str())?;
+            // A surrogate pair reads as the one character its two halves make.
+            if (0xD800..0xDC00).contains(&code)
+                && let Some((low, rest)) = after.strip_prefix("\\u").and_then(script_unit)
+                && (0xDC00..0xE000).contains(&low)
+            {
+                let pair = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                return Some((char::from_u32(pair)?, rest));
+            }
+            return Some((char::from_u32(code)?, after));
+        }
+        other => other,
+    };
+    Some((read, chars.as_str()))
+}
+
+/// The code of a `\u` escape, `text` being what follows its `u`: four hex digits or a
+/// braced code point.
+fn script_unit(text: &str) -> Option<(u32, &str)> {
+    match text.strip_prefix('{') {
+        Some(braced) => {
+            let close = braced.find('}')?;
+            let (code, _) = hex(&braced[..close], close)?;
+            Some((code, &braced[close + 1..]))
+        }
+        None => hex(text, 4),
+    }
+}
+
+/// The value of the `n` hex digits `text` starts with, and the text after them.
+fn hex(text: &str, n: usize) -> Option<(u32, &str)> {
+    let digits = text.get(..n)?;
+    if n == 0 || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some((u32::from_str_radix(digits, 16).ok()?, &text[n..]))
 }
 
 fn script_tests(lines: &[&str]) -> Vec<TestSpan> {
