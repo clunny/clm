@@ -670,6 +670,13 @@ mod tests {
             git_piece("git -C m* push", None).tokens,
             ["git", "-C", "m*", "push"]
         );
+        // The segment's own absolute `env -C` moves its checkout, not where bash globs.
+        let git = git_piece(&format!("env -C {} git -C m* push", m.display()), None);
+        assert_eq!(
+            git.tokens[git.tokens.len() - 4..],
+            ["git", "-C", "m*", "push"]
+        );
+        assert_eq!(git.checkout.as_deref(), Some(m.as_path()));
     }
 
     // req:plugin.hooks.guard.shell/guard-checkout@dd60352e
