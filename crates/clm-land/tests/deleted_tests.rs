@@ -425,6 +425,21 @@ fn the_pre_check_passes_a_renamed_test_keeping_its_marker() {
 }
 
 #[test]
+fn a_head_with_no_merge_base_is_not_refused() {
+    // req:land/deleted-tests-approved@8b7c3461
+    // An orphan head holds `tests/t.rs` without `two`: with no history in common it removed
+    // nothing, so the pre-check goes on to its check.
+    let f = with_tests();
+    let work = f.work();
+    f.git(&work, &["checkout", "-q", "--orphan", "fresh"]);
+    std::fs::write(work.join("tests/t.rs"), test("one")).unwrap();
+    f.git(&work, &["add", "-A"]);
+    f.git(&work, &["commit", "-q", "-m", "fresh"]);
+    let out = clm_land::check_only(&work, None, &f.env(&[])).unwrap();
+    assert_eq!(out.lines.last().unwrap(), "checks pass");
+}
+
+#[test]
 fn the_pre_check_with_no_origin_main_judges_nothing() {
     // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
