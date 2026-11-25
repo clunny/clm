@@ -163,20 +163,19 @@ fn what_the_webhook_answers() {
     assert_eq!(ping.status, 204, "a ping");
     assert!(reached(&fake).is_empty(), "the ping reached no object");
 
-    fake.replicas.bound.set(false);
+    fake.replicas.fails.borrow_mut().insert("o/a".into());
     let push = fake.handle(webhook(
         "push",
         &push_body("o/a", "111", "222"),
         WEBHOOK_SECRET,
     ));
     assert_eq!(push.status, 200, "a push the object fails");
-    // The unreachable object records nothing; the Worker's log shows it was posted to.
-    let logs = fake.logs.borrow().clone();
-    assert!(
-        logs.len() == 1 && logs[0].contains("o/a"),
-        "the push was passed on to o/a's object: {logs:?}"
+    assert_eq!(
+        reached(&fake),
+        ["o/a"],
+        "the push was posted to o/a's object"
     );
-    fake.replicas.bound.set(true);
+    fake.replicas.calls.borrow_mut().clear();
 
     let added = json!({
         "action": "added",
