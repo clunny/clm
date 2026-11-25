@@ -298,7 +298,6 @@ describe('signed repositories', () => {
     const note = view.querySelector<HTMLElement>('.approve-bar .signed-note')!;
     expect(note.textContent).toContain("signed with the reviewer's SSH key");
     expect(note.querySelector('code')?.textContent).toBe('clm approve spec/x');
-    expect(note.querySelector('button.copy')).not.toBeNull();
     const head = view.querySelector<HTMLElement>('.head')!;
     expect(head.textContent).toContain('clunny/web');
     expect(approvalMarks(view)).toEqual(["unsigned, doesn't count"]);
@@ -327,10 +326,16 @@ describe('signed repositories', () => {
 
   it('copy puts the command on the clipboard', () => {
     const writeText = vi.fn(() => Promise.resolve());
+    const kept = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    const view = renderReview(review({ branch: 'spec/x', signed: true }), opts());
-    view.querySelector<HTMLButtonElement>('.signed-note button.copy')!.click();
-    expect(writeText).toHaveBeenCalledWith('clm approve spec/x');
+    try {
+      const view = renderReview(review({ branch: 'spec/x', signed: true }), opts());
+      view.querySelector<HTMLButtonElement>('.signed-note button.copy')!.click();
+      expect(writeText).toHaveBeenCalledWith('clm approve spec/x');
+    } finally {
+      if (kept) Object.defineProperty(navigator, 'clipboard', kept);
+      else delete (navigator as { clipboard?: unknown }).clipboard;
+    }
   });
 
   // req:web.views/signed-approvals@bdf1ce5c
@@ -349,9 +354,7 @@ describe('signed repositories', () => {
   });
 });
 
-const settle = async () => {
-  for (let i = 0; i < 4; i++) await Promise.resolve();
-};
+const settle = () => new Promise((go) => setTimeout(go));
 const typeIn = (form: HTMLElement, text: string) => {
   const t = form.querySelector('textarea')!;
   t.value = text;
@@ -378,6 +381,7 @@ describe('Request changes', () => {
     expect(onRequest).toHaveBeenCalledWith('Split it');
     done(null);
     await settle();
+    expect(view.querySelector('.approve-bar .fbform')).toBeNull();
 
     const after = renderReview(review({ branch: 'spec/x', signed: true, change_requests: [held()] }), opts());
     const h = after.querySelector<HTMLElement>('.head .changes-held')!;
@@ -388,6 +392,9 @@ describe('Request changes', () => {
     expect(h.textContent).toContain("won't land until the author pushes a change or alice approves it");
     // A held request is the header's, not a comment under the intent.
     expect(after.querySelector('.intent .fb')).toBeNull();
+    // A request that no longer holds the branch isn't the header's.
+    const settled = renderReview(review({ change_requests: [held({ held: false })] }), opts());
+    expect(settled.querySelector('.head .changes-held')).toBeNull();
   });
 
   // req:web.views/request-changes@db57a569
@@ -430,10 +437,14 @@ describe('Request changes', () => {
     const onRequest = vi.fn(() => Promise.resolve(null));
     const view = renderReview(review(), opts({ onRequest }));
     button(view).click();
+    typeIn(view.querySelector<HTMLElement>('.approve-bar .fbform')!, '   ');
     view.querySelector<HTMLButtonElement>('.approve-bar .fbform button.send')!.click();
     await settle();
     expect(onRequest).not.toHaveBeenCalled();
     expect(view.querySelector('.approve-bar .fbform .err')?.textContent).toBe('Write something first.');
+    // Kept until cancelled.
+    view.querySelector<HTMLButtonElement>('.approve-bar .fbform button.cancel')!.click();
+    expect(renderReview(review(), opts()).querySelector('.approve-bar .fbform')).toBeNull();
   });
 });
 
@@ -446,7 +457,7 @@ describe('comments', () => {
   beforeEach(() => drafts.clear());
 
   // req:web.views/comment-on-review@85d2f160
-  it('comment on a requirement: one post of the fingerprint, target and text, and the card shows the comment by alice', async () => {
+  it('comment on a requirement: one call with the target and trimmed text, and the card shows the comment by alice', async () => {
     let done: (v: string | null) => void = () => undefined;
     const onComment = vi.fn(() => new Promise<string | null>((go) => (done = go)));
     const view = renderReview(review({ branch: 'spec/x' }), opts({ onComment }));
@@ -496,10 +507,14 @@ describe('comments', () => {
     const r = review({
       fingerprint: 'f2',
       comments: [comment({ fingerprint: 'f1', current: false })],
-      change_requests: [{ id: 'q1', writer: 'bob/web', at: '2026-10-27T11:00:00Z', fingerprint: 'f2', text: 'Split it', current: true, held: false }],
+      change_requests: [
+        { id: 'q1', writer: 'bob/web', at: '2026-10-27T11:00:00Z', fingerprint: 'f2', text: 'Split it', current: true, held: false },
+        { id: 'q0', writer: 'bob/web', at: '2026-10-27T09:00:00Z', fingerprint: 'f1', text: 'Older', current: false, held: false },
+      ],
     });
     const items = [...renderReview(r, opts()).querySelectorAll<HTMLElement>('.intent .fb')];
-    expect(items.map((i) => i.textContent?.includes('on an earlier version'))).toEqual([true, false]);
+    expect(items.map((i) => i.textContent?.includes('on an earlier version'))).toEqual([true, false, true]);
+    expect(items[2].textContent).not.toContain('since approved');
     expect(items[1].textContent).toContain('since approved');
     expect(items[1].textContent).toContain('bob');
     expect(items[1].textContent).toContain('Split it');
@@ -569,7 +584,7 @@ describe('comments', () => {
   });
 
   // req:web.views/comment-on-review@85d2f160
-  it('disabled offline and without a fingerprint, on the intent and every card; none on a land', () => {
+  it('disabled offline and without a fingerprint, on the intent and every card', () => {
     for (const [r, o] of [
       [review({ fingerprint: null }), opts()],
       [review(), opts({ offline: true })],
