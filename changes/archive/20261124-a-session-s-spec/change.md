@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-session-s-spec-auditor-on-a-code-fix-runs-on-the-agent-file-s]
 ---
 
