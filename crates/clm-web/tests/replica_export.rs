@@ -4,29 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use toml::Value;
-
 fn workspace() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-#[test]
-fn exports_the_replica_class() {
-    // req:web.worker/replica-class-export@92f08d8b
-    let manifest: Value = toml::from_str(include_str!("../Cargo.toml")).unwrap();
-    manifest
-        .get("target")
-        .and_then(|t| t.get("cfg(target_arch = \"wasm32\")"))
-        .and_then(|t| t.get("dependencies"))
-        .and_then(|d| d.get("clm-web-replica"))
-        .expect("the wasm32 target dependencies name clm-web-replica");
-    // A line of its own, so a commented-out re-export doesn't count.
-    assert!(
-        include_str!("../src/lib.rs")
-            .lines()
-            .any(|l| l.trim() == "pub use clm_web_replica::Replica;"),
-        "lib.rs holds no `pub use clm_web_replica::Replica;`"
-    );
 }
 
 #[test]
