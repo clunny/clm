@@ -452,6 +452,55 @@ fn scenario_merged_later() {
 }
 
 #[test]
+fn a_recorded_merge_moves_across_components_only_once_applied_and_from_the_archive() {
+    // req:check.coverage/status-report@476f39dd
+    for (status, archived, counted) in [
+        ("applied", false, true),
+        ("implementing", false, true),
+        ("done", true, true),
+        ("proposed", false, false),
+        ("approved", false, false),
+        ("abandoned", false, false),
+    ] {
+        let dir = TempDir::new().unwrap();
+        let d = dir.path();
+        write(d, "specs/SPEC.md", ROOT);
+        write(d, "specs/a/SPEC.md", &spec("[]", &["keep"]));
+        write(d, "specs/b/SPEC.md", &spec("[]", &["y"]));
+        change(d, "20260101-c", "applied");
+        adds(d, "20260101-c", "a", "x");
+        merges(d, "20260102-m", "a/x", "b/y");
+        let md = d.join("changes/20260102-m/change.md");
+        let text = fs::read_to_string(&md).unwrap();
+        fs::write(
+            &md,
+            text.replace("status: applied", &format!("status: {status}")),
+        )
+        .unwrap();
+        write(
+            d,
+            "changes/20260102-m/deltas/a.md",
+            "---\ncomponent: a\n---\n## REMOVED Requirements\n\n### Requirement: x <!-- base: 0123456789abcdef -->\n",
+        );
+        write(
+            d,
+            "changes/20260102-m/deltas/b.md",
+            "---\ncomponent: b\n---\n## MODIFIED Requirements\n\n### Requirement: y <!-- base: 0123456789abcdef -->\ny.\n\n#### Scenario: s\n- ok\n",
+        );
+        if archived {
+            archive(d, "20260102-m");
+        }
+        let g = graph(d);
+        let expected: &[&str] = if counted {
+            &["20260101-c", "0/1 requirements"]
+        } else {
+            &["20260101-c", "0/0 requirements", "complete"]
+        };
+        assert_eq!(row(&g, &[], "20260101-c"), expected, "{status}");
+    }
+}
+
+#[test]
 fn scenario_a_merge_into_a_requirement_of_the_same_component() {
     // req:check.coverage/pending-report@f3f35088
     let dir = TempDir::new().unwrap();
