@@ -64,16 +64,13 @@ pub fn review_notice(repo: &str, event: &Value) -> Option<Notice> {
     })
 }
 
-/// `s` percent-encoded as one URL path segment: every byte but RFC 3986's unreserved ones,
-/// as `clm-web`'s `http::percent_encode` does; this crate can't depend on `clm-web`, which
-/// links it.
+/// `s` percent-encoded as one URL path segment: every byte but RFC 3986's unreserved ones.
 fn segment(s: &str) -> String {
-    s.bytes()
-        .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                char::from(b).to_string()
-            }
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
+    use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
+    const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC
+        .remove(b'-')
+        .remove(b'.')
+        .remove(b'_')
+        .remove(b'~');
+    utf8_percent_encode(s, SEGMENT).to_string()
 }

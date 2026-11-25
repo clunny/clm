@@ -1,5 +1,5 @@
-//! The crate builds for wasm with its `durable` feature, where `clm-web` links it, and
-//! natively without it, where these tests run.
+//! The crate builds for wasm with its `durable` feature, where `clm-web` links it, and for
+//! the host without it.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -29,7 +29,7 @@ fn wasm_cargo(args: &[&str]) -> Output {
 
 #[test]
 fn builds_for_wasm_with_durable() {
-    // req:web.live/builds-for-wasm@7c0fd37d
+    // req:web.live/builds-for-wasm@f9ab086a
     // A separate target dir, so the build doesn't wait on the outer `cargo test`'s lock.
     let dir = workspace().join("target/wasm-test");
     let out = wasm_cargo(&[
@@ -47,24 +47,19 @@ fn builds_for_wasm_with_durable() {
 }
 
 #[test]
-fn needs_no_getrandom() {
-    // req:web.live/builds-for-wasm@7c0fd37d
-    // The randomness is a parameter, so the crypto builds for wasm without `getrandom`,
-    // with `durable` (the build `clm-web` links) and without it (where `worker` stays out).
-    let tree = |features: &[&str]| {
-        let out = wasm_cargo(&[&["tree", "-e", "normal", "--prefix", "none"], features].concat());
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        String::from_utf8_lossy(&out.stdout).into_owned()
-    };
-    let durable = tree(&["--features", "durable"]);
-    assert!(durable.contains("worker "), "{durable}");
-    assert!(!durable.contains("getrandom"), "{durable}");
-    let plain = tree(&[]);
-    assert!(plain.contains("p256 "), "{plain}");
-    assert!(!plain.contains("getrandom"), "{plain}");
-    assert!(!plain.contains("worker "), "without durable: {plain}");
+fn builds_for_the_host() {
+    // req:web.live/builds-for-wasm@f9ab086a
+    // A separate target dir, as for the wasm build.
+    let dir = workspace().join("target/host-test");
+    let out = Command::new(env!("CARGO"))
+        .current_dir(workspace())
+        .args(["build", "-p", "clm-web-live", "--locked", "--target-dir"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "host build failed:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
