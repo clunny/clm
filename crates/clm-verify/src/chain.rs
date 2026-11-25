@@ -1,9 +1,22 @@
 //! The lands of `main` and what the ledger says of them: the last verified commit, the last
 //! green one and the unverified lands (`verify`'s Design, "Since when").
 
+use std::collections::BTreeSet;
+
 use clm_ledger::{Body, Fold, Record};
 
 use crate::{Ctx, Error};
+
+/// One record of a requirement's run of `mutated` records that counted it against it.
+#[derive(Clone)]
+pub(crate) struct Left {
+    /// The commit the record names, a full ID.
+    pub(crate) commit: String,
+    /// Why its block's tool failed, when the record's `failed` names the requirement.
+    pub(crate) why: Option<String>,
+    /// The record's `ended`.
+    pub(crate) ended: Option<String>,
+}
 
 pub(crate) struct State {
     /// The first-parent commits of the base, oldest first, full IDs.
@@ -129,24 +142,53 @@ impl State {
             .collect()
     }
 
-    /// For each requirement the newest `mutated` record on the whole chain holds under
-    /// `left`, the commits of the unbroken run of newest records whose `left` names it,
-    /// newest first (`files-unproven`).
-    pub(crate) fn left_runs(&self) -> Vec<(String, Vec<String>)> {
+    /// For each requirement some commit's newest `mutated` record on the whole chain holds
+    /// under `left`, in ID order, the run of those records, newest commit first, that count it
+    /// against it: leaving out those that pass over it, and ending at the first that does
+    /// neither (`files-unproven`). A requirement whose run is empty is left out.
+    pub(crate) fn left_runs(&self) -> Vec<(String, Vec<Left>)> {
         let newest = self.newest_mutations(self.chain.len() - 1);
-        let Some((_, Body::Mutated { left, .. })) = newest.first() else {
-            return Vec::new();
-        };
-        left.iter()
-            .map(|id| {
-                let run = newest
-                    .iter()
-                    .take_while(
-                        |(_, body)| matches!(body, Body::Mutated { left, .. } if left.contains(id)),
-                    )
-                    .map(|(commit, _)| commit.to_string())
-                    .collect();
-                (id.clone(), run)
+        let ids: BTreeSet<&String> = newest
+            .iter()
+            .flat_map(|(_, body)| match body {
+                Body::Mutated { left, .. } => left.as_slice(),
+                _ => &[],
+            })
+            .collect();
+        ids.into_iter()
+            .filter_map(|id| {
+                let mut run = Vec::new();
+                for (commit, body) in &newest {
+                    let Body::Mutated {
+                        left,
+                        failed,
+                        ended,
+                        ..
+                    } = body
+                    else {
+                        break;
+                    };
+                    if !left.contains(id) {
+                        break;
+                    }
+                    let why = failed.get(id).cloned();
+                    // Stopped, or failed because another requirement's block failed: the
+                    // pass says nothing of this one.
+                    let passes_over = why.is_none()
+                        && match ended.as_deref() {
+                            Some("stopped") => true,
+                            Some(e) => e.starts_with("status ") && !failed.is_empty(),
+                            None => false,
+                        };
+                    if !passes_over {
+                        run.push(Left {
+                            commit: commit.to_string(),
+                            why,
+                            ended: ended.clone(),
+                        });
+                    }
+                }
+                (!run.is_empty()).then(|| (id.clone(), run))
             })
             .collect()
     }
