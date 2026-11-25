@@ -82,9 +82,6 @@ On a verified `push` to the default branch, the object SHALL fetch only the file
 ### Requirement: alarm-batches
 Applying an event SHALL set the alarm to one minute later unless one is set to fire within that minute, and SHALL NOT recompute. The alarm SHALL recompute once, save, then post `{"delivery"}` naming the latest delivery applied to the repo's `Live` object's `/notify`. While the repo has open pages, the alarm SHALL also fire at the time the last recompute said the implementation view next changes, recompute, and post `{"delivery"}` to `/notify`, naming 32 lowercase hex digits no event has when no event was applied since the last notice.
 
-#### Needs
-- replica/batched-recompute
-
 #### Scenario: a burst of pushes
 - GIVEN a replica whose views describe `111`
 - WHEN pushes to `222`, `333` and `444` are applied within 30 seconds, and the alarm then fires
@@ -96,9 +93,9 @@ Applying an event SHALL set the alarm to one minute later unless one is set to f
 - THEN the alarm is set one minute after it
 
 #### Scenario: a claim lapses while a page is open
-- GIVEN a replica holding a claim on `a` that lapses at 14:00, read at 13:58
-- WHEN the alarms run until 14:00
-- THEN an alarm fired at 14:00, the implementation view no longer lists the claim, and one notice was posted, whose `delivery` is 32 hex digits naming no event
+- GIVEN a replica holding a claim on `a` pushed at 10:00, read at 13:58, its last recompute naming the time `t` the implementation view next changes
+- WHEN the alarms run until a second past `t`
+- THEN an alarm fired at `t`, the implementation view no longer lists the claim, and each notice posted since 13:58 is `{"delivery"}` naming 32 hex digits no event has
 
 ### Requirement: first-build
 A read of a repo whose object holds nothing SHALL answer 503 `{"preparing": 0}` and start the build, and an event reaching such an object SHALL answer 202, start the build and apply nothing of the event. No request or alarm of the build SHALL make more than 50 subrequests. The views SHALL be computed, with coverage indexing, as soon as the spec files are in, before the non-Markdown files are scanned. When the build can't get an installation token, or can't read the default branch, its tip or its tree, the alarm SHALL re-arm a minute later and reads SHALL go on answering 503 `{"preparing": 0}`. The build SHALL put each branch creation GitHub's events listing gives in the activity feed once, by its actor, and no creation for a ref it lists that the listing doesn't give.
@@ -306,7 +303,7 @@ The times the object gives the replica, a ref's tip commit time from a push, a r
 #### Scenario: a commit made two hours east
 - GIVEN a built replica, and a push creating `impl/a` whose head commit's `timestamp` is `2026-10-01T12:00:00.5+02:00`; and a second built replica whose resync's refs listing gives `impl/b`, which it doesn't hold, a `committedDate` of `2026-10-01T12:00:00+02:00`
 - WHEN the push is applied to the first and the resync runs on the second, and the replica each object saved is loaded and recomputed at `2026-10-01T11:00:00Z`
-- THEN the first's `activity` holds the claim of `a` at 10:00 UTC, and each `recompute` returns 14:00 UTC as the time the implementation view next changes
+- THEN the first's `activity` holds the claim of `a` at 10:00 UTC, and each `recompute` returns, as the time the implementation view next changes, the time a replica holding only a claim pushed at 10:00 UTC returns when recomputed at 11:00 UTC
 
 #### Scenario: a time GitHub gives that can't be read
 - GIVEN a built replica read a minute ago, holding `impl/b`, and an object that holds nothing
