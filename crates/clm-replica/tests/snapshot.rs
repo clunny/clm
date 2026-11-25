@@ -20,8 +20,8 @@ fn strings(v: &Value) -> Vec<String> {
 
 /// An unbuilt and an active component, a test citing `a/p` at its current version and
 /// `b/q` at an older one, a Markdown file citing `b/r`, an applied change, a backlog
-/// item blocking `b/r`, a text asset of `b`, a binary file outside the spec directories
-/// and a decision.
+/// item blocking `b/r`, a text asset of `b`, a binary asset of `b` given with its bytes, a
+/// binary file outside the spec directories and a decision.
 fn fixture() -> FileMap {
     let mut f = clm_repo();
     f.insert(
@@ -53,13 +53,17 @@ fn fixture() -> FileMap {
             "---\ntitle: D\ndate: 2026-10-01\nstatus: accepted\n---\nWhy.\n",
         ),
     ]));
+    f.insert(
+        "specs/b/assets/logo.png".into(),
+        vec![0x89, b'P', b'N', b'G', 0x00, 0xff],
+    );
     f.insert("img/logo.bin".into(), vec![0xff, 0x00, 0xfe, 0x01]);
     f
 }
 
 #[test]
 fn fixture_repo_matches_clm() {
-    // req:replica/snapshot-matches-clm@3e19d262
+    // req:replica/snapshot-matches-clm@024facc5
     let f = fixture();
     let dir = tempfile::tempdir().unwrap();
     write_checkout(dir.path(), &f);
@@ -90,10 +94,15 @@ fn fixture_repo_matches_clm() {
     let b = nodes.iter().find(|n| n["id"] == "b").unwrap();
     assert_eq!(b["status"], b_row[1].as_str());
 
-    // The text asset with the checkout's hash, the decision, and no violation.
+    // The text asset and the binary one with the checkout's hashes, the decision, and no
+    // violation.
     assert_eq!(
         b["assets"]["note.txt"],
         graph.nodes["b"].assets["note.txt"].as_str()
+    );
+    assert_eq!(
+        b["assets"]["logo.png"],
+        graph.nodes["b"].assets["logo.png"].as_str()
     );
     assert_eq!(
         snap["decisions"],
@@ -168,7 +177,7 @@ fn fixture_repo_matches_clm() {
 
 #[test]
 fn a_binary_asset_hashes_text_only_when_it_is_text() {
-    // req:replica/snapshot-matches-clm@3e19d262
+    // req:replica/snapshot-matches-clm@024facc5
     // A binary file outside the spec directories never blocks completeness, and a text
     // asset hashes as the checkout's does.
     let mut f = fixture();
@@ -193,7 +202,7 @@ fn a_binary_asset_hashes_text_only_when_it_is_text() {
 
 #[test]
 fn a_complete_change_reports_complete() {
-    // req:replica/snapshot-matches-clm@3e19d262
+    // req:replica/snapshot-matches-clm@024facc5
     let mut f = fixture();
     // `tests/t.rs` now cites `a/p`, `b/q` and `b/r` at their versions (archive-on-sync).
     let cited: String = ["a/p", "b/q", "b/r"]
