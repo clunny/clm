@@ -196,12 +196,8 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
             }
             let parsed = parsed.and_then(|value| {
                 let record = Record::deserialize(&value)?;
-                if let Body::Mutated { left, failed, .. } = &record.body
-                    && let Some(id) = failed.keys().find(|id| !left.contains(id))
-                {
-                    return Err(serde::de::Error::custom(format!(
-                        "`failed` names `{id}`, which `left` doesn't"
-                    )));
+                if let Some(why) = crate::record::unfit(&record) {
+                    return Err(serde::de::Error::custom(why));
                 }
                 match value {
                     Value::Object(object) => Ok((record, object)),

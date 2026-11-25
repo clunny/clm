@@ -198,7 +198,8 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
                 )
             };
             if reviewed
-                || serde_json::from_str::<Record>(line).is_ok_and(|r| superseded(&r, line))
+                || serde_json::from_str::<Record>(line)
+                    .is_ok_and(|r| crate::record::unfit(&r).is_none() && superseded(&r, line))
                 || repeated()
             {
                 removed += 1;

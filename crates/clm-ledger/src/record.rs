@@ -59,6 +59,18 @@ fn write_value(value: &Value, out: &mut String) {
     }
 }
 
+/// Why a record that parsed is still no record: a `mutated` one whose `failed` names an ID
+/// its `left` doesn't (`mutated-record`). Its keys are then requirement IDs, as `left`'s are.
+pub(crate) fn unfit(record: &Record) -> Option<String> {
+    let Body::Mutated { left, failed, .. } = &record.body else {
+        return None;
+    };
+    failed
+        .keys()
+        .find(|id| !left.contains(id))
+        .map(|id| format!("`failed` names `{id}`, which `left` doesn't"))
+}
+
 /// One line of `records.jsonl`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Record {
@@ -253,11 +265,7 @@ pub enum Body {
         left: Vec<String>,
         /// Why the pass left a requirement, by its ID, each one `left` holds; absent, as in
         /// records written before the field, it is empty.
-        #[serde(
-            default,
-            deserialize_with = "requirement_reasons",
-            skip_serializing_if = "BTreeMap::is_empty"
-        )]
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         failed: BTreeMap<String, String>,
         /// How the pass ended when it ended early; absent, as in records written before the
         /// field, it is none.
@@ -354,15 +362,6 @@ fn requirement_ids<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>
     let ids = Vec::<String>::deserialize(d)?;
     ids.iter().try_for_each(|id| requirement_id(id))?;
     Ok(ids)
-}
-
-/// An object from requirement IDs to texts.
-fn requirement_reasons<'de, D: serde::Deserializer<'de>>(
-    d: D,
-) -> Result<BTreeMap<String, String>, D::Error> {
-    let reasons = BTreeMap::<String, String>::deserialize(d)?;
-    reasons.keys().try_for_each(|id| requirement_id(id))?;
-    Ok(reasons)
 }
 
 /// Entries `<component>/<slug>@<version>`, the version 8 lowercase hex digits.
