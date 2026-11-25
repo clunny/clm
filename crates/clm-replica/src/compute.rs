@@ -63,7 +63,8 @@ pub(crate) fn next_lapse(state: &State, now: u64) -> Option<u64> {
 
 /// Every view, at `now`.
 pub(crate) fn views(state: &State, files: &Files, now: u64) -> Views {
-    let (graph, violations) = clm_model::load_files(files);
+    let (mut graph, violations) = clm_model::load_files(files);
+    state.held_assets(&mut graph);
     let violations: Vec<String> = violations.iter().map(clm_check::format).collect();
     let fold = fold(state);
     let flag_text = clm_effort::flag_text(&graph, &|path| {
