@@ -1,7 +1,7 @@
 // The backlog: "Waiting on you" first (question and human-task items, with the requirements
 // each blocks, `requirement-blocks`), then the other items in columns by kind, filterable
-// by component (web.views/backlog-view), each item marked with what holds it (web/backlog-taken), and
-// New proposal with the open proposals under Proposed (web/propose-from-backlog).
+// by component (web.views/backlog-view), each item marked with what holds it (web.views/backlog-taken), and
+// New proposal with the open proposals under Proposed (web.views/propose-from-backlog).
 
 import { answerButtons, type Answering } from './answers';
 import { chip, div, el } from './dom';

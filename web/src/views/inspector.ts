@@ -104,7 +104,7 @@ function closeOnEscape(aside: HTMLElement, onClose: () => void) {
 
 /** Node `id`'s queue state and pending count as the `flight` model gives them, and each
  * pending requirement with its state, an obsolete one with the markers that still cite it
- * (web/inspector-pending). While coverage is indexing every requirement would read
+ * (web.views/inspector-pending). While coverage is indexing every requirement would read
  * `unbuilt`, so none is listed. */
 function work(impl: Implementation | null, id: string): HTMLElement {
   if (impl === null) return div('note', 'Loading work in flight…');

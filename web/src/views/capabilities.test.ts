@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { decide, renderCapabilities, renderCapability } from './capabilities';
 import type { ListOptions, PageOptions } from './capabilities';
-import { capabilities } from './fixtures';
+import { capabilities, cost } from './fixtures';
 import { SignedOut } from './api';
 
 const list = (o: Partial<ListOptions> = {}): ListOptions => ({ flaggedOnly: false, onFilter: vi.fn(), link: (s) => `#/o/a/capabilities/${s}`, ...o });
@@ -9,8 +9,8 @@ const page = (o: Partial<PageOptions> = {}): PageOptions => ({ offline: false, b
 const slugs = (e: HTMLElement, sel: string) => [...e.querySelectorAll<HTMLElement>(sel)].map((r) => r.dataset.slug);
 const decideButtons = (e: HTMLElement) => [...e.querySelectorAll<HTMLButtonElement>('button.decide')];
 
-// req:web.views/capabilities-list@fde4e68b
 describe('capabilities list', () => {
+  // req:web.views/capabilities-list@d74a43a5
   it('list ranked and flagged: the report order, as a table and as cards, only a marked ⚑', () => {
     const view = renderCapabilities(capabilities(), list());
     expect(slugs(view, 'tr.cap')).toEqual(['b', 'a']);
@@ -30,6 +30,7 @@ describe('capabilities list', () => {
     expect(view.querySelector<HTMLAnchorElement>('tr.cap[data-slug=a] a')!.getAttribute('href')).toBe('#/o/a/capabilities/a');
   });
 
+  // req:web.views/capabilities-list@d74a43a5
   it('flag filter: ⚑ only lists the flagged ones, and the switch says which it shows', () => {
     const o = list();
     const all = renderCapabilities(capabilities(), o);
@@ -41,6 +42,7 @@ describe('capabilities list', () => {
     expect(only.querySelector('button.flag-only')!.getAttribute('aria-pressed')).toBe('true');
   });
 
+  // req:web.views/capabilities-list@d74a43a5
   it('a report without capabilities says there are none, not that none is flagged', () => {
     const none = capabilities();
     none.report.capabilities = [];
@@ -49,9 +51,36 @@ describe('capabilities list', () => {
     c.report.capabilities = c.report.capabilities.filter((x) => !x.flagged);
     expect(renderCapabilities(c, list({ flaggedOnly: true })).querySelector('.empty')!.textContent).toBe('No capability is flagged.');
   });
+
+  // req:web.views/capabilities-list@d74a43a5
+  it('figures and empties: dollars, tokens, live without, never decided, the notes, and the empty texts', () => {
+    const c = capabilities();
+    c.report.capabilities = [
+      cost('b', 9, { spend: { dollars: 9, work_tokens: 900_000, cache_read_tokens: 0, active_seconds: 0 } }),
+      cost('c', 12.34, { spend: { dollars: 12.34, work_tokens: 1_300_000, cache_read_tokens: 0, active_seconds: 0 }, overlap: { only: 2, shared: [] } }),
+    ];
+    c.report.unattributed = { dollars: 1, work_tokens: 0, cache_read_tokens: 0, active_seconds: 0 };
+    c.report.architecture_only = { dollars: 2, work_tokens: 0, cache_read_tokens: 0, active_seconds: 0 };
+    const view = renderCapabilities(c, list());
+    const row = (slug: string) => view.querySelector<HTMLElement>(`tr.cap[data-slug=${slug}]`)!.textContent;
+    for (const text of ['≈$9.00', '900k tok', '1 of 2 rules only here; also other (1)', 'never decided']) expect(row('b')).toContain(text);
+    for (const text of ['≈$12.3', '1.3M tok', 'all its rules only here']) expect(row('c')).toContain(text);
+    expect(row('c')).not.toContain('≈$12.34');
+    // The card holds the same facts, with a bar for its share of the costliest.
+    const card = view.querySelector<HTMLElement>('.ccard[data-slug=b]')!;
+    for (const text of ['≈$9.00', '900k tok', '1 of 2 rules only here; also other (1)', 'never decided']) expect(card.textContent).toContain(text);
+    expect(card.querySelector<HTMLElement>('.cbar i')!.style.width).toBe('73%');
+    expect(view.querySelector<HTMLElement>('.ccard[data-slug=c] .cbar i')!.style.width).toBe('100%');
+    const note = [...view.querySelectorAll('.note')].map((n) => n.textContent).find((t) => t?.startsWith('Unattributed'))!;
+    expect(note).toContain('≈$1.00');
+    expect(note).toContain('≈$2.00');
+    const none = capabilities();
+    none.report.capabilities = [];
+    expect(renderCapabilities(none, list()).querySelector('.empty')!.textContent).toBe('No capabilities: CAPABILITIES.md holds none.');
+    expect(renderCapabilities(c, list({ flaggedOnly: true })).querySelector('.empty')!.textContent).toBe('No capability is flagged.');
+  });
 });
 
-// req:web.views/capability-page@ebf73282
 describe('capability page', () => {
   const withText = () => {
     const c = capabilities();
@@ -60,6 +89,7 @@ describe('capability page', () => {
     return c;
   };
 
+  // req:web.views/capability-page@1b546acc
   it('page sections in order: the entry in full as Markdown, and clm capabilities named for what the Worker lacks', () => {
     const view = renderCapability(withText(), 'a', page());
     const secs = [...view.querySelectorAll<HTMLElement>('section[data-sec]')].map((s) => s.dataset.sec);
@@ -81,6 +111,7 @@ describe('capability page', () => {
     expect(view.querySelector<HTMLAnchorElement>('a.back')!.getAttribute('href')).toBe('#/o/a/capabilities');
   });
 
+  // req:web.views/capability-page@1b546acc
   it('workaround details show its text: summary its title, body its text', () => {
     const view = renderCapability(capabilities(), 'a', page());
     const d = view.querySelector<HTMLDetailsElement>('section[data-sec=workarounds] details')!;
@@ -89,8 +120,10 @@ describe('capability page', () => {
     expect(d.textContent).toContain('n/a-one');
   });
 
+  // req:web.views/capability-page@1b546acc
   it('an unknown slug says so', () => {
     expect(renderCapability(capabilities(), 'zzz', page()).textContent).toContain('zzz');
+    expect(renderCapability(capabilities(), 'nope', page()).querySelector('.empty')!.textContent).toBe('The report holds no capability nope.');
   });
 });
 
@@ -203,7 +236,6 @@ describe('decide', () => {
   });
 });
 
-// req:web.views/repo-markdown@53adc355
 describe('repo markdown in the capabilities views', () => {
   const hostile = () => {
     const c = capabilities();
@@ -212,6 +244,7 @@ describe('repo markdown in the capabilities views', () => {
     return c;
   };
 
+  // req:web.views/repo-markdown@342a93bb
   it('a statement in the list and the page shows code, no backtick and no onerror', () => {
     for (const view of [renderCapabilities(hostile(), list()), renderCapability(hostile(), 'b', page())]) {
       const code = view.querySelector('code');

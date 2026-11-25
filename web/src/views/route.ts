@@ -10,7 +10,7 @@ export type View = 'graph' | 'prs' | 'build' | 'backlog' | 'capabilities' | 'arc
 
 const VIEWS: View[] = ['graph', 'prs', 'build', 'backlog', 'capabilities', 'architecture'];
 
-/** What a review page reviews: a spec branch (`web/spec-branch-review`). */
+/** What a review page reviews: a spec branch (`web.views/spec-branch-review`). */
 export type Target = { branch: string };
 
 export interface Route {
@@ -20,9 +20,9 @@ export interface Route {
   review?: Target;
   prTab?: 'document' | 'graph';
   full?: string;
-  /** The capability whose page is shown (web/capability-page). */
+  /** The capability whose page is shown (web.views/capability-page). */
   capability?: string;
-  /** The architectural constraint whose page is shown (web/architecture-page). */
+  /** The architectural constraint whose page is shown (web.views/architecture-page). */
   entry?: string;
   /** The backlog item whose page is shown. */
   item?: string;

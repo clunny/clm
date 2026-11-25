@@ -1,6 +1,6 @@
 // A changed file whole, as it reads at the PR's head: unchanged text dimmed, long unchanged
 // runs folded, every change marked and numbered, an outline marking where they are, opened
-// at the first change, with ↑/↓ and j/k stepping through them (web/full-document).
+// at the first change, with ↑/↓ and j/k stepping through them (web.views/full-document).
 
 import { diffArrays } from 'diff';
 import { wordMarks } from './diff';

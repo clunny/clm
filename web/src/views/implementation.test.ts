@@ -130,7 +130,7 @@ describe('implementation view', () => {
 
   // req:web.views/implementation-view@d45af0b5
   it('no waiting field: a ready node shows as ready, naming nothing it waits on', () => {
-    // Built in parts, so no source file names the field (web/queue-states).
+    // Built in parts, so no source file names the field (web.views/queue-states).
     const field = `${'waiting'}_on`;
     for (const extra of [{}, { [field]: ['b'] }]) {
       const f = flight();
@@ -353,9 +353,9 @@ describe('activity feed', () => {
   it('what each reads: a claim, a land with its actor, another kind by its name, and an empty feed', () => {
     const feed = renderActivity(
       [
-        { kind: 'claim', at: NOW - 120, ref: 'impl/a' },
+        { kind: 'claim', at: NOW - 120, actor: '', ref: 'impl/a' },
         { kind: 'land', at: NOW - 180, actor: 'alice', ref: 'spec/x' },
-        { kind: 'merge', at: NOW - 240, ref: 'main' },
+        { kind: 'merge', at: NOW - 240, actor: '', ref: 'main' },
       ],
       NOW,
     );

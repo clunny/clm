@@ -1,5 +1,5 @@
 // The forms that write to the person's web ledger: a comment, a request for changes
-// (web/comment-on-review, web/request-changes) and a proposal (web/propose-from-backlog).
+// (web.views/comment-on-review, web.views/request-changes) and a proposal (web.views/propose-from-backlog).
 // Each sends once per tap and nothing while a send is in flight, and keeps what was typed
 // across the redraws a refresh makes, until it is sent.
 

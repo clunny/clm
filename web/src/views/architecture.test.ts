@@ -10,8 +10,8 @@ const slugs = (e: HTMLElement, sel: string) => [...e.querySelectorAll<HTMLElemen
 const decideButtons = (e: HTMLElement) => [...e.querySelectorAll<HTMLButtonElement>('button.decide')];
 const proof = (e: HTMLElement, slug: string) => e.querySelector<HTMLElement>(`tr.cap[data-slug=${slug}] .proof`)!;
 
-// req:web.views/architecture-list@d644a9d4
 describe('architecture list', () => {
+  // req:web.views/architecture-list@d79a2659
   it('ranked, held and flagged: the report order, as a table and as cards, held 1/2 in amber, untested alone', () => {
     const view = renderArchitecture(architecture(), list());
     expect(slugs(view, 'tr.cap')).toEqual(['e', 'g']);
@@ -38,6 +38,7 @@ describe('architecture list', () => {
     expect(view.querySelector('.cost-note')!.textContent).toContain('counted apart from the capabilities');
   });
 
+  // req:web.views/architecture-list@d79a2659
   it('fully held: held 2/2 is not amber, and an entry with no rule and no untested text reads held 0/0', () => {
     const a = architecture();
     a.architecture = [
@@ -50,6 +51,7 @@ describe('architecture list', () => {
     expect(proof(view, 'z').textContent).toBe('held 0/0');
   });
 
+  // req:web.views/architecture-list@d79a2659
   it('flag filter: ⚑ only lists the flagged ones', () => {
     const o = list();
     renderArchitecture(architecture(), o).querySelector<HTMLButtonElement>('button.flag-only')!.click();
@@ -60,6 +62,7 @@ describe('architecture list', () => {
     expect(only.querySelector('button.flag-only')!.getAttribute('aria-pressed')).toBe('true');
   });
 
+  // req:web.views/architecture-list@d79a2659
   it('indexing: the proof reads ? / n and the note says coverage is still indexing', () => {
     const view = renderArchitecture(architecture({ indexing: true }), list());
     expect(proof(view, 'e').textContent).toBe('? / 2 + untested');
@@ -67,10 +70,24 @@ describe('architecture list', () => {
     expect(renderArchitecture(architecture(), list()).querySelector('.cost-note')!.textContent).not.toContain('indexing');
   });
 
+  // req:web.views/architecture-list@d79a2659
+  it('unknown and empty proofs: a rule with no known state reads ? / 2, and no rule and no untested held 0/0, not amber', () => {
+    const a = architecture();
+    a.architecture = [
+      constraint('e', 5, { enforced_by: [{ rule: 'a/x', current: true }, { rule: 'a/y', current: null }] }),
+      constraint('z', 0),
+    ];
+    const view = renderArchitecture(a, list());
+    expect(proof(view, 'e').textContent).toBe('? / 2');
+    expect(proof(view, 'z').textContent).toBe('held 0/0');
+    expect(proof(view, 'z').classList.contains('short')).toBe(false);
+    expect(view.querySelector('.cost-note')!.textContent).not.toContain('indexing');
+  });
+
 });
 
-// req:web.views/architecture-page@b9446399
 describe('architecture page', () => {
+  // req:web.views/architecture-page@59dee3e8
   it('sections in order: the entry in full, held with each rule, cost, workarounds, without, decisions, then the buttons', () => {
     const view = renderConstraint(architecture(), 'e', page());
     const secs = [...view.querySelectorAll<HTMLElement>('section[data-sec]')].map((s) => s.dataset.sec);
@@ -97,6 +114,7 @@ describe('architecture page', () => {
     expect(view.querySelector<HTMLAnchorElement>('a.back')!.getAttribute('href')).toBe('#/o/a/architecture');
   });
 
+  // req:web.views/architecture-page@59dee3e8
   it('indexing: every rule is drawn unknown', () => {
     const a = architecture({ indexing: true });
     a.architecture[0].enforced_by = a.architecture[0].enforced_by.map((r) => ({ ...r, current: null }));
@@ -108,6 +126,7 @@ describe('architecture page', () => {
     expect([...known.querySelectorAll<HTMLElement>('li.rule')].map((r) => r.dataset.state)).toEqual(['unknown', 'unknown']);
   });
 
+  // req:web.views/architecture-page@59dee3e8
   it('an entry without rules, and an unknown slug', () => {
     const held = renderConstraint(architecture(), 'g', page()).querySelector('section[data-sec=held]')!;
     expect(held.querySelectorAll('li.rule')).toHaveLength(0);
@@ -170,8 +189,8 @@ describe('architecture decide', () => {
   });
 });
 
-// req:web.views/repo-markdown@53adc355
 describe('repo markdown in the architecture views', () => {
+  // req:web.views/repo-markdown@342a93bb
   it('a statement in the list and the entry on the page show code, no backtick and no onerror', () => {
     const a = architecture();
     a.architecture[0].statement = 'Run `clm land` <img src=x onerror=alert(1)>';
