@@ -117,7 +117,7 @@ export function renderConstraint(data: Architecture, slug: string, o: PageOption
         el('li', {}, `${c.changes} changes · ${c.approvals} approvals · ${c.flags_settled} flags settled`),
         el('li', {}, `Declared burdens: ${c.burdens.length ? c.burdens.join(', ') : 'none'}`),
       ),
-      div('note', "An estimate: its enforcing rules' share of their components' cost, counted apart from the capabilities'. For more, run ", code(`clm architecture ${c.slug}`), '.'),
+      div('note', "An estimate: a component's cost is split by its rules' share, and this is its enforcing rules' share, counted apart from the capabilities'. For more, run ", code(`clm architecture ${c.slug}`), '.'),
     ),
     workarounds(c.flags),
     withoutSection(c),

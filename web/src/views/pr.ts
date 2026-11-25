@@ -156,12 +156,12 @@ export interface ReviewOptions {
   fullHref: (path: string) => string;
   /** Sends a comment on the intent (`null`) or a requirement: null once it went through,
    * else why not (web.views/comment-on-review). */
-  onComment?: (target: string | null, text: string) => Promise<string | null>;
+  onComment: (target: string | null, text: string) => Promise<string | null>;
   /** What the review's form drafts are kept under, such as its Worker path, so the same
    * branch name in another repository has drafts of its own. */
   scope?: string;
   /** Sends a request for changes, answering as `onComment` does (web.views/request-changes). */
-  onRequest?: (text: string) => Promise<string | null>;
+  onRequest: (text: string) => Promise<string | null>;
 }
 
 export function renderReview(r: Review, o: ReviewOptions): HTMLElement {
@@ -190,7 +190,7 @@ export function renderReview(r: Review, o: ReviewOptions): HTMLElement {
       label: 'Comment',
       cls: 'comment',
       disabled: writeWhy,
-      submit: (text) => o.onComment?.(target, text) ?? Promise.resolve('Not sent.'),
+      submit: (text) => o.onComment(target, text),
     });
   const said = (target: string | null) =>
     comments
@@ -274,7 +274,7 @@ export function renderReview(r: Review, o: ReviewOptions): HTMLElement {
     label: 'Request changes',
     cls: 'request',
     disabled: writeWhy,
-    submit: (text) => o.onRequest?.(text) ?? Promise.resolve('Not sent.'),
+    submit: (text) => o.onRequest(text),
   });
   const command = `clm approve ${r.branch}`;
   const copy = el('button', { type: 'button', class: 'btn copy', title: 'Copy the command' }, 'Copy');
