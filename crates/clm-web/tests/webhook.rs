@@ -21,7 +21,7 @@ fn setup() -> Fake {
 
 #[test]
 fn push_to_main() {
-    // req:web.worker/webhook-refresh@2b72012d
+    // req:web.worker/webhook-refresh@656e517a
     let fake = setup();
     let calls = fake.gh.calls.borrow().len();
     let res = fake.handle(with_delivery(
@@ -46,7 +46,7 @@ fn push_to_main() {
 
 #[test]
 fn every_event_that_names_repos_is_passed_on() {
-    // req:web.worker/webhook-refresh@2b72012d
+    // req:web.worker/webhook-refresh@656e517a
     let fake = setup();
     let repo = |name: &str| json!({"full_name": name});
     let events = [
@@ -99,7 +99,7 @@ fn every_event_that_names_repos_is_passed_on() {
 
 #[test]
 fn a_failed_post_does_not_change_the_answer() {
-    // req:web.worker/webhook-refresh@2b72012d
+    // req:web.worker/webhook-refresh@656e517a
     let fake = setup();
     fake.replicas.bound.set(false);
     let res = fake.handle(webhook(
@@ -113,7 +113,7 @@ fn a_failed_post_does_not_change_the_answer() {
 
 #[test]
 fn forged_webhook() {
-    // req:web.worker/webhook-refresh@2b72012d
+    // req:web.worker/webhook-refresh@656e517a
     let fake = setup();
     let calls = fake.gh.calls.borrow().len();
     let res = fake.handle(webhook("push", &push_body("o/a", "111", "222"), "wrong"));
@@ -131,9 +131,73 @@ fn forged_webhook() {
 
 #[test]
 fn other_events_reach_no_object() {
-    // req:web.worker/webhook-refresh@2b72012d
+    // req:web.worker/webhook-refresh@656e517a
     let fake = setup();
     let res = fake.handle(webhook("ping", &json!({"zen": "z"}), WEBHOOK_SECRET));
     assert_eq!(res.status, 204);
     assert!(fake.replicas.calls.borrow().is_empty());
+}
+
+/// A webhook signed with `secret` whose body is `bytes`, JSON or not.
+fn raw_webhook(event: &str, bytes: &[u8], secret: &str) -> Request {
+    let mut req = webhook(event, &json!({}), secret);
+    req.body = bytes.to_vec();
+    req.headers
+        .insert("x-hub-signature-256".into(), signature(secret, bytes));
+    req
+}
+
+/// The objects the Worker posted to, in order.
+fn reached(fake: &Fake) -> Vec<String> {
+    let calls = fake.replicas.calls.borrow();
+    calls.iter().map(|c| c.name.clone()).collect()
+}
+
+#[test]
+fn what_the_webhook_answers() {
+    // req:web.worker/webhook-refresh@656e517a
+    let mut fake = setup();
+    let repo = |name: &str| json!({"full_name": name});
+
+    let ping = fake.handle(raw_webhook("ping", b"not json", WEBHOOK_SECRET));
+    assert_eq!(ping.status, 204, "a ping");
+    assert!(reached(&fake).is_empty(), "the ping reached no object");
+
+    fake.replicas.bound.set(false);
+    let push = fake.handle(webhook(
+        "push",
+        &push_body("o/a", "111", "222"),
+        WEBHOOK_SECRET,
+    ));
+    assert_eq!(push.status, 200, "a push the object fails");
+    fake.replicas.bound.set(true);
+
+    let added = json!({
+        "action": "added",
+        "repositories_added": [repo("o/b"), repo("o/b"), repo("../x")],
+        "repositories_removed": [],
+        "installation": {"id": 9},
+    });
+    let res = fake.handle(webhook("installation_repositories", &added, WEBHOOK_SECRET));
+    assert_eq!(res.status, 200);
+    assert_eq!(reached(&fake), ["o/b"], "o/b's object once, and no other");
+
+    for event in ["pull_request", "installation"] {
+        let res = fake.handle(raw_webhook(event, b"not json", WEBHOOK_SECRET));
+        assert_eq!(res.status, 400, "{event} with a body that isn't JSON");
+    }
+
+    fake.secrets.remove("GITHUB_WEBHOOK_SECRET");
+    let unset = fake.handle(webhook(
+        "push",
+        &push_body("o/a", "111", "222"),
+        WEBHOOK_SECRET,
+    ));
+    assert_eq!(unset.status, 401, "no GITHUB_WEBHOOK_SECRET");
+
+    assert_eq!(
+        reached(&fake),
+        ["o/b"],
+        "nothing reached an object but the installation_repositories event"
+    );
 }
