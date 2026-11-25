@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-claim-reads-live-at-the-instant-recompute-says-it-lapses, workaround-web.worker.replica-alarm-batches-1]
 ---
 
