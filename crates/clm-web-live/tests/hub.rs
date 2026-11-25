@@ -34,12 +34,14 @@ fn two_pages() {
     assert_eq!(host.received(s2), [notice]);
     assert!(host.received(s1).is_empty());
     // With no socket held, again.
-    let empty = Fake::default();
+    host.browser_closes(s2);
+    on_close(&host, &s2);
     let answer = block_on(fetch(
-        &empty,
+        &host,
         request("POST", "/notify", None, notice.as_bytes()),
     ));
     assert_eq!(answer, Answer::Status(204));
+    assert_eq!(host.received(s2), [notice]);
 }
 
 #[test]

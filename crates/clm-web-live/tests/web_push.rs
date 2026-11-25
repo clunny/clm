@@ -198,6 +198,8 @@ fn bad_inputs_are_named() {
         "https://user@push.example/s/1",
         "https://push .example/s",
         "https://:8443/s",
+        "https://push.example:/s",
+        "https://push.example:x1/s",
     ] {
         let err = named(subscription(endpoint), vapid(), "endpoint");
         assert_eq!(err, PushError::Endpoint, "{endpoint}");

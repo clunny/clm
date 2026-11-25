@@ -2,7 +2,7 @@ mod common;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use clm_web_live::{Answer, MAX_MESSAGES, Request, Vapid, fetch};
+use clm_web_live::{Answer, MAX_MESSAGES, Request, Vapid, fetch, web_push};
 use common::{Fake, block_on};
 use p256::SecretKey;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
@@ -88,6 +88,49 @@ fn a_404_is_gone_too() {
     assert_eq!(
         send(&host, &body),
         Answer::Json(200, json!({"gone": [A]}).to_string())
+    );
+    let sent = host.sent.borrow();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(jwt(&sent[0].headers), jwt(&sent[1].headers));
+}
+
+#[test]
+fn each_post_is_the_messages_web_push_request() {
+    // req:web.live/push-send@849824f0
+    // Two origins: each request is `web_push`'s for its own subscription and the payload
+    // serialised as JSON, signed for its own endpoint's origin, at the host's clock and
+    // with the host's randomness.
+    const C: &str = "https://push.example/s/1";
+    let host = Fake {
+        vapid: Some(vapid()),
+        ..Fake::default()
+    };
+    let messages = [message(A), message(C)];
+    let body = json!({ "messages": messages }).to_string();
+    assert_eq!(
+        send(&host, &body),
+        Answer::Json(200, json!({"gone": []}).to_string())
+    );
+    let expected: Vec<_> = messages
+        .iter()
+        .map(|m| {
+            let subscription = serde_json::from_value(m["subscription"].clone()).unwrap();
+            let payload = m["payload"].to_string();
+            web_push(
+                &subscription,
+                payload.as_bytes(),
+                &vapid(),
+                1_800_000_000,
+                [5; 48],
+            )
+            .unwrap()
+        })
+        .collect();
+    assert_eq!(*host.sent.borrow(), expected);
+    assert_ne!(
+        jwt(&expected[0].headers),
+        jwt(&expected[1].headers),
+        "one JWT per origin"
     );
 }
 

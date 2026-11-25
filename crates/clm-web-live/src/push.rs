@@ -120,8 +120,17 @@ pub(crate) fn origin(endpoint: &str) -> Result<String, PushError> {
         .strip_prefix("https://")
         .ok_or(PushError::Endpoint)?;
     let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    let host = authority.split(':').next().unwrap_or_default();
-    if host.is_empty() || authority.contains(|c: char| c.is_whitespace() || c == '@') {
+    // An IPv6 host is bracketed, and holds colons of its own.
+    let after_host = match authority.strip_prefix('[') {
+        Some(v6) => v6.split_once(']').ok_or(PushError::Endpoint)?.1,
+        None => authority.find(':').map_or("", |i| &authority[i..]),
+    };
+    let host = &authority[..authority.len() - after_host.len()];
+    let port_ok = match after_host.strip_prefix(':') {
+        Some(port) => !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()),
+        None => after_host.is_empty(),
+    };
+    if host.is_empty() || !port_ok || authority.contains(|c: char| c.is_whitespace() || c == '@') {
         return Err(PushError::Endpoint);
     }
     let authority = authority.strip_suffix(":443").unwrap_or(authority);
