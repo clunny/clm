@@ -70,6 +70,23 @@ impl Fold {
         self.clearing(request).next().is_some()
     }
 
+    /// Whether the fold read a line for the record `id` whose `sig` is a non-empty string.
+    /// It checks no signature (`ledger/cleared-by-a-signed-line`).
+    pub fn carries_sig(&self, id: &str) -> bool {
+        self.lines
+            .get(id)
+            .and_then(|line| line.get("sig"))
+            .and_then(Value::as_str)
+            .is_some_and(|sig| !sig.is_empty())
+    }
+
+    /// `cleared`, counting only an approval whose line carries a `sig`, for a caller that can
+    /// check no signature: a line can carry one `signed_by` refuses, which only `cleared_at`
+    /// tells apart (`ledger/cleared-by-a-signed-line`).
+    pub fn cleared_by_sig(&self, request: &Record) -> bool {
+        self.clearing(request).any(|a| self.carries_sig(&a.id))
+    }
+
     /// The approvals that clear `request` by `cleared`'s rule, signed or not.
     pub(crate) fn clearing<'a>(&'a self, request: &'a Record) -> impl Iterator<Item = &'a Record> {
         let fingerprint = match &request.body {
