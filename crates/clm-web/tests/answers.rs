@@ -60,7 +60,7 @@ fn records(fake: &Fake, writer: &str) -> Vec<Value> {
 
 #[test]
 fn an_answer_is_appended() {
-    // req:web.worker/answers@7d19919b
+    // req:web.worker/answers@fc2241eb
     let (fake, cookie) = setup_as(true);
     let res = answer(&fake, &cookie, "q", &json!({"answer": "yes"}));
     assert_eq!(res.status, 200, "{res:?}");
@@ -97,20 +97,18 @@ fn an_answer_is_appended() {
 
 #[test]
 fn refused() {
-    // req:web.worker/answers@7d19919b
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup_as(true);
     let res = answer(&fake, &cookie, "q", &json!({"answer": "maybe"}));
-    assert_eq!(res.status, 422);
-    assert_eq!(body_json(&res), json!({"error": "answer"}));
+    the_objects_json(&res, 422, &json!({"error": "answer"}));
     let res = answer(&fake, &cookie, "nope", &json!({"answer": "yes"}));
-    assert_eq!(res.status, 404);
-    assert_eq!(body_json(&res), json!({"error": "unknown"}));
+    the_objects_json(&res, 404, &json!({"error": "unknown"}));
     assert!(fake.gh.writes().is_empty());
 }
 
 #[test]
 fn a_body_that_is_no_answer_is_refused_before_asking_anyone() {
-    // req:web.worker/answers@7d19919b
+    // req:web.worker/answers@fc2241eb
     let (fake, cookie) = setup_as(true);
     for body in [json!({}), json!({"answer": 1}), json!({"answer": null})] {
         let (calls, asked) = (
@@ -138,7 +136,7 @@ fn a_body_that_is_no_answer_is_refused_before_asking_anyone() {
 
 #[test]
 fn no_access() {
-    // req:web.worker/answers@7d19919b
+    // req:web.worker/answers@fc2241eb
     let (fake, cookie) = setup_as(true);
     fake.gh
         .add_repo("o/private", FakeRepo::new("111", clm_repo()));
@@ -159,7 +157,7 @@ fn no_access() {
 
 #[test]
 fn open_answers() {
-    // req:web.worker/answers@7d19919b
+    // req:web.worker/answers@fc2241eb
     let (fake, cookie) = setup_as(false);
     let listed = [
         json!({"id": "a1", "writer": "alice/web", "at": "2027-01-15T07:00:00.000Z", "item": "q", "answer": "yes"}),

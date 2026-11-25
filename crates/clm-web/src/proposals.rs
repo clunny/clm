@@ -17,8 +17,6 @@ const TITLE_MAX: usize = 120;
 const BODY_MAX: usize = 8_000;
 /// The nodes a proposal names at most.
 const NODES_MAX: usize = 10;
-/// A slug's bytes at most, as `clm defect` cuts one.
-const SLUG_MAX: usize = 64;
 
 /// A proposal's body, checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,7 +63,13 @@ pub(crate) fn parse(body: &[u8]) -> Result<Proposal, Response> {
             nodes.push(node.to_string());
         }
     }
-    if slug(title).is_empty() {
+    // The slug is the object's (`replica/validate-writes`); it is empty only for a title
+    // that lowercases to no ASCII letter or digit (lowercased first: the Kelvin sign).
+    if !title
+        .to_lowercase()
+        .chars()
+        .any(|c| c.is_ascii_alphanumeric())
+    {
         return Err(refused("slug"));
     }
     Ok(Proposal {
@@ -73,32 +77,6 @@ pub(crate) fn parse(body: &[u8]) -> Result<Proposal, Response> {
         body: text.into(),
         nodes,
     })
-}
-
-/// The title in kebab case as `clm defect` slugs one (`plugin.hooks/defect-backlog`):
-/// lowercased, split on anything but ASCII letters and digits, the words joined with `-`
-/// while the result stays within [`SLUG_MAX`] bytes, a first word longer than that cut to
-/// it; empty when the title has no such word.
-fn slug(title: &str) -> String {
-    let mut slug = String::new();
-    let lower = title.to_lowercase();
-    for word in lower
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| !w.is_empty())
-    {
-        let sep = usize::from(!slug.is_empty());
-        if slug.len() + sep + word.len() > SLUG_MAX {
-            if slug.is_empty() {
-                slug.push_str(&word[..SLUG_MAX]);
-            }
-            break;
-        }
-        if sep == 1 {
-            slug.push('-');
-        }
-        slug.push_str(word);
-    }
-    slug
 }
 
 /// `POST /api/repos/{o}/{r}/proposals`: the checked proposal, passed to the object.
@@ -141,26 +119,4 @@ pub(crate) fn with_mine(mut view: Value, list: &str, login: &str) -> Value {
     }
     view[list] = if listed.is_array() { listed } else { json!([]) };
     view
-}
-
-#[cfg(test)]
-mod tests {
-    use super::slug;
-
-    #[test]
-    fn slugs_as_clm_defect_does() {
-        // req:web.worker/proposals@e608c36e
-        assert_eq!(slug("Export CSV"), "export-csv");
-        assert_eq!(slug("  Dark mode: on/off!  "), "dark-mode-on-off");
-        assert_eq!(slug("Ünïcode only"), "n-code-only");
-        assert_eq!(slug("!!!"), "");
-        let long = "a".repeat(70);
-        assert_eq!(slug(&long), "a".repeat(64));
-        let words = format!("{} bb", "a".repeat(62));
-        assert_eq!(
-            slug(&words),
-            "a".repeat(62),
-            "a word that doesn't fit is left out"
-        );
-    }
 }
