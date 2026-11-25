@@ -31,13 +31,14 @@ fn push_main(f: &Fixture, files: &[(&str, &str)]) {
 
 const LINE: &str = "tests/t.rs: land/deleted-tests-approved: test two, which cited a/x, is gone \
                     and no approved list names it. Keep the test under its name, citing any \
-                    requirement, even another than it cited; or rename it in its file to a name \
-                    no test carried at the merge base, citing every requirement it cited; or \
-                    leave the requirement unbuilt and add a question item";
+                    requirement, even one it didn't cite; or rename it in its file to a name no \
+                    test carried at the merge base, citing every requirement it cited, and \
+                    remove no uncited test from that file on the same branch; or leave the \
+                    requirement unbuilt and add a question item";
 
 #[test]
 fn a_deleted_test_refuses_the_land() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.branch("impl/a", &[("tests/t.rs", &test("one"))]);
     let old = f.remote("main");
@@ -53,7 +54,7 @@ fn a_deleted_test_refuses_the_land() {
 
 #[test]
 fn a_test_an_approved_list_names_lands() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     push_main(
         &f,
@@ -69,7 +70,7 @@ fn a_test_an_approved_list_names_lands() {
 
 #[test]
 fn a_list_in_the_archive_lands() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     push_main(
         &f,
@@ -85,7 +86,7 @@ fn a_list_in_the_archive_lands() {
 
 #[test]
 fn a_list_on_the_branch_counts_for_nothing() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.branch(
         "tidy",
@@ -100,7 +101,7 @@ fn a_list_on_the_branch_counts_for_nothing() {
 
 #[test]
 fn a_list_naming_another_file_or_test_counts_for_nothing() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     push_main(
         &f,
@@ -116,7 +117,7 @@ fn a_list_naming_another_file_or_test_counts_for_nothing() {
 
 #[test]
 fn a_moved_test_lands() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.branch(
         "impl/a",
@@ -128,7 +129,7 @@ fn a_moved_test_lands() {
 
 #[test]
 fn a_recited_test_lands() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     // `two` keeps its name and cites `b/y` in place of `a/x`: no test is gone.
     let f = with_tests();
     let two = test("two").replace(concat!("req", ":a/x"), concat!("req", ":b/y"));
@@ -142,7 +143,7 @@ fn a_recited_test_lands() {
 
 #[test]
 fn a_renamed_test_refuses_the_land() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     // Renamed with its marker taken off, `two` is gone: the new name cites nothing.
     let f = with_tests();
     let second = "#[test]\nfn second() {\n    assert!(true);\n}\n";
@@ -156,7 +157,7 @@ fn a_renamed_test_refuses_the_land() {
 
 #[test]
 fn a_renamed_test_keeping_its_marker_lands() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.branch(
         "tidy",
@@ -166,6 +167,50 @@ fn a_renamed_test_keeping_its_marker_lands() {
         )],
     );
     clm_land::land(&f.work(), Some("tidy"), &f.env(&[])).unwrap();
+    assert_eq!(f.landed().len(), 1);
+}
+
+#[test]
+fn a_rename_beside_a_deleted_uncited_test_refuses_the_land() {
+    // req:land/deleted-tests-approved@8b7c3461
+    // `main`'s `tests/t.rs` also holds `helper`, citing nothing; `tidy` renames `two` to
+    // `second`, keeping its marker, and deletes `helper`. The gone uncited `helper` takes the
+    // file's one new test, `second`, so `two` is gone, and the advice says why.
+    let f = Fixture::new("");
+    let helper = "#[test]\nfn helper() {\n    assert!(true);\n}\n";
+    push_main(
+        &f,
+        &[(
+            "tests/t.rs",
+            &format!("{}\n{}\n{helper}", test("one"), test("two")),
+        )],
+    );
+    f.branch(
+        "tidy",
+        &[(
+            "tests/t.rs",
+            &format!("{}\n{}", test("one"), test("second")),
+        )],
+    );
+    let old = f.remote("main");
+    let why = refused(clm_land::land(&f.work(), Some("tidy"), &f.env(&[])));
+    assert_eq!(why, LINE);
+    assert!(
+        why.contains("remove no uncited test from that file on the same branch"),
+        "{why}"
+    );
+    assert!(f.lines("check.log").is_empty());
+    assert_eq!(f.remote("main"), old);
+    assert!(f.landed().is_empty());
+    // The deletion is the cause: the same rename, keeping `helper`, lands.
+    f.branch(
+        "keep",
+        &[(
+            "tests/t.rs",
+            &format!("{}\n{}\n{helper}", test("one"), test("second")),
+        )],
+    );
+    clm_land::land(&f.work(), Some("keep"), &f.env(&[])).unwrap();
     assert_eq!(f.landed().len(), 1);
 }
 
@@ -183,7 +228,7 @@ fn renamed_to_a_name_another_file_carries() -> Fixture {
 
 #[test]
 fn a_new_name_another_file_carries_refuses_the_land() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = renamed_to_a_name_another_file_carries();
     let why = refused(clm_land::land(&f.work(), Some("tidy"), &f.env(&[])));
     assert_eq!(why, LINE);
@@ -212,7 +257,7 @@ fn a_new_name_another_file_carries_refuses_the_land() {
 
 #[test]
 fn the_pre_check_refuses_a_new_name_another_file_carries() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = renamed_to_a_name_another_file_carries();
     f.git(&f.work(), &["checkout", "-q", "tidy"]);
     let why = refused(clm_land::check_only(&f.work(), None, &f.env(&[])));
@@ -222,7 +267,7 @@ fn the_pre_check_refuses_a_new_name_another_file_carries() {
 
 #[test]
 fn a_deleted_file_names_each_test_it_held() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.git(&f.work(), &["checkout", "-q", "-b", "impl/a"]);
     f.git(&f.work(), &["rm", "-q", "tests/t.rs"]);
@@ -250,7 +295,7 @@ const A_SPEC: &str = "---\ntitle: A\nstatus: specd\nowners: [\"@a\"]\n---\n\n## 
 
 #[test]
 fn a_spec_branch_is_not_judged() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     // `spec/r` holds only the committed result of `clm rename r`, which rewrote the marker in
     // a test's title: a replay, which this rule leaves alone.
     let f = Fixture::new("");
@@ -282,7 +327,7 @@ fn a_spec_branch_is_not_judged() {
 
 #[test]
 fn a_spec_branch_that_deletes_a_test() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     // A spec branch is judged as any other, and so is a branch whose only other change is an
     // approval edit, which vouches for no test.
     let f = Fixture::new("approval = \"other\"");
@@ -318,7 +363,7 @@ fn a_spec_branch_that_deletes_a_test() {
 
 #[test]
 fn what_it_doesnt_read() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     // A branch touching no file that can hold a test, a binary among them.
     let f = with_tests();
     let work = f.work();
@@ -352,7 +397,7 @@ fn what_it_doesnt_read() {
 
 #[test]
 fn the_pre_check_prints_the_same_line() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.branch("impl/a", &[("tests/t.rs", &test("one"))]);
     f.git(&f.work(), &["checkout", "-q", "impl/a"]);
@@ -364,7 +409,7 @@ fn the_pre_check_prints_the_same_line() {
 
 #[test]
 fn the_pre_check_judges_a_detached_head() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.branch("impl/a", &[("tests/t.rs", &test("one"))]);
     f.git(&f.work(), &["checkout", "-q", "--detach", "impl/a"]);
@@ -375,7 +420,7 @@ fn the_pre_check_judges_a_detached_head() {
 
 #[test]
 fn the_pre_check_passes_a_renamed_test_keeping_its_marker() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.branch(
         "tidy",
@@ -390,8 +435,23 @@ fn the_pre_check_passes_a_renamed_test_keeping_its_marker() {
 }
 
 #[test]
+fn a_head_with_no_merge_base_is_not_refused() {
+    // req:land/deleted-tests-approved@8b7c3461
+    // An orphan head holds `tests/t.rs` without `two`: with no history in common it removed
+    // nothing, so the pre-check goes on to its check.
+    let f = with_tests();
+    let work = f.work();
+    f.git(&work, &["checkout", "-q", "--orphan", "fresh"]);
+    std::fs::write(work.join("tests/t.rs"), test("one")).unwrap();
+    f.git(&work, &["add", "-A"]);
+    f.git(&work, &["commit", "-q", "-m", "fresh"]);
+    let out = clm_land::check_only(&work, None, &f.env(&[])).unwrap();
+    assert_eq!(out.lines.last().unwrap(), "checks pass");
+}
+
+#[test]
 fn the_pre_check_with_no_origin_main_judges_nothing() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = with_tests();
     f.branch("impl/a", &[("tests/t.rs", &test("one"))]);
     f.git(&f.work(), &["checkout", "-q", "impl/a"]);
@@ -402,7 +462,7 @@ fn the_pre_check_with_no_origin_main_judges_nothing() {
 
 #[test]
 fn a_root_in_a_subdirectory_reads_paths_from_the_root() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = Fixture::nested();
     let proj = f.work();
     f.commit_files(
@@ -420,7 +480,7 @@ fn a_root_in_a_subdirectory_reads_paths_from_the_root() {
 
 #[test]
 fn a_root_in_a_subdirectory_names_the_file_from_the_root() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     let f = Fixture::nested();
     let proj = f.work();
     f.commit_files(
@@ -450,7 +510,7 @@ fn tickets(f: &Fixture) -> usize {
 
 #[test]
 fn a_waiting_land_that_lost_a_test_is_not_taken_with_another() {
-    // req:land/deleted-tests-approved@00650f33
+    // req:land/deleted-tests-approved@8b7c3461
     // req:land/batched-lands@ba7cbebe
     let f = with_tests();
     f.branch("impl/a", &[("a.txt", "a2\n")]);
