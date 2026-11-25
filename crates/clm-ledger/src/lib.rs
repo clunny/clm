@@ -1,16 +1,20 @@
 //! Approvals, checks and lands as records in per-writer ledger branches
 //! (specs/ledger/SPEC.md, `per-writer-ledgers`).
 
+mod change_ids;
 mod doc_only;
 mod fold;
 mod record;
+mod times;
 
+pub use change_ids::change_ids;
 pub use doc_only::{doc_only, legacy_doc_only};
 pub use fold::{Fold, TimedLand, fold_records, person, show, slug};
 pub use record::{
     Basis, Body, Decision, LandKind, Rating, Recheck, Record, TimedStep, Usage, VerifyMode,
     signed_message,
 };
+pub use times::{rfc3339, unix_time};
 
 #[cfg(feature = "git")]
 mod append;
