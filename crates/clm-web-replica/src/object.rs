@@ -329,11 +329,12 @@ impl<S: Store, A: Alarm> Object<S, A> {
         after: &str,
         compare: source::Compare,
     ) {
+        // A compare names no mode: `fetch` asks each file's parent tree for it.
         let entry = |c: &source::Changed| Entry {
             path: c.path.clone(),
             sha: c.sha.clone(),
             size: 0,
-            mode: "100644".into(),
+            mode: String::new(),
         };
         let wanted: Vec<Entry> = compare
             .changed
@@ -345,7 +346,10 @@ impl<S: Store, A: Alarm> Object<S, A> {
         // What isn't fetched stays to fetch: the replica lists it as pending.
         for c in &compare.changed {
             if !files.iter().any(|f| f.entry.path == c.path) {
-                files.push(File::unfetched(entry(c)));
+                // Its mode is read when the tree is listed to fetch it.
+                let mut unfetched = entry(c);
+                unfetched.mode = "100644".into();
+                files.push(File::unfetched(unfetched));
             }
         }
         self.replica.apply(Change::Tip {
@@ -404,7 +408,15 @@ impl<S: Store, A: Alarm> Object<S, A> {
             .iter()
             .filter_map(|path| listing?.get(path).cloned())
             .collect();
-        let files = source::fetch(p, auth, &self.name, &tip, &entries, b).await;
+        // The files whose text the replica keeps go in queries of their own, before any
+        // other (`fetches-what-the-replica-wants`).
+        let (kept, rest): (Vec<Entry>, Vec<Entry>) = entries
+            .into_iter()
+            .partition(|e| clm_replica::keeps_text(&e.path));
+        let mut files = source::fetch(p, auth, &self.name, &tip, &kept, b).await;
+        if files.len() == kept.len() {
+            files.extend(source::fetch(p, auth, &self.name, &tip, &rest, b).await);
+        }
         let taken = files.len();
         if taken > 0 {
             self.replica.apply(Change::Tip {

@@ -41,7 +41,7 @@ fn a_push_to_main() {
 
 #[test]
 fn a_push_listing_every_kind_of_file() {
-    // req:web.worker.replica/fetches-what-the-replica-wants@bb23e1f0
+    // req:web.worker.replica/fetches-what-the-replica-wants@433cbf63
     let paths = [
         "web/.gitattributes",
         "clm.toml",
@@ -92,13 +92,21 @@ fn every_kind(round: &str) -> clm_web_platform::fake::FileMap {
     let toml = format!("# {round}\n");
     let readme = format!("# r {round}\n");
     let d = format!("# d {round}\n");
-    repo_files(&[
+    let mut all = repo_files(&[
         ("a.rs", &a),
         ("web/.gitattributes", &attrs),
         ("clm.toml", &toml),
         ("README.md", &readme),
         ("docs/decisions/d.md", &d),
-    ])
+    ]);
+    // More non-Markdown files than one blob query holds.
+    for i in 0..150 {
+        all.extend(files(&[(
+            &format!("src/f{i}.rs"),
+            &format!("fn f{i}() {{ /* {round} */ }}"),
+        )]));
+    }
+    all
 }
 
 /// The paths each blob query since `from` calls fetched, query by query.
@@ -143,7 +151,7 @@ fn kept_text_first(fetched: &[String]) {
 
 #[test]
 fn a_first_build_fetches_the_kept_text_first() {
-    // req:web.worker.replica/fetches-what-the-replica-wants@bb23e1f0
+    // req:web.worker.replica/fetches-what-the-replica-wants@433cbf63
     let fake = fake_with("111", every_kind("one"));
     built(&fake);
     let queries = blob_queries(&fake, 0);
@@ -156,7 +164,7 @@ fn a_first_build_fetches_the_kept_text_first() {
 
 #[test]
 fn a_recovery_fetches_the_kept_text_first() {
-    // req:web.worker.replica/fetches-what-the-replica-wants@bb23e1f0
+    // req:web.worker.replica/fetches-what-the-replica-wants@433cbf63
     let fake = fake_with("111", every_kind("one"));
     let (mut object, _mem, _slot) = built(&fake);
     // A force-push: the compare isn't a fast-forward, so the object lists the tree.
@@ -176,7 +184,103 @@ fn a_recovery_fetches_the_kept_text_first() {
             .any(|u| u.contains("/git/trees/222")),
         "the tree at 222 is listed"
     );
-    kept_text_first(&blob_queries(&fake, from).concat());
+    let queries = blob_queries(&fake, from);
+    assert!(
+        queries[0].iter().all(|p| clm_replica::keeps_text(p)),
+        "the first query holds only kept text: {queries:?}"
+    );
+    kept_text_first(&queries.concat());
+}
+
+/// A test citing `a/p`, built so this file holds no marker of its own.
+const CITES_P: &str = concat!("// req", ":a/p\n#[test]\nfn p() {}\n");
+
+/// The files the snapshot `seen` gives as citing requirement `a/p`.
+fn citing_p(seen: &serde_json::Value) -> Vec<String> {
+    seen["view"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["id"] == "a")
+        .unwrap()["requirements"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "a/p")
+        .unwrap()["markers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|m| m.as_str().unwrap().split(':').next().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn a_link_changed_by_a_push() {
+    // req:web.worker.replica/fetches-what-the-replica-wants@433cbf63
+    let fake = fake_with(
+        "111",
+        repo_files(&[("src/a.rs", CITES_P), ("src/b.rs", "fn b() {}\n")]),
+    );
+    let (mut object, mem, slot) = built(&fake);
+    assert_eq!(
+        citing_p(&view(&fake, &mut object, "snapshot")),
+        ["src/a.rs"]
+    );
+    // `src/a.rs` becomes a symlink to `src/b.rs`, whose bytes are its target, and
+    // `src/b.rs` now cites `a/p`.
+    commit(
+        &fake,
+        "222",
+        repo_files(&[("src/a.rs", "src/b.rs"), ("src/b.rs", CITES_P)]),
+    );
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .modes
+        .insert("src/a.rs".into(), "120000".into());
+    let from = gh_calls(&fake);
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    // The blob query asks `src`'s tree for its entries' modes, which GitHub gives as
+    // integers: the symlink's 40960.
+    let queries = graphql_calls(&fake, from);
+    assert_eq!(queries.len(), 1, "{queries:?}");
+    let asked: serde_json::Value = serde_json::from_str(&queries[0]).unwrap();
+    let trees: Vec<&str> = asked["variables"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .filter(|(k, _)| k.starts_with('t'))
+        .map(|(_, v)| v.as_str().unwrap())
+        .collect();
+    assert_eq!(trees, ["222:src"]);
+    // What GitHub answered that query: the fake answers it again as it did.
+    let call = fake.gh.calls.borrow()[from..]
+        .iter()
+        .find(|c| c.url.ends_with("/graphql"))
+        .cloned()
+        .unwrap();
+    let answered = block_on(clm_web_platform::platform::GitHub::send(&fake, call));
+    let answered: serde_json::Value = serde_json::from_str(&answered.body).unwrap();
+    let entries = answered["data"]["repository"]["t0"]["entries"].clone();
+    assert!(
+        entries
+            .as_array()
+            .unwrap()
+            .contains(&json!({"name": "a.rs", "mode": 40960})),
+        "{entries}"
+    );
+    // The replica was given it at its octal text, and holds it as no file.
+    let state = stored_state(&mem);
+    assert_eq!(state["state"]["tree"]["src/a.rs"]["mode"], "120000");
+    assert_eq!(state["state"]["tree"]["src/b.rs"]["mode"], "100644");
+    assert!(state["state"]["held"].get("src/a.rs").is_none());
+    run_alarms(&fake, &mut object, &slot);
+    let seen = view(&fake, &mut object, "snapshot");
+    assert_eq!(citing_p(&seen), ["src/b.rs"]);
+    assert_eq!(seen["view"]["coverage"]["state"], "complete");
 }
 
 #[test]
