@@ -52,10 +52,10 @@ describe('answer buttons', () => {
   // req:web.views/answer-buttons@1248b040
   it('done: Done sends done', async () => {
     const onAnswer = vi.fn(async () => null);
-    const page = renderBacklogItem(snapshot(), 'setup', null, '#/o/a/backlog', answering({ onAnswer }));
+    const page = renderBacklogItem(snapshot({ backlog: [item('h', 'human-task')] }), 'h', null, '#/o/a/backlog', answering({ onAnswer }));
     page.querySelector<HTMLButtonElement>('button.answer')!.click();
     await tick();
-    expect(onAnswer.mock.calls).toEqual([['setup', 'done']]);
+    expect(onAnswer.mock.calls).toEqual([['h', 'done']]);
   });
 
   // req:web.views/answer-buttons@1248b040

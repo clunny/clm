@@ -288,11 +288,20 @@ describe('decide', () => {
 
   // req:web.views/decide-buttons@4075a6f6
   it('moved: a 409 says the capability changed since it was shown and loads the report again', async () => {
-    const w = wired(async () => answer(409), () => capabilities());
+    // The Worker's tip holds the capability at a new version, which the page then shows.
+    const moved = () => {
+      const c = capabilities();
+      c.report.capabilities[1].version = 'b2000000';
+      c.report.capabilities[1].text = '### Capability: a\nA person can a, now in CSV.';
+      return c;
+    };
+    const w = wired(async () => answer(409), moved);
     w.view.querySelector<HTMLButtonElement>('button.decide[data-decision=keep]')!.click();
     await w.done();
     expect(w.reload).toHaveBeenCalledTimes(1);
-    expect(w.redraw().querySelector('.decide-note')!.textContent).toContain('The capability changed since it was shown');
+    const after = w.redraw();
+    expect(after.querySelector('.decide-note')!.textContent).toContain('The capability changed since it was shown');
+    expect(after.querySelector('section[data-sec=entry]')!.textContent).toContain('now in CSV');
   });
 
   // req:web.views/decide-buttons@4075a6f6
