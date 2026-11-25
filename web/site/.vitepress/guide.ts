@@ -62,12 +62,9 @@ export function guideFiles(): GuidePage[] {
   })
 }
 
-// The guide's files link to the spec format as `../spec-format.md`; its page is a sibling.
-export function guideSource(page: GuidePage): string {
-  return readFileSync(page.file, 'utf8')
-    .replaceAll('](../spec-format.md', '](spec-format.md')
-    .replaceAll('](README.md', '](index.md')
-}
+/** A guide file's text for its page: its links rewritten for the page (`rewriteLinks`). */
+export const guideSource = (page: GuidePage, repo: string): string =>
+  rewriteLinks(readFileSync(page.file, 'utf8'), page, repo, { kind: 'page' })
 
 /** The page's address under the site, as a path: `/guide/` for the README. */
 export const pagePath = (name: string) => (name === 'index' ? '/guide/' : `/guide/${name}`)
@@ -79,38 +76,84 @@ export function repoLink(inRepo: string, endsWithSlash: boolean, anchor: string,
   return `https://github.com/${repo}/${dir ? 'tree' : 'blob'}/main/${inRepo.replace(/\/$/, '')}${anchor}`
 }
 
-/** The file's text for its Markdown copy: every inline link outside fenced code to another guide
- * file names that file's copy, and every other relative link names the file on GitHub's `main`. */
-export function rewriteLinks(text: string, page: GuidePage, siteUrl: string, repo: string): string {
-  const isSpecFormat = page.name === 'spec-format'
-  // The file's place in the repository, whatever directory `GUIDE_DIR` reads it from.
-  const here = isSpecFormat ? 'docs' : 'docs/guide'
+// A code span: a run of backticks, up to the next run of as many.
+const CODE_SPAN = /(?<!`)(`+)[\s\S]*?(?<!`)\1(?!`)/g
+
+/** `text` with `f` applied to each piece of it outside fenced code and code spans, so a link
+ * written as code is never rewritten (`agent-markdown`). */
+export function outsideCode(text: string, f: (piece: string) => string): string {
   let fenced = false
   return text
     .split('\n')
     .map((line) => {
-      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced
+      if (/^\s*(```|~~~)/.test(line)) {
+        fenced = !fenced
+        return line
+      }
       if (fenced) return line
-      return line.replace(/(\]\()([^)\s]+)/g, (whole, open: string, target: string) => {
-        if (/^([a-z][a-z0-9+.-]*:|#|\/\/)/i.test(target)) return whole
-        const hash = target.indexOf('#')
-        const path = hash < 0 ? target : target.slice(0, hash)
-        const anchor = hash < 0 ? '' : target.slice(hash)
-        if (path === '') return whole
-        const inRepo = posix.normalize(posix.join(here, path))
-        if (inRepo === 'docs/spec-format.md') return `${open}${siteUrl}/guide/spec-format.md${anchor}`
-        const guide = /^docs\/guide\/([^/]+\.md)$/.exec(inRepo)
-        if (guide) {
-          const name = guide[1] === 'README.md' ? 'index' : guide[1].slice(0, -3)
-          return `${open}${siteUrl}/guide/${name}.md${anchor}`
-        }
-        return `${open}${repoLink(inRepo, path.endsWith('/'), anchor, repo)}`
-      })
+      let out = ''
+      let at = 0
+      for (const m of line.matchAll(CODE_SPAN)) {
+        out += f(line.slice(at, m.index)) + m[0]
+        at = m.index + m[0].length
+      }
+      return out + f(line.slice(at))
     })
     .join('\n')
 }
 
-// README's links in the order it gives them, then whatever it leaves unlinked, then the spec format.
+/** The target of a relative link: its path and its `#anchor`, or undefined for a link that
+ * names a scheme, an anchor alone or a path from the site's root, which stays as it is. */
+export function relativeTarget(target: string): { path: string; anchor: string } | undefined {
+  if (/^([a-z][a-z0-9+.-]*:|#|\/)/i.test(target)) return undefined
+  const hash = target.indexOf('#')
+  return hash < 0 ? { path: target, anchor: '' } : { path: target.slice(0, hash), anchor: target.slice(hash) }
+}
+
+/** On a page, `piece` with each relative image's target made the file's raw copy on GitHub's
+ * `main`: the page is built from `web/site/pages/`, where no file of the guide or a post lies, so
+ * left as it is the image would fail the build (`agent-markdown`). A Markdown copy keeps it. */
+export function pageImages(piece: string, from: string, repo: string): string {
+  return piece.replace(/(!\[[^\]]*\]\()([^)\s]+)/g, (whole, open: string, target: string) => {
+    const rel = relativeTarget(target)
+    if (!rel || rel.path === '') return whole
+    return `${open}https://github.com/${repo}/raw/main/${posix.normalize(posix.join(from, rel.path))}${rel.anchor}`
+  })
+}
+
+/** A guide file's text with the targets of its inline links outside code rewritten
+ * (`agent-markdown`, `guide-pages`). A link out of the guide's files names the file on GitHub's
+ * `main`. A link to another guide file names, in a Markdown copy, that file's copy, and on a page
+ * that file's page, as a sibling (every guide page is under `/guide/`), so a dead guide link
+ * still fails the build. */
+export function rewriteLinks(
+  text: string,
+  page: Pick<GuidePage, 'name'>,
+  repo: string,
+  mode: { kind: 'page' } | { kind: 'copy'; siteUrl: string },
+): string {
+  // The file's place in the repository, whatever directory `GUIDE_DIR` reads it from.
+  const here = page.name === 'spec-format' ? 'docs' : 'docs/guide'
+  return outsideCode(text, (piece) =>
+    (mode.kind === 'page' ? pageImages(piece, here, repo) : piece).replace(/(?<!!)(\[(?:!\[[^\]]*\]\([^)]*\)|[^\]])*\]\()([^)\s]+)/g, (whole, open: string, target: string) => {
+      const rel = relativeTarget(target)
+      if (!rel || rel.path === '') return whole
+      const { path, anchor } = rel
+      const inRepo = posix.normalize(posix.join(here, path))
+      const guide = inRepo === 'docs/spec-format.md' ? 'spec-format.md' : /^docs\/guide\/([^/]+\.md)$/.exec(inRepo)?.[1]
+      if (guide !== undefined) {
+        const name = guide === 'README.md' ? 'index' : guide.slice(0, -3)
+        return mode.kind === 'copy'
+          ? `${open}${mode.siteUrl}/guide/${name}.md${anchor}`
+          : `${open}${name}.md${anchor}`
+      }
+      return `${open}${repoLink(inRepo, path.endsWith('/'), anchor, repo)}`
+    }),
+  )
+}
+
+// README's links in the order it first gives them, labelled with their text, an `#anchor` counted
+// as a link to its file; then whatever it leaves unlinked, by its title; then the spec format.
 export function guideSidebar(): { text: string; link: string; name: string }[] {
   const pages = guideFiles()
   const readme = pages.find((p) => p.name === 'index')
@@ -119,7 +162,7 @@ export function guideSidebar(): { text: string; link: string; name: string }[] {
   ]
   const seen = new Set(['index', 'spec-format'])
   if (readme) {
-    for (const m of readFileSync(readme.file, 'utf8').matchAll(/\[([^\]]+)\]\(([^)#]+)\.md\)/g)) {
+    for (const m of readFileSync(readme.file, 'utf8').matchAll(/\[([^\]]+)\]\(([^)#\s]+)\.md(?:#[^)\s]*)?\)/g)) {
       const name = m[2]
       if (seen.has(name) || !pages.some((p) => p.name === name)) continue
       seen.add(name)
@@ -128,7 +171,7 @@ export function guideSidebar(): { text: string; link: string; name: string }[] {
   }
   for (const p of pages) {
     if (seen.has(p.name)) continue
-    items.push({ text: p.name, link: `/guide/${p.name}`, name: p.name })
+    items.push({ text: p.title, link: `/guide/${p.name}`, name: p.name })
   }
   items.push({ text: 'Spec format', link: '/guide/spec-format', name: 'spec-format' })
   return items

@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -9,29 +9,49 @@ export const repoDocs = resolve(siteDir, '../../docs')
 /** The build the browser tests serve (`playwright.config.ts`). */
 export const mainDist = join(siteDir, '.test-dist', 'main')
 
-/** Builds the site into `.test-dist/<name>` with `env` added to the environment; returns the
- * output, or the failure's text. `UMAMI_WEBSITE_ID` and `GITHUB_STARS` start unset, and the
- * GitHub API address refuses connections, so no build waits on the network. */
-export function build(
-  name: string,
-  env: Record<string, string> = {},
-): { out: string; error?: string } {
+/** What a build left: where it wrote, all it printed, and, when it failed, the failure's text. */
+export type Built = { out: string; output: string; error?: string }
+
+/** The environment a build runs in: `env` added to this process's, with `UMAMI_WEBSITE_ID`,
+ * `GITHUB_STARS`, `GITHUB_TOKEN`, `INSTALL_REPO`, `GUIDE_DIR` and `BLOG_DIR` unset first and the
+ * GitHub API address one that refuses connections, so no build waits on the network. */
+function buildEnv(out: string, env: Record<string, string>): NodeJS.ProcessEnv {
+  const base: NodeJS.ProcessEnv = { ...process.env, SITE_OUT: out, GITHUB_API: 'http://127.0.0.1:9' }
+  for (const key of ['UMAMI_WEBSITE_ID', 'GITHUB_STARS', 'GITHUB_TOKEN', 'INSTALL_REPO', 'GUIDE_DIR', 'BLOG_DIR']) {
+    delete base[key]
+  }
+  return { ...base, ...env }
+}
+
+const built = (out: string, status: number | null, output: string, failure?: string): Built =>
+  status === 0 ? { out, output } : { out, output, error: `${output}${failure ?? `exit ${status}`}` }
+
+/** Builds the site into `.test-dist/<name>` with `env` added to the environment (`buildEnv`). */
+export function build(name: string, env: Record<string, string> = {}): Built {
   const out = join(siteDir, '.test-dist', name)
   rmSync(out, { recursive: true, force: true })
-  const base: NodeJS.ProcessEnv = { ...process.env, SITE_OUT: out, GITHUB_API: 'http://127.0.0.1:9' }
-  for (const key of ['UMAMI_WEBSITE_ID', 'GITHUB_STARS', 'INSTALL_REPO', 'GUIDE_DIR', 'BLOG_DIR']) delete base[key]
-  try {
-    execFileSync('npx', ['vitepress', 'build', '.'], {
-      cwd: siteDir,
-      env: { ...base, ...env },
-      stdio: 'pipe',
-      maxBuffer: 64 * 1024 * 1024,
-    })
-    return { out }
-  } catch (e) {
-    const err = e as { stdout?: Buffer; stderr?: Buffer; message: string }
-    return { out, error: `${err.stdout ?? ''}${err.stderr ?? ''}${err.message}` }
-  }
+  const run = spawnSync('npx', ['vitepress', 'build', '.'], {
+    cwd: siteDir,
+    env: buildEnv(out, env),
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  return built(out, run.status, `${run.stdout ?? ''}${run.stderr ?? ''}`, run.error?.message)
+}
+
+/** `build`, leaving this process free to answer requests while it runs, as a test's own
+ * stand-in for GitHub's API must. */
+export function buildAsync(name: string, env: Record<string, string> = {}): Promise<Built> {
+  const out = join(siteDir, '.test-dist', name)
+  rmSync(out, { recursive: true, force: true })
+  return new Promise((done) => {
+    const child = spawn('npx', ['vitepress', 'build', '.'], { cwd: siteDir, env: buildEnv(out, env) })
+    let output = ''
+    child.stdout.on('data', (d) => (output += d))
+    child.stderr.on('data', (d) => (output += d))
+    child.on('error', (e) => done(built(out, null, output, e.message)))
+    child.on('close', (status) => done(built(out, status, output)))
+  })
 }
 
 /** A fixture guide under `.test-dist/<name>-src/docs/guide`, with its sibling `spec-format.md`. */

@@ -3,11 +3,14 @@
 // clm:reads docs/guide/**
 // clm:reads docs/spec-format.md
 import { test, expect } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
-
-const siteDir = resolve(import.meta.dirname, '..')
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
+import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { unstable_readConfig } from 'wrangler'
+import { build, filesUnder, read, siteDir } from './helpers'
 
 test('the homepage first screen shows the headline, Get started and the four stages', async ({ page }) => {
   // req:web.site/homepage-first-screen@cfa9754e
@@ -71,42 +74,35 @@ test('the homepage holds its five sections in order with the credits linked', as
 
 test('the install commands name the one configured repository', () => {
   test.setTimeout(180_000)
-  // req:web.site/install-repository@3b9ed6ef
-  const out = join(siteDir, '.test-dist', 'repo')
-  execFileSync('npx', ['vitepress', 'build', '.'], {
-    cwd: siteDir,
-    env: { ...process.env, SITE_OUT: out, INSTALL_REPO: 'someone/clm-public', GITHUB_STARS: '1' },
-    stdio: 'pipe',
-  })
-  const html = readFileSync(join(out, 'index.html'), 'utf8')
-  expect(html).toContain('/plugin marketplace add someone/clm-public')
-  // The default repository is written in the config alone, but for the blog's posts, which are
-  // written text, as the guide's files are, and may name it in their own install commands.
+  // req:web.site/install-repository@2a80f121
+  const { out, error } = build('repo', { INSTALL_REPO: 'someone/clm-public', GITHUB_STARS: '1' })
+  expect(error).toBeUndefined()
+  expect(read(out, 'index.html')).toContain('/plugin marketplace add someone/clm-public')
+  expect(read(out, 'llms.txt')).toContain('/plugin marketplace add someone/clm-public')
+  const app = /<script type="application\/ld\+json">([^<]*)<\/script>/.exec(read(out, 'index.html'))!
+  expect(JSON.parse(app[1]).sameAs).toEqual(['https://github.com/someone/clm-public'])
+  // No built file names the public repository but those holding text taken from the guide's
+  // files or the posts, which are written text and may name it in their own install commands:
+  // their pages and the scripts that carry them, their copies, the agent files and the feed.
+  const writtenText = (f: string) =>
+    /^(guide|blog)\//.test(f) || /^assets\/(guide|blog)_/.test(f) || f === 'llms-full.txt' || f === 'llms.txt'
   const needle = 'clunny' + '/clm'
-  const posts = join(siteDir, 'blog')
-  const named: string[] = []
-  const walk = (dir: string) => {
-    for (const name of readdirSync(dir)) {
-      if (['node_modules', 'dist', '.test-dist', 'test-results', 'cache', 'package-lock.json'].includes(name)) continue
-      const path = join(dir, name)
-      if (path === posts) continue
-      if (statSync(path).isDirectory()) walk(path)
-      else if (readFileSync(path, 'utf8').includes(needle)) named.push(relative(siteDir, path))
-    }
-  }
-  walk(siteDir)
-  expect(named).toEqual(['.vitepress/config.ts'])
+  const named = filesUnder(out).filter((f) => !writtenText(f) && read(out, f).includes(needle))
+  expect(named).toEqual([])
+  // llms.txt names it only in the guide's own text: its summaries.
+  const llms = read(out, 'llms.txt')
+  expect(llms.slice(0, llms.indexOf('## Guide'))).not.toContain(needle)
+  expect(llms.slice(llms.indexOf('## Optional'))).not.toContain(needle)
 })
 
 test('the install commands default to the public repository', () => {
   test.setTimeout(180_000)
-  // req:web.site/install-repository@3b9ed6ef
-  const out = join(siteDir, '.test-dist', 'default-repo')
-  const env = { ...process.env, SITE_OUT: out, GITHUB_STARS: '1' }
-  delete env.INSTALL_REPO
-  execFileSync('npx', ['vitepress', 'build', '.'], { cwd: siteDir, env, stdio: 'pipe' })
-  const html = readFileSync(join(out, 'index.html'), 'utf8')
-  expect(html).toContain('/plugin marketplace add ' + 'clunny' + '/clm')
+  // req:web.site/install-repository@2a80f121
+  for (const env of [{}, { INSTALL_REPO: '' }]) {
+    const { out, error } = build('default-repo', { ...env, GITHUB_STARS: '1' })
+    expect(error).toBeUndefined()
+    expect(read(out, 'index.html'), JSON.stringify(env)).toContain('/plugin marketplace add ' + 'clunny' + '/clm')
+  }
 })
 
 test('the homepage and the guide fit a phone without scrolling sideways', async ({ page }) => {
@@ -135,33 +131,77 @@ test('the homepage and the guide fit a phone without scrolling sideways', async 
 })
 
 test('npmrc ignores install scripts', () => {
-  // req:web.site/site-no-install-scripts@5ee0d14e
-  const npmrc = readFileSync(join(siteDir, '.npmrc'), 'utf8')
-  expect(npmrc.split('\n').map((l) => l.trim())).toContain('ignore-scripts=true')
+  // req:web.site/site-no-install-scripts@3828bfd9
+  // A user's own npm settings that turn install scripts on, and nothing in the environment.
+  const home = mkdtempSync(join(tmpdir(), 'clm-site-npmrc-'))
+  try {
+    const userconfig = join(home, '.npmrc')
+    writeFileSync(userconfig, 'ignore-scripts=false\n')
+    const env: NodeJS.ProcessEnv = { ...process.env, npm_config_userconfig: userconfig }
+    for (const key of Object.keys(env)) if (/^npm_config_ignore[-_]scripts$/i.test(key)) delete env[key]
+    const got = execFileSync('npm', ['config', 'get', 'ignore-scripts'], { cwd: siteDir, env, encoding: 'utf8' })
+    expect(got.trim()).toBe('true')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
-test("wrangler.toml declares the site's own Worker, assets only", () => {
-  // req:web.site/site-worker@0fb56a72
-  const toml = readFileSync(join(siteDir, 'wrangler.toml'), 'utf8')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l !== '' && !l.startsWith('#'))
-  expect(toml).toContain('name = "clm-site"')
-  expect(toml.filter((l) => /^main\s*=/.test(l))).toEqual([])
-  expect(toml.filter((l) => /^routes\s*=/.test(l))).toEqual([
-    'routes = [{ pattern = "clm-app.dev", custom_domain = true }]',
-  ])
-  const assets = toml.slice(toml.indexOf('[assets]') + 1)
-  expect(assets).toContain('not_found_handling = "404-page"')
-  // Where `npm run build` writes the site by default.
-  expect(assets).toContain('directory = "./dist"')
-  expect(readFileSync(join(siteDir, '.vitepress/config.ts'), 'utf8')).toContain("process.env.SITE_OUT || 'dist'")
+/** A port nothing listens on right now, from the OS. */
+async function freePort(): Promise<number> {
+  const server = createServer()
+  await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok))
+  const { port } = server.address() as AddressInfo
+  await new Promise((ok) => server.close(ok))
+  return port
+}
+
+test("wrangler reads the site's own Worker, assets only, and serves the build with its 404 page", async () => {
+  test.setTimeout(240_000)
+  // req:web.site/site-worker@d088ecb7
+  // The site built as `npm run build` builds it, with no `SITE_OUT`.
+  const env: NodeJS.ProcessEnv = { ...process.env, GITHUB_STARS: '1', UMAMI_WEBSITE_ID: '' }
+  delete env.SITE_OUT
+  execFileSync('npm', ['run', 'build'], { cwd: siteDir, env, stdio: 'pipe' })
+  const config = unstable_readConfig({ config: join(siteDir, 'wrangler.toml') }, {})
+  expect(config.name).toBe('clm-site')
+  expect(config.main).toBeUndefined()
+  expect(config.routes).toEqual([{ pattern: 'clm-app.dev', custom_domain: true }])
+  const assets = resolve(siteDir, config.assets!.directory!)
+  expect(existsSync(join(assets, 'index.html'))).toBe(true)
+
+  const port = await freePort()
+  const dev = spawn('npx', ['wrangler', 'dev', '--ip', '127.0.0.1', '--port', String(port)], {
+    cwd: siteDir,
+    env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' },
+    detached: true,
+    stdio: 'ignore',
+  })
+  try {
+    const base = `http://127.0.0.1:${port}`
+    const deadline = Date.now() + 90_000
+    let up = false
+    while (!up && Date.now() < deadline) {
+      up = await fetch(`${base}/`).then(() => true, () => false)
+      if (!up) await new Promise((ok) => setTimeout(ok, 500))
+    }
+    expect(up, 'wrangler dev answered').toBe(true)
+    expect((await fetch(`${base}/guide/quickstart`)).status).toBe(200)
+    const missing = await fetch(`${base}/no-such-page`)
+    expect(missing.status).toBe(404)
+    expect(await missing.text()).toBe(readFileSync(join(assets, '404.html'), 'utf8'))
+  } finally {
+    try {
+      process.kill(-dev.pid!, 'SIGTERM')
+    } catch {
+      // Already gone.
+    }
+  }
 })
 
 test('the nav reads How it works, Guide, Blog, Get started, Web app, and every link to the app reads Web app', async ({
   page,
 }) => {
-  // req:web.site/nav-web-app@c1d913a8
+  // req:web.site/nav-web-app@d9d68241
   for (const path of ['/', '/guide/quickstart']) {
     await page.goto(path)
     const nav = await page.locator('.VPNavBarMenu a').allTextContents()
@@ -178,5 +218,23 @@ test('the nav reads How it works, Guide, Blog, Get started, Web app, and every l
     expect(toApp.length, path).toBeGreaterThan(0)
     for (const text of toApp) expect(text.trim(), path).toBe('Web app')
     expect(await page.getByRole('link', { name: 'Sign in' }).count(), path).toBe(0)
+  }
+})
+
+test("every link to the app loads /app/ from the server, not a page of the site's own", async ({ page }) => {
+  // req:web.site/nav-web-app@d9d68241
+  for (const [path, link] of [
+    ['/guide/quickstart', '.VPNavBarMenu a:has-text("Web app")'],
+    ['/', '.clm-home .foot a:has-text("Web app")'],
+  ]) {
+    await page.goto(path)
+    // Once the app is up: VitePress's router takes a click only after hydration.
+    await page.waitForLoadState('networkidle')
+    const asked = page.waitForRequest(
+      (r) => r.resourceType() === 'document' && new URL(r.url()).pathname === '/app/',
+      { timeout: 10_000 },
+    )
+    await page.locator(link).click()
+    await asked
   }
 })

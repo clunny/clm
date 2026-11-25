@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { HeadConfig, PageData } from 'vitepress'
 import { guideDir, guideFiles, plain, titleAndSummary } from './guide'
 import type { SiteFacts } from './agents'
-import { publishedPosts } from './blog'
+import { postPath, publishedPosts } from './blog'
 import type { Post } from './blog'
 
 export interface HeadFacts extends SiteFacts {
@@ -12,8 +12,10 @@ export interface HeadFacts extends SiteFacts {
   pagesDir: string // where the site's own Markdown pages (privacy) live
 }
 
-/** The page's clean URL path: `/`, `/guide/`, `/guide/quickstart`, `/privacy`. */
-export function urlPath(relativePath: string): string {
+/** The page's clean URL path: `/`, `/guide/`, `/guide/quickstart`, `/privacy`, a post's `postPath`. */
+function urlPath(relativePath: string): string {
+  const post = postOf(relativePath)
+  if (post) return postPath(post.slug)
   const p = '/' + relativePath.replace(/\.md$/, '')
   return p === '/index' ? '/' : p.endsWith('/index') ? p.slice(0, -5) : p
 }
@@ -70,12 +72,10 @@ export function describePage(pageData: PageData, facts: HeadFacts): void {
   }
 }
 
-/** The 404 page's own title and description: VitePress builds that page without running
- * `transformPageData`, so its HTML is rewritten after (`page-metadata`). */
+/** The 404 page's own title: VitePress builds that page without running `transformPageData`, so
+ * its HTML is rewritten after (`page-metadata`); its description is `pageHead`'s. */
 export function notFoundHtml(html: string): string {
-  return html
-    .replace(/<title>[^<]*<\/title>/, '<title>Page not found | CLM</title>')
-    .replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="This page does not exist.">')
+  return html.replace(/<title>[^<]*<\/title>/, '<title>Page not found | CLM</title>')
 }
 
 const meta = (attrs: Record<string, string>): HeadConfig => ['meta', attrs]
@@ -124,11 +124,15 @@ export function pageHead(pageData: PageData, facts: HeadFacts): HeadConfig[] {
       },
     ])
   }
+  // The description is written here, not by VitePress, which writes its tag unescaped: given one
+  // in the head, it leaves its own out, and this one's attributes are escaped.
   if (pageData.isNotFound) {
+    head.push(meta({ name: 'description', content: 'This page does not exist.' }))
     head.push(meta({ name: 'robots', content: 'noindex' }))
     return head
   }
   const { relativePath, description: pageDescription = '' } = pageData
+  head.push(meta({ name: 'description', content: pageDescription || description }))
   const template = pageData.titleTemplate
   const title =
     typeof template === 'string' ? template.replace(':title', pageData.title) : pageData.title
@@ -158,7 +162,7 @@ export function pageHead(pageData: PageData, facts: HeadFacts): HeadConfig[] {
     head.push(['link', { rel: 'alternate', type: 'application/rss+xml', title: 'CLM blog', href: `${siteUrl}/blog/feed.xml` }])
   }
   if (post) {
-    head.push(['link', { rel: 'alternate', type: 'text/markdown', href: `${siteUrl}/blog/${post.slug}.md` }])
+    head.push(['link', { rel: 'alternate', type: 'text/markdown', href: `${siteUrl}${postPath(post.slug)}.md` }])
     head.push(meta({ property: 'article:published_time', content: post.date }))
     if (post.updated) head.push(meta({ property: 'article:modified_time', content: post.updated }))
     head.push(
@@ -188,7 +192,7 @@ export function pageHead(pageData: PageData, facts: HeadFacts): HeadConfig[] {
           '@type': 'BlogPosting',
           headline: p.title,
           datePublished: p.date,
-          url: `${siteUrl}/blog/${p.slug}`,
+          url: siteUrl + postPath(p.slug),
         })),
       }),
     )

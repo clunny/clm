@@ -10,9 +10,8 @@ export function formatStars(n: number): string {
 export async function readStars(repo: string): Promise<string | undefined> {
   const given = process.env.GITHUB_STARS
   if (given !== undefined && given !== '') {
-    const n = Number(given)
-    if (Number.isFinite(n)) return formatStars(n)
-    console.warn(`warning: GITHUB_STARS=${given} isn't a number; the GitHub link shows without a count`)
+    if (/^\d+$/.test(given.trim()) && Number.isSafeInteger(Number(given.trim()))) return formatStars(Number(given.trim()))
+    console.warn(`warning: GITHUB_STARS=${given} isn't a whole number of 0 or more; the GitHub link shows without a count`)
     return undefined
   }
   const api = process.env.GITHUB_API || 'https://api.github.com'
@@ -22,8 +21,10 @@ export async function readStars(repo: string): Promise<string | undefined> {
     const res = await fetch(`${api}/repos/${repo}`, { headers, signal: AbortSignal.timeout(10_000) })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const count = ((await res.json()) as { stargazers_count?: unknown }).stargazers_count
-    if (typeof count !== 'number') throw new Error('no stargazers_count in the answer')
-    return formatStars(count)
+    if (!Number.isSafeInteger(count) || (count as number) < 0) {
+      throw new Error(`no whole stargazers_count of 0 or more in the answer (${String(count)})`)
+    }
+    return formatStars(count as number)
   } catch (e) {
     console.warn(`warning: the star count of ${repo} couldn't be read (${(e as Error).message}); the GitHub link shows without one`)
     return undefined

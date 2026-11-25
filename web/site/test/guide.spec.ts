@@ -5,7 +5,7 @@
 import { test, expect } from '@playwright/test'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { build, fixture, repoDocs, siteDir } from './helpers'
+import { build, fixture, repoDocs, serve, siteDir } from './helpers'
 
 // The links written in a page's own text, resolved against its address: the sidebar, nav and pager
 // carry a class, the text's links don't.
@@ -13,7 +13,7 @@ const bodyLinks = (html: string, path: string) =>
   Array.from(html.matchAll(/<a href="([^"#]+)"/g), (m) => new URL(m[1], `http://site${path}`).pathname)
 
 test('every guide file has a page and the sidebar follows the README', async ({ page }) => {
-  // req:web.site/guide-pages@846e6608
+  // req:web.site/guide-pages@53de1da4
   const files = readdirSync(join(repoDocs, 'guide')).filter((f) => f.endsWith('.md'))
   expect(files).toContain('README.md')
   const dist = join(siteDir, '.test-dist', 'main')
@@ -25,29 +25,60 @@ test('every guide file has a page and the sidebar follows the README', async ({ 
   const readmeTitle = /^# (.+)$/m.exec(readFileSync(join(repoDocs, 'guide/README.md'), 'utf8'))![1]
   expect(readFileSync(join(dist, 'guide/index.html'), 'utf8')).toContain(readmeTitle)
 
+  // The README's links to guide files, in the order it first gives them, with their text.
+  const linked: string[] = []
+  const seen = new Set<string>()
+  for (const m of readFileSync(join(repoDocs, 'guide/README.md'), 'utf8').matchAll(/\[([^\]]+)\]\(([\w-]+)\.md(#[^)]*)?\)/g)) {
+    if (seen.has(m[2]) || !files.includes(`${m[2]}.md`) || m[2] === 'README') continue
+    seen.add(m[2])
+    linked.push(m[1])
+  }
+  expect(linked.length).toBeGreaterThan(3)
   await page.goto('/guide/quickstart')
   const labels = await page.locator('.VPSidebar a').allInnerTexts()
-  expect(labels.indexOf('Why CLM')).toBeGreaterThanOrEqual(0)
-  expect(labels.indexOf('Why CLM')).toBeLessThan(labels.indexOf('Quickstart'))
+  expect(labels.slice(0, linked.length + 1)).toEqual(['Overview', ...linked])
   expect(labels[labels.length - 1]).toBe('Spec format')
+  expect(labels.length).toBe(files.length + 1)
 })
 
-test('a file added to the guide gets a page with no edit under web/site', () => {
+test('a file added to the guide gets a page with no edit under web/site', async ({ page }) => {
   test.setTimeout(180_000)
-  // req:web.site/guide-pages@846e6608
+  // req:web.site/guide-pages@53de1da4
   const dir = fixture('added', {
-    'README.md': '# Guide\n\nThe guide.\n\n1. [Why](why-clm.md)\n',
-    'why-clm.md': '# Why\n\nWhy CLM.\n',
+    'README.md': '# Guide\n\nThe guide.\n\n1. [Why](why-clm.md#start)\n',
+    'why-clm.md': '# Why CLM\n\nWhy CLM.\n\n## Start\n\nHere.\n',
     'brand-new.md': '# Brand new\n\nA page nobody listed.\n',
   })
   const { out, error } = build('added', { GUIDE_DIR: dir })
   expect(error).toBeUndefined()
   expect(readFileSync(join(out, 'guide/brand-new.html'), 'utf8')).toContain('A page nobody listed.')
+  const server = await serve(out)
+  try {
+    await page.goto(`${server.url}/guide/brand-new`)
+    expect(await page.locator('.VPSidebar a').allInnerTexts()).toEqual(['Overview', 'Why', 'Brand new', 'Spec format'])
+  } finally {
+    await server.close()
+  }
+  // Pages the README doesn't link come in file-name order, each labelled with its `#` title.
+  const two = fixture('unlinked', {
+    'README.md': '# Guide\n\nThe guide.\n',
+    'b-file.md': '# Alpha title\n\nSecond by file name.\n',
+    'a-file.md': '# Zeta title\n\nFirst by file name.\n',
+  })
+  const unlinked = build('unlinked', { GUIDE_DIR: two })
+  expect(unlinked.error).toBeUndefined()
+  const second = await serve(unlinked.out)
+  try {
+    await page.goto(`${second.url}/guide/a-file`)
+    expect(await page.locator('.VPSidebar a').allInnerTexts()).toEqual(['Overview', 'Zeta title', 'Alpha title', 'Spec format'])
+  } finally {
+    await second.close()
+  }
 })
 
 test('links between guide files lead to their pages', () => {
   test.setTimeout(180_000)
-  // req:web.site/guide-pages@846e6608
+  // req:web.site/guide-pages@53de1da4
   const dir = fixture('links', {
     'README.md': '# Guide\n\nThe guide.\n\n1. [Why CLM](why-clm.md)\n2. [Reference](reference.md)\n',
     'why-clm.md': '# Why\n\nBack to the [guide](README.md).\n',
@@ -66,7 +97,7 @@ test('links between guide files lead to their pages', () => {
 
 test('a dead link fails the build, naming it', () => {
   test.setTimeout(180_000)
-  // req:web.site/guide-pages@846e6608
+  // req:web.site/guide-pages@53de1da4
   const dir = fixture('dead', {
     'README.md': '# Guide\n\nSee [nowhere](missing.md).\n',
   })

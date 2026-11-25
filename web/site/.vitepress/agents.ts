@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { guideFiles, guideSidebar, pagePath, rewriteLinks } from './guide'
-import { loadPosts, postCopy, publishedPosts } from './blog'
+import { loadPosts, postCopy, postPath, publishedPosts } from './blog'
 
 export interface SiteFacts {
   siteUrl: string
@@ -16,7 +16,7 @@ const xml = (s: string) =>
 /** `/blog/feed.xml`: RSS 2.0, one item for each published post, newest first (`blog-feed`). */
 export function feedXml(siteUrl: string, blogDescription: string): string {
   const items = publishedPosts().map((p) => {
-    const url = `${siteUrl}/blog/${p.slug}`
+    const url = siteUrl + postPath(p.slug)
     const pubDate = new Date(`${p.date}T00:00:00Z`).toUTCString()
     return `    <item>
       <title>${xml(p.title)}</title>
@@ -51,7 +51,7 @@ export function writeAgentFiles(outDir: string, facts: SiteFacts): void {
   const copies = new Map<string, string>()
   mkdirSync(join(outDir, 'guide'), { recursive: true })
   for (const page of pages) {
-    const copy = rewriteLinks(readFileSync(page.file, 'utf8'), page, siteUrl, installRepo)
+    const copy = rewriteLinks(readFileSync(page.file, 'utf8'), page, installRepo, { kind: 'copy', siteUrl })
     copies.set(page.name, copy)
     writeFileSync(join(outDir, 'guide', `${page.name}.md`), copy)
   }
@@ -72,7 +72,7 @@ export function writeAgentFiles(outDir: string, facts: SiteFacts): void {
       ? ''
       : `## Blog
 
-${posts.map((p) => `- [${p.title}](${siteUrl}/blog/${p.slug}.md): ${p.summary}`).join('\n')}
+${posts.map((p) => `- [${p.title}](${siteUrl}${postPath(p.slug)}.md): ${p.summary}`).join('\n')}
 
 `
   const llms = `# CLM

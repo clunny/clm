@@ -1,7 +1,8 @@
-import { dateLabel, publishedPosts } from '../blog'
+import { dateLabel, postPath, publishedPosts } from '../blog'
 
 export interface PostCard {
   slug: string
+  path: string // its page, `postPath`
   title: string
   summary: string
   dateLabel: string
@@ -19,6 +20,7 @@ export default {
   load(): PostCard[] {
     return publishedPosts().map((p) => ({
       slug: p.slug,
+      path: postPath(p.slug),
       title: p.title,
       summary: p.summary,
       dateLabel: dateLabel(p.date),
