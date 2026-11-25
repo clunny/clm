@@ -333,6 +333,7 @@ test.describe('live refresh', () => {
     await expect(page.locator('.seg button.on')).toHaveText('After');
   });
 
+  // req:web/app-writes@d1c16934
   test('no refresh runs while an approval is in progress', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);

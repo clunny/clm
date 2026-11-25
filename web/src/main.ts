@@ -134,7 +134,12 @@ const notify = new Notify({
   permission: () => Notification.permission,
   requestPermission: () => Notification.requestPermission(),
   subscribed: async (base, endpoint, fresh) => (await get<{ subscribed?: boolean }>(`${base}/push?endpoint=${encodeURIComponent(endpoint)}`, { live: true, fresh, keep: false })).data.subscribed === true,
-  send,
+  // A switch's write that is answered 401 shows the sign-in page (web/app-writes).
+  send: (method, path, body) =>
+    send(method, path, body).catch((e: unknown) => {
+      if (e instanceof SignedOut) showSignIn();
+      throw e;
+    }),
   apiBase,
   online: () => !offline(),
   storage: {
@@ -506,7 +511,9 @@ async function prPage(route: Route, base: string, snap: Snapshot, first: Review,
           }
         }
       } catch (e) {
-        say(e instanceof SignedOut ? `Signed out. Sign in again to approve.` : `Offline: approve when back online.`);
+        // Signed out: the sign-in page, which nothing then draws over (web/app-writes).
+        if (e instanceof SignedOut) return showSignIn();
+        say('Offline: approve when back online.');
       }
       // Drawn again, so the button reflects the outcome: disabled once accepted, else enabled.
       await render();
@@ -1054,7 +1061,8 @@ function sans(v: unknown, key: string): unknown {
  * when an answer differs; otherwise leaves it as it is. A failure leaves it too, except that
  * being signed out shows the sign-in page. */
 async function refresh(fresh?: string) {
-  if (writes > 0 || document.visibilityState !== 'visible' || !held.snap) return;
+  // The sign-in page a write's 401 showed stays: no refresh draws over it (web/app-writes).
+  if (signedOutShown || writes > 0 || document.visibilityState !== 'visible' || !held.snap) return;
   const route = appRoute(location.hash);
   if (!route.owner || !route.repo || apiBase(route.owner, route.repo) !== held.base) return;
   const base = held.base;
@@ -1075,7 +1083,7 @@ async function refresh(fresh?: string) {
       need.arch ? live<Architecture>(`${base}/architecture`) : null,
       ...reviewUrls.map((u) => live<Review>(u).then((r) => [u, r] as const)),
     ]);
-    if (ticket !== showing || base !== held.base || writes > 0 || wrote !== since) return;
+    if (ticket !== showing || base !== held.base || writes > 0 || wrote !== since || signedOutShown) return;
     let changed = JSON.stringify(snap) !== JSON.stringify(held.snap) || JSON.stringify(branches) !== JSON.stringify(held.branches);
     if (impl && sans(impl, 'now') !== sans(held.impl, 'now')) changed = true;
     if (caps && JSON.stringify(caps) !== JSON.stringify(held.caps)) changed = true;

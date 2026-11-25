@@ -315,6 +315,7 @@ test.describe('deciding a capability', () => {
     expect(mock.urls.filter((u) => u.startsWith(`${CAPABILITIES}?fresh=`))).toHaveLength(1);
   });
 
+  // req:web/app-writes@d1c16934
   test('a refresh begun before a decision never draws its older report over the decision', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => {
