@@ -306,7 +306,7 @@ The times the object gives the replica, a ref's tip commit time from a push, a r
 #### Scenario: a commit made two hours east
 - GIVEN a built replica, and a push creating `impl/a` whose head commit's `timestamp` is `2026-10-01T12:00:00.5+02:00`; and a second built replica whose resync's refs listing gives `impl/b`, which it doesn't hold, a `committedDate` of `2026-10-01T12:00:00+02:00`
 - WHEN the push is applied to the first and the resync runs on the second, and the replica each object saved is loaded and recomputed at `2026-10-01T11:00:00Z`
-- THEN the first's `activity` holds the claim of `a` at 10:00 UTC, and each `recompute` returns 14:00 UTC as the time the implementation view next changes
+- THEN the first's `activity` holds the claim of `a` at 10:00 UTC, and each `recompute` returns 14:00:01 UTC, the first second the claim reads lapsed (`replica/batched-recompute`), as the time the implementation view next changes
 
 #### Scenario: a time GitHub gives that can't be read
 - GIVEN a built replica read a minute ago, holding `impl/b`, and an object that holds nothing
@@ -315,6 +315,7 @@ The times the object gives the replica, a ref's tip commit time from a push, a r
 
 #### Needs
 - ledger/record-times
+- replica/batched-recompute
 
 ### Requirement: fetches-what-the-replica-wants
 Of the files a compare or a tree listing names, the object SHALL fetch only those the replica reads (`replica/files-it-fetches`): every path that doesn't end `.md`, and the Markdown files whose text the replica keeps; and SHALL give each to the replica at the mode GitHub's tree gives it, so the replica holds no symlink or submodule as a file; GraphQL gives a mode as an integer, and the object SHALL give the replica its octal text, as a tree listing writes it. In a first build or a recovery it SHALL fetch those whose text the replica keeps before any other, so every file `pending_fetch` lists is fetched while the budget lasts.

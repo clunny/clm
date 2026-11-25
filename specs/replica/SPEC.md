@@ -23,7 +23,7 @@ Crate `clm-replica`: a repository's derived state, kept up to date from the chan
 - `stale()`: whether a change has been applied since the last `recompute` that computed (`batched-recompute`).
 - `keeps_text(path)` and `wanted(path)`: the replica's rule for the files whose text it keeps and the files it reads at all, which a source fetches by (`files-it-fetches`); `keeps_hash(path)`, the binary files whose hash it keeps for the snapshot's `assets` (`asset-hashes`). `REF_PREFIXES` and `reads_ref(name)`: the refs its views read, which a source lists and applies by (`refs-the-views-read`).
 - `pending_fetch()`: what the replica still needs before its views are complete: the tree's files it hasn't been given at their listed blob SHA, with their text or marked binary, in the order to fetch them (`files-it-fetches`). The runtime fetches them in slices it can afford and applies each slice as a `Tip` change.
-- `recompute(now) -> Recomputed`: computes every view from the state, at once, and returns the time they next go stale without a change (the next claim's expiry), or none; while a regular file of the listing that `keeps_text` accepts is still to be fetched (given with its text or marked binary) it computes nothing (`batched-recompute`).
+- `recompute(now) -> Recomputed`: computes every view from the state, at once, and returns the time they next go stale without a change (the first second a live claim reads lapsed), or none; while a regular file of the listing that `keeps_text` accepts is still to be fetched (given with its text or marked binary) it computes nothing (`batched-recompute`).
 - `view(name)`: the last computed view, with the commit it describes and the time it was computed, or `Preparing { done }` before the first recompute that has the spec files; nothing for a name that isn't a view's.
 - `validate(write)`: checks a web write against the state, giving the refusal its route answers or the record's fields to append (`validate-writes`, `validate-answers`).
 
@@ -75,7 +75,7 @@ After any sequence of changes, a replica's state and views SHALL equal those of 
 - architecture/git-is-truth
 
 ### Requirement: batched-recompute
-`apply` SHALL never recompute, and `view` SHALL answer the last computed views however many changes have been applied since, until `recompute` runs. `stale()` SHALL be true from any `apply` until a `recompute` that computes, and false after one. Before any `Tree` change, and while a regular file of the listing that `keeps_text` accepts has still to be fetched (given with its text or marked binary), `recompute` SHALL compute nothing, leaving every view and `stale()` as they were, and return none. `view` SHALL answer nothing for a name other than `snapshot`, `implementation`, `capabilities` and `architecture`. `recompute` SHALL return the time the implementation view next changes without a change: of the live `impl/<component>` and `propose/<item>` claims, the earliest time one lapses, 4 hours after its tip's time, or one second after `now` for a claim that lapses at `now` itself, which is still live; or none when no claim is live.
+`apply` SHALL never recompute, and `view` SHALL answer the last computed views however many changes have been applied since, until `recompute` runs. `stale()` SHALL be true from any `apply` until a `recompute` that computes, and false after one. Before any `Tree` change, and while a regular file of the listing that `keeps_text` accepts has still to be fetched (given with its text or marked binary), `recompute` SHALL compute nothing, leaving every view and `stale()` as they were, and return none. `view` SHALL answer nothing for a name other than `snapshot`, `implementation`, `capabilities` and `architecture`. `recompute` SHALL return the time the implementation view next changes without a change: of the live `impl/<component>` and `propose/<item>` claims, the earliest time one lapses, the first second at which `orchestrator`'s rule reads it lapsed (its tip older than the 4-hour expiry), one second past 4 hours after its tip's time; or none when no claim is live.
 
 #### Scenario: three pushes, one recompute
 - GIVEN a replica whose views describe `111`
@@ -84,8 +84,8 @@ After any sequence of changes, a replica's state and views SHALL equal those of 
 
 #### Scenario: a claim lapses
 - GIVEN a replica holding `impl/a` pushed at 10:00 with the 4-hour expiry, and no other claim
-- WHEN `recompute` runs at 11:00, at 14:00 and at 15:00, and, on a replica whose only claim is `propose/x` pushed at 10:30, at 11:00
-- THEN they return 14:00, 14:00:01 and none, and 14:30
+- WHEN `recompute` runs at 11:00, at 14:00, at 14:00:01 and at 15:00, and, on a replica whose only claim is `propose/x` pushed at 10:30, at 11:00
+- THEN they return 14:00:01, 14:00:01, none and none, and 14:30:01
 
 #### Scenario: spec files still to fetch
 - GIVEN a new replica given only a `Tree` change at `111` listing spec files, and a ready replica at `111` given a `Tree` change at `222` that lists a spec file whose text it doesn't hold
