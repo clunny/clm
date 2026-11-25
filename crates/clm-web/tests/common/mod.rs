@@ -12,7 +12,7 @@ use clm_replica::Store;
 use clm_web::Replicas;
 use clm_web_platform::http::{Request, Response};
 use clm_web_platform::platform::{
-    Assets, Cache, Clock, GhRequest, GhResponse, GitHub, Kv, Live, Log, Secrets,
+    Assets, Cache, Clock, GhRequest, GhResponse, GitHub, Live, Log, Secrets,
 };
 use clm_web_replica::{Alarm, Object};
 use serde_json::{Value, json};
@@ -265,15 +265,6 @@ impl Replicas for Fake {
 impl Assets for Fake {
     async fn fetch_asset(&self, req: &Request) -> Response {
         self.inner.fetch_asset(req).await
-    }
-}
-
-impl Kv for Fake {
-    async fn kv_get(&self, key: &str) -> Option<String> {
-        self.inner.kv_get(key).await
-    }
-    async fn kv_put(&self, key: &str, value: &str) {
-        self.inner.kv_put(key, value).await
     }
 }
 

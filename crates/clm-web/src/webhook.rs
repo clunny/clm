@@ -1,6 +1,6 @@
 //! `POST /webhook`: GitHub's events. The signature is checked before anything is parsed.
 //! A verified event is passed to the `Replica` object of each repo it names
-//! (`webhook-refresh`); the Worker computes no view and writes no KV.
+//! (`webhook-refresh`); the Worker computes no view and stores nothing.
 
 use std::collections::BTreeSet;
 

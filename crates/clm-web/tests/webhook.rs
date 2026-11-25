@@ -1,5 +1,5 @@
 //! The webhook: verified, then each event goes to the `Replica` object of the repo it names.
-//! The Worker computes no view and writes no KV.
+//! The Worker computes no view and stores nothing.
 
 mod common;
 
@@ -41,8 +41,7 @@ fn push_to_main() {
     assert_eq!(sent["delivery"], "d1");
     assert_eq!(sent["installation"], 9);
     assert_eq!(sent["body"]["after"], "222");
-    assert!(fake.kv_writes.borrow().is_empty(), "no KV value written");
-    assert!(fake.kv.borrow().is_empty());
+    assert!(fake.stored.borrow().is_empty(), "nothing stored");
 }
 
 #[test]
@@ -95,7 +94,7 @@ fn every_event_that_names_repos_is_passed_on() {
                 .all(|c| c.body.as_ref().unwrap()["delivery"] == "d2")
         );
     }
-    assert!(fake.kv_writes.borrow().is_empty());
+    assert!(fake.stored.borrow().is_empty());
 }
 
 #[test]
@@ -120,7 +119,7 @@ fn forged_webhook() {
     let res = fake.handle(webhook("push", &push_body("o/a", "111", "222"), "wrong"));
     assert_eq!(res.status, 401);
     assert!(fake.replicas.calls.borrow().is_empty());
-    assert!(fake.kv_writes.borrow().is_empty());
+    assert!(fake.stored.borrow().is_empty());
     assert_eq!(fake.gh.calls.borrow().len(), calls);
 
     // A missing signature is no better.
