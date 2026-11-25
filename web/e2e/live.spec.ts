@@ -25,7 +25,7 @@ async function visibility(page: Page, state: 'hidden' | 'visible') {
 async function liveSocket(page: Page) {
   const sockets: WebSocketRoute[] = [];
   const closed: number[] = [];
-  await page.routeWebSocket('**/api/repos/o/a/live', (ws) => {
+  await page.routeWebSocket(/\/api\/repos\/[^/]+\/[^/]+\/live$/, (ws) => {
     const n = sockets.push(ws) - 1;
     ws.onMessage((m) => {
       if (m === 'ping') ws.send('pong');
@@ -35,8 +35,8 @@ async function liveSocket(page: Page) {
   return { sockets, closed };
 }
 
-// req:web/notice-refresh@1ead25d5
 test.describe('live updates', () => {
+  // req:web/notice-refresh@91921a88
   test('a claim shows within seconds: a notice refreshes Build at once, with fresh', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -52,6 +52,7 @@ test.describe('live updates', () => {
     expect(mock.urls).toContain(`${SNAPSHOT}?fresh=d1`);
   });
 
+  // req:web/notice-refresh@91921a88
   test('hidden: the socket is closed while hidden, and a new one opened when shown', async ({ page, context }) => {
     await page.clock.install();
     await mockApi(context);
@@ -67,22 +68,31 @@ test.describe('live updates', () => {
     await expect.poll(() => live.sockets.length).toBe(2);
   });
 
-  test('another repo shown: the socket for o/a is closed', async ({ page, context }) => {
+  // req:web/notice-refresh@91921a88
+  test("another repo shown: the socket for o/a is closed, and only o/b's is open", async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
     mock.routes['GET /api/repos'] = [
       { owner: 'o', name: 'a', default_branch: 'main' },
-      { owner: 'p', name: 'q', default_branch: 'main' },
+      { owner: 'o', name: 'b', default_branch: 'main' },
     ];
+    mock.routes['GET /api/repos/o/b/snapshot'] = snapshot({ repo: 'o/b' });
+    mock.routes['GET /api/repos/o/b/branches'] = [];
+    mock.routes['GET /api/repos/o/b/implementation'] = implementation();
     const live = await liveSocket(page);
     await page.goto('/app/#/o/a/graph');
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
     await expect.poll(() => live.sockets.length).toBe(1);
-    await page.goto('/app/#/p/q/graph');
+    await page.evaluate(() => (location.hash = '#/o/b/graph'));
     await expect.poll(() => live.closed).toEqual([0]);
-    expect(live.sockets).toHaveLength(1);
+    await expect.poll(() => live.sockets.length).toBe(2);
+    expect(new URL(live.sockets[1].url()).pathname).toBe('/api/repos/o/b/live');
+    await page.waitForTimeout(300);
+    expect(live.closed).toEqual([0]);
+    expect(live.sockets).toHaveLength(2);
   });
 
+  // req:web/notice-refresh@91921a88
   test('the sign-in page: the socket is closed and none opened while it is on screen', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -98,6 +108,7 @@ test.describe('live updates', () => {
     expect(live.sockets).toHaveLength(1);
   });
 
+  // req:web/notice-refresh@91921a88
   test('offline: the socket is closed, and opened again once online', async ({ page, context }) => {
     await page.clock.install();
     await mockApi(context);
@@ -107,10 +118,15 @@ test.describe('live updates', () => {
     await expect.poll(() => live.sockets.length).toBe(1);
     await context.setOffline(true);
     await expect.poll(() => live.closed).toEqual([0]);
+    // None is opened while offline, through a refresh's tick too.
+    await page.clock.runFor(60_000);
+    await page.waitForTimeout(300);
+    expect(live.sockets).toHaveLength(1);
     await context.setOffline(false);
     await expect.poll(() => live.sockets.length).toBe(2);
   });
 
+  // req:web/notice-refresh@91921a88
   test('one refresh at a time: notices during a refresh share the next one', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -132,6 +148,7 @@ test.describe('live updates', () => {
     expect(fresh('d2')).toBe(0);
   });
 
+  // req:web/notice-refresh@91921a88
   test('a notice during an approval waits until it ends', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -141,12 +158,18 @@ test.describe('live updates', () => {
     await expect.poll(() => live.sockets.length).toBe(1);
     mock.hold(APPROVE);
     await page.locator('button.approve').click();
+    await expect.poll(() => mock.requests.filter((r) => r === APPROVE).length).toBe(1);
+    live.sockets[0].send(JSON.stringify({ delivery: 'd1' }));
     live.sockets[0].send(JSON.stringify({ delivery: 'd2' }));
     await page.waitForTimeout(300);
-    expect(mock.urls.filter((u) => u.endsWith('fresh=d2'))).toEqual([]);
+    expect(mock.urls.filter((u) => /fresh=d[12]$/.test(u))).toEqual([]);
     mock.release(APPROVE);
     await expect(page.locator('button.approve')).toHaveText('Approved');
-    await expect.poll(() => mock.urls.filter((u) => u.endsWith('fresh=d2')).length).toBeGreaterThan(0);
+    // One refresh follows, with the latest notice's delivery.
+    await expect.poll(() => mock.urls.filter((u) => u === `${SNAPSHOT}?fresh=d2`).length).toBe(1);
+    await page.waitForTimeout(300);
+    expect(mock.urls.filter((u) => u === `${SNAPSHOT}?fresh=d2`)).toHaveLength(1);
+    expect(mock.urls.filter((u) => u.endsWith('fresh=d1'))).toEqual([]);
   });
 });
 

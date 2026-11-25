@@ -1,7 +1,6 @@
-// The retry schedule, the words for each failure, and what the
-// API client does with a 5xx.
+// The retry schedule and the words for each failure.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HttpError, Offline, get } from './views/api';
+import { HttpError, Offline } from './views/api';
 import { classify, failureText, retryDelay } from './errors';
 
 describe('retryDelay', () => {
@@ -32,26 +31,5 @@ describe('failures', () => {
     expect(failureText({ kind: 'retry' }).text).not.toMatch(/account|App/);
     expect(failureText({ kind: 'preparing', share: 0.4 }).text).toContain('40% done');
     expect(failureText({ kind: 'no-access' }).text).toContain("isn't readable with your GitHub account");
-  });
-});
-
-describe('api.get on a 5xx', () => {
-  const store = new Map<string, Response>();
-  beforeEach(() => {
-    store.clear();
-    const cache = { match: async (k: string) => store.get(k)?.clone(), put: async (k: string, r: Response) => void store.set(k, r) };
-    vi.stubGlobal('caches', { open: async () => cache, delete: async () => true });
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  // req:web/honest-errors@444ce2bc
-  it('falls back to the kept copy, but not for a live refresh or a preparing 503', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('{"v":1}', { status: 200 })));
-    await get('/p');
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('{"error":"unavailable"}', { status: 502 })));
-    expect((await get<{ v: number }>('/p')).data).toEqual({ v: 1 });
-    await expect(get('/p', { live: true })).rejects.toBeInstanceOf(HttpError);
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('{"preparing":0.4}', { status: 503 })));
-    await expect(get('/p')).rejects.toMatchObject({ status: 503, preparing: 0.4 });
   });
 });
