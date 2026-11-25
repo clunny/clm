@@ -13,7 +13,7 @@ describe('routes', () => {
     expect(parseRoute('')).toEqual({ owner: undefined, repo: undefined, view: 'graph' });
   });
 
-  // req:web.views/spec-branch-review@26ee0085
+  // req:web.views/spec-branch-review@bf6312ca
   it('routes a branch by its name as one segment, and asks the Worker with its slashes', () => {
     const at = reviewHref('o', 'a', { branch: 'spec/x/y' }, 'full', 'specs/n/SPEC.md');
     expect(at).toBe('#/o/a/prs/spec%2Fx%2Fy/full/specs/n/SPEC.md');
