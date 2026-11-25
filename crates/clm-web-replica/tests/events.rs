@@ -14,7 +14,7 @@ fn gh_calls(fake: &clm_web_platform::fake::Fake) -> usize {
 
 #[test]
 fn a_push_to_main() {
-    // req:web.worker.replica/applies-events@f75e1a7c
+    // req:web.worker.replica/applies-events@fad75cef
     let before = repo_files(&[("t.rs", "fn t() {}"), ("u.rs", "fn u() {}")]);
     let fake = fake_with("111", before);
     let (mut object, _mem, slot) = built(&fake);
@@ -181,16 +181,16 @@ fn a_recovery_fetches_the_kept_text_first() {
 
 #[test]
 fn a_ledger_append() {
-    // req:web.worker.replica/applies-events@f75e1a7c
+    // req:web.worker.replica/applies-events@fad75cef
     let mut repo = FakeRepo::new("111", repo_files(&[]));
     let record = |id: &str| {
         json!({"id": id, "writer": "alice/web", "at": "2027-01-15T07:00:00.000Z",
-            "kind": "unsubscribed", "subscription": "x"})
+            "kind": "proposed", "slug": id, "title": id, "body": "", "nodes": []})
     };
     ledger(&mut repo, "alice/web", "LA", &[record("r1")]);
     let fake = clm_web_platform::fake::Fake::default();
     fake.gh.add_repo("o/a", repo);
-    let (mut object, _mem, _slot) = built(&fake);
+    let (mut object, mem, slot) = built(&fake);
     {
         let mut repos = fake.gh.repos.borrow_mut();
         ledger(
@@ -213,11 +213,40 @@ fn a_ledger_append() {
             .unwrap()
             .contains("LB:records.jsonl")
     );
+    drop(calls);
+    run_alarms(&fake, &mut object, &slot);
+    let seen = view(&fake, &mut object, "implementation");
+    assert_eq!(
+        seen["view"]["proposals"].as_array().map(Vec::len),
+        Some(2),
+        "{seen}"
+    );
+
+    // The branch is deleted: nothing is fetched, and its records leave the views.
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .branches
+        .remove("clm/ledger/alice/web");
+    let from = gh_calls(&fake);
+    let mut body = push("clm/ledger/alice/web", "LB", &"0".repeat(40));
+    body["deleted"] = json!(true);
+    block_on(object.event(&fake, &event("push", "d2", body)));
+    assert_eq!(gh_calls(&fake), from, "nothing was fetched");
+    // What the event saved, recomputed with no resync to read GitHub again.
+    let mut saved = clm_replica::Replica::load(&mem);
+    saved.recompute(fake.now.get());
+    let Some(clm_replica::Answer::Ready { value, .. }) = saved.view("implementation") else {
+        panic!("no implementation view");
+    };
+    assert_eq!(value["proposals"], json!([]), "{value}");
 }
 
 #[test]
 fn a_truncated_compare() {
-    // req:web.worker.replica/applies-events@f75e1a7c
+    // req:web.worker.replica/applies-events@fad75cef
     let name = |i: usize| format!("src/f{i}.rs");
     let make = |gen_of: &dyn Fn(usize) -> &'static str| {
         let mut all = repo_files(&[]);
@@ -569,9 +598,9 @@ fn a_gone_endpoint() {
 
 #[test]
 fn a_ref_the_views_read_moves() {
-    // req:web.worker.replica/applies-events@f75e1a7c
+    // req:web.worker.replica/applies-events@fad75cef
     let fake = fake_with("111", repo_files(&[]));
-    let (mut object, _mem, slot) = built(&fake);
+    let (mut object, mem, slot) = built(&fake);
     slot.0.set(None);
     {
         let mut repos = fake.gh.repos.borrow_mut();
@@ -584,13 +613,99 @@ fn a_ref_the_views_read_moves() {
     let mut body = push("impl/a", "0", "c1");
     body["created"] = json!(true);
     block_on(object.event(&fake, &event("push", "d1", body)));
-    let urls = urls(&fake, from);
+    let made = urls(&fake, from);
     // Only the head's tree, for its code key: no compare, no file fetched.
-    assert_eq!(urls.len(), 1, "{urls:?}");
-    assert!(urls[0].contains("/git/trees/c1"));
+    assert_eq!(made.len(), 1, "{made:?}");
+    assert!(made[0].contains("/git/trees/c1"));
     run_alarms(&fake, &mut object, &slot);
     let now = view(&fake, &mut object, "implementation");
     assert_eq!(now["view"]["flight"]["totals"]["by_state"]["claimed"], 1);
+    assert!(claimed_on(&now, "a"), "{now}");
+
+    // The branch is deleted: nothing is fetched, and the claim goes.
+    fake.gh.repos.borrow_mut().get_mut("o/a").unwrap().claims.clear();
+    let from = gh_calls(&fake);
+    let mut body = push("impl/a", "c1", &"0".repeat(40));
+    body["deleted"] = json!(true);
+    block_on(object.event(&fake, &event("push", "d2", body)));
+    assert_eq!(urls(&fake, from), Vec::<String>::new());
+    // What the event saved, recomputed with no resync to read GitHub again.
+    let mut saved = clm_replica::Replica::load(&mem);
+    saved.recompute(fake.now.get());
+    let Some(clm_replica::Answer::Ready { value, .. }) = saved.view("implementation") else {
+        panic!("no implementation view");
+    };
+    assert!(!claimed_on(&json!({ "view": value }), "a"), "{value}");
+}
+
+/// Whether the implementation view `seen` lists a claim on `node`.
+fn claimed_on(seen: &serde_json::Value, node: &str) -> bool {
+    seen["view"]["flight"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|n| n["node"] == node && n["state"] == "claimed")
+}
+
+#[test]
+fn a_push_in_the_feed() {
+    // req:web.worker.replica/applies-events@fad75cef
+    let fake = fake_with("111", repo_files(&[]));
+    let (mut object, _mem, slot) = built(&fake);
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        repo.commits
+            .insert("c1".into(), repo_files(&[("x.rs", "fn x() {}")]));
+        repo.claims.push(("a".into(), "c1".into(), fake.now.get()));
+        ledger(repo, "alice/web", "LA", &[]);
+    }
+    let base = fake.now.get() - 3600;
+    let pushed = |branch: &str, after: &str, created: bool, at: u64| {
+        let mut body = push(branch, "0", after);
+        body["created"] = json!(created);
+        body["head_commit"] = json!({"timestamp": clm_web_platform::fake::iso(at)});
+        body
+    };
+    let pushes = [
+        pushed("impl/a", "c1", true, base),
+        pushed("spec/x", "c1", true, base + 60),
+        pushed("clm/ledger/alice/web", "LA", false, base + 120),
+    ];
+    for (i, body) in pushes.into_iter().enumerate() {
+        block_on(object.event(&fake, &event("push", &format!("d{i}"), body)));
+    }
+    let mut tag = pushed("main", "c1", true, base + 180);
+    tag["ref"] = json!("refs/tags/v1");
+    block_on(object.event(&fake, &event("push", "dt", tag)));
+    run_alarms(&fake, &mut object, &slot);
+    let seen = view(&fake, &mut object, "implementation");
+    let mut feed: Vec<(String, String, String, u64)> = seen["view"]["activity"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["at"].as_u64().unwrap() >= base)
+        .map(|a| {
+            (
+                a["kind"].as_str().unwrap().into(),
+                a["ref"].as_str().unwrap().into(),
+                a["actor"].as_str().unwrap().into(),
+                a["at"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    feed.sort();
+    let entry = |kind: &str, r: &str, at: u64| (kind.into(), r.into(), "alice".into(), at);
+    assert_eq!(
+        feed,
+        vec![
+            entry("claim", "a", base),
+            entry("push", "impl/a", base),
+            entry("push", "spec/x", base + 60),
+        ],
+        "{}",
+        seen["view"]["activity"]
+    );
 }
 
 #[test]
