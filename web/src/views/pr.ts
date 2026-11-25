@@ -38,7 +38,8 @@ export function renderPrList(branches: SpecBranch[], link: (t: Target) => string
   );
 }
 
-function status(t: Texts): string {
+/** Whether `t` was added, modified or removed. */
+export function status(t: Texts): string {
   return t.before === null ? 'added' : t.after === null ? 'removed' : 'modified';
 }
 

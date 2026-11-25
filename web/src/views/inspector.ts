@@ -1,16 +1,18 @@
-// What a selected node shows: its contract, dependencies, changes in open PRs, work in
-// flight with its pending requirements, and backlog items. A bottom sheet on narrow screens.
+// What a selected component shows (web.views/inspector): its contract, dependencies, changes
+// in open PRs, work in flight with its pending requirements, and backlog items.
 
 import { chip, div, el } from './dom';
 import { proven } from './graph';
 import { md } from './markdown';
+import { status } from './pr';
 import type { Implementation, NodeChanges, Review, Snapshot } from './types';
 
 function prChanges(changed: NodeChanges): HTMLElement[] {
   return [
-    ...(['contract', 'design', 'frontmatter'] as const)
-      .filter((k) => changed[k])
-      .map((k) => div('mini', el('b', {}, k, chip('modified', 'modified')))),
+    ...(['contract', 'design', 'frontmatter'] as const).flatMap((k) => {
+      const t = changed[k];
+      return t ? [div('mini', el('b', {}, k, chip(status(t), status(t))))] : [];
+    }),
     ...(['added', 'modified', 'removed'] as const).flatMap((k) =>
       [...changed.requirements[k], ...changed.assets[k]].map((r) => div('mini', el('b', {}, r.id ?? `assets/${r.path}`, chip(k, k)))),
     ),
