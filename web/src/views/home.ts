@@ -26,7 +26,7 @@ const answerable = (b: BacklogView) => offered(b) !== null;
 /** The reviews that need review and hold no approval. */
 const toReview = (reviews: Review[]) => reviews.filter((r) => r.review && r.approvals.length === 0);
 
-/** The number of entries in Review and Answer: what the sidebar and tab bar badge Home with. */
+/** The number of entries in Review and Answer: the count Home gives its caller for its badge. */
 export function homeCount(snap: Snapshot, reviews: Review[]): number {
   return toReview(reviews).length + snap.backlog.filter(answerable).length;
 }
