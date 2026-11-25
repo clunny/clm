@@ -353,7 +353,7 @@ fn approve_res(
 #[test]
 fn signed_repository() {
     // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     let (fake, cookie) = setup();
     sign_main(&fake);
     let named = current(&fake, "spec/x").unwrap();
@@ -370,7 +370,7 @@ fn signed_repository() {
 #[test]
 fn signed_and_pushed_after_the_review() {
     // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     let (fake, cookie) = setup();
     sign_main(&fake);
     let stale = json!({"fingerprint": "f"}).to_string();
@@ -383,7 +383,7 @@ fn signed_and_pushed_after_the_review() {
 #[test]
 fn signed_refusals_come_after_the_branch_checks() {
     // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     // A branch that can't be approved at all gets an empty 422, signed repository or not.
     let (fake, cookie) = setup();
     sign_main(&fake);
@@ -399,7 +399,7 @@ fn signed_refusals_come_after_the_branch_checks() {
 #[test]
 fn signed_lookup_fails() {
     // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     let mut repo = repo();
     repo.signers_fail = true;
     let fake = Fake::default();

@@ -708,11 +708,7 @@ pub async fn branch<P: Platform>(p: &P, access: &Access, branch: &str) -> Respon
         .map(|r| Approval {
             writer: r.writer.clone(),
             at: r.at.clone(),
-            signed: fold
-                .lines
-                .get(&r.id)
-                .and_then(|line| line.get("sig")?.as_str())
-                .is_some_and(|sig| !sig.is_empty()),
+            signed: fold.carries_sig(&r.id),
         })
         .collect();
     let checked = comparison

@@ -1340,7 +1340,7 @@ fn approvals_signed(v: &Value) -> Vec<(String, bool)> {
 
 #[test]
 fn signed_repository() {
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     let mut repo = signed_approvals();
     sign(&mut repo, "111");
     sign(&mut repo, "222");
@@ -1357,7 +1357,7 @@ fn signed_repository() {
 
 #[test]
 fn unsigned_repository() {
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     let v = review_of(signed_approvals());
     assert_eq!(v["signed"], false);
     assert_eq!(
@@ -1371,7 +1371,7 @@ fn unsigned_repository() {
 
 #[test]
 fn empty_sig_is_unsigned() {
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     let mut repo = spec_pr();
     let fingerprint = fingerprint(&repo);
     let mut empty = approved("dana/9f9f9f9f", &fingerprint, "2026-10-26T09:00:00.000Z");
@@ -1391,7 +1391,7 @@ fn empty_sig_is_unsigned() {
 
 #[test]
 fn signed_behind_main() {
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     // `spec/c2` branched before `main` gained `docs/allowed_signers`: its merge base and
     // head lack the file, and `main`'s tip holds it.
     let mut repo = spec_pr();
@@ -1410,7 +1410,7 @@ fn signed_behind_main() {
 
 #[test]
 fn signed_lookup_fails() {
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     let mut repo = spec_pr();
     repo.signers_fail = true;
     let fake = Fake::default();
@@ -1421,7 +1421,7 @@ fn signed_lookup_fails() {
 
 #[test]
 fn signed_lookup_null_repository() {
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     // A token that can read the repo over REST but gets a null `repository` from GraphQL.
     let fake = Fake::default();
     fake.gh.add_repo("o/a", spec_pr());
@@ -1432,7 +1432,7 @@ fn signed_lookup_null_repository() {
 
 #[test]
 fn signed_is_cached_by_tip() {
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/signed-repository@e056a364
     let fake = Fake::default();
     let mut repo = spec_pr();
     sign(&mut repo, "111");
@@ -1452,6 +1452,18 @@ fn signed_is_cached_by_tip() {
             .count()
     };
     assert_eq!(asked(), 1);
-    assert_eq!(body_json(&fake.handle(get(URL, &cookie)))["signed"], true);
+    let second = body_json(&fake.handle(get(URL, &cookie)));
+    assert_eq!(second["signed"], true);
     assert_eq!(asked(), 1, "kept by tip");
+    // The approve route shares the answer: it refuses as signed, asking nothing more.
+    let pin = second["fingerprint"].as_str().unwrap();
+    let body = json!({ "fingerprint": pin }).to_string();
+    let res = fake.handle(post(
+        "/api/repos/o/a/branches/spec/c2/approve",
+        &cookie,
+        body.as_bytes(),
+    ));
+    assert_eq!(res.status, 422);
+    assert_eq!(body_json(&res)["error"], "signed");
+    assert_eq!(asked(), 1, "the approve shares the answer");
 }
