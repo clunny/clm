@@ -19,9 +19,12 @@ export default function setup(): () => void {
   // guide, so an edit to it selects these tests (`doc-readers-marked`):
   // clm:reads docs/guide/**
   // clm:reads docs/spec-format.md
+  // GitHub lies beyond the boundary: the build is given its star count, and an unused address in
+  // place of GitHub's API, so no run asks GitHub for it.
   const site = mkdtempSync(join(tmpdir(), 'clm-web-capability-site-'))
   run(join(root, 'web', 'site'), 'npm', 'ci', '--ignore-scripts')
-  execFileSync('npm', ['run', 'build'], { cwd: join(root, 'web', 'site'), stdio: 'inherit', env: { ...process.env, SITE_OUT: site } })
+  const env = { ...process.env, SITE_OUT: site, GITHUB_STARS: '1234', GITHUB_API: 'http://127.0.0.1:9' }
+  execFileSync('npm', ['run', 'build'], { cwd: join(root, 'web', 'site'), stdio: 'inherit', env })
   process.env.CLM_CAPABILITY_SITE_DIR = site
 
   // The version of `worker-build` that `web/package.json` pins for the release build.
