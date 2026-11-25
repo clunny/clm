@@ -6,21 +6,21 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-# The fake GitHub and platform the Worker's tests drive (`web.worker.platform/shared-layer`).
-fake = ["dep:futures-executor", "dep:hmac", "dep:tempfile"]
+# The fake GitHub and platform the Worker's crates' tests drive (`fake-github`).
+fake = ["dep:futures-executor", "dep:hmac"]
 
 [dependencies]
 clm-model.workspace = true
 clm-gate.workspace = true
 clm-ledger = { workspace = true, default-features = false }
-clm-orchestrator = { workspace = true, default-features = false }
+clm-replica.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 base64.workspace = true
+percent-encoding = "2.3"
 futures-executor = { version = "0.3", optional = true }
 hmac = { version = "0.12", optional = true }
-tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
 clm-ledger.workspace = true

@@ -97,32 +97,28 @@ fn permission_key(repo: &str, login: &str) -> String {
     format!("permission2:{repo}:{login}")
 }
 
-/// `login`'s permission on `repo` as it is remembered, without asking GitHub.
-pub(crate) async fn cached_permission<P: Platform>(
-    p: &P,
-    repo: &str,
-    login: &str,
-) -> Option<String> {
-    p.cache_get(&permission_key(repo, login)).await
-}
-
-/// `login`'s permission on `repo` as GitHub answers it with the installation's token
-/// `auth`, `none` for a 404, remembered for 5 minutes; `None` when GitHub doesn't answer,
-/// which is never remembered.
+/// `login`'s permission on `repo` as GitHub answers it, asked as `auth`, `none` for a 404,
+/// remembered for 5 minutes; `None` when GitHub doesn't answer, which is never remembered
+/// (`permission`).
 pub async fn permission<P: Platform>(
     p: &P,
     auth: &Auth,
     repo: &str,
     login: &str,
 ) -> Option<String> {
-    if let Some(known) = cached_permission(p, repo, login).await {
+    if let Some(known) = p.cache_get(&permission_key(repo, login)).await {
         return Some(known);
     }
     ask(p, auth, repo, login).await
 }
 
 /// `login`'s permission on `repo` asked of GitHub, remembered when it answers.
-pub async fn ask<P: Platform>(p: &P, auth: &Auth, repo: &str, login: &str) -> Option<String> {
+pub(crate) async fn ask<P: Platform>(
+    p: &P,
+    auth: &Auth,
+    repo: &str,
+    login: &str,
+) -> Option<String> {
     let known = permission_direct(p, auth, repo, login).await?;
     p.cache_put(&permission_key(repo, login), &known, PERMISSION_TTL)
         .await;
@@ -181,18 +177,36 @@ pub async fn check<P: Platform>(p: &P, token: &str, owner: &str, repo: &str) -> 
     access_of(memo, token)
 }
 
-/// `Some` when `token` can read `owner/repo`, asked of GitHub every time and remembered
-/// nowhere (`object-reads`).
+/// [`checked_direct`] with a failed read folded into none, as a refusal is: withdrawn once
+/// its last user has moved to `checked_direct` (`old-paths-removed`).
+// clm:remove-by 20261124-wave-6-worker-by-the-rule
 pub async fn check_direct<P: GitHub>(
     p: &P,
     token: &str,
     owner: &str,
     repo: &str,
 ) -> Option<Access> {
+    checked_direct(p, token, owner, repo).await.ok().flatten()
+}
+
+/// The `Access` when `token` can read `owner/repo`, asked of GitHub every time and
+/// remembered nowhere (`object-reads`): none for a name the rule refuses, which asks
+/// nothing, and for GitHub's 403 or 404; [`gh::Failed`] for any other answer, a 401
+/// included, or a 200 whose `full_name` the rule refuses (`access-check`).
+pub async fn checked_direct<P: GitHub>(
+    p: &P,
+    token: &str,
+    owner: &str,
+    repo: &str,
+) -> Result<Option<Access>, gh::Failed> {
     if !valid_name(owner) || !valid_name(repo) {
-        return None;
+        return Ok(None);
     }
-    access_of(ask_repo(p, token, owner, repo).await.1, token)
+    match ask_repo(p, token, owner, repo).await {
+        (200, memo) if memo.ok => Ok(access_of(memo, token)),
+        (403 | 404, _) => Ok(None),
+        _ => Err(gh::Failed),
+    }
 }
 
 /// `GET /repos/{o}/{r}` as `token`: GitHub's status and what it says of the repo.

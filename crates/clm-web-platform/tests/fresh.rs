@@ -1,6 +1,8 @@
 //! A fresh read replaces the plain entry (`fresh-replaces-plain`): what `live::cached`
 //! fetches for a notice's delivery is also what the next plain read answers from.
 
+use std::cell::Cell;
+
 use clm_web_platform::access::{self, Access};
 use clm_web_platform::fake::*;
 use clm_web_platform::platform::Cache;
@@ -26,7 +28,7 @@ fn reads(fake: &Fake) -> usize {
 
 #[test]
 fn the_next_plain_read_sees_it() {
-    // req:web.worker.platform/fresh-replaces-plain@2297901a
+    // req:web.worker.platform/fresh-replaces-plain@9128f779
     let (fake, access) = setup();
     // The ledgers as the minute-old live state holds them: without alice's branch.
     let before = block_on(ledger::fold(&fake, &access)).unwrap();
@@ -50,20 +52,29 @@ fn ledger_branch(fake: &Fake) {
 
 #[test]
 fn the_plain_copy_lasts_a_minute() {
-    // req:web.worker.platform/fresh-replaces-plain@2297901a
+    // req:web.worker.platform/fresh-replaces-plain@9128f779
     let (fake, access) = setup();
-    let fresh = access.fresh(Some("d1"));
+    let fresh = access.clone().fresh(Some("d1"));
     let fetch = async || Some(1u32);
     block_on(live::cached(&fake, &fresh, "x", fetch));
+    let fetches = Cell::new(0);
+    let plain = || {
+        block_on(live::cached(&fake, &access, "x", async || {
+            fetches.set(fetches.get() + 1);
+            Some(2u32)
+        }))
+    };
     fake.now.set(NOW + 59);
-    assert!(block_on(fake.cache_get("live:o/a:x")).is_some());
+    assert_eq!(plain(), Some(1), "the fresh read's value");
+    assert_eq!(fetches.get(), 0, "no fetch at 59 seconds");
     fake.now.set(NOW + 60);
-    assert!(block_on(fake.cache_get("live:o/a:x")).is_none());
+    assert_eq!(plain(), Some(2));
+    assert_eq!(fetches.get(), 1, "a fetch at 60 seconds");
 }
 
 #[test]
 fn a_cached_fresh_read() {
-    // req:web.worker.platform/fresh-replaces-plain@2297901a
+    // req:web.worker.platform/fresh-replaces-plain@9128f779
     let (fake, access) = setup();
     let fresh = access.fresh(Some("d1"));
     let fetch = async || Some(1u32);

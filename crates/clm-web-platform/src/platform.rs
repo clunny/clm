@@ -3,7 +3,9 @@
 
 use crate::http::{Request, Response};
 
-/// Workers KV: durable, but the Free plan allows 1,000 writes a day.
+/// Workers KV: durable, but the Free plan allows 1,000 writes a day. No longer a part of
+/// [`Platform`] (`platform-parts`); withdrawn once `clm-web` drops its adapter.
+// clm:remove-by 20261124-wave-6-worker-by-the-rule
 #[allow(async_fn_in_trait)]
 pub trait Kv {
     async fn kv_get(&self, key: &str) -> Option<String>;
@@ -75,8 +77,9 @@ pub trait Assets {
     /// (`asset-responses`).
     async fn fetch_asset(&self, req: &Request) -> Response;
 
-    /// The text of the asset at `path`, such as `/_clm/invited.json`: `Some` only for a
-    /// 200 whose body is UTF-8.
+    /// The text of the asset at `path`, such as `/_clm/invited.json`, from the answer to a
+    /// `GET` of it with no query, headers or body: `Some` only for a 200 whose body is
+    /// UTF-8.
     async fn asset(&self, path: &str) -> Option<String> {
         let req = Request {
             method: "GET".into(),
@@ -108,6 +111,7 @@ pub trait Log {
     fn log(&self, line: &str);
 }
 
-pub trait Platform: Kv + Cache + GitHub + Clock + Secrets + Assets + Live + Log {}
+/// Every type offering the seven parts, and no KV store (`platform-parts`).
+pub trait Platform: Cache + GitHub + Clock + Secrets + Assets + Live + Log {}
 
-impl<T: Kv + Cache + GitHub + Clock + Secrets + Assets + Live + Log> Platform for T {}
+impl<T: Cache + GitHub + Clock + Secrets + Assets + Live + Log> Platform for T {}

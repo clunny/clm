@@ -1,10 +1,11 @@
 //! `keys::code_key` is the ledger's (`code-key-doc-only`): the doc-only
-//! paths come from `clm_ledger::doc_only`, and the key equals the one `clm land` records.
+//! paths come from `clm_ledger::doc_only`, and the key equals the one `clm land` records;
+//! and `keys::fingerprint` is what `clm fingerprint` prints (`fingerprint-from-listings`).
 
 use std::path::Path;
 use std::process::Command;
 
-use clm_web_platform::keys::{TreeLine, code_key, listing_of};
+use clm_web_platform::keys::{TreeLine, code_key, fingerprint, listing_of};
 
 fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
@@ -65,7 +66,7 @@ fn line(path: &str) -> TreeLine<'_> {
 
 #[test]
 fn doc_only_paths_come_from_the_ledger() {
-    // req:web.worker.platform/code-key-doc-only@99e1fff6
+    // req:web.worker.platform/code-key-doc-only@c6fcc964
     let all = [
         "docs/x.md",
         "docs/guide/intro.md",
@@ -92,7 +93,7 @@ fn doc_only_paths_come_from_the_ledger() {
 
 #[test]
 fn the_guides_files_are_doc_only() {
-    // req:web.worker.platform/code-key-doc-only@99e1fff6
+    // req:web.worker.platform/code-key-doc-only@c6fcc964
     let dir = repo();
     let d = dir.path();
     write(
@@ -138,4 +139,116 @@ fn the_guides_files_are_doc_only() {
     assert_eq!(keys[0], keys[2], "docs/guide/ is doc-only");
     assert_eq!(keys[0], keys[3], "docs/spec-format.md is doc-only");
     assert_ne!(keys[0], keys[4], "crates/a/src/lib.rs is code");
+    // A commit whose order `.`, `-` and `/` decide: `src.rs` before `src/`, and
+    // `src/a-b.rs` before `src/a.rs`.
+    git(d, &["switch", "-qc", "order", "main"]);
+    write(
+        d,
+        &[
+            ("src.rs", b"s\n"),
+            ("src/a.rs", b"a\n"),
+            ("src/a-b.rs", b"ab\n"),
+        ],
+    );
+    commit(d);
+    let ours = listing_of(&trees_api(d, "HEAD"))
+        .unwrap()
+        .code_key()
+        .unwrap();
+    assert_eq!(
+        ours,
+        clm_ledger::code_key(d, "HEAD").unwrap(),
+        "in git's order"
+    );
+}
+
+#[test]
+fn a_truncated_listing_has_no_code_key() {
+    // req:web.worker.platform/code-key-doc-only@c6fcc964
+    let dir = repo();
+    let d = dir.path();
+    write(
+        d,
+        &[("src/lib.rs", b"fn a() {}\n"), ("docs/x.md", b"doc\n")],
+    );
+    commit(d);
+    let whole = trees_api(d, "HEAD");
+    let mut cut = whole.clone();
+    cut["truncated"] = serde_json::json!(true);
+    assert_eq!(
+        listing_of(&whole).unwrap().code_key(),
+        Some(clm_ledger::code_key(d, "HEAD").unwrap())
+    );
+    assert_eq!(listing_of(&cut).unwrap().code_key(), None);
+}
+
+fn long(n: usize, mark: &str) -> String {
+    (0..n)
+        .map(|i| {
+            if i == 3 || i == 40 {
+                format!("line {i} {mark}\n")
+            } else {
+                format!("line {i}\n")
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn same_as_the_cli() {
+    // req:web.worker.platform/fingerprint-from-listings@a7991f74
+    // The CLM root is the top of the git repository: `specs/SPEC.md` sits at its top.
+    let dir = repo();
+    let d = dir.path();
+    git(d, &["config", "core.abbrev", "16"]);
+    git(d, &["config", "diff.renames", "copies"]);
+    write(
+        d,
+        &[
+            ("moved.txt", long(20, "m").as_bytes()),
+            ("bin.dat", &[0, 1, 2, 3, 255, 0]),
+            ("specs/SPEC.md", b"# spec\n"),
+        ],
+    );
+    commit(d);
+    git(d, &["switch", "-qc", "spec/x"]);
+    std::fs::create_dir_all(d.join("dir")).unwrap();
+    std::fs::remove_file(d.join("moved.txt")).unwrap();
+    write(
+        d,
+        &[
+            ("dir/moved.txt", long(20, "moved").as_bytes()),
+            ("bin.dat", &[0, 9, 9, 9, 255, 0]),
+            ("latin1.txt", b"caf\xe9 cr\xe8me\n"),
+        ],
+    );
+    commit(d);
+    let base = git(d, &["merge-base", "main", "HEAD"]);
+    let ours = fingerprint(
+        &listing_of(&trees_api(d, base.trim())).unwrap(),
+        &listing_of(&trees_api(d, "HEAD")).unwrap(),
+    );
+    let cli = clm_gate::fingerprint(d, "main").unwrap();
+    assert_ne!(cli, "empty");
+    assert_eq!(
+        ours.as_deref(),
+        Some(cli.as_str()),
+        "what `clm fingerprint` prints"
+    );
+}
+
+#[test]
+fn truncated_listing_has_no_fingerprint() {
+    // req:web.worker.platform/fingerprint-from-listings@a7991f74
+    let dir = repo();
+    let d = dir.path();
+    write(d, &[("a.txt", b"a\n")]);
+    commit(d);
+    let whole = trees_api(d, "HEAD");
+    let mut cut = whole.clone();
+    cut["truncated"] = serde_json::json!(true);
+    let (whole, cut) = (listing_of(&whole).unwrap(), listing_of(&cut).unwrap());
+    assert_eq!(fingerprint(&whole, &whole).as_deref(), Some("empty"));
+    assert_eq!(fingerprint(&cut, &whole), None);
+    assert_eq!(fingerprint(&whole, &cut), None);
 }

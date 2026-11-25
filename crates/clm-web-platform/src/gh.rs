@@ -6,6 +6,12 @@ use crate::platform::{Auth, GhRequest, GitHub};
 
 pub const API: &str = "https://api.github.com";
 
+/// A read GitHub didn't answer as asked: neither what was asked for nor the 404 that says
+/// it isn't there, so a route answers 502 rather than "not found" or a refusal
+/// (`branch-tip`, `access-check`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Failed;
+
 /// `GET <API><path>`: the status and the parsed body (`Null` if it isn't JSON).
 pub async fn get<P: GitHub>(p: &P, auth: &Auth, path: &str) -> (u16, Value) {
     send(p, "GET", auth, &format!("{API}{path}"), None).await

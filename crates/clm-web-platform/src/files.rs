@@ -1,5 +1,6 @@
 //! Reading a commit's files from GitHub without a tarball: the tree listing, then the
-//! text of many files per GraphQL query.
+//! text of many files per GraphQL query (`batched-fetches`), and a commit's spec files
+//! (`spec-files`).
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -28,7 +29,9 @@ pub struct TreeEntry {
     pub sha: String,
 }
 
-/// The paths the model reads.
+/// The paths the model reads: a copy of the model's half of the replica's rule, withdrawn
+/// once its last user has moved to `clm_gate::is_spec_path` (`old-paths-removed`).
+// clm:remove-by 20261124-wave-6-worker-by-the-rule
 pub fn is_spec_path(path: &str) -> bool {
     path == "ARCHITECTURE.md"
         || path == "CAPABILITIES.md"
@@ -37,7 +40,8 @@ pub fn is_spec_path(path: &str) -> bool {
             .any(|d| path.starts_with(d))
 }
 
-/// The Trees API's recursive listing of a commit's tree.
+/// The Trees API's recursive listing of a commit's tree, with its `truncated` flag; none
+/// for any answer but a 200.
 pub async fn listing<P: GitHub>(
     p: &P,
     auth: &Auth,
@@ -51,45 +55,6 @@ pub async fn listing<P: GitHub>(
     )
     .await?;
     keys::listing_of(&v)
-}
-
-/// A commit's tree as the snapshot reads it: its blobs, the size of each regular file, and
-/// whether GitHub left entries out.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Listed {
-    pub blobs: Vec<TreeEntry>,
-    /// Each regular file's (mode `100644` or `100755`) size in bytes, as stored: symlinks
-    /// and submodules never count (`snapshot-size`).
-    pub sizes: BTreeMap<String, u64>,
-    pub truncated: bool,
-}
-
-/// The size of each regular file in the Trees API's JSON, by path. `keys::Listing` holds
-/// `clm_gate::Entry`, which has no size, so sizes and modes are read here.
-fn sizes_of(v: &Value) -> BTreeMap<String, u64> {
-    v["tree"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|e| e["type"] == "blob" && matches!(e["mode"].as_str(), Some("100644" | "100755")))
-        .filter_map(|e| Some((e["path"].as_str()?.to_string(), e["size"].as_u64()?)))
-        .collect()
-}
-
-/// The Trees API's recursive listing of a commit's tree, with each regular file's size.
-pub async fn listed<P: GitHub>(p: &P, auth: &Auth, repo: &str, sha: &str) -> Option<Listed> {
-    let v = gh::get_ok(
-        p,
-        auth,
-        &format!("/repos/{repo}/git/trees/{sha}?recursive=1"),
-    )
-    .await?;
-    let listing = keys::listing_of(&v)?;
-    Some(Listed {
-        blobs: blobs(&listing),
-        sizes: sizes_of(&v),
-        truncated: listing.truncated,
-    })
 }
 
 /// The blobs of a listing.
@@ -108,41 +73,26 @@ pub fn blobs(listing: &keys::Listing) -> Vec<TreeEntry> {
 }
 
 /// Every blob in the commit's tree.
-pub async fn tree<P: GitHub>(p: &P, auth: &Auth, repo: &str, sha: &str) -> Option<Vec<TreeEntry>> {
-    Some(listed(p, auth, repo, sha).await?.blobs)
+async fn tree<P: GitHub>(p: &P, auth: &Auth, repo: &str, sha: &str) -> Option<Vec<TreeEntry>> {
+    Some(blobs(&listing(p, auth, repo, sha).await?))
 }
 
-/// Bytes git reads from the start of a file to decide it is binary, as `clm size` does.
-const BINARY_PROBE: usize = 8000;
-
-/// A blob as GitHub gave it.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Fetched {
-    /// Its text; `None` for a binary blob, one missing from the commit, or truncated text
-    /// that isn't UTF-8.
-    pub text: Option<String>,
-    /// GitHub says `isBinary`, or its text has a NUL byte in its first 8000 bytes.
-    pub binary: bool,
-}
-
-/// Each path at `sha` as GitHub gives it, batched by GraphQL query.
-pub async fn texts<P: Platform>(
+/// Each path's text at `sha`, by path, none for a binary file, batched by GraphQL query.
+async fn texts<P: Platform>(
     p: &P,
     auth: &Auth,
     repo: &str,
     sha: &str,
     paths: &[String],
-) -> Option<BTreeMap<String, Fetched>> {
+) -> Option<BTreeMap<String, Option<String>>> {
     let expressions: Vec<String> = paths.iter().map(|path| format!("{sha}:{path}")).collect();
-    let fetched = fetch(p, auth, repo, "Blobs", &expressions, async |sha: &str| {
-        blob(p, auth, repo, sha).await
-    })
-    .await?;
-    Some(paths.iter().cloned().zip(fetched).collect())
+    let texts = objects(p, auth, repo, "Blobs", &expressions).await?;
+    Some(paths.iter().cloned().zip(texts).collect())
 }
 
 /// The text of each `<rev>:<path>` expression, in order, `None` for a binary file or one
-/// that doesn't exist, batched in GraphQL queries named `query`.
+/// that doesn't exist, batched in GraphQL queries named `query`; a text GraphQL cuts short
+/// is read whole from the blob API, and that blob kept a day.
 pub async fn objects<P: Platform>(
     p: &P,
     auth: &Auth,
@@ -150,11 +100,10 @@ pub async fn objects<P: Platform>(
     query: &str,
     expressions: &[String],
 ) -> Option<Vec<Option<String>>> {
-    let fetched = fetch(p, auth, repo, query, expressions, async |sha: &str| {
+    fetch(p, auth, repo, query, expressions, async |sha: &str| {
         blob(p, auth, repo, sha).await
     })
-    .await?;
-    Some(fetched.into_iter().map(|f| f.text).collect())
+    .await
 }
 
 /// [`objects`] with nothing kept: a truncated blob is read from the blob API each time
@@ -166,15 +115,15 @@ pub async fn objects_direct<P: GitHub>(
     query: &str,
     expressions: &[String],
 ) -> Option<Vec<Option<String>>> {
-    let fetched = fetch(p, auth, repo, query, expressions, async |sha: &str| {
+    fetch(p, auth, repo, query, expressions, async |sha: &str| {
         blob_direct(p, auth, repo, sha).await
     })
-    .await?;
-    Some(fetched.into_iter().map(|f| f.text).collect())
+    .await
 }
 
-/// Each `<rev>:<path>` expression's blob, in order, batched in GraphQL queries named
-/// `query`.
+/// Each `<rev>:<path>` expression's text, in order, batched in GraphQL queries named
+/// `query`, at most `PER_QUERY` a query; none at all when a query fails or GitHub answers
+/// a null `repository`.
 async fn fetch<P: GitHub>(
     p: &P,
     auth: &Auth,
@@ -182,7 +131,7 @@ async fn fetch<P: GitHub>(
     query: &str,
     expressions: &[String],
     blob: impl AsyncFn(&str) -> Option<Vec<u8>>,
-) -> Option<Vec<Fetched>> {
+) -> Option<Vec<Option<String>>> {
     let (owner, name) = repo.split_once('/')?;
     let mut out = Vec::new();
     for chunk in expressions.chunks(PER_QUERY) {
@@ -213,35 +162,40 @@ async fn fetch<P: GitHub>(
                 // GraphQL cuts long text short; the blob API has all of it.
                 (Some(_), true) => {
                     let sha = object["oid"].as_str()?;
-                    let bytes = blob(sha).await?;
-                    String::from_utf8(bytes).ok()
+                    String::from_utf8(blob(sha).await?).ok()
                 }
                 (text, _) => text.map(String::from),
             };
-            let nul = text
-                .as_ref()
-                .is_some_and(|t| t.as_bytes()[..t.len().min(BINARY_PROBE)].contains(&0));
-            out.push(Fetched {
-                binary: object["isBinary"] == true || nul,
-                text,
-            });
+            out.push(text);
         }
     }
     Some(out)
 }
 
-/// The bytes of a blob, from the Cache API or the blob API. A blob never changes.
+/// The Cache API key of a blob's bytes.
+fn blob_key(repo: &str, sha: &str) -> String {
+    format!("blob:{repo}:{sha}")
+}
+
+/// The bytes of a blob kept in the Cache API.
+async fn kept_blob<P: Platform>(p: &P, repo: &str, sha: &str) -> Option<Vec<u8>> {
+    let kept = p.cache_get(&blob_key(repo, sha)).await?;
+    STANDARD.decode(kept).ok()
+}
+
+/// The bytes of a blob, from the Cache API or the blob API, kept a day: a blob never
+/// changes.
 async fn blob<P: Platform>(p: &P, auth: &Auth, repo: &str, sha: &str) -> Option<Vec<u8>> {
-    let key = format!("blob:{repo}:{sha}");
-    if let Some(bytes) = p
-        .cache_get(&key)
-        .await
-        .and_then(|b| STANDARD.decode(b).ok())
-    {
+    if let Some(bytes) = kept_blob(p, repo, sha).await {
         return Some(bytes);
     }
+    fetch_blob(p, auth, repo, sha).await
+}
+
+/// The bytes of a blob from the blob API, kept a day.
+async fn fetch_blob<P: Platform>(p: &P, auth: &Auth, repo: &str, sha: &str) -> Option<Vec<u8>> {
     let content = blob_content(p, auth, repo, sha).await?;
-    p.cache_put(&key, &content, FILES_TTL).await;
+    p.cache_put(&blob_key(repo, sha), &content, FILES_TTL).await;
     STANDARD.decode(content).ok()
 }
 
@@ -258,22 +212,23 @@ async fn blob_content<P: GitHub>(p: &P, auth: &Auth, repo: &str, sha: &str) -> O
     Some(v["content"].as_str()?.split_whitespace().collect())
 }
 
-/// Whether the model reads a file's bytes, not just its text: node and change assets.
+/// Whether `spec_files` fetches a binary file whole: one in an `assets/` directory under
+/// `specs/` or `changes/`, at any depth.
 fn is_asset(path: &str) -> bool {
     (path.starts_with("specs/") || path.starts_with("changes/")) && path.contains("/assets/")
 }
 
-/// The files a snapshot reads besides the model's: `clm.toml`, for the size budgets, and
-/// every `.gitattributes`, for the files they leave out of sizes (`snapshot-size`).
-fn is_size_path(path: &str) -> bool {
-    path == "clm.toml" || path == ".gitattributes" || path.ends_with("/.gitattributes")
+/// Whether `spec_files` gives a file: one whose text the replica keeps or the gate reads
+/// as a spec (`replica/files-it-fetches`, `gate/classify`).
+fn is_spec_file(path: &str) -> bool {
+    clm_replica::keeps_text(path) || clm_gate::is_spec_path(path)
 }
 
-/// The files the model reads at `sha`, with `clm.toml` and every `.gitattributes`: from
-/// the Cache API, or from GitHub. Binary assets
-/// come through the blob API so their hashes match a checkout's, at most
-/// `MAX_BLOB_FETCHES` per request; each is cached, so a later request picks up where this
-/// one stopped. Binary files the model never reads are left out.
+/// The spec files of commit `sha`, from the Cache API or from GitHub: each text file with
+/// its text, and each binary asset with its bytes from the blob API, at most
+/// `MAX_BLOB_FETCHES` fetched per call and each kept a day, so a later call goes on from
+/// where this one stopped. None while the commit needs more, or when a fetch fails. Binary
+/// files that aren't assets are left out.
 pub async fn spec_files<P: Platform>(
     p: &P,
     auth: &Auth,
@@ -281,7 +236,7 @@ pub async fn spec_files<P: Platform>(
     sha: &str,
     tree: Option<&[TreeEntry]>,
 ) -> Option<Files> {
-    let key = format!("files2:{repo}@{sha}");
+    let key = format!("files3:{repo}@{sha}");
     if let Some(files) = p.cache_get(&key).await.and_then(|v| decode(&v)) {
         return Some(files);
     }
@@ -293,27 +248,27 @@ pub async fn spec_files<P: Platform>(
             &fetched
         }
     };
-    let entries: Vec<&TreeEntry> = tree
-        .iter()
-        .filter(|e| is_spec_path(&e.path) || is_size_path(&e.path))
-        .collect();
+    let entries: Vec<&TreeEntry> = tree.iter().filter(|e| is_spec_file(&e.path)).collect();
     let paths: Vec<String> = entries.iter().map(|e| e.path.clone()).collect();
     let texts = texts(p, auth, repo, sha, &paths).await?;
     let mut files = Files::new();
     let mut fetches = 0;
     let mut complete = true;
     for entry in entries {
-        let bytes = match texts.get(&entry.path).and_then(|f| f.text.as_ref()) {
+        let bytes = match texts.get(&entry.path).and_then(Option::as_ref) {
             Some(text) => text.clone().into_bytes(),
-            _ if !is_asset(&entry.path) => continue,
-            _ if fetches < MAX_BLOB_FETCHES => {
-                fetches += 1;
-                blob(p, auth, repo, &entry.sha).await?
-            }
-            _ => {
-                complete = false;
-                continue;
-            }
+            None if !is_asset(&entry.path) => continue,
+            None => match kept_blob(p, repo, &entry.sha).await {
+                Some(bytes) => bytes,
+                None if fetches < MAX_BLOB_FETCHES => {
+                    fetches += 1;
+                    fetch_blob(p, auth, repo, &entry.sha).await?
+                }
+                None => {
+                    complete = false;
+                    continue;
+                }
+            },
         };
         files.insert(PathBuf::from(&entry.path), bytes);
     }

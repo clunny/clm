@@ -14,7 +14,7 @@ fn get(path: &str) -> Request {
 
 #[test]
 fn a_binary_asset() {
-    // req:web.worker.platform/asset-responses@6084735c
+    // req:web.worker.platform/asset-responses@362717da
     let fake = Fake::default();
     let bytes = vec![0xff, 0xfe, 0x00, 0x80];
     fake.assets.borrow_mut().insert(
@@ -34,7 +34,7 @@ fn a_binary_asset() {
 
 #[test]
 fn text_through_the_provided_method() {
-    // req:web.worker.platform/asset-responses@6084735c
+    // req:web.worker.platform/asset-responses@362717da
     let fake = Fake::default();
     assert_eq!(
         block_on(fake.asset("/_clm/invited.json")).as_deref(),
