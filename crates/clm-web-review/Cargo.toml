@@ -16,4 +16,3 @@ futures = { version = "0.3", default-features = false, features = ["async-await"
 
 [dev-dependencies]
 clm-web-platform = { workspace = true, features = ["fake"] }
-tempfile.workspace = true

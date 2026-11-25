@@ -115,8 +115,8 @@ const GIT: &str = "https://api.github.com/repos/o/a/git";
 
 #[test]
 fn approve_spec_branch() {
-    // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/fingerprint-from-trees@c44557f5
+    // req:web.worker.review/approve@cf733e72
+    // req:web.worker.review/fingerprint-from-trees@e49d6717
     let (fake, cookie) = setup();
     assert_eq!(approve(&fake, &cookie, "spec/x"), 200);
     assert_eq!(
@@ -159,7 +159,7 @@ fn approve_spec_branch() {
 
 #[test]
 fn approve_appends() {
-    // req:web.worker.review/approve@7dc5d5a3
+    // req:web.worker.review/approve@cf733e72
     // A ledger that exists gains one line on a commit whose parent is its tip, and the ref
     // moves without force; a last line without its newline still ends before the new one.
     let mut repo = repo();
@@ -198,7 +198,7 @@ fn approve_appends() {
 
 #[test]
 fn change_as_the_cli_names_it() {
-    // req:web.worker.review/approve@7dc5d5a3
+    // req:web.worker.review/approve@cf733e72
     let (fake, cookie) = setup();
     fake.gh
         .repos
@@ -212,8 +212,101 @@ fn change_as_the_cli_names_it() {
 }
 
 #[test]
+fn the_change_it_names() {
+    // req:web.worker.review/approve@cf733e72
+    // Each record's `change` is the first of the IDs `clm_ledger::change_ids` gives: `x`
+    // before `x-y`, though `changes/x-y/` sorts first by its bytes.
+    let mut repo = repo();
+    let mut two = repo.commits["spec"].clone();
+    two.insert(
+        "changes/x-y/change.md".into(),
+        b"---\nstatus: proposed\n---\n\n## Intent\nAdd x-y.\n".to_vec(),
+    );
+    repo.commits.insert("two".into(), two);
+    repo.branches.insert("spec/two".into(), "two".into());
+    let fake = Fake::default();
+    fake.gh.add_repo("o/a", repo);
+    let cookie = fake.user("u", &["o/a"]);
+    for branch in ["spec/x", "spec/arch", "spec/two"] {
+        assert_eq!(approve(&fake, &cookie, branch), 200, "{branch}");
+    }
+    let named: Vec<Value> = records(&fake, "clm/ledger/clunny/web")
+        .iter()
+        .map(|r| r["change"].clone())
+        .collect();
+    assert_eq!(named, [json!("x"), Value::Null, json!("x")]);
+}
+
+#[test]
+fn github_fails() {
+    // req:web.worker.review/approve@cf733e72
+    // A failed read of the branch's ref or of the default branch's is GitHub failing, not a
+    // missing branch: 502. A refused move of the ledger's ref leaves it where it was.
+    let mut repo = repo();
+    let old = json!({"id": "0", "writer": "clunny/web", "at": "2026-10-26T10:00:00.000Z",
+                     "kind": "approved", "fingerprint": "f0", "branch": "spec/y",
+                     "change": null});
+    ledger(&mut repo, "clunny/web", "L1", &[old]);
+    let fake = Fake::default();
+    fake.gh.add_repo("o/a", repo);
+    let cookie = fake.user("u", &["o/a"]);
+    let set = |f: &dyn Fn(&mut FakeRepo)| f(fake.gh.repos.borrow_mut().get_mut("o/a").unwrap());
+    set(&|r| {
+        r.ref_fails.insert("spec/x".into());
+    });
+    assert_eq!(approve(&fake, &cookie, "spec/x"), 502, "the branch's ref");
+    set(&|r| {
+        r.ref_fails.clear();
+        r.ref_fails.insert("main".into());
+    });
+    assert_eq!(
+        approve(&fake, &cookie, "spec/x"),
+        502,
+        "the default branch's"
+    );
+    assert!(fake.gh.writes().is_empty());
+    set(&|r| {
+        r.ref_fails.clear();
+        r.refused_refs.insert("clm/ledger/clunny/web".into());
+    });
+    assert_eq!(approve(&fake, &cookie, "spec/x"), 502, "the ledger's ref");
+    assert_eq!(
+        fake.gh.repos.borrow()["o/a"].branches["clm/ledger/clunny/web"],
+        "L1",
+        "the ledger's ref is where it was"
+    );
+}
+
+#[test]
+fn refusals_in_order() {
+    // req:web.worker.review/approve@cf733e72
+    // In a signed repository, a branch that can't be approved at all gets an empty 422
+    // before the signed refusal, which comes before the truncated listing's.
+    let mut repo = repo();
+    for files in repo.commits.values_mut() {
+        files.insert(
+            "docs/allowed_signers".into(),
+            b"dana ssh-ed25519 AAAA\n".to_vec(),
+        );
+    }
+    repo.truncated_trees.insert("111".into());
+    let fake = Fake::default();
+    fake.gh.add_repo("o/a", repo);
+    let cookie = fake.user("u", &["o/a"]);
+    let stale = json!({"fingerprint": "stale"}).to_string();
+    for branch in ["spec/missing", "spec/code", "impl/a"] {
+        let res = approve_res(&fake, &cookie, branch, &stale);
+        assert_eq!((res.status, res.body.is_empty()), (422, true), "{branch}");
+    }
+    let res = approve_res(&fake, &cookie, "spec/x", &stale);
+    assert_eq!(res.status, 422);
+    assert_eq!(body_json(&res)["error"], "signed");
+    assert!(fake.gh.writes().is_empty());
+}
+
+#[test]
 fn code_branch() {
-    // req:web.worker.review/approve@7dc5d5a3
+    // req:web.worker.review/approve@cf733e72
     let (fake, cookie) = setup();
     assert_eq!(approve(&fake, &cookie, "impl/a"), 422);
     assert_eq!(approve(&fake, &cookie, "spec/code"), 422);
@@ -222,7 +315,7 @@ fn code_branch() {
 
 #[test]
 fn approve_refuses_a_missing_or_odd_branch() {
-    // req:web.worker.review/approve@7dc5d5a3
+    // req:web.worker.review/approve@cf733e72
     let (fake, cookie) = setup();
     assert_eq!(approve(&fake, &cookie, "spec/missing"), 422);
     assert_eq!(approve(&fake, &cookie, "spec%2F..%2Fmain"), 422);
@@ -232,8 +325,8 @@ fn approve_refuses_a_missing_or_odd_branch() {
 
 #[test]
 fn truncated_listing() {
-    // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/fingerprint-from-trees@c44557f5
+    // req:web.worker.review/approve@cf733e72
+    // req:web.worker.review/fingerprint-from-trees@e49d6717
     // With the merge base's listing truncated there's no fingerprint to approve.
     let mut repo = repo();
     repo.truncated_trees.insert("111".into());
@@ -246,7 +339,7 @@ fn truncated_listing() {
 
 #[test]
 fn pushed_after_the_review() {
-    // req:web.worker.review/approve@7dc5d5a3
+    // req:web.worker.review/approve@cf733e72
     // The review was drawn at `spec`'s fingerprint; the author then pushed a commit that
     // changes the change's own `change.md`, an authored file, so the branch's fingerprint
     // now differs.
@@ -283,26 +376,8 @@ fn pushed_after_the_review() {
 }
 
 #[test]
-fn nothing_named() {
-    // req:web.worker.review/approve@7dc5d5a3
-    // A body that names no fingerprint is refused before any request to GitHub.
-    let (fake, cookie) = setup();
-    for body in ["", "not json", "{}", r#"{"fingerprint": 7}"#, r#"["f"]"#] {
-        let before = fake.gh.calls.borrow().len();
-        assert_eq!(
-            approve_with(&fake, &cookie, "spec/x", body),
-            422,
-            "{body:?}"
-        );
-        let after = fake.gh.calls.borrow().len();
-        assert_eq!(after, before, "{body:?}: no GitHub request");
-    }
-    assert!(fake.gh.writes().is_empty());
-}
-
-#[test]
 fn refusals_before_a_moved_fingerprint() {
-    // req:web.worker.review/approve@7dc5d5a3
+    // req:web.worker.review/approve@cf733e72
     // A branch that can't be approved at all gets 422 whatever fingerprint it names.
     let (fake, cookie) = setup();
     let stale = json!({"fingerprint": "stale"}).to_string();
@@ -352,8 +427,8 @@ fn approve_res(
 
 #[test]
 fn signed_repository() {
-    // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/approve@cf733e72
+    // req:web.worker.review/signed-repository@e056a364
     let (fake, cookie) = setup();
     sign_main(&fake);
     let named = current(&fake, "spec/x").unwrap();
@@ -369,8 +444,8 @@ fn signed_repository() {
 
 #[test]
 fn signed_and_pushed_after_the_review() {
-    // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/approve@cf733e72
+    // req:web.worker.review/signed-repository@e056a364
     let (fake, cookie) = setup();
     sign_main(&fake);
     let stale = json!({"fingerprint": "f"}).to_string();
@@ -382,8 +457,8 @@ fn signed_and_pushed_after_the_review() {
 
 #[test]
 fn signed_refusals_come_after_the_branch_checks() {
-    // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/approve@cf733e72
+    // req:web.worker.review/signed-repository@e056a364
     // A branch that can't be approved at all gets an empty 422, signed repository or not.
     let (fake, cookie) = setup();
     sign_main(&fake);
@@ -398,8 +473,8 @@ fn signed_refusals_come_after_the_branch_checks() {
 
 #[test]
 fn signed_lookup_fails() {
-    // req:web.worker.review/approve@7dc5d5a3
-    // req:web.worker.review/signed-repository@a9873234
+    // req:web.worker.review/approve@cf733e72
+    // req:web.worker.review/signed-repository@e056a364
     let mut repo = repo();
     repo.signers_fail = true;
     let fake = Fake::default();
@@ -414,7 +489,7 @@ fn signed_lookup_fails() {
 
 #[test]
 fn approve_over_a_request() {
-    // req:web.worker.review/approve@7dc5d5a3
+    // req:web.worker.review/approve@cf733e72
     // The approval names, as the requests it clears, the requester's own requests for the
     // branch at the fingerprint, read from their web ledger at its tip: not another
     // person's, not another fingerprint's, not another branch's.

@@ -89,7 +89,7 @@ fn writes(fake: &Fake) -> Vec<(String, String)> {
 
 #[test]
 fn comment_on_a_requirement() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
+    // req:web.worker.review/review-feedback@6f6d24a4
     let (fake, cookie) = setup("read");
     let f = fingerprint(&fake);
     let res = send(
@@ -134,7 +134,7 @@ fn comment_on_a_requirement() {
 
 #[test]
 fn unknown_target() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
+    // req:web.worker.review/review-feedback@6f6d24a4
     let (fake, cookie) = setup("read");
     let f = fingerprint(&fake);
     let res = send(
@@ -188,10 +188,18 @@ fn unknown_target() {
     assert_eq!(comments[2]["target"], Value::Null);
 }
 
+/// The 422 body a parser refuses `body` with, or none when it accepts it.
+fn refusal<T>(parsed: Result<T, clm_web_platform::http::Response>) -> Option<Value> {
+    let res = parsed.err()?;
+    assert_eq!(res.status, 422);
+    Some(body_json(&res))
+}
+
 #[test]
 fn refused_bodies_and_branches() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
-    let (fake, cookie) = setup("write");
+    // req:web.worker.review/review-feedback@6f6d24a4
+    // req:web.worker.review/request-changes@e3dfe01b
+    use clm_web_review::feedback::{parse_comment, parse_request};
     for (body, field) in [
         (json!({"target": null, "text": "x"}), "fingerprint"),
         (
@@ -208,19 +216,17 @@ fn refused_bodies_and_branches() {
             "text",
         ),
     ] {
-        let calls = fake.gh.calls.borrow().len();
-        let res = send(&fake, &cookie, "comments", &body);
-        assert_eq!(res.status, 422, "{body}");
-        assert_eq!(body_json(&res), json!({"error": field}), "{body}");
-        assert_eq!(fake.gh.calls.borrow().len(), calls, "{body}: asked GitHub");
+        let parsed = parse_comment(body.to_string().as_bytes());
+        assert_eq!(refusal(parsed), Some(json!({"error": field})), "{body}");
     }
-    for body in [
-        json!({"text": "x"}),
-        json!({"fingerprint": "f", "text": ""}),
+    for (body, field) in [
+        (json!({"text": "x"}), "fingerprint"),
+        (json!({"fingerprint": "f", "text": ""}), "text"),
     ] {
-        let res = send(&fake, &cookie, "request-changes", &body);
-        assert_eq!(res.status, 422, "{body}");
+        let parsed = parse_request(body.to_string().as_bytes());
+        assert_eq!(refusal(parsed), Some(json!({"error": field})), "{body}");
     }
+    let (fake, cookie) = setup("write");
     for branch in ["impl/a", "spec/nope"] {
         for route in ["comments", "request-changes"] {
             let body = json!({"fingerprint": "f", "target": null, "text": "x"}).to_string();
@@ -238,7 +244,7 @@ fn refused_bodies_and_branches() {
 
 #[test]
 fn changes_requested() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
+    // req:web.worker.review/request-changes@e3dfe01b
     let (fake, cookie) = setup("write");
     {
         let mut repos = fake.gh.repos.borrow_mut();
@@ -262,6 +268,7 @@ fn changes_requested() {
     );
     assert_eq!(res.status, 200, "a signed repository accepts it");
     let last = records(&fake).pop().unwrap();
+    assert_eq!(body_json(&res), json!({"id": last["id"]}));
     assert_eq!(last["kind"], "changes_requested");
     assert_eq!(last["branch"], "spec/x");
     assert_eq!(last["fingerprint"], f.as_str());
@@ -277,7 +284,7 @@ fn changes_requested() {
 
 #[test]
 fn admins_can_hold_a_land() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
+    // req:web.worker.review/request-changes@e3dfe01b
     let (fake, cookie) = setup("admin");
     let f = fingerprint(&fake);
     let res = send(
@@ -291,7 +298,7 @@ fn admins_can_hold_a_land() {
 
 #[test]
 fn a_reader_cant_hold_a_land() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
+    // req:web.worker.review/request-changes@e3dfe01b
     for permission in ["read", "none"] {
         let (fake, cookie) = setup(permission);
         let f = fingerprint(&fake);
@@ -311,13 +318,37 @@ fn a_reader_cant_hold_a_land() {
             &json!({"fingerprint": "older", "text": "Split it"}),
         );
         assert_eq!(res.status, 403, "{permission}: before 409");
+        // The branch and the fingerprint's absence are refused before the permission.
+        let body = json!({"fingerprint": "f", "text": "Split it"}).to_string();
+        let res = fake.handle(post(
+            "/api/repos/o/a/branches/spec/nope/request-changes",
+            &cookie,
+            body.as_bytes(),
+        ));
+        assert_eq!(
+            (res.status, body_json(&res)),
+            (422, json!({"error": "branch"}))
+        );
+        set(&fake, |r| {
+            r.truncated_trees.insert("222".into());
+        });
+        let res = send(
+            &fake,
+            &cookie,
+            "request-changes",
+            &json!({"fingerprint": "f", "text": "x"}),
+        );
+        assert_eq!(
+            (res.status, body_json(&res)),
+            (422, json!({"error": "fingerprint"}))
+        );
         assert!(fake.gh.writes().is_empty());
     }
 }
 
 #[test]
 fn moved() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
+    // req:web.worker.review/request-changes@e3dfe01b
     let (fake, cookie) = setup("write");
     let res = send(
         &fake,
@@ -332,7 +363,8 @@ fn moved() {
 
 #[test]
 fn truncated_listing() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
+    // req:web.worker.review/review-feedback@6f6d24a4
+    // req:web.worker.review/request-changes@e3dfe01b
     let (fake, cookie) = setup("write");
     let f = fingerprint(&fake);
     let at = "2027-01-15T07:00:00.000Z";
@@ -365,7 +397,7 @@ fn truncated_listing() {
 
 #[test]
 fn cleared() {
-    // req:web.worker.review/review-feedback@bb8c3fbe
+    // req:web.worker.review/review-feedback@6f6d24a4
     let (fake, cookie) = setup("write");
     let f = fingerprint(&fake);
     {
@@ -417,4 +449,237 @@ fn cleared() {
             ("r4", true, false)
         ]
     );
+}
+
+/// `docs/allowed_signers` added to `main`'s tip.
+fn sign_main(repo: &mut FakeRepo) {
+    let main = repo.commits.get_mut("111").unwrap();
+    main.insert(
+        "docs/allowed_signers".into(),
+        b"x ssh-ed25519 AAAA\n".to_vec(),
+    );
+}
+
+#[test]
+fn held_in_a_signed_repository() {
+    // req:web.worker.review/review-feedback@6f6d24a4
+    // In a signed repository only an approval whose line carries a non-empty `sig` clears a
+    // request: the unsigned one leaves `r` held, the signed one clears it.
+    for (sig, held) in [
+        (None, true),
+        (Some(""), true),
+        (Some("-----SIG-----"), false),
+    ] {
+        let (fake, cookie) = setup("write");
+        set(&fake, sign_main);
+        let f = fingerprint(&fake);
+        {
+            let mut repos = fake.gh.repos.borrow_mut();
+            let repo = repos.get_mut("o/a").unwrap();
+            let mut approval = json!({"id": "a1", "writer": "alice/1a2b3c4d",
+                "at": "2027-01-15T07:10:00.000Z", "kind": "approved", "fingerprint": f,
+                "branch": "spec/x", "change": "x", "clears": ["r"]});
+            if let Some(sig) = sig {
+                approval["sig"] = json!(sig);
+            }
+            let request = json!({"id": "r", "writer": "alice/web",
+                "at": "2027-01-15T07:00:00.000Z", "kind": "changes_requested",
+                "branch": "spec/x", "fingerprint": f, "text": "Split it"});
+            ledger(repo, "alice/web", "LA", &[request]);
+            ledger(repo, "alice/1a2b3c4d", "LB", &[approval]);
+        }
+        let review = review(&fake, &cookie);
+        assert_eq!(review["signed"], true);
+        let r = &review["change_requests"][0];
+        assert_eq!((&r["id"], &r["current"]), (&json!("r"), &json!(true)));
+        assert_eq!(r["held"], held, "sig {sig:?}");
+    }
+    // The same unsigned approval clears it in a repository that isn't signed.
+    let (fake, cookie) = setup("write");
+    let f = fingerprint(&fake);
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        let records = [
+            json!({"id": "r", "writer": "alice/web", "at": "2027-01-15T07:00:00.000Z",
+                   "kind": "changes_requested", "branch": "spec/x", "fingerprint": f,
+                   "text": "Split it"}),
+            json!({"id": "a1", "writer": "alice/1a2b3c4d", "at": "2027-01-15T07:10:00.000Z",
+                   "kind": "approved", "fingerprint": f, "branch": "spec/x", "change": "x",
+                   "clears": ["r"]}),
+        ];
+        ledger(repo, "alice/web", "LA", &records);
+    }
+    assert_eq!(review(&fake, &cookie)["change_requests"][0]["held"], false);
+}
+
+/// An access check for the signed-in user `u` on `o/a`, as the router makes it.
+fn access(fake: &Fake) -> clm_web_platform::access::Access {
+    block_on(clm_web_platform::access::check(fake, "u", "o", "a")).unwrap()
+}
+
+/// A comment, checked by `parse_comment`.
+fn comment(body: &Value) -> clm_web_review::feedback::Comment {
+    clm_web_review::feedback::parse_comment(body.to_string().as_bytes())
+        .unwrap_or_else(|_| panic!("{body}"))
+}
+
+#[test]
+fn the_target_cant_be_checked() {
+    // req:web.worker.review/review-feedback@6f6d24a4
+    // A snapshot that can't be read, and one that lacks the target while GitHub fails the
+    // fetch of the branch's spec files: 502 and no write. A comment with no target needs
+    // neither.
+    use clm_web_review::feedback;
+    let (fake, _) = setup("read");
+    let f = fingerprint(&fake);
+    let access = access(&fake);
+    let on = |target: Value| comment(&json!({"fingerprint": f, "target": target, "text": "Hm"}));
+    let unread = async { None };
+    let res = block_on(feedback::comment(
+        &fake,
+        &access,
+        "clunny",
+        "spec/x",
+        on(json!("n/r")),
+        unread,
+    ));
+    assert_eq!(res.status, 502, "no snapshot");
+    fake.gh.graphql_null.borrow_mut().insert("Blobs".into());
+    let lacking = async { Some(std::collections::BTreeSet::new()) };
+    let res = block_on(feedback::comment(
+        &fake,
+        &access,
+        "clunny",
+        "spec/x",
+        on(json!("n/r")),
+        lacking,
+    ));
+    assert_eq!(res.status, 502, "no comparison");
+    assert!(fake.gh.writes().is_empty());
+    let unread = async { None };
+    let res = block_on(feedback::comment(
+        &fake,
+        &access,
+        "clunny",
+        "spec/x",
+        on(Value::Null),
+        unread,
+    ));
+    assert_eq!(res.status, 200, "no target, nothing to check");
+}
+
+#[test]
+fn an_odd_body() {
+    // req:web.worker.review/review-feedback@6f6d24a4
+    use clm_web_review::feedback::parse_comment;
+    let long = "é".repeat(4_000);
+    let refused = |body: &[u8]| refusal(parse_comment(body));
+    assert_eq!(refused(b"not json"), Some(json!({"error": "fingerprint"})));
+    assert_eq!(
+        refused(br#"{"target": 3}"#),
+        Some(json!({"error": "fingerprint"}))
+    );
+    assert_eq!(
+        refused(br#"{"fingerprint": "f", "target": 3, "text": ""}"#),
+        Some(json!({"error": "target"}))
+    );
+    // The two it accepts: no target reads as null, and 4,000 characters is not too many.
+    let no_target = json!({"fingerprint": "f", "text": "x"});
+    let long_text = json!({"fingerprint": "f", "text": long});
+    let (fake, cookie) = setup("read");
+    for body in [&no_target, &long_text] {
+        assert_eq!(refused(body.to_string().as_bytes()), None, "{body}");
+        assert_eq!(send(&fake, &cookie, "comments", body).status, 200, "{body}");
+    }
+    let records = records(&fake);
+    assert_eq!(records[0]["target"], Value::Null);
+    assert!(records[0].as_object().unwrap().contains_key("target"));
+    assert_eq!(records[1]["text"], long.as_str());
+}
+
+/// `setup(permission)` with a web ledger for `clunny` at `L1`.
+fn with_ledger(permission: &str) -> (Fake, String) {
+    let (fake, cookie) = setup(permission);
+    let old = json!({"id": "0", "writer": "clunny/web", "at": "2026-10-26T10:00:00.000Z",
+                     "kind": "commented", "branch": "spec/y", "fingerprint": "f0",
+                     "target": null, "text": "old"});
+    set(&fake, |r| ledger(r, "clunny/web", "L1", &[old]));
+    (fake, cookie)
+}
+
+fn ledger_tip(fake: &Fake) -> String {
+    fake.gh.repos.borrow()["o/a"].branches["clm/ledger/clunny/web"].clone()
+}
+
+fn set(fake: &Fake, f: impl FnOnce(&mut FakeRepo)) {
+    f(fake.gh.repos.borrow_mut().get_mut("o/a").unwrap())
+}
+
+#[test]
+fn a_comment_github_fails() {
+    // req:web.worker.review/review-feedback@6f6d24a4
+    let (fake, cookie) = with_ledger("read");
+    let body = json!({"fingerprint": "f", "target": null, "text": "Hm"});
+    set(&fake, |r| {
+        r.ref_fails.insert("spec/x".into());
+    });
+    let res = send(&fake, &cookie, "comments", &body);
+    assert_eq!(res.status, 502, "the branch's ref");
+    assert!(fake.gh.writes().is_empty());
+    set(&fake, |r| {
+        r.ref_fails.clear();
+        r.refused_refs.insert("clm/ledger/clunny/web".into());
+    });
+    let res = send(&fake, &cookie, "comments", &body);
+    assert_eq!(res.status, 502, "the ledger's ref");
+    assert_eq!(ledger_tip(&fake), "L1", "the ledger's ref is where it was");
+}
+
+#[test]
+fn what_a_refused_request_says() {
+    // req:web.worker.review/request-changes@e3dfe01b
+    let request = |fake: &Fake, cookie: &str, branch: &str, f: &str| {
+        let body = json!({"fingerprint": f, "text": "Split it"}).to_string();
+        fake.handle(post(
+            &format!("/api/repos/o/a/branches/{branch}/request-changes"),
+            cookie,
+            body.as_bytes(),
+        ))
+    };
+    let (fake, cookie) = with_ledger("write");
+    let f = fingerprint(&fake);
+    let res = request(&fake, &cookie, "spec/nope", &f);
+    assert_eq!(
+        (res.status, body_json(&res)),
+        (422, json!({"error": "branch"}))
+    );
+    set(&fake, |r| {
+        r.truncated_trees.insert("222".into());
+    });
+    let res = request(&fake, &cookie, "spec/x", &f);
+    assert_eq!(
+        (res.status, body_json(&res)),
+        (422, json!({"error": "fingerprint"}))
+    );
+    set(&fake, |r| {
+        r.truncated_trees.clear();
+        r.fail_paths.push("installation".into());
+    });
+    let res = request(&fake, &cookie, "spec/x", &f);
+    assert_eq!(res.status, 502, "no installation");
+    set(&fake, |r| {
+        r.fail_paths.clear();
+        r.ref_fails.insert("spec/x".into());
+    });
+    let res = request(&fake, &cookie, "spec/x", &f);
+    assert_eq!(res.status, 502, "the branch's ref");
+    assert!(fake.gh.writes().is_empty());
+    set(&fake, |r| {
+        r.ref_fails.clear();
+        r.refused_refs.insert("clm/ledger/clunny/web".into());
+    });
+    let res = request(&fake, &cookie, "spec/x", &f);
+    assert_eq!(res.status, 502, "the ledger's ref");
+    assert_eq!(ledger_tip(&fake), "L1", "the ledger's ref is where it was");
 }

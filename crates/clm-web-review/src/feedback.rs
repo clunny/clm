@@ -191,7 +191,7 @@ pub async fn request_changes<P: Platform>(
 
 /// A `commented` record, as a branch's review lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Commented {
+pub(crate) struct Commented {
     id: String,
     writer: String,
     at: String,
@@ -205,21 +205,22 @@ pub struct Commented {
 
 /// A `changes_requested` record, as a branch's review lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Requested {
+pub(crate) struct Requested {
     id: String,
     writer: String,
     at: String,
     fingerprint: String,
     text: String,
     current: bool,
-    /// Current, and not cleared as `Fold::cleared` decides, the rule `clm land` holds the
-    /// branch by (`ledger/request-cleared`).
+    /// Current, and not cleared by the rule `clm land` holds the branch by
+    /// (`ledger/request-cleared`), counting in a signed repository only an approval whose
+    /// line carries a `sig`.
     held: bool,
 }
 
 /// The fold's comments on `branch`, oldest first; `current` against `fingerprint`, the
 /// review's, false on every entry without one.
-pub fn comments(fold: &Fold, branch: &str, fingerprint: Option<&str>) -> Vec<Commented> {
+pub(crate) fn comments(fold: &Fold, branch: &str, fingerprint: Option<&str>) -> Vec<Commented> {
     fold.comments
         .get(branch)
         .into_iter()
@@ -244,8 +245,19 @@ pub fn comments(fold: &Fold, branch: &str, fingerprint: Option<&str>) -> Vec<Com
         .collect()
 }
 
-/// The fold's change requests on `branch`, oldest first, with `held`.
-pub fn change_requests(fold: &Fold, branch: &str, fingerprint: Option<&str>) -> Vec<Requested> {
+/// The fold's change requests on `branch`, oldest first, with `held`: in a repository
+/// that is `signed`, only an approval whose line carries a `sig` clears one, since the
+/// Worker checks no signature (`ledger/cleared-by-a-signed-line`).
+pub(crate) fn change_requests(
+    fold: &Fold,
+    branch: &str,
+    fingerprint: Option<&str>,
+    signed: bool,
+) -> Vec<Requested> {
+    let cleared = |r| match signed {
+        true => fold.cleared_by_sig(r),
+        false => fold.cleared(r),
+    };
     fold.change_requests
         .get(branch)
         .into_iter()
@@ -264,7 +276,7 @@ pub fn change_requests(fold: &Fold, branch: &str, fingerprint: Option<&str>) -> 
                     fingerprint: f.clone(),
                     text: text.clone(),
                     current,
-                    held: current && !fold.cleared(r),
+                    held: current && !cleared(r),
                 })
             }
             _ => None,
