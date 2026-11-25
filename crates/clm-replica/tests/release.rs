@@ -106,6 +106,13 @@ fn another_release_saved_it() {
     assert_eq!(state["release"], env!("CARGO_PKG_VERSION"));
     // The markers another release counted, which this one counts otherwise.
     state["state"]["held"][CHECK]["markers"] = json!([]);
+    // What another release kept or read that this one doesn't: `src/a.rs`'s text, and
+    // `README.md`, which this release never reads. Neither is held once loaded.
+    state["state"]["held"]["src/a.rs"]["text"] =
+        json!(String::from_utf8(f["src/a.rs"].clone()).unwrap());
+    let readme = &state["state"]["tree"]["README.md"]["sha"];
+    state["state"]["held"]["README.md"] =
+        json!({"sha": readme, "binary": false, "text": "# Read me\n", "markers": []});
     let mut older = state.clone();
     older["release"] = json!("0.0.0");
     let mut unnamed = state;
@@ -134,6 +141,7 @@ fn another_release_saved_it() {
         );
         assert_eq!(held_markers(&loaded, "src/a.rs"), None, "{which}");
         assert!(held_markers(&loaded, "src/b.bin").is_some(), "{which}");
+        assert_eq!(held_markers(&loaded, "README.md"), None, "{which}");
 
         fetch(&mut loaded, &f, "111");
         loaded.recompute(100);

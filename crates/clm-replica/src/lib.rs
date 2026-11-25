@@ -364,9 +364,16 @@ impl State {
 
     /// Counts the held markers with this release's scanner (`replica/markers-of-this-release`):
     /// a kept text is scanned again, and a file held with neither text nor binary is
-    /// forgotten, so `pending_fetch` lists it again.
+    /// forgotten, so `pending_fetch` lists it again. What this release neither reads nor
+    /// keeps the text of is taken as it would hold it now.
     fn rescan(&mut self) {
         self.held.retain(|path, h| {
+            if !wanted(path) {
+                return false;
+            }
+            if !keeps_text(path) {
+                h.text = None;
+            }
             if h.text.is_none() && !h.binary {
                 return false;
             }
