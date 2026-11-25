@@ -53,7 +53,7 @@ describe('wrangler.toml', () => {
   // its Needs: its build cites this test there, with the three above.
   it('binds nothing but LIVE, REPLICA and ASSETS, and no KV namespace', () => {
     expect(rawConfig.kv_namespaces ?? []).toEqual([]);
-    expect((rawConfig.durable_objects?.bindings ?? []).map((b) => b.name).sort()).toEqual(['LIVE', 'REPLICA']);
+    expect((rawConfig.durable_objects?.bindings ?? []).map((b: { name: string }) => b.name).sort()).toEqual(['LIVE', 'REPLICA']);
     expect(config.assets?.binding).toBe('ASSETS');
   });
 
