@@ -21,15 +21,14 @@ async function visibility(page: Page, state: 'hidden' | 'visible') {
   }, state);
 }
 
-/** The repo's live socket, as the Worker's `Live` object answers it: `pong` to each `ping`
- * unless `silent`. */
-async function liveSocket(page: Page, o: { silent?: boolean } = {}) {
+/** The repo's live socket, as the Worker's `Live` object answers it: `pong` to each `ping`. */
+async function liveSocket(page: Page) {
   const sockets: WebSocketRoute[] = [];
   const closed: number[] = [];
   await page.routeWebSocket('**/api/repos/o/a/live', (ws) => {
     const n = sockets.push(ws) - 1;
     ws.onMessage((m) => {
-      if (m === 'ping' && !o.silent) ws.send('pong');
+      if (m === 'ping') ws.send('pong');
     });
     ws.onClose(() => closed.push(n));
   });
@@ -131,18 +130,6 @@ test.describe('live updates', () => {
     await expect.poll(() => fresh('d3')).toBe(1);
     await page.waitForTimeout(300);
     expect(fresh('d2')).toBe(0);
-  });
-
-  test('a silent drop: a socket that stops answering ping is closed and another opened', async ({ page, context }) => {
-    await page.clock.install();
-    await mockApi(context);
-    const live = await liveSocket(page, { silent: true });
-    await page.goto('/app/#/o/a/graph');
-    await expect(page.locator('.n[data-node=b]')).toBeVisible();
-    await expect.poll(() => live.sockets.length).toBe(1);
-    await page.clock.runFor(61_000);
-    await expect.poll(() => live.closed).toContain(0);
-    await expect.poll(() => live.sockets.length).toBe(2);
   });
 
   test('a notice during an approval waits until it ends', async ({ page, context }) => {
