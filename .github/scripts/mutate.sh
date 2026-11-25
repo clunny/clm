@@ -2,8 +2,9 @@
 # The mutation pass's command (`clm.toml`'s `[verify] mutate`; specs/ci/SPEC.md,
 # ci/mutate-script): run from the repository root with `CLM_MUTATE` naming the plan `clm verify`
 # wrote and `CLM_MUTATE_RESULT` the file to append a verdict line per requirement to, as soon as
-# it is judged: `<id> killed`, `<id> survived <n>` or `<id> not-judged`. It judges up to
-# `CLM_MUTATE_JOBS` blocks at once. No land, check or workflow runs it.
+# it is judged: `<id> killed`, `<id> survived <n>` or `<id> not-judged`, or `<id> failed <why>`
+# for a block whose own judging failed. It judges up to `CLM_MUTATE_JOBS` blocks at once. No
+# land, check or workflow runs it.
 set -euo pipefail
 
 # The newest releases at build time.
@@ -84,10 +85,13 @@ nl='
 '
 tab=$(printf '\t')
 
-# A tool that doesn't work leaves no verdict: the script stops, naming the tool and what it was
-# judging, and writes nothing for the block, so its requirement stays due (`verify/mutation-pass`).
+# A tool that doesn't work leaves no verdict: the script, or the block it judges, stops, naming
+# the tool and what it was judging. In a block, the text is kept in `why_file` too, for the
+# block's `failed` line, so its requirement stays due with its reason (`verify/mutation-pass`).
+why_file=
 die() {
   echo "mutate.sh: $*" >&2
+  [ -z "$why_file" ] || printf '%s' "${*//$'\n'/ }" >"$why_file"
   exit 1
 }
 
@@ -593,7 +597,11 @@ judge_test_files() {
   if ! [ -d "$copy" ]; then
     # From the tree, so the mutants land on the revision they were listed and their lines found
     # for, wherever the checkout's `HEAD` has moved since.
-    make_tree "$tree" "$copy" || die "a copy of the tree could not be made for requirement $id"
+    # A part-made copy goes, or the job's next block would take it for one made.
+    make_tree "$tree" "$copy" || {
+      rm -rf "$copy"
+      die "a copy of the tree could not be made for requirement $id"
+    }
   fi
   caught=0
   missed=0
@@ -1210,16 +1218,29 @@ run_block() {
   mkdir -p "$work"
   tag=$1
   job=$2
+  why_file=$pass_work/why-$1
   export CLM_SLOT=$((slot_base + $2 - 1)) CARGO_TARGET_DIR=$target_base/mutate-job-$2
   load_block "$1"
   finish_block
 }
 
-# Starts the blocks in the plan's order, each in a job number no running block holds. Once a
-# block fails, it starts no other, and lets those running finish and write their lines.
+# Appends block $1's `failed` line, in one write: the text of its `mutate.sh: ` line, or how it
+# exited, $2, when it printed none.
+fail_block() {
+  local b=${blocks[$1]} why
+  b=${b%%"$nl"*}
+  why="exited with status $2"
+  [ ! -s "$pass_work/why-$1" ] || why=$(cat "$pass_work/why-$1")
+  printf '%s\n' "${b#requirement } failed $why" >>"$result"
+}
+
+# Starts the blocks in the plan's order, each in a job number no running block holds. A block
+# that fails is that block's alone: the others still start, and their lines are written as they
+# are judged. One that `SIGTERM` or `SIGINT` ended writes no line.
 count=${#blocks[@]}
 [ "$jobs_max" -le "$count" ] || jobs_max=$((count > 0 ? count : 1))
 pid_of=()
+block_of=()
 next=0
 running=0
 failed=false
@@ -1229,27 +1250,28 @@ while :; do
     if [ -n "$p" ] && ! kill -0 "$p" 2>/dev/null; then
       status=0
       wait "$p" || status=$?
-      [ "$status" -eq 0 ] || failed=true
+      if [ "$status" -ne 0 ]; then
+        failed=true
+        case $status in 130 | 143) ;; *) fail_block "${block_of[j]}" "$status" ;; esac
+      fi
       pid_of[j]=
       running=$((running - 1))
     fi
   done
-  if ! $failed; then
-    for ((j = 1; j <= jobs_max && next < count; j++)); do
-      [ -z "${pid_of[j]:-}" ] || continue
-      run_block "$next" "$j" &
-      pid_of[j]=$!
-      running=$((running + 1))
-      next=$((next + 1))
-    done
-  fi
+  for ((j = 1; j <= jobs_max && next < count; j++)); do
+    [ -z "${pid_of[j]:-}" ] || continue
+    run_block "$next" "$j" &
+    pid_of[j]=$!
+    block_of[j]=$next
+    running=$((running + 1))
+    next=$((next + 1))
+  done
   [ "$running" -gt 0 ] || break
   sleep 0.1
 done
-if $failed; then exit 1; fi
-
 
 .github/scripts/coverage.sh
 if [ -n "${CLM_LAND_DIR:-}" ]; then
   cp target/lcov.info "$CLM_LAND_DIR/lcov.info"
 fi
+if $failed; then exit 1; fi
