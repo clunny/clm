@@ -223,6 +223,43 @@ pub fn status(status: u16) -> GhResponse {
     }
 }
 
+/// The replica state `mem` holds, as `replica` saved it: a chunk count under `replica`,
+/// then `replica/<n>`.
+pub fn stored_state(mem: &Mem) -> Value {
+    let map = mem.0.borrow();
+    let count: usize = String::from_utf8(map["replica"].clone())
+        .unwrap()
+        .parse()
+        .unwrap();
+    let bytes: Vec<u8> = (0..count)
+        .flat_map(|n| map[&format!("replica/{n}")].clone())
+        .collect();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+/// Keeps the pages open and runs the alarms until one resyncs: lists the refs again.
+pub fn resync(fake: &Fake, object: &mut Obj, slot: &Slot) {
+    let refs = |fake: &Fake| {
+        fake.gh
+            .calls
+            .borrow()
+            .iter()
+            .filter(|c| c.body.as_deref().is_some_and(|b| b.contains("query Refs")))
+            .count()
+    };
+    let before = refs(fake);
+    for _ in 0..50 {
+        block_on(object.view(fake, "implementation", false));
+        let Some(at) = slot.0.get() else { break };
+        fake.now.set(fake.now.get().max(at));
+        block_on(object.on_alarm(fake));
+        if refs(fake) > before {
+            return;
+        }
+    }
+    panic!("no resync ran");
+}
+
 pub fn urls(fake: &Fake, from: usize) -> Vec<String> {
     fake.gh.calls.borrow()[from..]
         .iter()

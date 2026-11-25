@@ -1080,7 +1080,9 @@ impl<S: Store, A: Alarm> Object<S, A> {
             }
         }
         self.resync_ledgers(p, b, auth).await;
-        if let Some(pulls) = source::pulls(p, auth, &repo, b).await {
+        // A listing not read to its end, as one of more than 300 is, changes no pull
+        // request: one it leaves out may still be open.
+        if let Some((pulls, true)) = source::pulls(p, auth, &repo, b).await {
             let gone: Vec<Pull> = self
                 .meta
                 .pulls

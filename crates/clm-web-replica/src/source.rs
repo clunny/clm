@@ -12,7 +12,7 @@ use clm_replica::{Entry, Event, File, Pull, RefChange};
 use clm_web_platform::platform::Auth;
 
 use crate::Host;
-use clm_web_platform::{files, gh};
+use clm_web_platform::{files, gh, live};
 use serde_json::{Value, json};
 
 /// The subrequests one invocation spends at most, under the plan's 50.
@@ -23,6 +23,10 @@ const REF_PAGES: usize = 3;
 const PER_SPEC_QUERY: usize = 50;
 /// A compare lists at most this many files, so a list this long may be cut short.
 const COMPARE_FILES: usize = 300;
+/// The pull requests a page of `live::pulls_direct` holds, and the pages it reads at most
+/// (`web.worker.platform/open-pulls`).
+const PULLS_PER_PAGE: usize = 100;
+const PULL_PAGES: usize = 3;
 
 /// The subrequests an invocation has made.
 #[derive(Debug, Default)]
@@ -285,35 +289,36 @@ pub(crate) async fn tips<P: Host>(
     complete.then_some(tips)
 }
 
-/// The open pull requests, in one GraphQL query.
+/// The open pull requests, through the platform's pages of 100, at most 300, with whether
+/// the listing was read to its end.
 pub(crate) async fn pulls<P: Host>(
     p: &P,
     auth: &Auth,
     repo: &str,
     b: &Budget,
-) -> Option<Vec<Pull>> {
-    let (owner, name) = repo.split_once('/')?;
-    let query = "query Pulls($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { pullRequests(states: OPEN, first: 50) { nodes { number title url headRefName baseRefName headRefOid isCrossRepository } } } }";
-    b.spend(1);
-    let data = gh::graphql(p, auth, query, json!({"owner": owner, "name": name})).await?;
-    let nodes = data["repository"]["pullRequests"]["nodes"].as_array()?;
-    Some(
-        nodes
-            .iter()
-            .filter_map(|v| {
-                Some(Pull {
-                    number: v["number"].as_u64()?,
-                    title: v["title"].as_str().unwrap_or_default().into(),
-                    head: v["headRefName"].as_str()?.into(),
-                    base: v["baseRefName"].as_str()?.into(),
-                    head_sha: v["headRefOid"].as_str().unwrap_or_default().into(),
-                    url: v["url"].as_str().unwrap_or_default().into(),
-                    fork: v["isCrossRepository"] == true,
-                    open: true,
-                })
-            })
-            .collect(),
-    )
+) -> Option<(Vec<Pull>, bool)> {
+    let listed = live::pulls_direct(p, auth, repo).await;
+    // One query a page: a listing read to its end took one for each 100 it holds, and one
+    // cut short, or a failed one, is counted at the most it can take.
+    b.spend(match &listed {
+        Some((pulls, true)) => pulls.len().div_ceil(PULLS_PER_PAGE).max(1),
+        _ => PULL_PAGES,
+    });
+    let (pulls, complete) = listed?;
+    let pulls = pulls
+        .into_iter()
+        .map(|v| Pull {
+            number: v.number,
+            title: v.title,
+            head: v.head,
+            base: v.base,
+            head_sha: v.head_sha,
+            url: v.url,
+            fork: v.fork,
+            open: true,
+        })
+        .collect();
+    Some((pulls, complete))
 }
 
 /// Each spec ref's `changes/<id>/change.md` and `deltas/` names at its tip, or the archived
