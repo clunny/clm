@@ -22,10 +22,6 @@ routes = [
 # the `worker` crate's version so its wasm-bindgen matches.
 command = "npm run build && npm run build:worker"
 
-[[kv_namespaces]]
-binding = "CLM"
-id = "9fa493aaa0a54d219b2dfebb5f681b9e"
-
 # `web.live`'s Durable Object, which holds the open pages' sockets. The Free plan has only
 # SQLite-backed Durable Objects, so the class is created under `new_sqlite_classes`.
 [[durable_objects.bindings]]
