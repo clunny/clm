@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - clm-land-s-refusal-of-a-deleted-test-reads-as-if-a-test-keeping
 ---

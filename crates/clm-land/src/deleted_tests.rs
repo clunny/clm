@@ -1,10 +1,11 @@
 //! No branch loses a citing test no approved list names (`land/deleted-tests-approved`,
 //! `removal-needs-a-yes`): a land or a `--check-only` run refuses, before the lock, a head
 //! that, against its merge base with `base`, loses a citing test as
-//! `clm_coverage::deleted_tests` counts one gone (a test moved to another file, or renamed in its
-//! own file still citing all it cited, is not), unless a change's `deleted-tests.txt` in `base`'s
-//! tree names each. Whatever the branch's name: only a replayed rename, which `rename/replay`
-//! vouches for, isn't judged. It reads the files of both trees under the CLM root that can hold
+//! `clm_coverage::deleted_tests` counts one gone (a test moved to another file, kept under its
+//! name whatever it now cites, or renamed in its own file to a name no test carried at the
+//! merge base, still citing all it cited, is not), unless a change's `deleted-tests.txt` in
+//! `base`'s tree names each. Whatever the branch's name: only a replayed rename, which
+//! `rename/replay` vouches for, isn't judged. It reads the files of both trees under the CLM root that can hold
 //! a test (`check.coverage/test-holding-paths`), the rest holding none on either side, so it
 //! gives the verdict `clm coverage --deleted-tests` gives on a committed branch.
 
@@ -84,8 +85,9 @@ pub(crate) fn check(repo: &Repo, base: &str, head: &str) -> Result<(), Error> {
             (!named).then(|| {
                 format!(
                     "{file}: {RULE}: test {name}, which cited {}, is gone and no approved list \
-                     names it. Keep the test under its name, or under a name no citing test \
-                     carried, in its file, citing every requirement it cited, or leave the \
+                     names it. Keep the test under its name, citing any requirement, even \
+                     another than it cited; or rename it in its file to a name no test carried \
+                     at the merge base, citing every requirement it cited; or leave the \
                      requirement unbuilt and add a question item",
                     t.ids.join(", ")
                 )
@@ -116,7 +118,7 @@ mod tests {
 
     #[test]
     fn lists_live_and_archived() {
-        // req:land/deleted-tests-approved@90e1578b
+        // req:land/deleted-tests-approved@00650f33
         assert!(is_list("changes/c/deleted-tests.txt"));
         assert!(is_list("changes/archive/c/deleted-tests.txt"));
         assert!(!is_list("changes/c/deltas/deleted-tests.txt"));
