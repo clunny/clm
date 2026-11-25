@@ -2402,9 +2402,14 @@ tmp=$(grep -o '"tempDirName": "[^"]*"' "$cfg" | sed -e 's/^"tempDirName": "//' -
 vcfg=$(grep -o '"configFile": "[^"]*"' "$cfg" | sed -e 's/^"configFile": "//' -e 's/"$//')
 # Each run's configuration and the test files its vitest configuration names, in order.
 tests=$(grep -o "include: \[[^]]*\]" "$vcfg" | grep -o "'[^']*'" | tr -d "'")
-run=$CI_LOG.runs/$(ls "$CI_LOG.runs" 2>/dev/null | wc -l)
-mkdir -p "$run"
+# Numbered by the first free number, taken with `mkdir`, so runs at once never share one.
+mkdir -p "$CI_LOG.runs"
+n=0
+until mkdir "$CI_LOG.runs/$n" 2>/dev/null; do n=$((n + 1)); done
+run=$CI_LOG.runs/$n
 cp "$cfg" "$run/stryker.config.json"
+cp "$vcfg" "$run/vitest.config.mts"
+cp "$(dirname "$vcfg")"/*.mjs "$run/" 2>/dev/null || true
 i=0
 imports=
 for t in $tests; do
@@ -2430,7 +2435,7 @@ if grep -q clm-mutate-fixture "$cfg"; then
     # The test file that imports nothing: its mutants are `NoCoverage`, unless a switch says
     # otherwise.
     killed=0; survived=0; nocov=1; nocompile=1
-    [ ! -e "$bin/stryker-fixture-unrelated-survives" ] || { survived=1; nocov=0; }
+    [ ! -e "$bin/stryker-fixture-unrelated-survives" ] || { survived=1; }
     [ ! -e "$bin/stryker-fixture-unrelated-empty" ] || nocov=0
   elif grep -q 'fixture.ts:1-1' "$cfg" || [ -e "$bin/stryker-fixture-kills-all" ]; then
     killed=1; survived=0
@@ -4377,6 +4382,27 @@ fn the_stryker_fixture_runs_a_test_that_imports_nothing() {
     let (path, text) = &alone.tests[0];
     assert!(path.starts_with("clm-mutate-fixture/"), "{path}");
     assert!(!text.contains("import { double"), "{text}");
+    // The file it reads, by a path relative to its own, is a file of the repository.
+    let rel = text
+        .split("new URL('")
+        .nth(1)
+        .and_then(|r| r.split('\'').next())
+        .unwrap_or_else(|| panic!("{text}"));
+    let mut target = tree.work().join("web").join(path);
+    target.pop();
+    for part in Path::new(rel).components() {
+        match part {
+            std::path::Component::ParentDir => {
+                target.pop();
+            }
+            p => target.push(p),
+        }
+    }
+    assert!(
+        target.starts_with(tree.work()) && target.is_file(),
+        "{rel} reaches {}",
+        target.display()
+    );
     assert_eq!(alone.config["mutate"], notices.config["mutate"]);
     assert!(
         alone.config["mutate"]
@@ -4384,6 +4410,44 @@ fn the_stryker_fixture_runs_a_test_that_imports_nothing() {
             .is_some_and(|m| !m.is_empty()),
         "{}",
         alone.config
+    );
+}
+
+#[test]
+fn every_stryker_run_reports_coverage_though_no_test_loads_a_mutated_file() {
+    // req:ci/mutate-script@5f0ee0b6
+    // StrykerJS's vitest runner reports no coverage from a run in which no test loads a mutated
+    // file, and then counts every mutant `Survived`: each run's vitest configuration keeps the
+    // base's setup files and adds one that makes the coverage object in the initial run.
+    let tree = mutate_tree(WEB_BLOCK);
+    tree.report("stryker-killed", "1");
+    let (ok, log, _, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    let dir = tree.dir.path().join("log.runs");
+    let runs = stryker_runs(&tree);
+    assert_eq!(runs.len(), 4, "{log:?}");
+    for n in 0..runs.len() {
+        let run = dir.join(n.to_string());
+        let vitest = fs::read_to_string(run.join("vitest.config.mts")).unwrap();
+        let seed = fs::read_to_string(run.join("seed-coverage.mjs"))
+            .unwrap_or_else(|_| panic!("run {n} had no seed: {vitest}"));
+        assert!(
+            vitest.contains("base.test?.setupFiles") && vitest.contains("seed-coverage.mjs'] }"),
+            "{vitest}"
+        );
+        assert!(
+            seed.contains("inject('mode') !== 'mutant'")
+                && seed.contains("inject('globalNamespace')")
+                && seed
+                    .contains("mutantCoverage = ns.mutantCoverage || { static: {}, perTest: {} }"),
+            "{seed}"
+        );
+    }
+    assert!(
+        !tree
+            .work()
+            .join("web/node_modules/.clm-mutate/fixture/seed-coverage.mjs")
+            .exists()
     );
 }
 
@@ -4414,7 +4478,7 @@ fn a_fixture_test_that_imports_nothing_reported_other_than_no_coverage_judges_no
     // req:ci/mutate-script@5f0ee0b6
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-killed", "1");
-    // A mutant that test survives, and then no mutant at all.
+    // A mutant that test survives beside one `NoCoverage`, and then no mutant at all.
     for switch in [
         "stryker-fixture-unrelated-survives",
         "stryker-fixture-unrelated-empty",

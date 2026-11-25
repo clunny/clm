@@ -832,8 +832,9 @@ diff_ranges() {
 # configuration that names those tests, the reporter and the ranges. It sets `vitest.related`
 # false, so vitest runs those tests whether or not they import a mutated file: left true, vitest
 # keeps only the tests that import one, and a block whose tests read a file instead, as a test of
-# `web/.npmrc` does, runs none, which StrykerJS reports as an error, and its mutants are never
-# counted `NoCoverage`. It sets no
+# `web/.npmrc` does, runs none, which StrykerJS reports as an error. Its vitest configuration
+# also adds a setup file that makes the runner's coverage object, without which such a run reports
+# no coverage and StrykerJS counts every mutant `Survived` rather than `NoCoverage`. It sets no
 # `thresholds.break`, so StrykerJS's exit status never depends on a score. Returns 1 when StrykerJS
 # exits non-zero or writes no report: it judged nothing. `tsconfigFile` names a file that doesn't
 # exist: StrykerJS 10.1.1 reads a `tsconfig.json` it finds with `ts.parseConfigFileTextToJson`,
@@ -879,7 +880,7 @@ EOF
       "setupFiles: [...(Array.isArray(setup) ? setup : [setup]), '$seed'] } };"
   } >"$vcfg"
   for m in "$@"; do ranges="$ranges\"$m\","; done
-  ignores=$(stryker_ignores "$dir") || return 1
+  ignores=$(stryker_ignores "$dir") || { rm -f "$vcfg" "$seed"; return 1; }
   cat >"$scfg" <<EOF
 {
   "testRunner": "vitest",
