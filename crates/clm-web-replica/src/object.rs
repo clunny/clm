@@ -16,7 +16,7 @@ use clm_web_platform::install;
 use clm_web_platform::platform::Auth;
 
 use crate::Host;
-use clm_web_platform::{files, ledger};
+use clm_web_platform::ledger;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -659,22 +659,32 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let (Some(login), Some(token)) = (req["login"].as_str(), req["token"].as_str()) else {
             return Answer::empty(422);
         };
+        // A kind that is no write's is refused before GitHub is asked anything.
+        let Some(kind) = req["kind"]
+            .as_str()
+            .filter(|k| ["decide", "propose", "withdraw", "answer"].contains(k))
+        else {
+            return Answer::empty(422);
+        };
         let Some((owner, repo)) = self.name.split_once('/') else {
             return Answer::empty(404);
         };
-        let Some(access) = access::check_direct(p, token, owner, repo).await else {
-            return Answer::empty(404);
+        // GitHub's 403 or 404 is a token that can't read the repo; any other failure,
+        // a 401 included, is GitHub failing the check.
+        let access = match access::checked_direct(p, token, owner, repo).await {
+            Ok(Some(access)) => access,
+            Ok(None) => return Answer::empty(404),
+            Err(_) => return Answer::empty(502),
         };
         if !self.catch_up(p, &Budget::default()).await {
             self.save();
             return Answer::empty(502);
         }
-        let answer = match req["kind"].as_str() {
-            Some("decide") => self.decide(p, &access, login, req).await,
-            Some("propose") => self.propose(p, &access, login, req).await,
-            Some("withdraw") => self.withdraw(p, &access, login, req).await,
-            Some("answer") => self.answer(p, &access, login, req).await,
-            _ => Answer::empty(422),
+        let answer = match kind {
+            "decide" => self.decide(p, &access, login, req).await,
+            "propose" => self.propose(p, &access, login, req).await,
+            "withdraw" => self.withdraw(p, &access, login, req).await,
+            _ => self.answer(p, &access, login, req).await,
         };
         self.batch(now);
         self.save();
@@ -732,8 +742,8 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
-        let appended = ledger::append(p, access, &record).await.is_some();
-        if !self.applied(p, access, &record.writer, appended).await {
+        let appended = ledger::appended(p, access, &record).await;
+        if !self.applied(&record.writer, appended) {
             return Answer::empty(502);
         }
         self.recompute(p.now());
@@ -776,8 +786,8 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
-        let appended = ledger::append(p, access, &record).await.is_some();
-        if !self.applied(p, access, &record.writer, appended).await {
+        let appended = ledger::appended(p, access, &record).await;
+        if !self.applied(&record.writer, appended) {
             return Answer::empty(502);
         }
         self.recompute(p.now());
@@ -811,8 +821,8 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
-        let appended = ledger::append(p, access, &record).await.is_some();
-        if !self.applied(p, access, &record.writer, appended).await {
+        let appended = ledger::appended(p, access, &record).await;
+        if !self.applied(&record.writer, appended) {
             return Answer::empty(502);
         }
         self.recompute(p.now());
@@ -840,39 +850,26 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
-        let appended = ledger::append(p, access, &record).await.is_some();
-        if self.applied(p, access, &record.writer, appended).await {
+        let appended = ledger::appended(p, access, &record).await;
+        if self.applied(&record.writer, appended) {
             Answer::empty(200)
         } else {
             Answer::empty(502)
         }
     }
 
-    /// After an append (`appended`) of a record by `writer`: reads the ledger it made and
-    /// applies it to the replica. Answers whether the append went through.
-    async fn applied<P: Host>(
-        &mut self,
-        p: &P,
-        access: &Access,
-        writer: &str,
-        appended: bool,
-    ) -> bool {
-        if !appended {
+    /// After an append of a record by `writer`: applies the ledger text the append committed,
+    /// without reading the branch back. Answers whether the append went through.
+    fn applied(&mut self, writer: &str, appended: Option<ledger::Appended>) -> bool {
+        let Some(ledger::Appended { tip, text }) = appended else {
             return false;
-        }
+        };
         let branch = format!("clm/ledger/{writer}");
-        if let Some(tip) = ledger::tip(p, access, &branch).await {
-            let expression = format!("{tip}:records.jsonl");
-            let read =
-                files::objects_direct(p, access.auth(), &self.name, "Ledgers", &[expression]).await;
-            if let Some(text) = read.and_then(|mut t| t.pop().flatten()) {
-                self.meta.ledgers.insert(branch.clone(), tip);
-                self.replica.apply(Change::Ledger {
-                    branch,
-                    text: Some(text),
-                });
-            }
-        }
+        self.meta.ledgers.insert(branch.clone(), tip);
+        self.replica.apply(Change::Ledger {
+            branch,
+            text: Some(text),
+        });
         true
     }
 
