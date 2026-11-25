@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-replica-another-release-saved-waits-for-its-idle-alarm]
 ---
 
