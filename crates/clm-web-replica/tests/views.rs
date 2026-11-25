@@ -53,7 +53,9 @@ fn a_view_read() {
     let answer = block_on(object.view(&fake, "snapshot", false));
     assert_eq!(answer.status, 200, "{}", answer.body);
     let read = parsed(&answer.body);
-    let keys: Vec<&String> = read.as_object().unwrap().keys().collect();
+    // Sorted: the workspace build may keep JSON keys in the order written.
+    let mut keys: Vec<&String> = read.as_object().unwrap().keys().collect();
+    keys.sort();
     assert_eq!(keys, ["computed_at", "sha", "view"]);
     assert_eq!(read["sha"], "111");
     assert_eq!(read["view"]["sha"], "111", "the view is the snapshot");
