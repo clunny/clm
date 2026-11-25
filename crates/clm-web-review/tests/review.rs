@@ -410,26 +410,33 @@ fn the_page() {
 #[test]
 fn a_pull_request_onto_another_base() {
     // req:web.worker.review/pr-review@5982714a
-    // `spec/c3`'s only open pull request, #8, is onto `release`, not the default branch.
-    let mut repo = spec_pr();
-    assert_eq!(repo.default_branch, "main");
-    repo.branches.insert("spec/c3".into(), "222".into());
-    repo.pulls.push(FakePull {
-        number: 8,
-        state: "open".into(),
-        title: "Onto release".into(),
-        base_ref: "release".into(),
-        base_sha: "111".into(),
-        head_ref: "spec/c3".into(),
-        head_sha: "222".into(),
-        fork: false,
-    });
-    let fake = Fake::default();
-    fake.gh.add_repo("o/a", repo);
-    let cookie = fake.user("u", &["o/a"]);
-    let res = fake.handle(get("/api/repos/o/a/branches/spec/c3/review", &cookie));
-    assert_eq!(res.status, 200, "{res:?}");
-    assert_eq!(body_json(&res)["page"], Value::Null);
+    // `spec/c3`'s only open pull request, #8, is onto `base`; the default branch is `default`.
+    let page = |default: &str, base: &str| {
+        let mut repo = spec_pr();
+        repo.default_branch = default.into();
+        repo.branches.insert(default.into(), "111".into());
+        repo.branches.insert("spec/c3".into(), "222".into());
+        repo.pulls.push(FakePull {
+            number: 8,
+            state: "open".into(),
+            title: "Onto another base".into(),
+            base_ref: base.into(),
+            base_sha: "111".into(),
+            head_ref: "spec/c3".into(),
+            head_sha: "222".into(),
+            fork: false,
+        });
+        let fake = Fake::default();
+        fake.gh.add_repo("o/a", repo);
+        let cookie = fake.user("u", &["o/a"]);
+        let res = fake.handle(get("/api/repos/o/a/branches/spec/c3/review", &cookie));
+        assert_eq!(res.status, 200, "{res:?}");
+        body_json(&res)["page"].clone()
+    };
+    assert_eq!(page("main", "release"), Value::Null);
+    // The default branch is the repository's, not always `main`.
+    assert_eq!(page("trunk", "main"), Value::Null);
+    assert_eq!(page("trunk", "trunk")["number"], 8);
 }
 
 #[test]
