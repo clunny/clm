@@ -166,7 +166,7 @@ test.describe('phone', () => {
   });
 });
 
-// req:web/cost-views-in-the-browser@34e19461
+// req:web/cost-views-in-the-browser@3d307cc3
 test('capabilities from 900 px: a table in the report order, ⚑ only filters, and a row opens its page', async ({ page, context }) => {
   await mockApi(context);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -182,10 +182,10 @@ test('capabilities from 900 px: a table in the report order, ⚑ only filters, a
   await expect(page.locator('.sidebar .nv[data-view=capabilities]')).toHaveClass(/on/);
 });
 
-// req:web/cost-views-in-the-browser@34e19461
 test.describe('architecture list', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('its own view: listed after Capabilities in the sidebar, opening #/o/a/architecture', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/graph');
@@ -200,6 +200,7 @@ test.describe('architecture list', () => {
     await expect(page.locator('.sidebar .nv[data-view=architecture]')).toHaveClass(/on/);
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('ranked, held and flagged: a table in the report order, held 1/2 in amber, ⚑ only filters, and a row opens its page', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/architecture');
@@ -226,6 +227,7 @@ test.describe('architecture list', () => {
     await expect(page.locator('section[data-sec=entry]')).toContainText('Partly judgement.');
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('indexing: the proof reads ? / 2 and the note says coverage is still indexing', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes[ARCHITECTURE] = architecture({ indexing: true });
@@ -235,10 +237,10 @@ test.describe('architecture list', () => {
   });
 });
 
-// req:web/cost-views-in-the-browser@34e19461
 test.describe('deciding an architectural constraint', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('one request per tap: two quick taps post once, the report is asked again and the decision shows', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => {
@@ -260,6 +262,7 @@ test.describe('deciding an architectural constraint', () => {
     expect(mock.urls.filter((u) => u.startsWith(`${ARCHITECTURE}?fresh=`))).toHaveLength(1);
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('moved: a 409 says the entry changed and draws it as it is now', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(ARCH_DECIDE, 409);
@@ -275,6 +278,7 @@ test.describe('deciding an architectural constraint', () => {
     await expect(page.locator('.capage')).toContainText('CLM SHALL e, reworded.');
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('signed: the buttons are disabled and the note gives clm architecture decide', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes[ARCHITECTURE] = architecture({ signed: true });
@@ -285,10 +289,10 @@ test.describe('deciding an architectural constraint', () => {
   });
 });
 
-// req:web/cost-views-in-the-browser@34e19461
 test.describe('deciding a capability', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('decided: two quick taps post once, the report is asked again and the decision shows', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => {
@@ -316,6 +320,7 @@ test.describe('deciding a capability', () => {
   });
 
   // req:web/app-writes@d1c16934
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('a refresh begun before a decision never draws its older report over the decision', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => {
@@ -349,6 +354,7 @@ test.describe('deciding a capability', () => {
     await expect(page.locator('section[data-sec=decisions]')).toContainText('cut (value low) by clunny/web');
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('moved: a 409 says the capability changed and draws it as it is now', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(DECIDE, 409);
@@ -370,6 +376,7 @@ test.describe('deciding a capability', () => {
     ]);
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('became signed: a 422 signed shows the Worker’s command and disables the buttons', async ({ page, context }) => {
     const mock = await mockApi(context);
     const command = 'clm capabilities decide a --value high --decision keep';
@@ -380,6 +387,27 @@ test.describe('deciding a capability', () => {
     await page.locator('button.decide', { hasText: 'Keep' }).click();
     await expect(page.locator('.decide-note code')).toHaveText(command);
     await expect(page.locator('button.decide').first()).toBeDisabled();
+  });
+
+  // req:web/cost-views-in-the-browser@3d307cc3
+  test("a report that can't be loaded again after a decision: no kept copy drawn, and the page says so", async ({ page, context }) => {
+    for (const [layer, route, key, slug] of [
+      ['capabilities', CAPABILITIES, DECIDE, 'a'],
+      ['architecture', ARCHITECTURE, ARCH_DECIDE, 'e'],
+    ] as const) {
+      const mock = await mockApi(context);
+      // The report is kept for offline use when it is first drawn; once the decision is
+      // taken, the Worker answers the report with 502.
+      mock.onPost = (k) => k === key && mock.fail(route, 502);
+      await page.goto(`/app/#/o/a/${layer}/${slug}`);
+      await page.locator('button.value', { hasText: 'low' }).click();
+      await page.locator('button.decide', { hasText: 'Cut' }).click();
+      await expect(page.locator('.decide-note')).toContainText('Its report could not be loaded again');
+      expect(mock.posts.map((p) => p.key)).toEqual([key]);
+      // The kept copy would show under CLM couldn't be reached.
+      await expect(page.locator('.offline')).toHaveCount(0);
+      await context.unroute('**/api/**');
+    }
   });
 });
 
