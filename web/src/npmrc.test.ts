@@ -19,16 +19,14 @@ describe('web/.npmrc', () => {
     try {
       const user = join(dir, 'npmrc');
       writeFileSync(user, 'ignore-scripts=false\n');
-      const global = join(dir, 'global-npmrc');
-      writeFileSync(global, '');
-      // No `ignore-scripts` in the environment, in any case npm reads it.
+      // No `ignore-scripts` in the environment, in any case npm reads it. The user file outranks
+      // npm's global and built-in settings, so it alone decides wherever a project sets nothing.
       const env = Object.fromEntries(
         Object.entries(process.env).filter(
-          ([k]) => !['npm_config_ignore_scripts', 'npm_config_ignore-scripts', 'npm_config_userconfig', 'npm_config_globalconfig'].includes(k.toLowerCase()),
+          ([k]) => !['npm_config_ignore_scripts', 'npm_config_ignore-scripts', 'npm_config_userconfig'].includes(k.toLowerCase()),
         ),
       );
       env.npm_config_userconfig = user;
-      env.npm_config_globalconfig = global;
       const get = (cwd: string) =>
         execFileSync('npm', ['config', 'get', 'ignore-scripts'], { cwd, env, encoding: 'utf8', timeout: 60_000 }).trim();
       // The control: a directory with no settings of its own takes the user's `false`, so the
