@@ -10,19 +10,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use clm_ledger::Body;
 
-use crate::chain::State;
+use crate::chain::{Left, State};
 use crate::kept::MIN_NAME;
 use crate::mutate::{Cite, cites, scratch};
 use crate::{Ctx, Error};
 
-/// A requirement ID with the commits of its run of records that left it, newest first.
-type Run = (String, Vec<String>);
+/// A requirement ID with its run of records that counted it against it, newest first.
+type Run = (String, Vec<Left>);
 
 /// What one item is to name.
 enum Found {
     /// `<id>@<version>` entries a pass found unproven.
     Unproven(Vec<String>),
-    /// The requirements two or more passes in a row left.
+    /// The requirements a run of two or more passes counted against them, with their runs.
     Unjudged(Vec<Run>),
 }
 
@@ -83,10 +83,10 @@ fn try_file(ctx: &Ctx, stop: &AtomicBool) -> Result<Option<Filed>, Error> {
 }
 
 /// The items still to file: the entries each `mutated` record on the chain holds, by commit
-/// and component, and the requirements two or more newest records in a row left, by the
-/// commit of the second oldest of the run and component; each left out when a commit after
-/// the one it is named after already added an item of its kind and component named by any
-/// prefix of that commit at least 7 characters long.
+/// and component, and the requirements whose run of records counting them against them
+/// holds two or more, by the commit of the second oldest of the run and component; each
+/// left out when a commit after the one it is named after already added an item of its kind
+/// and component named by any prefix of that commit at least 7 characters long.
 fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
     let component = |id: &str| id.split('/').next().unwrap_or_default().to_string();
     let mut unproven: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
@@ -114,7 +114,7 @@ fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
     let mut unjudged: BTreeMap<(String, String), Vec<Run>> = BTreeMap::new();
     for (id, run) in state.left_runs() {
         if run.len() >= 2 {
-            let at = run[run.len() - 2].clone();
+            let at = run[run.len() - 2].commit.clone();
             unjudged
                 .entry((at, component(&id)))
                 .or_default()
@@ -311,29 +311,49 @@ fn unproven_text(
     Ok(out)
 }
 
-/// The `unjudged` item for one component: each requirement and the commits of the passes
-/// that left it, oldest first.
+/// The `unjudged` item for one component: each requirement and the records of its run,
+/// oldest first, each with its commit and how that pass left it.
 fn unjudged_text(ctx: &Ctx, component: &str, runs: &[Run]) -> Result<String, Error> {
     let mut out = format!(
         "---\ntitle: The mutation pass can't judge requirements of {component}\nkind: bug\n\
          components: [{component}]\n---\n\n\
          Each of the mutation passes after the lands named left these requirements of \
-         `{component}` unjudged, having stopped, reached its limit or failed before its \
-         verdict:\n\n"
+         `{component}` without a verdict. A pass that was stopped, or that left one only \
+         because another requirement's block failed, isn't listed:\n\n"
     );
     for (id, run) in runs {
-        let commits = run
-            .iter()
-            .rev()
-            .map(|commit| Ok(format!("`{}`", ctx.short(commit)?)))
-            .collect::<Result<Vec<_>, Error>>()?;
-        out.push_str(&format!("- `{id}`: {}\n", commits.join(", ")));
+        out.push_str(&format!("- `{id}`:\n"));
+        for left in run.iter().rev() {
+            out.push_str(&format!(
+                "  - `{}`: {}\n",
+                ctx.short(&left.commit)?,
+                how(left)
+            ));
+        }
     }
     out.push_str(
-        "\nEach pass after the first tried them first, so one that left them was stopped, reached \
-         `mutate_minutes`, or met a mutation command that fails on their code: `clm verify`'s \
-         stderr for those passes says which. Mend what keeps the pass from its verdict, then \
-         delete this item.\n",
+        "\nMend what keeps the pass from its verdict (the failing tool, or `mutate_minutes`), \
+         then delete this item.\n",
     );
     Ok(out)
+}
+
+/// How one pass left a requirement (`files-unproven`).
+fn how(left: &Left) -> String {
+    if let Some(why) = &left.why {
+        return match why.as_str() {
+            "" => "its block's tool failed".to_string(),
+            why => format!("its block's tool failed: {why}"),
+        };
+    }
+    let ended = left.ended.as_deref().unwrap_or_default();
+    if let Some(m) = ended.strip_prefix("limit ") {
+        format!("the pass reached its limit of {m} minutes")
+    } else if let Some(n) = ended.strip_prefix("status ") {
+        format!("the command failed with status {n}")
+    } else if let Some(n) = ended.strip_prefix("signal ") {
+        format!("the command was ended by signal {n}")
+    } else {
+        "no reason recorded".to_string()
+    }
 }

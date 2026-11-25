@@ -134,7 +134,7 @@ fn said(out: &Outcome, start: &str) -> Option<String> {
 
 #[test]
 fn filed_and_read_as_not_built() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.due();
@@ -187,7 +187,7 @@ fn filed_and_read_as_not_built() {
 
 #[test]
 fn already_filed() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", None);
     p.f.due();
     let filed = p.head();
@@ -198,7 +198,7 @@ fn already_filed() {
 
 #[test]
 fn reworded_since() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", Some("11111111"));
     let before = p.head();
     let out = p.f.due();
@@ -209,7 +209,7 @@ fn reworded_since() {
 
 #[test]
 fn resolved_by_a_build() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", None);
     p.f.due();
     p.sync();
@@ -291,13 +291,13 @@ fn files_after_deleted_items(name: impl Fn(&str, &str) -> String) -> bool {
 
 #[test]
 fn resolved_under_a_shorter_name() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     assert!(!files_after_deleted_items(|_, r| r[..7].to_string()));
 }
 
 #[test]
 fn an_item_of_another_name_resolves_nothing() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     // A prefix of `R` shorter than 7 characters names no item of `R`.
     assert!(files_after_deleted_items(|_, r| r[..6].to_string()));
     // Nor does a prefix of another commit.
@@ -306,7 +306,7 @@ fn an_item_of_another_name_resolves_nothing() {
 
 #[test]
 fn the_land_fails() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", None);
     let hook = p.f.path("origin.git/hooks/pre-receive");
     write_exec(
@@ -332,7 +332,7 @@ fn the_land_fails() {
 
 #[test]
 fn pipeline_mode_files_nothing() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("pipeline", None);
     let before = p.head();
     let out = p.f.due();
@@ -342,7 +342,7 @@ fn pipeline_mode_files_nothing() {
 
 #[test]
 fn a_commit_verification_files_nothing() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.run(&clm_verify::Request::Commit(p.found.clone()));
@@ -352,7 +352,7 @@ fn a_commit_verification_files_nothing() {
 
 #[test]
 fn a_dry_run_files_nothing() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", None);
     let before = p.head();
     let out = p.f.dry(false);
@@ -390,7 +390,7 @@ fn a_dry_run_files_nothing() {
 
 #[test]
 fn a_verification_that_ends_in_an_error_files_nothing() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", None);
     // A trigger holds, and the verify tree's lock can't be opened (a directory stands in its
     // place), so the verification ends in a failure once its settings are loaded; a filing
@@ -423,7 +423,7 @@ fn a_verification_that_ends_in_an_error_files_nothing() {
 
 #[test]
 fn stopped_before_it_files() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", None);
     let before = p.head();
     let out = due_stopped(&p, true);
@@ -448,7 +448,7 @@ fn stopped_before_it_files() {
 
 #[test]
 fn a_stop_with_nothing_current_to_file_says_nothing() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let p = filing("local", Some("11111111"));
     let before = p.head();
     let out = due_stopped(&p, true);
@@ -459,7 +459,7 @@ fn a_stop_with_nothing_current_to_file_says_nothing() {
 
 #[test]
 fn a_filing_command_ended_by_a_signal() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     // The land's check writes its process group and sends `SIGINT` to its own shell, as a
     // Ctrl-C at a terminal reaches every process of `clm verify`'s group.
     let p = filing_with(
@@ -531,7 +531,7 @@ fn left_twice(q_left: bool) -> (Fixture, String, String) {
 
 #[test]
 fn left_by_two_passes_in_a_row() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let (f, q, r) = left_twice(true);
     let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
     let short = |sha: &str| f.git(&f.work(), &["rev-parse", "--short", sha]);
@@ -617,7 +617,7 @@ fn files_after(records: &[(usize, &str, bool)]) -> bool {
 
 #[test]
 fn only_an_unbroken_run_of_commits_files() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     // R's pass judged it, so the run is S's alone.
     assert!(!files_after(&[
         (0, "a/thing", true),
@@ -644,7 +644,7 @@ fn only_an_unbroken_run_of_commits_files() {
 
 #[test]
 fn a_stop_keeps_an_unjudged_item_from_filing() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let (f, _, r) = left_twice(true);
     let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
     let before = origin(&["rev-parse", "main"]);
@@ -677,7 +677,7 @@ fn a_stop_keeps_an_unjudged_item_from_filing() {
 
 #[test]
 fn left_by_one_pass() {
-    // req:verify/files-unproven@d8c36be4
+    // req:verify/files-unproven@c354a495
     let (f, _, _) = left_twice(false);
     let origin = |args: &[&str]| f.git(&f.path("origin.git"), args);
     let before = origin(&["rev-parse", "main"]);
@@ -687,4 +687,273 @@ fn left_by_one_pass() {
     assert_eq!(said(&out, "unproven:"), None, "{out:?}");
     let backlog = origin(&["ls-tree", "--name-only", "main", "backlog/"]);
     assert_eq!(backlog, "", "{backlog}");
+}
+
+/// `specs/b/SPEC.md` with one requirement, `b/y`.
+const B_WITH_Y: &str = "---\ntitle: B\nstatus: active\nowners: []\npaths: [\"crates/b/**\"]\n---\n\n\
+    ## Contract\nc\n\n## Design\nd\n\n## Requirements\n\n### Requirement: y\nIt SHALL do y.\n\n\
+    #### Scenario: doing\n- GIVEN a\n- WHEN b\n- THEN c\n";
+
+/// One `mutated` record: the land it names, its `left`, its `failed` and its `ended`.
+type Pass<'a> = (
+    usize,
+    &'a [&'a str],
+    &'a [(&'a str, &'a str)],
+    Option<&'a str>,
+);
+
+/// A clone whose `main` holds `b/y` beside `a/thing` and three lands `Q`, `R` and `S`,
+/// verified green at `S`, so nothing is due.
+struct Passes {
+    f: Fixture,
+    lands: [String; 3],
+}
+
+impl Passes {
+    fn new() -> Passes {
+        let f = Fixture::new(None);
+        let toml = format!(
+            "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nmutate = \"true\"\n",
+            f.path("bin/check").display()
+        );
+        let lands = [
+            f.land(&[("clm.toml", &toml), ("specs/b/SPEC.md", B_WITH_Y)], "Q"),
+            f.land(&[("crates/a/src/r.rs", "fn r() {}\n")], "R"),
+            f.land(&[("crates/a/src/s.rs", "fn s() {}\n")], "S"),
+        ];
+        f.verified(&lands[2], true);
+        Passes { f, lands }
+    }
+
+    /// Appends a `mutated` record for each pass, in order.
+    fn record(&self, passes: &[Pass]) {
+        for (land, left, failed, ended) in passes {
+            let mut body = Body::mutated(self.lands[*land].clone(), None, vec![], vec![], vec![])
+                .with_left(left.iter().map(|s| s.to_string()).collect())
+                .with_failed(
+                    failed
+                        .iter()
+                        .map(|(id, why)| (id.to_string(), why.to_string()))
+                        .collect(),
+                );
+            if let Some(ended) = ended {
+                body = body.with_ended(ended.to_string());
+            }
+            clm_ledger::append(&self.f.work(), body, &self.f.env()).unwrap();
+        }
+    }
+
+    fn short(&self, land: usize) -> String {
+        self.f
+            .git(&self.f.work(), &["rev-parse", "--short", &self.lands[land]])
+    }
+
+    fn main(&self) -> String {
+        self.f
+            .git(&self.f.path("origin.git"), &["rev-parse", "main"])
+    }
+
+    /// The `unjudged` items `origin/main` holds, by path, with their text.
+    fn unjudged(&self) -> Vec<(String, String)> {
+        let origin = self.f.path("origin.git");
+        let listed = self
+            .f
+            .git(&origin, &["ls-tree", "--name-only", "main", "backlog/"]);
+        listed
+            .lines()
+            .filter(|p| p.starts_with("backlog/unjudged-"))
+            .map(|p| {
+                let text = self.f.git(&origin, &["show", &format!("main:{p}")]);
+                (p.to_string(), text)
+            })
+            .collect()
+    }
+}
+
+const STRYKER: &str = "StrykerJS ran no test";
+
+#[test]
+fn a_block_that_fails_starves_the_rest() {
+    // req:verify/files-unproven@c354a495
+    let p = Passes::new();
+    let both: &[&str] = &["a/thing", "b/y"];
+    let failed: &[(&str, &str)] = &[("a/thing", STRYKER)];
+    p.record(&[
+        (0, both, failed, Some("status 1")),
+        (1, both, failed, Some("status 1")),
+    ]);
+    let out = p.f.due();
+    assert_eq!(out.code, 0);
+    assert_eq!(
+        said(&out, "unjudged:").as_deref(),
+        Some("unjudged: filed 1 items for 1 requirements"),
+        "{out:?}"
+    );
+    let items = p.unjudged();
+    assert_eq!(items.len(), 1, "{items:?}");
+    let (path, text) = &items[0];
+    assert_eq!(path, &format!("backlog/unjudged-a-{}.md", p.short(1)));
+    for needle in [
+        "`a/thing`",
+        &p.short(0),
+        &p.short(1),
+        "its block's tool failed: StrykerJS ran no test",
+    ] {
+        assert!(text.contains(needle), "{needle}: {text}");
+    }
+    assert!(!text.contains("b/y"), "{text}");
+}
+
+#[test]
+fn a_limit_reached_with_a_failed_block() {
+    // req:verify/files-unproven@c354a495
+    let p = Passes::new();
+    let both: &[&str] = &["a/thing", "b/y"];
+    let failed: &[(&str, &str)] = &[("a/thing", STRYKER)];
+    p.record(&[
+        (0, both, failed, Some("limit 60")),
+        (1, both, failed, Some("limit 60")),
+    ]);
+    let out = p.f.due();
+    assert_eq!(
+        said(&out, "unjudged:").as_deref(),
+        Some("unjudged: filed 2 items for 2 requirements"),
+        "{out:?}"
+    );
+    let items = p.unjudged();
+    let paths: Vec<&str> = items.iter().map(|(p, _)| p.as_str()).collect();
+    let a = format!("backlog/unjudged-a-{}.md", p.short(1));
+    let b = format!("backlog/unjudged-b-{}.md", p.short(1));
+    assert_eq!(paths, vec![a.as_str(), b.as_str()]);
+    let (_, a_text) = &items[0];
+    assert!(a_text.contains("`a/thing`"), "{a_text}");
+    assert!(
+        a_text.contains("its block's tool failed: StrykerJS ran no test"),
+        "{a_text}"
+    );
+    assert!(!a_text.contains("reached its limit"), "{a_text}");
+    let (_, b_text) = &items[1];
+    assert!(b_text.contains("`b/y`"), "{b_text}");
+    assert!(
+        b_text.contains("the pass reached its limit of 60 minutes"),
+        "{b_text}"
+    );
+    assert!(!b_text.contains("tool failed"), "{b_text}");
+}
+
+#[test]
+fn a_limit_reached_twice() {
+    // req:verify/files-unproven@c354a495
+    let p = Passes::new();
+    let a: &[&str] = &["a/thing"];
+    p.record(&[(0, a, &[], Some("limit 60")), (1, a, &[], Some("limit 60"))]);
+    let out = p.f.due();
+    assert!(said(&out, "unjudged: filed 1 items").is_some(), "{out:?}");
+    let items = p.unjudged();
+    assert_eq!(items.len(), 1, "{items:?}");
+    let (path, text) = &items[0];
+    assert_eq!(path, &format!("backlog/unjudged-a-{}.md", p.short(1)));
+    assert!(text.contains("`a/thing`"), "{text}");
+    assert!(
+        text.contains("the pass reached its limit of 60 minutes"),
+        "{text}"
+    );
+}
+
+#[test]
+fn stopped_twice() {
+    // req:verify/files-unproven@c354a495
+    let p = Passes::new();
+    let a: &[&str] = &["a/thing"];
+    p.record(&[(0, a, &[], Some("stopped")), (1, a, &[], Some("stopped"))]);
+    let before = p.main();
+    let out = p.f.due();
+    assert_eq!(said(&out, "unjudged:"), None, "{out:?}");
+    assert_eq!(said(&out, "unproven:"), None, "{out:?}");
+    assert_eq!(p.main(), before);
+    // A later pass that failed with nothing under `failed` makes a run of one: the stops
+    // neither add to it nor end it.
+    p.record(&[(2, a, &[], Some("status 1"))]);
+    let out = p.f.due();
+    assert_eq!(said(&out, "unjudged:"), None, "{out:?}");
+    assert_eq!(said(&out, "unproven:"), None, "{out:?}");
+    assert_eq!(p.main(), before);
+    assert_eq!(p.unjudged(), vec![]);
+}
+
+#[test]
+fn a_stop_between_two_failures() {
+    // req:verify/files-unproven@c354a495
+    let p = Passes::new();
+    let a: &[&str] = &["a/thing"];
+    p.record(&[
+        (0, a, &[], Some("status 1")),
+        (1, a, &[], Some("stopped")),
+        (2, a, &[], Some("status 1")),
+    ]);
+    let out = p.f.due();
+    assert!(said(&out, "unjudged: filed 1 items").is_some(), "{out:?}");
+    let items = p.unjudged();
+    assert_eq!(items.len(), 1, "{items:?}");
+    let (path, text) = &items[0];
+    assert_eq!(path, &format!("backlog/unjudged-a-{}.md", p.short(2)));
+    assert!(
+        text.contains(&p.short(0)) && text.contains(&p.short(2)),
+        "{text}"
+    );
+    assert!(!text.contains(&p.short(1)), "{text}");
+    assert!(text.contains("the command failed with status 1"), "{text}");
+    // A pass that left it only because another requirement's block failed neither adds to
+    // the run nor ends it either.
+    let p = Passes::new();
+    let both: &[&str] = &["a/thing", "b/y"];
+    p.record(&[
+        (0, a, &[], Some("status 1")),
+        (1, both, &[("b/y", STRYKER)], Some("status 1")),
+        (2, a, &[], Some("status 1")),
+    ]);
+    let out = p.f.due();
+    assert!(said(&out, "unjudged: filed 1 items").is_some(), "{out:?}");
+    let items = p.unjudged();
+    let a_item: Vec<_> = items
+        .iter()
+        .filter(|(path, _)| path.starts_with("backlog/unjudged-a-"))
+        .collect();
+    assert_eq!(a_item.len(), 1, "{items:?}");
+    let (path, text) = a_item[0];
+    assert_eq!(path, &format!("backlog/unjudged-a-{}.md", p.short(2)));
+    assert!(
+        text.contains(&p.short(0)) && !text.contains(&p.short(1)),
+        "{text}"
+    );
+}
+
+#[test]
+fn each_pass_says_how_it_left_the_requirement() {
+    // req:verify/files-unproven@c354a495
+    let p = Passes::new();
+    let both: &[&str] = &["a/thing", "b/y"];
+    // Q stopped with `b/y`'s block failed and no why: it passes over `a/thing` and counts
+    // against `b/y`. R's pass has no `ended`; S's was ended by a signal.
+    p.record(&[
+        (0, both, &[("b/y", "")], Some("stopped")),
+        (1, both, &[], None),
+        (2, both, &[], Some("signal 9")),
+    ]);
+    let out = p.f.due();
+    assert!(said(&out, "unjudged: filed 2 items").is_some(), "{out:?}");
+    let items = p.unjudged();
+    assert_eq!(items.len(), 2, "{items:?}");
+    let (a_path, a_text) = &items[0];
+    assert_eq!(a_path, &format!("backlog/unjudged-a-{}.md", p.short(2)));
+    assert!(!a_text.contains(&p.short(0)), "{a_text}");
+    let (b_path, b_text) = &items[1];
+    assert_eq!(b_path, &format!("backlog/unjudged-b-{}.md", p.short(1)));
+    for needle in [
+        &format!("`{}`: its block's tool failed\n", p.short(0)),
+        &format!("`{}`: no reason recorded\n", p.short(1)),
+        &format!("`{}`: the command was ended by signal 9\n", p.short(2)),
+    ] {
+        assert!(b_text.contains(needle.as_str()), "{needle}: {b_text}");
+    }
 }
