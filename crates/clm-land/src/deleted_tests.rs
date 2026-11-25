@@ -2,10 +2,10 @@
 //! `removal-needs-a-yes`): a land or a `--check-only` run refuses, before the lock, a head
 //! that, against its merge base with `base`, loses a citing test as
 //! `clm_coverage::deleted_tests` counts one gone (a test moved to another file, kept under its
-//! name whatever it now cites, or renamed in its own file still citing all it cited, is not),
-//! unless a change's `deleted-tests.txt` in `base`'s
-//! tree names each. Whatever the branch's name: only a replayed rename, which `rename/replay`
-//! vouches for, isn't judged. It reads the files of both trees under the CLM root that can hold
+//! name whatever it now cites, or renamed in its own file to a name no test carried at the
+//! merge base, still citing all it cited, is not), unless a change's `deleted-tests.txt` in
+//! `base`'s tree names each. Whatever the branch's name: only a replayed rename, which
+//! `rename/replay` vouches for, isn't judged. It reads the files of both trees under the CLM root that can hold
 //! a test (`check.coverage/test-holding-paths`), the rest holding none on either side, so it
 //! gives the verdict `clm coverage --deleted-tests` gives on a committed branch.
 

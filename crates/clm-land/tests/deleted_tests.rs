@@ -1,4 +1,4 @@
-//! No branch loses no citing test no approved list names (land/deleted-tests-approved).
+//! No branch loses a citing test no approved list names (land/deleted-tests-approved).
 
 mod common;
 
