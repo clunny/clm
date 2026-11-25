@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves:
   - land-s-deleted-test-refusal-advises-a-rename-the-count-may-still
 ---
