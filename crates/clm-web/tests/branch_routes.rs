@@ -45,6 +45,7 @@ fn setup() -> (Fake, String) {
 
 #[test]
 fn approve_needs_same_origin() {
+    // req:web.worker/api-guard@b1c7f110
     let (fake, cookie) = setup();
     let url = "/api/repos/o/a/branches/spec/x/approve";
     let mut req = post(url, &cookie, b"");
