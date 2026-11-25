@@ -830,6 +830,7 @@ name = "clm-web-replica"
 version = "0.26.0"
 dependencies = [
  "base64",
+ "clm-ledger",
  "clm-replica",
  "clm-web-live",
  "clm-web-platform",

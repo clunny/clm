@@ -84,7 +84,7 @@ fn recomputed_at_eleven(mem: &Mem) -> (Option<u64>, Value) {
 
 #[test]
 fn a_commit_made_two_hours_east() {
-    // req:web.worker.replica/times-as-instants@5331269f
+    // req:web.worker.replica/times-as-instants@5944fea6
     // A push creating `impl/a`, whose head commit was made at 12:00:00.5 two hours east.
     let fake = fake_with("111", repo_files(&[]));
     let (mut object, mem, slot) = built(&fake);
@@ -142,4 +142,109 @@ fn a_commit_made_two_hours_east() {
     }
     assert!(resynced, "the resync applied `impl/b`");
     assert!(east.1.get() > 0, "the refs listing gave the offset");
+}
+
+/// Whether the implementation view lists a claim on `node`.
+fn claimed(view: &Value, node: &str) -> bool {
+    view["view"]["flight"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|n| n["node"] == node && n["state"] == "claimed")
+}
+
+#[test]
+fn a_time_github_gives_that_cant_be_read() {
+    // req:web.worker.replica/times-as-instants@5944fea6
+    // A built replica holding `impl/b`, read a minute ago.
+    let fake = fake_with("111", repo_files(&[]));
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        repo.claims.push(("b".into(), "cb".into(), fake.now.get()));
+        repo.commits
+            .insert("cb".into(), repo_files(&[("y.rs", "fn y() {}")]));
+        repo.commits
+            .insert("c1".into(), repo_files(&[("x.rs", "fn x() {}")]));
+        // GitHub lists `impl/a` too, once it is pushed below.
+        repo.claims.push(("a".into(), "c1".into(), fake.now.get()));
+    }
+    let (mut object, _mem, slot) = built(&fake);
+    fake.now.set(fake.now.get() + 60);
+    assert!(claimed(&view(&fake, &mut object, "implementation"), "b"));
+
+    // A push creating `impl/a` whose head commit's time is `yesterday`, applied at `ten`.
+    let ten = fake.now.get();
+    let mut body = push("impl/a", "0", "c1");
+    body["created"] = json!(true);
+    body["head_commit"] = json!({"timestamp": "yesterday"});
+    block_on(object.event(&fake, &event("push", "d1", body)));
+    fake.now.set(slot.0.get().unwrap());
+    block_on(object.on_alarm(&fake));
+    let seen = view(&fake, &mut object, "implementation");
+    let claim: Vec<&Value> = seen["view"]["activity"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["kind"] == "claim" && a["ref"] == "a")
+        .collect();
+    assert_eq!(claim.len(), 1, "{seen}");
+    assert_eq!(claim[0]["at"], ten, "recorded at the time it was applied");
+
+    // A resync whose refs listing gives `impl/b` a `committedDate` of `soon`: still held.
+    let listed = std::cell::Cell::new(0);
+    let over = Over::new(&fake);
+    *over.github.borrow_mut() = Box::new(|req| {
+        let body = req.body.as_deref()?;
+        if !(body.contains("query Refs") && body.contains("refs/heads/impl/")) {
+            return None;
+        }
+        listed.set(listed.get() + 1);
+        let nodes = json!([
+            {"name": "a", "target": {"oid": "c1", "committedDate": iso(ten)}},
+            {"name": "b", "target": {"oid": "cb", "committedDate": "soon"}},
+        ]);
+        let refs = json!({"nodes": nodes, "pageInfo": {"hasNextPage": false, "endCursor": "2"}});
+        Some(GhResponse {
+            status: 200,
+            body: json!({"data": {"repository": {"refs": refs}}}).to_string(),
+        })
+    });
+    for _ in 0..20 {
+        let Some(at) = slot.0.get() else { break };
+        fake.now.set(at);
+        // The pages stay open while the test reads.
+        block_on(object.view(&over, "implementation", false));
+        block_on(object.on_alarm(&over));
+        if listed.get() > 0 {
+            break;
+        }
+    }
+    assert!(listed.get() > 0, "a resync listed the refs");
+    // The views recompute after the resync's change, if any.
+    fake.now.set(fake.now.get() + 1);
+    block_on(object.view(&over, "implementation", true));
+    let seen = view(&fake, &mut object, "implementation");
+    assert!(claimed(&seen, "b"), "`impl/b` is still held: {seen}");
+
+    // An object that holds nothing builds over an events listing holding a push whose
+    // `created_at` is `soon`: the feed holds nothing for it.
+    let fake = fake_with("111", repo_files(&[]));
+    fake.gh.repos.borrow_mut().get_mut("o/a").unwrap().events = json!([
+        {"type": "PushEvent", "created_at": "soon", "actor": {"login": "alice"},
+            "payload": {"ref": "refs/heads/impl/q"}},
+        {"type": "PushEvent", "created_at": iso(fake.now.get() - 60), "actor": {"login": "bob"},
+            "payload": {"ref": "refs/heads/impl/r"}},
+    ]);
+    let (mut object, _mem, _slot) = built(&fake);
+    let seen = view(&fake, &mut object, "implementation");
+    let activity = seen["view"]["activity"].as_array().unwrap();
+    assert!(
+        activity.iter().any(|a| a["ref"] == "impl/r"),
+        "the readable push is in the feed: {activity:?}"
+    );
+    assert!(
+        !activity.iter().any(|a| a["ref"] == "impl/q"),
+        "nothing for the push whose time can't be read: {activity:?}"
+    );
 }
