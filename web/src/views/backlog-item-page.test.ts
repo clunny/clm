@@ -17,8 +17,8 @@ const answering: Answering = {
   onAnswer: async () => null,
 };
 
-// req:web.views/backlog-item-page@c5058fba
 describe('a backlog item page', () => {
+  // req:web.views/backlog-item-page@c5058fba
   it('an item in full: title, kind, priority, components, origin, blocks, the answer by its person, buttons, and the body as Markdown', () => {
     const page = renderBacklogItem(q(), 'q', null, '#/o/a/backlog', answering);
     expect(page.querySelector('h1')!.textContent).toBe('Ship it?');
@@ -33,11 +33,13 @@ describe('a backlog item page', () => {
     expect(order.indexOf('md')).toBeGreaterThan(order.indexOf('answers'));
   });
 
+  // req:web.views/backlog-item-page@c5058fba
   it('shows what holds the item', () => {
     const taken: Taken = { changes: [{ id: 'x', state: 'proposed', items: ['q'], nodes: [] }], claims: [] };
     expect(renderBacklogItem(q(), 'q', taken, '#/o/a/backlog').querySelector('.taken')!.textContent).toBe('proposed in x');
   });
 
+  // req:web.views/backlog-item-page@c5058fba
   it('sanitises the body', () => {
     const snap = q();
     snap.backlog[0].body = 'hi <img src=x onerror=alert(1)>';
@@ -45,6 +47,7 @@ describe('a backlog item page', () => {
     expect(page.innerHTML).not.toContain('onerror');
   });
 
+  // req:web.views/backlog-item-page@c5058fba
   it('an item with no priority or answers shows none', () => {
     const snap = snapshot();
     const page = renderBacklogItem(snap, 'crash', null, '#/o/a/backlog');
@@ -54,6 +57,7 @@ describe('a backlog item page', () => {
     expect(page.querySelector('.answers')).toBeNull();
   });
 
+  // req:web.views/backlog-item-page@c5058fba
   it('gone: says the item is not in the backlog and links to the Backlog', () => {
     const page = renderBacklogItem(snapshot(), 'gone', null, '#/o/a/backlog', answering);
     expect(page.textContent).toContain("isn't in the backlog");

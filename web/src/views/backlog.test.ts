@@ -151,7 +151,7 @@ describe('proposals', () => {
   const proposal = (over: Partial<Proposal> = {}): Proposal => ({ id: 'p1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', slug: 'export-csv', title: 'Export CSV', body: 'Let me export.', nodes: ['a'], mine: true, ...over });
   const proposing = (over: Partial<Proposing> = {}): Proposing => ({ proposals: [], offline: false, onPropose: vi.fn(() => Promise.resolve(null)), onWithdraw: vi.fn(() => Promise.resolve(null)), ...over });
   const openForm = (view: HTMLElement) => {
-    // A checkbox fires change only when it's in the document.
+    // In the document, as the page is.
     document.body.replaceChildren(view);
     view.querySelector<HTMLButtonElement>('button.propose')!.click();
     return view.querySelector<HTMLElement>('.fbform.proposal')!;
@@ -166,15 +166,17 @@ describe('proposals', () => {
   };
   beforeEach(() => drafts.clear());
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it("proposed: one post of the title and intent for two quick submits, then the form closes", async () => {
     let done: (v: string | null) => void = () => undefined;
     const onPropose = vi.fn(() => new Promise<string | null>((go) => (done = go)));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose }));
     const form = openForm(view);
-    // The draft that takes the item up decides its components: the form has no picker.
-    expect(form.querySelector('.picker, input[type=checkbox]')).toBeNull();
-    fill(form, 'Export CSV', 'Let me export.');
+    // The draft that takes the item up decides its components: the form has no picker, only
+    // the title and the intent.
+    expect([...form.querySelectorAll('input, select, textarea')].map((f) => f.getAttribute('aria-label'))).toEqual(['Title', 'Intent']);
+    // What is sent is trimmed.
+    fill(form, '  Export CSV ', '\n Let me export.  ');
     form.querySelector<HTMLButtonElement>('button.send')!.click();
     form.querySelector<HTMLButtonElement>('button.send')!.click();
     expect(onPropose).toHaveBeenCalledTimes(1);
@@ -182,9 +184,16 @@ describe('proposals', () => {
     done(null);
     await settle();
     expect(view.querySelector('.fbform.proposal')).toBeNull();
+    // The view drawn with the implementation state that lists it.
+    const after = renderBacklog(snapshot(), null, null, () => {}, proposing({ proposals: [proposal()] }));
+    expect(after.querySelector('.fbform.proposal')).toBeNull();
+    const listed = after.querySelector<HTMLElement>('.proposed .prop[data-id=p1]')!;
+    expect(listed.textContent).toContain('Export CSV');
+    expect(listed.textContent).toContain('alice');
+    expect(listed.textContent).toContain('next build files it');
   });
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it('Proposed lists each proposal with its title, proposer, time and the note, between Waiting on you and the columns', () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ proposals: [proposal()] }));
     const row = view.querySelector<HTMLElement>('.proposed')!;
@@ -198,7 +207,7 @@ describe('proposals', () => {
     expect(order.slice(0, 3)).toEqual(['waiting', 'proposed', 'col']);
   });
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it('title taken: a refusal keeps the form open with its reason', async () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose: () => Promise.resolve('That title is taken: choose another.') }));
     const form = openForm(view);
@@ -207,9 +216,19 @@ describe('proposals', () => {
     await settle();
     expect(view.querySelector('.fbform.proposal .err')?.textContent).toBe('That title is taken: choose another.');
     expect(view.querySelector<HTMLInputElement>('.fbform.proposal input[name=title]')?.value).toBe('Export CSV');
+    // A call that fails says the proposal wasn't sent, and keeps the form and its text.
+    drafts.clear();
+    const failed = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose: () => Promise.reject(new Error('down')) }));
+    const again = openForm(failed);
+    fill(again, 'Export CSV', 'Let me export.');
+    again.querySelector<HTMLButtonElement>('button.send')!.click();
+    await settle();
+    expect(failed.querySelector('.fbform.proposal .err')?.textContent).toBe('Not sent: offline.');
+    expect(failed.querySelector<HTMLInputElement>('.fbform.proposal input[name=title]')?.value).toBe('Export CSV');
+    expect(failed.querySelector<HTMLTextAreaElement>('.fbform.proposal textarea')?.value).toBe('Let me export.');
   });
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it('sends nothing without a title', async () => {
     const onPropose = vi.fn(() => Promise.resolve(null));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose }));
@@ -218,10 +237,10 @@ describe('proposals', () => {
     form.querySelector<HTMLButtonElement>('button.send')!.click();
     await settle();
     expect(onPropose).not.toHaveBeenCalled();
-    expect(form.querySelector('.err')?.textContent).toContain('title');
+    expect(form.querySelector('.err')?.textContent).toBe('Give it a title first.');
   });
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it('what was typed survives a redraw', () => {
     fill(openForm(renderBacklog(snapshot(), null, null, () => {}, proposing())), 'Half', 'a thought');
     const form = renderBacklog(snapshot(), null, null, () => {}, proposing()).querySelector<HTMLElement>('.fbform.proposal')!;
@@ -229,7 +248,7 @@ describe('proposals', () => {
     expect(form.querySelector('textarea')?.value).toBe('a thought');
   });
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it('withdraw: only mine carries Withdraw, and a tap sends one withdrawal', () => {
     const onWithdraw = vi.fn(() => new Promise<string | null>(() => undefined));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onWithdraw, proposals: [proposal(), proposal({ id: 'p2', writer: 'bob/web', mine: false, title: 'Other' })] }));
@@ -241,24 +260,46 @@ describe('proposals', () => {
     expect(onWithdraw).toHaveBeenCalledWith('p1');
   });
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it('a refused withdrawal says so under the proposal and can be tapped again', async () => {
-    const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onWithdraw: () => Promise.resolve('Not withdrawn (404).'), proposals: [proposal()] }));
+    const onWithdraw = vi.fn(() => Promise.resolve('Not withdrawn (500).'));
+    const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onWithdraw, proposals: [proposal()] }));
     const w = view.querySelector<HTMLButtonElement>('.prop[data-id=p1] button.withdraw')!;
     w.click();
     await settle();
-    expect(view.querySelector('.prop[data-id=p1] .err')?.textContent).toBe('Not withdrawn (404).');
-    expect(w.disabled).toBe(false);
+    expect(view.querySelector('.prop[data-id=p1] .err')?.textContent).toBe('Not withdrawn (500).');
+    w.click();
+    await settle();
+    expect(onWithdraw.mock.calls).toEqual([['p1'], ['p1']]);
+    const failed = renderBacklog(snapshot(), null, null, () => {}, proposing({ onWithdraw: () => Promise.reject(new Error('down')), proposals: [proposal()] }));
+    const fw = failed.querySelector<HTMLButtonElement>('.prop[data-id=p1] button.withdraw')!;
+    fw.click();
+    await settle();
+    expect(failed.querySelector('.prop[data-id=p1] .err')?.textContent).toBe('Not withdrawn: offline.');
+    expect(fw.disabled).toBe(false);
   });
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
+  it('draft kept: a redraw keeps the open form and its title, apart for each repository, until it is cancelled', () => {
+    const of = (repo: string) => snapshot({ repo });
+    fill(openForm(renderBacklog(of('o/a'), null, null, () => {}, proposing())), 'Export', '');
+    const redrawn = renderBacklog(of('o/a'), null, null, () => {}, proposing());
+    expect(redrawn.querySelector<HTMLInputElement>('.fbform.proposal input[name=title]')?.value).toBe('Export');
+    const other = renderBacklog(of('o/b'), null, null, () => {}, proposing());
+    expect(other.querySelector('.fbform.proposal')).toBeNull();
+    expect(other.querySelector('button.propose')).not.toBeNull();
+    redrawn.querySelector<HTMLButtonElement>('.fbform.proposal button.cancel')!.click();
+    expect(renderBacklog(of('o/a'), null, null, () => {}, proposing()).querySelector('.fbform.proposal')).toBeNull();
+  });
+
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it('both disabled offline', () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ offline: true, proposals: [proposal()] }));
     expect(view.querySelector<HTMLButtonElement>('button.propose')!.disabled).toBe(true);
     expect(view.querySelector<HTMLButtonElement>('button.withdraw')!.disabled).toBe(true);
   });
 
-  // req:web.views/propose-from-backlog@9531d23b
+  // req:web.views/propose-from-backlog@6d9d0fbe
   it('no Proposed row without proposals, or before the implementation state', () => {
     expect(renderBacklog(snapshot(), null, null, () => {}, proposing()).querySelector('.proposed')).toBeNull();
     expect(renderBacklog(snapshot(), null, null, () => {}, proposing({ proposals: null })).querySelector('.proposed')).toBeNull();

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderArchitecture, renderConstraint } from './architecture';
 import { decide } from './capabilities';
-import type { ListOptions, PageOptions } from './capabilities';
+import type { ListOptions, Note, PageOptions } from './capabilities';
+import type { DecisionKind } from './types';
 import { architecture, constraint } from './fixtures';
 
 const list = (o: Partial<ListOptions> = {}): ListOptions => ({ flaggedOnly: false, onFilter: vi.fn(), link: (s) => `#/o/a/architecture/${s}`, ...o });
@@ -143,8 +144,8 @@ describe('architecture page', () => {
   });
 });
 
-// req:web.views/architecture-decide-buttons@41e20cf5
 describe('architecture decide', () => {
+  // req:web.views/architecture-decide-buttons@641ea94e
   it('one request per tap: a second tap while the first is in flight sends nothing', () => {
     const o = page();
     const view = renderConstraint(architecture(), 'e', o);
@@ -157,6 +158,7 @@ describe('architecture decide', () => {
     expect(decideButtons(view).every((b) => b.disabled)).toBe(true);
   });
 
+  // req:web.views/architecture-decide-buttons@641ea94e
   it('signed: the buttons are disabled and the note gives clm architecture decide', () => {
     for (const [a, o] of [
       [architecture(), page({ offline: true })],
@@ -173,6 +175,7 @@ describe('architecture decide', () => {
 
   const answer = (status: number, body?: unknown) => new Response(body === undefined ? '' : JSON.stringify(body), { status });
 
+  // req:web.views/architecture-decide-buttons@641ea94e
   it('posts the version shown, the value and the decision to the architecture route, then loads the report again', async () => {
     const post = vi.fn(async () => answer(200, {}));
     const reload = vi.fn(async () => true);
@@ -183,6 +186,7 @@ describe('architecture decide', () => {
     expect(note.text).toContain('Decided');
   });
 
+  // req:web.views/architecture-decide-buttons@641ea94e
   it('a 409 says the entry changed and loads the report again; a 422 signed gives the Worker’s command', async () => {
     const reload = vi.fn(async () => true);
     const moved = await decide('/b', 'architecture', 'e', 'v', 'low', 'cut', { post: async () => answer(409), reload });
@@ -194,6 +198,33 @@ describe('architecture decide', () => {
     // Without the Worker's command, the note still gives one.
     const bare = await decide('/b', 'architecture', 'e', 'v', 'low', 'cut', { post: async () => answer(422, { error: 'signed' }), reload: vi.fn(async () => false) });
     expect(bare.command).toBe('clm architecture decide e --value high|medium|low --decision keep|cut|redesign|accept');
+  });
+  // req:web.views/architecture-decide-buttons@641ea94e
+  it('one request per tap through the page: two quick taps on Redesign post the version shown once, the report is loaded again and the page shows the decision', async () => {
+    let data = architecture();
+    const post = vi.fn(async () => answer(200, {}));
+    const reload = vi.fn(async () => {
+      data = architecture();
+      data.architecture[0].decisions = [{ at: '2026-11-24T10:00:00Z', writer: 'alice/web', value: 'medium', decision: 'redesign' }];
+      return true;
+    });
+    let note: Note | null = null;
+    let pending: Promise<void> = Promise.resolve();
+    const onDecide = vi.fn((d: DecisionKind) => {
+      pending = decide('/api/repos/o/a', 'architecture', 'e', data.architecture[0].version, 'medium', d, { post, reload }).then((n) => {
+        note = n;
+      });
+    });
+    const view = renderConstraint(data, 'e', page({ onDecide }));
+    const redesign = view.querySelector<HTMLButtonElement>('button.decide[data-decision=redesign]')!;
+    redesign.click();
+    redesign.click();
+    await pending;
+    expect(post.mock.calls).toEqual([['/api/repos/o/a/architecture/e/decide', { version: architecture().architecture[0].version, value: 'medium', decision: 'redesign' }]]);
+    expect(reload).toHaveBeenCalledTimes(1);
+    const after = renderConstraint(data, 'e', page({ note }));
+    expect(after.querySelector('section[data-sec=decisions]')!.textContent).toContain('redesign (value medium) by alice/web');
+    expect(after.querySelector('.decide-note')!.textContent).toBe('Decided: redesign, value medium.');
   });
 });
 
