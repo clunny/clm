@@ -877,23 +877,28 @@ fn rest_pulls(name: &str, repo: &FakeRepo, head: Option<&str>) -> Vec<Value> {
             "base": {"ref": base, "repo": {"full_name": name}},
         })
     };
-    let pulls = repo
+    let matched: Vec<&FakePull> = repo
         .pulls
         .iter()
         .filter(|p| p.state == "open")
-        .filter_map(|p| {
+        .filter(|p| {
             let head_owner = if p.fork { fork_owner } else { owner };
-            (head == Some(format!("{head_owner}:{}", p.head_ref).as_str())).then(|| {
-                let url = format!("https://github.com/{name}/pull/{}", p.number);
-                let head_repo = format!("{head_owner}/{short}");
-                let head = (p.head_ref.as_str(), p.head_sha.as_str(), head_repo);
-                entry(p.number, url, &p.title, head, &p.base_ref)
-            })
-        });
+            head == Some(format!("{head_owner}:{}", p.head_ref).as_str())
+        })
+        .collect();
+    let pulls = matched.iter().map(|p| {
+        let head_owner = if p.fork { fork_owner } else { owner };
+        let url = format!("https://github.com/{name}/pull/{}", p.number);
+        let head_repo = format!("{head_owner}/{short}");
+        let head = (p.head_ref.as_str(), p.head_sha.as_str(), head_repo);
+        entry(p.number, url, &p.title, head, &p.base_ref)
+    });
+    // A page of a pull request `pulls` already gave is the same pull request.
     let pages = repo
         .pages
         .iter()
         .filter(|(branch, _, _)| head == Some(format!("{owner}:{branch}").as_str()))
+        .filter(|(_, number, _)| !matched.iter().any(|p| p.number == *number))
         .map(|(branch, number, url)| {
             let head = (branch.as_str(), "", name.to_string());
             entry(*number, url.clone(), "", head, &repo.default_branch)
