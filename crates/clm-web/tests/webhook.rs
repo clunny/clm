@@ -170,6 +170,12 @@ fn what_the_webhook_answers() {
         WEBHOOK_SECRET,
     ));
     assert_eq!(push.status, 200, "a push the object fails");
+    // The unreachable object records nothing; the Worker's log shows it was posted to.
+    let logs = fake.logs.borrow().clone();
+    assert!(
+        logs.len() == 1 && logs[0].contains("o/a"),
+        "the push was passed on to o/a's object: {logs:?}"
+    );
     fake.replicas.bound.set(true);
 
     let added = json!({
@@ -198,6 +204,6 @@ fn what_the_webhook_answers() {
     assert_eq!(
         reached(&fake),
         ["o/b"],
-        "nothing reached an object but the installation_repositories event"
+        "the ping, the unreadable bodies and the unsigned push reached no object"
     );
 }

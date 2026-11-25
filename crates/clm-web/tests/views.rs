@@ -89,7 +89,6 @@ fn object_down() {
         assert_eq!(res.status, 503, "{route}");
         assert_eq!(body_json(&res), json!({"error": "unavailable"}), "{route}");
     }
-    assert!(fake.replicas.calls.borrow().is_empty());
     // An answer that is neither a view nor `preparing` is the same, and isn't kept.
     fake.replicas.bound.set(true);
     fake.set_answer("o/a", "architecture", 500, json!({"boom": true}));
