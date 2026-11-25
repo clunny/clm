@@ -102,6 +102,8 @@ fn a_newer_release() {
         "the alarm is set to now"
     );
 
+    // The page closes: the alarms go on while files are left.
+    fake.now.set(fake.now.get() + 600);
     let told = notices(&fake);
     let from = fake.gh.calls.borrow().len();
     let alarms = run_alarms(&fake, &mut object, &slot);

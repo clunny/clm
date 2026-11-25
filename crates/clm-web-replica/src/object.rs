@@ -667,7 +667,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let (Some(login), Some(token)) = (req["login"].as_str(), req["token"].as_str()) else {
             return Answer::empty(422);
         };
-        // A kind that is no write's is refused before GitHub is asked anything.
+        // A kind that is no write's is refused (422).
         let Some(kind) = req["kind"]
             .as_str()
             .filter(|k| ["decide", "propose", "withdraw", "answer"].contains(k))

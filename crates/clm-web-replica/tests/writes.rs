@@ -50,6 +50,13 @@ fn a_decision_shows_at_once() {
     let version = before["version"].as_str().unwrap().to_string();
     let answer = block_on(object.write(&fake, &decide(&version)));
     assert_eq!(answer.status, 200, "{}", answer.body);
+    let record: Value = serde_json::from_str(&answer.body).unwrap();
+    assert_eq!(record["kind"], "decided", "{record}");
+    assert_eq!(record["capability"], "capability/x");
+    assert_eq!(record["value"], "high");
+    assert_eq!(record["decision"], "keep");
+    assert_eq!(record["settles"], json!([]));
+    assert_eq!(record["writer"], "carol/web");
     let after = entry(&fake, &mut object);
     assert_eq!(after["decisions"].as_array().unwrap().len(), 1, "{after}");
     let writes = fake.gh.writes();
@@ -105,7 +112,11 @@ fn a_proposal_shows_at_once() {
     assert_eq!(again.status, 409);
     // A withdrawal decides from the requester's own ledger.
     let withdraw = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": id});
-    assert_eq!(block_on(object.write(&fake, &withdraw)).status, 200);
+    assert_eq!(
+        block_on(object.write(&fake, &withdraw)),
+        clm_web_replica::Answer::empty(200),
+        "200 with no body"
+    );
     let other = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": "nope"});
     assert_eq!(block_on(object.write(&fake, &other)).status, 404);
 }
@@ -204,7 +215,6 @@ fn bodies_without_a_requester_or_a_kind() {
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
-    let from = fake.gh.calls.borrow().len();
     for body in [
         json!({"token": "tok", "kind": "propose", "title": "T", "body": "", "nodes": []}),
         json!({"login": "carol", "kind": "propose", "title": "T", "body": "", "nodes": []}),
@@ -215,11 +225,7 @@ fn bodies_without_a_requester_or_a_kind() {
         let got = block_on(object.write(&fake, &body));
         assert_eq!(got, clm_web_replica::Answer::empty(422), "{body}");
     }
-    assert_eq!(
-        fake.gh.calls.borrow().len(),
-        from,
-        "GitHub was asked nothing"
-    );
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
 }
 
 #[test]
@@ -242,10 +248,22 @@ fn the_tip_cant_be_read() {
     let propose = json!({"login": "carol", "token": "tok", "kind": "propose",
         "title": "Export CSV", "body": "Please.", "nodes": []});
     let withdraw = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": "x"});
-    for write in [decide(&version), propose, withdraw] {
+    for write in [decide(&version), propose.clone(), withdraw] {
         let answer = block_on(object.write(&fake, &write));
         assert_eq!(answer.status, 502, "{}", answer.body);
     }
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+
+    // The ref reads, but at a commit the object can't bring itself up to.
+    commit(&fake, "222", repo(CAPABILITIES));
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let r = repos.get_mut("o/a").unwrap();
+        r.ref_fails.clear();
+        r.fail_paths = vec!["compare".into(), "git/trees".into()];
+    }
+    let answer = block_on(object.write(&fake, &propose));
+    assert_eq!(answer.status, 502, "{}", answer.body);
     assert!(fake.gh.writes().is_empty(), "nothing was appended");
 }
 

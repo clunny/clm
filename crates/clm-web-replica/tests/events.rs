@@ -675,7 +675,13 @@ fn a_push_in_the_feed() {
     };
     let pushes = [
         pushed("impl/a", "c1", true, base),
-        pushed("spec/x", "c1", true, base + 60),
+        // A push that names no pusher is its sender's.
+        {
+            let mut body = pushed("spec/x", "c1", true, base + 60);
+            body.as_object_mut().unwrap().remove("pusher");
+            body["sender"] = json!({"login": "alice"});
+            body
+        },
         pushed("clm/ledger/alice/web", "LA", false, base + 120),
     ];
     for (i, body) in pushes.into_iter().enumerate() {
