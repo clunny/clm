@@ -61,6 +61,8 @@ fn a_token_near_its_expiry() {
     let fake = Fake::default();
     fake.gh.mint_status.set(Some(401));
     assert_eq!(twice(&fake), [None, None], "a 401");
+    let jwt = json!({"iss": "1", "iat": NOW - 60, "exp": NOW + 540});
+    assert!(claims(&fake).iter().all(|c| *c == jwt) && !claims(&fake).is_empty());
     assert_eq!(block_on(install::token_direct(&fake, 7)), None);
     let mut fake = Fake::default();
     fake.secrets.remove("GITHUB_APP_ID");
@@ -73,6 +75,7 @@ fn a_token_near_its_expiry() {
     fake.gh.add_repo("o/a", FakeRepo::new("111", clm_repo()));
     assert_eq!(block_on(install::installation_id(&fake, "o/a")), Some(9));
     assert_eq!(block_on(install::installation_id(&fake, "o/none")), None);
+    assert_eq!(claims(&fake), [jwt.clone(), jwt]);
     assert!(
         fake.gh
             .calls

@@ -124,3 +124,44 @@ fn a_failed_fetch_gives_none() {
             .all(|k| !k.starts_with("files3:"))
     );
 }
+
+#[test]
+fn a_cut_short_text_is_kept_a_day() {
+    // req:web.worker.platform/batched-fetches@d19c47cf
+    let fake = Fake::default();
+    let long = "x".repeat(60_000);
+    let repo = FakeRepo::new("111", files(&[("long.md", &long)]));
+    fake.gh.add_repo("o/a", repo);
+    fake.gh.grant("u", "o/a");
+    let exprs = vec!["111:long.md".to_string()];
+    for _ in 0..2 {
+        let got = block_on(files::objects(&fake, &auth(), "o/a", "Blobs", &exprs)).unwrap();
+        assert_eq!(got, [Some(long.clone())]);
+    }
+    assert_eq!(blob_calls(&fake), 1, "the blob is read once and kept");
+    fake.now.set(NOW + 86_400);
+    block_on(files::objects(&fake, &auth(), "o/a", "Blobs", &exprs)).unwrap();
+    assert_eq!(blob_calls(&fake), 2, "and read again after a day");
+}
+
+#[test]
+fn the_tree_given() {
+    // req:web.worker.platform/spec-files@07ebeb2f
+    let fake = Fake::default();
+    let map = files(&[("specs/a/SPEC.md", "spec"), ("CLAUDE.md", "c")]);
+    fake.gh.add_repo("o/a", FakeRepo::new("111", map));
+    fake.gh.grant("u", "o/a");
+    let tree = vec![files::TreeEntry {
+        path: "specs/a/SPEC.md".into(),
+        sha: blob_sha(b"spec"),
+    }];
+    let got = block_on(files::spec_files(&fake, &auth(), "o/a", "111", Some(&tree))).unwrap();
+    let paths: Vec<&PathBuf> = got.keys().collect();
+    assert_eq!(
+        paths,
+        [&PathBuf::from("specs/a/SPEC.md")],
+        "the tree given, not a listing"
+    );
+    let calls = fake.gh.calls.borrow();
+    assert!(calls.iter().all(|c| !c.url.contains("/git/trees/")));
+}

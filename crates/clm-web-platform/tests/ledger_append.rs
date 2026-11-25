@@ -102,6 +102,11 @@ fn a_first_an_unended_and_a_refused_append() {
                 let tip = tip(&fake).unwrap();
                 assert!(fake.gh.repos.borrow()["o/a"].parents[&tip].is_empty());
                 assert_eq!(text_at(&fake, &tip), format!("{line}\n"));
+                assert_eq!(
+                    fake.gh.writes().len(),
+                    4,
+                    "a blob, a tree, a commit and the ref"
+                );
                 let created = fake.gh.writes().last().unwrap().clone();
                 assert_eq!(created.method, "POST");
                 assert!(created.url.ends_with("/git/refs"), "the ref is created");

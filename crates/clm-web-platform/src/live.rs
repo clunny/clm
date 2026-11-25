@@ -76,7 +76,8 @@ pub async fn pulls_direct<P: GitHub>(p: &P, auth: &Auth, repo: &str) -> Option<(
         pulls.extend(page["nodes"].as_array()?.iter().filter_map(pull));
         match page["pageInfo"]["endCursor"].as_str() {
             Some(cursor) if page["pageInfo"]["hasNextPage"] == true => after = cursor.into(),
-            _ => return Some((pulls, true)),
+            // A next page GitHub names no cursor for is a listing not read to its end.
+            _ => return Some((pulls, page["pageInfo"]["hasNextPage"] != true)),
         }
     }
     Some((pulls, false))

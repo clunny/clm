@@ -92,7 +92,7 @@ fn who_may_read_a_repo() {
 }
 
 #[test]
-fn checked_direct_tells_a_401_and_an_odd_name_from_a_refusal() {
+fn checked_direct_tells_a_failed_read_from_a_refusal() {
     // req:web.worker.platform/access-check@af49f3ca
     let fake = Fake::default();
     fake.gh.add_repo("o/a", FakeRepo::new("111", clm_repo()));

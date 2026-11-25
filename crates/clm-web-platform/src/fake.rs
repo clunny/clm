@@ -823,7 +823,12 @@ fn tree_object(repo: &FakeRepo, sha: &str, dir: &str) -> Value {
         entries.insert(mode.0, mode.1);
     }
     if entries.is_empty() {
-        return Value::Null;
+        // A file is a Blob, which `... on Tree` reads as `{}`; nothing there is null.
+        return if files.contains_key(dir) {
+            json!({})
+        } else {
+            Value::Null
+        };
     }
     let entries: Vec<Value> = entries
         .iter()
