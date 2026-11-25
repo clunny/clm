@@ -22,3 +22,5 @@ Considered:
 - **A check that every test of a removed requirement in its own files is listed.** Rejected: it would take the re-cite from the build, which is the right answer whenever the behaviour stays stated, and make every removal list tests that stay.
 - **A list of tests to re-cite, written by the change.** Rejected for now: it is new machinery for a forgotten line, which the question covers with what exists (`yagni`, `reuse-first`).
 - **Accepting a block on a removed requirement whatever the change's status.** Rejected: a stale item would survive a removal unseen and hold its obsolete line back.
+
+**Changed on 2026-11-24** (`merges-are-recorded-moves`). A change that merges a removed requirement into one of another slug records the pair in `moves`, so its tests wait for the build that re-cites them there; the question stays the route for a test the change forgot.

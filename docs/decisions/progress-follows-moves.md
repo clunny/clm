@@ -15,3 +15,5 @@ Considered:
 - Leaving it as designed, and having the rename change resolve the earlier changes' items too. Each rename would have to copy them by hand, and the earlier changes would still drop out of `clm status` early.
 - Requiring a move's added text to match the removed text word for word. A move that also rewords is still the same work, and the hash comparison adds nothing the counts need.
 - A `moved_from` key on the new requirement. The removal and the addition in one change already say it, with nothing new to write or check.
+
+**Changed on 2026-11-24** (`merges-are-recorded-moves`). Besides the moves the deltas make, a change may record in `moves` a removed requirement merged into one of another slug, which the deltas can't say; progress follows it as any move.

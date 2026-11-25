@@ -18,3 +18,5 @@ Rejected:
 - **Leaving it to each split's Design** (`plugin.hooks` told its build to leave the markers alone). The queue still offered the node, so a build was launched only to stop.
 
 **Changed on 2026-11-19** (`a-removed-requirement-s-tests-elsewhere-are-listed`). Once the root sets `wiring`, a marker the move left in a file another component owns is that owner's obsolete work, not the old component's, and the old component's line appears only when no other component's file cites the requirement. A marker in a file of the component the requirement moved to doesn't wait on that component's own requirement.
+
+**Changed on 2026-11-24** (`merges-are-recorded-moves`). A change may also record a move in `change.md`'s `moves`: a removed requirement merged into one of another slug, on the same component or another. The obsolete markers wait on that target as on a same-slug move's.
