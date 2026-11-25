@@ -37,6 +37,10 @@ const RESYNC: u64 = 600;
 const META: &str = "meta";
 /// A read rewrites its time in the store only when it has moved this far.
 const READ_WRITE: u64 = 60;
+/// The version of the object that writes its record: 1 hashes binary assets. Storage whose
+/// record names another, or none, is dropped on waking and built again
+/// (`fetches-binary-assets`).
+const VERSION: u32 = 1;
 
 /// The object's alarm, in Unix seconds.
 pub trait Alarm {
@@ -74,6 +78,8 @@ impl Answer {
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct Meta {
+    /// The version of the object that wrote the record; none, read as 0, before versions.
+    version: u32,
     installation: Option<u64>,
     default_branch: Option<String>,
     /// The default branch's commit the replica holds; none until the first build lists it.
@@ -127,11 +133,19 @@ pub struct Object<S, A> {
 
 impl<S: Store, A: Alarm> Object<S, A> {
     /// The object named `name`, `<owner>/<repo>`, with what `store` holds.
-    pub fn load(name: &str, store: S, alarm: A) -> Self {
-        let meta: Meta = store
+    pub fn load(name: &str, mut store: S, alarm: A) -> Self {
+        let stored: Option<Meta> = store
             .get(META)
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default();
+            .and_then(|b| serde_json::from_slice(&b).ok());
+        let meta = match stored {
+            Some(meta) if meta.version >= VERSION => meta,
+            // Written by an object that didn't hash binary assets, or no record that reads:
+            // built again from nothing.
+            _ => {
+                Wipe(&mut store).delete_all();
+                Meta::default()
+            }
+        };
         Object {
             name: name.into(),
             replica: Replica::load(&store),
@@ -161,6 +175,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
     }
 
     fn save_meta(&mut self) {
+        self.meta.version = VERSION;
         self.stored_read = self.meta.last_read;
         if let Ok(bytes) = serde_json::to_vec(&self.meta) {
             self.store.put(META, bytes);
@@ -329,11 +344,12 @@ impl<S: Store, A: Alarm> Object<S, A> {
         after: &str,
         compare: source::Compare,
     ) {
+        // A compare names no mode: `fetch` asks each file's parent tree for it.
         let entry = |c: &source::Changed| Entry {
             path: c.path.clone(),
             sha: c.sha.clone(),
             size: 0,
-            mode: "100644".into(),
+            mode: String::new(),
         };
         let wanted: Vec<Entry> = compare
             .changed
@@ -345,7 +361,10 @@ impl<S: Store, A: Alarm> Object<S, A> {
         // What isn't fetched stays to fetch: the replica lists it as pending.
         for c in &compare.changed {
             if !files.iter().any(|f| f.entry.path == c.path) {
-                files.push(File::unfetched(entry(c)));
+                // Its mode is read when the tree is listed to fetch it.
+                let mut unfetched = entry(c);
+                unfetched.mode = "100644".into();
+                files.push(File::unfetched(unfetched));
             }
         }
         self.replica.apply(Change::Tip {
@@ -404,7 +423,15 @@ impl<S: Store, A: Alarm> Object<S, A> {
             .iter()
             .filter_map(|path| listing?.get(path).cloned())
             .collect();
-        let files = source::fetch(p, auth, &self.name, &tip, &entries, b).await;
+        // The files whose text the replica keeps go in queries of their own, before any
+        // other (`fetches-what-the-replica-wants`).
+        let (kept, rest): (Vec<Entry>, Vec<Entry>) = entries
+            .into_iter()
+            .partition(|e| clm_replica::keeps_text(&e.path));
+        // The rest takes what budget the kept text leaves: a kept file that can't be read
+        // holds nothing else back.
+        let mut files = source::fetch(p, auth, &self.name, &tip, &kept, b).await;
+        files.extend(source::fetch(p, auth, &self.name, &tip, &rest, b).await);
         let taken = files.len();
         if taken > 0 {
             self.replica.apply(Change::Tip {
@@ -1080,7 +1107,9 @@ impl<S: Store, A: Alarm> Object<S, A> {
             }
         }
         self.resync_ledgers(p, b, auth).await;
-        if let Some(pulls) = source::pulls(p, auth, &repo, b).await {
+        // A listing not read to its end, as one of more than 300 is, changes no pull
+        // request: one it leaves out may still be open.
+        if let Some((pulls, true)) = source::pulls(p, auth, &repo, b).await {
             let gone: Vec<Pull> = self
                 .meta
                 .pulls

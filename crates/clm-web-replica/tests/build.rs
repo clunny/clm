@@ -2,7 +2,7 @@
 
 mod common;
 
-use clm_web_platform::fake::{files, iso};
+use clm_web_platform::fake::{Fake, FakePull, files, iso, node};
 use common::*;
 use futures::executor::block_on;
 use serde_json::{Value, json};
@@ -225,7 +225,7 @@ fn a_big_repo_stays_within_the_budget() {
 
 #[test]
 fn a_lost_webhook() {
-    // req:web.worker.replica/resync@69cbabef
+    // req:web.worker.replica/resync@bdd4c4e3
     let fake = fake_with("111", repo_files(&[]));
     let (mut object, _mem, slot) = built(&fake);
     // A read a minute ago keeps the pages open.
@@ -265,7 +265,7 @@ fn a_lost_webhook() {
 
 #[test]
 fn nobody_looking() {
-    // req:web.worker.replica/resync@69cbabef
+    // req:web.worker.replica/resync@bdd4c4e3
     let fake = fake_with("111", repo_files(&[]));
     let (mut object, _mem, slot) = built(&fake);
     // Last read an hour ago; the alarm then fires 20 minutes on with no event.
@@ -277,4 +277,206 @@ fn nobody_looking() {
     block_on(object.on_alarm(&fake));
     assert_eq!(fake.gh.calls.borrow().len(), from, "no request to GitHub");
     assert_eq!(slot.0.get(), None, "nothing is re-armed for nobody");
+}
+
+/// The names of the refs the stored replica holds under `prefix`.
+fn held_refs(mem: &Mem, prefix: &str) -> Vec<String> {
+    let state = stored_state(mem);
+    state["state"]["refs"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .filter(|k| k.starts_with(prefix))
+        .cloned()
+        .collect()
+}
+
+/// The numbers of the pull requests the stored replica holds open, in order.
+fn open_pulls(mem: &Mem) -> Vec<u64> {
+    let state = stored_state(mem);
+    let mut open: Vec<u64> = state["state"]["pulls"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|k| k.parse().unwrap())
+        .collect();
+    open.sort();
+    open
+}
+
+/// An open pull request `#number` of `impl/p<number>` on `main`.
+fn fake_pull(number: u64) -> FakePull {
+    FakePull {
+        number,
+        state: "open".into(),
+        title: format!("P{number}"),
+        base_ref: "main".into(),
+        base_sha: "111".into(),
+        head_ref: format!("impl/p{number}"),
+        head_sha: format!("h{number}"),
+        fork: false,
+    }
+}
+
+/// The `pull_request` webhook body that opens `pull`.
+fn opened(pull: &FakePull) -> Value {
+    json!({"action": "opened", "pull_request": {
+        "number": pull.number, "state": "open", "title": pull.title,
+        "html_url": format!("https://github.com/o/a/pull/{}", pull.number),
+        "head": {"ref": pull.head_ref, "sha": pull.head_sha, "repo": {"full_name": "o/a"}},
+        "base": {"ref": pull.base_ref, "repo": {"full_name": "o/a"}},
+    }})
+}
+
+fn set_pull_state(fake: &Fake, number: u64, state: &str) {
+    let mut repos = fake.gh.repos.borrow_mut();
+    let repo = repos.get_mut("o/a").unwrap();
+    repo.pulls
+        .iter_mut()
+        .find(|p| p.number == number)
+        .unwrap()
+        .state = state.into();
+}
+
+fn claims_mut(fake: &Fake, f: impl FnOnce(&mut Vec<(String, String, u64)>)) {
+    f(&mut fake.gh.repos.borrow_mut().get_mut("o/a").unwrap().claims);
+}
+
+#[test]
+fn what_a_resync_cant_list() {
+    // req:web.worker.replica/resync@bdd4c4e3
+    let fake = fake_with("111", repo_files(&[]));
+    let at = fake.now.get();
+    claims_mut(&fake, |c| {
+        for name in ["a", "z"] {
+            c.push((name.into(), format!("c{name}"), at));
+        }
+    });
+    let (mut object, mem, slot) = built(&fake);
+    assert_eq!(held_refs(&mem, "impl/"), ["impl/a", "impl/z"]);
+    let claimed_a = |object: &mut Obj| -> bool {
+        let seen = view(&fake, object, "implementation");
+        seen["view"]["flight"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["node"] == "a" && n["state"] == "claimed")
+    };
+    assert!(claimed_a(&mut object));
+
+    // `impl/a` deleted with its webhook lost: the resync drops it, and its claim goes.
+    claims_mut(&fake, |c| c.retain(|c| c.0 != "a"));
+    resync(&fake, &mut object, &slot);
+    assert_eq!(held_refs(&mem, "impl/"), ["impl/z"]);
+    recompute(&fake, &mut object, &slot);
+    assert!(!claimed_a(&mut object), "the claim on `a` goes");
+
+    // `impl/` comes to hold 301 refs, `z` not among them: nothing under `impl/` changes.
+    let at = fake.now.get();
+    claims_mut(&fake, |c| {
+        *c = (0..301)
+            .map(|i| (format!("n{i:03}"), format!("cn{i}"), at))
+            .collect();
+    });
+    resync(&fake, &mut object, &slot);
+    assert_eq!(held_refs(&mem, "impl/"), ["impl/z"]);
+
+    // 151 pull requests open, all known from webhooks: all stay open.
+    let pulls: Vec<FakePull> = (1..=151).map(fake_pull).collect();
+    fake.gh.repos.borrow_mut().get_mut("o/a").unwrap().pulls = pulls.clone();
+    for (i, pull) in pulls.iter().enumerate() {
+        let delivery = format!("p{i}");
+        let answer = block_on(object.event(&fake, &event("pull_request", &delivery, opened(pull))));
+        assert_eq!(answer.status, 202);
+    }
+    let all: Vec<u64> = (1..=151).collect();
+    assert_eq!(open_pulls(&mem), all);
+    resync(&fake, &mut object, &slot);
+    assert_eq!(open_pulls(&mem), all, "a listing of 151 closes none");
+
+    // #3 closed with its webhook lost: it closes, the other 150 stay open.
+    set_pull_state(&fake, 3, "closed");
+    resync(&fake, &mut object, &slot);
+    let without_3: Vec<u64> = all.iter().copied().filter(|n| *n != 3).collect();
+    assert_eq!(open_pulls(&mem), without_3);
+
+    // 301 open and #4 closed with its webhook lost: the resync changes no pull request.
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .pulls
+        .extend((152..=303).map(fake_pull));
+    set_pull_state(&fake, 4, "closed");
+    let open = fake.gh.repos.borrow()["o/a"]
+        .pulls
+        .iter()
+        .filter(|p| p.state == "open")
+        .count();
+    assert_eq!(open, 301);
+    resync(&fake, &mut object, &slot);
+    assert_eq!(
+        open_pulls(&mem),
+        without_3,
+        "#4 stays open, and none is added"
+    );
+}
+
+/// Runs the alarm due, so what the last resync applied is recomputed.
+fn recompute(fake: &Fake, object: &mut Obj, slot: &Slot) {
+    let at = slot.0.get().expect("an alarm is set");
+    fake.now.set(fake.now.get().max(at));
+    block_on(object.on_alarm(fake));
+}
+
+#[test]
+fn a_code_key_that_cant_be_read() {
+    // req:web.worker.replica/resync@bdd4c4e3
+    let spec = node("", &["r"], "active");
+    let fake = fake_with("111", repo_files(&[("specs/y/SPEC.md", &spec)]));
+    let (mut object, _mem, slot) = built(&fake);
+    // `impl/y` created by `bob`, its webhook lost; GitHub has no tree for its head, so its
+    // code key can't be read.
+    let at = fake.now.get();
+    claims_mut(&fake, |c| c.push(("y".into(), "cy".into(), at)));
+    let claims_of_y = |object: &mut Obj| -> usize {
+        let seen = view(&fake, object, "implementation");
+        seen["view"]["activity"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["kind"] == "claim" && a["ref"] == "y")
+            .count()
+    };
+    let lists_y = |object: &mut Obj| -> bool {
+        let seen = view(&fake, object, "implementation");
+        seen["view"]["flight"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["node"] == "y" && n["state"] == "claimed")
+    };
+    let trees_of_y = |fake: &Fake| {
+        fake.gh
+            .calls
+            .borrow()
+            .iter()
+            .filter(|c| c.url.contains("/git/trees/cy"))
+            .count()
+    };
+    resync(&fake, &mut object, &slot);
+    let first = trees_of_y(&fake);
+    assert!(first >= 1, "the code key is asked for");
+    resync(&fake, &mut object, &slot);
+    assert!(trees_of_y(&fake) > first, "and asked for again");
+    recompute(&fake, &mut object, &slot);
+    assert_eq!(claims_of_y(&mut object), 1, "one claim in the feed");
+    assert!(lists_y(&mut object), "the view lists the claim");
+
+    // `impl/y` deleted with its webhook lost: the third resync drops it.
+    claims_mut(&fake, |c| c.retain(|c| c.0 != "y"));
+    resync(&fake, &mut object, &slot);
+    recompute(&fake, &mut object, &slot);
+    assert!(!lists_y(&mut object), "no claim on `y`");
 }

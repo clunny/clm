@@ -12,7 +12,7 @@ use clm_replica::{Entry, Event, File, Pull, RefChange};
 use clm_web_platform::platform::Auth;
 
 use crate::Host;
-use clm_web_platform::{files, gh};
+use clm_web_platform::{files, gh, live};
 use serde_json::{Value, json};
 
 /// The subrequests one invocation spends at most, under the plan's 50.
@@ -23,6 +23,10 @@ const REF_PAGES: usize = 3;
 const PER_SPEC_QUERY: usize = 50;
 /// A compare lists at most this many files, so a list this long may be cut short.
 const COMPARE_FILES: usize = 300;
+/// The largest binary asset read whole: a blob over 10 MiB is held without its bytes.
+const MAX_ASSET: u64 = 10 << 20;
+/// The pages `live::pulls_direct` reads at most (`web.worker.platform/open-pulls`).
+const PULL_PAGES: usize = 3;
 
 /// The subrequests an invocation has made.
 #[derive(Debug, Default)]
@@ -149,7 +153,8 @@ pub(crate) async fn compare<P: Host>(
 /// The files of `entries` at `sha`, as many as the budget allows, in GraphQL queries of at
 /// most 100 paths. A blob GraphQL cut short is read whole from the blob API, one call each;
 /// one the budget can't afford is left out, so it stays to fetch. The entries without a text
-/// the source could read are binary.
+/// the source could read are binary. An entry with no mode, as a compare gives it, takes the
+/// mode its parent tree gives, asked in the same query (`fetches-what-the-replica-wants`).
 pub(crate) async fn fetch<P: Host>(
     p: &P,
     auth: &Auth,
@@ -175,7 +180,22 @@ pub(crate) async fn fetch<P: Host>(
             vars.insert(format!("e{i}"), json!(format!("{sha}:{}", entry.path)));
             params.push(format!("$e{i}: String!"));
             fields.push_str(&format!(
-                "f{i}: object(expression: $e{i}) {{ ... on Blob {{ text isBinary isTruncated oid }} }}\n"
+                "f{i}: object(expression: $e{i}) {{ ... on Blob {{ text isBinary isTruncated oid byteSize }} }}\n"
+            ));
+        }
+        // Each distinct parent directory of an entry with no mode: `t<j>`.
+        let mut dirs: Vec<&str> = chunk
+            .iter()
+            .filter(|e| e.mode.is_empty())
+            .map(|e| parent(&e.path).0)
+            .collect();
+        dirs.sort_unstable();
+        dirs.dedup();
+        for (j, dir) in dirs.iter().enumerate() {
+            vars.insert(format!("t{j}"), json!(format!("{sha}:{dir}")));
+            params.push(format!("$t{j}: String!"));
+            fields.push_str(&format!(
+                "t{j}: object(expression: $t{j}) {{ ... on Tree {{ entries {{ name mode }} }} }}\n"
             ));
         }
         let query = format!(
@@ -192,25 +212,59 @@ pub(crate) async fn fetch<P: Host>(
         }
         for (i, entry) in chunk.iter().enumerate() {
             let object = &repository[format!("f{i}")];
+            let mut entry = entry.clone();
+            if entry.mode.is_empty() {
+                let (dir, file) = parent(&entry.path);
+                let j = dirs.binary_search(&dir).unwrap_or_default();
+                // A mode the tree doesn't give leaves the file unfetched: the listing that
+                // fetches it later gives its mode.
+                let Some(mode) = mode_in(&repository[format!("t{j}")], file) else {
+                    continue;
+                };
+                entry.mode = mode;
+            }
+            if entry.size == 0 {
+                entry.size = object["byteSize"].as_u64().unwrap_or_default();
+            }
+            let blob = if entry.sha.is_empty() {
+                object["oid"].as_str().unwrap_or_default().to_string()
+            } else {
+                entry.sha.clone()
+            };
+            // GitHub gives `isBinary` null when it can't tell: no text is binary too.
+            let binary = object["isBinary"] == true
+                || (!object.is_null() && object["isBinary"] != false && object["text"].is_null());
+            if binary && clm_replica::keeps_hash(&entry.path) {
+                // A binary asset is read whole, one call each, and given with its bytes;
+                // one too big, or one the blob API fails, is held without them
+                // (`fetches-binary-assets`).
+                if entry.size > MAX_ASSET || blob.is_empty() {
+                    out.push(File::binary(entry));
+                    continue;
+                }
+                if b.left() == 0 {
+                    continue;
+                }
+                b.spend(1);
+                out.push(match blob_bytes(p, auth, repo, &blob).await {
+                    Some(bytes) => File::asset(entry, bytes),
+                    None => File::binary(entry),
+                });
+                continue;
+            }
             let text = match (object["text"].as_str(), object["isTruncated"] == true) {
                 (Some(_), true) => {
-                    let blob = if entry.sha.is_empty() {
-                        object["oid"].as_str().unwrap_or_default()
-                    } else {
-                        entry.sha.as_str()
-                    };
                     if blob.is_empty() || b.left() == 0 {
                         continue;
                     }
                     b.spend(1);
-                    let Some(bytes) = blob_bytes(p, auth, repo, blob).await else {
+                    let Some(bytes) = blob_bytes(p, auth, repo, &blob).await else {
                         continue;
                     };
                     String::from_utf8(bytes).ok()
                 }
                 (text, _) => text.map(String::from),
             };
-            let mut entry = entry.clone();
             if entry.size == 0 {
                 entry.size = text.as_ref().map_or(0, |t| t.len() as u64);
             }
@@ -223,6 +277,22 @@ pub(crate) async fn fetch<P: Host>(
         }
     }
     out
+}
+
+/// A path's directory, empty at the top, and its name.
+fn parent(path: &str) -> (&str, &str) {
+    path.rsplit_once('/').unwrap_or(("", path))
+}
+
+/// The mode a tree's `entries` give `name`, as the octal text a tree listing writes, from
+/// GraphQL's integer (33188 is `100644`, 40960 `120000`); none when it gives none.
+fn mode_in(tree: &Value, name: &str) -> Option<String> {
+    tree["entries"]
+        .as_array()?
+        .iter()
+        .find(|e| e["name"] == name)
+        .and_then(|e| e["mode"].as_u64())
+        .map(|m| format!("{m:o}"))
 }
 
 async fn blob_bytes<P: Host>(p: &P, auth: &Auth, repo: &str, sha: &str) -> Option<Vec<u8>> {
@@ -285,35 +355,35 @@ pub(crate) async fn tips<P: Host>(
     complete.then_some(tips)
 }
 
-/// The open pull requests, in one GraphQL query.
+/// The open pull requests, through the platform's pages of 100, at most 300, with whether
+/// the listing was read to its end.
 pub(crate) async fn pulls<P: Host>(
     p: &P,
     auth: &Auth,
     repo: &str,
     b: &Budget,
-) -> Option<Vec<Pull>> {
-    let (owner, name) = repo.split_once('/')?;
-    let query = "query Pulls($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { pullRequests(states: OPEN, first: 50) { nodes { number title url headRefName baseRefName headRefOid isCrossRepository } } } }";
-    b.spend(1);
-    let data = gh::graphql(p, auth, query, json!({"owner": owner, "name": name})).await?;
-    let nodes = data["repository"]["pullRequests"]["nodes"].as_array()?;
-    Some(
-        nodes
-            .iter()
-            .filter_map(|v| {
-                Some(Pull {
-                    number: v["number"].as_u64()?,
-                    title: v["title"].as_str().unwrap_or_default().into(),
-                    head: v["headRefName"].as_str()?.into(),
-                    base: v["baseRefName"].as_str()?.into(),
-                    head_sha: v["headRefOid"].as_str().unwrap_or_default().into(),
-                    url: v["url"].as_str().unwrap_or_default().into(),
-                    fork: v["isCrossRepository"] == true,
-                    open: true,
-                })
-            })
-            .collect(),
-    )
+) -> Option<(Vec<Pull>, bool)> {
+    // One query a page, counted at the most it can take, and asked only while the budget
+    // affords that.
+    if b.left() < PULL_PAGES {
+        return None;
+    }
+    b.spend(PULL_PAGES);
+    let (pulls, complete) = live::pulls_direct(p, auth, repo).await?;
+    let pulls = pulls
+        .into_iter()
+        .map(|v| Pull {
+            number: v.number,
+            title: v.title,
+            head: v.head,
+            base: v.base,
+            head_sha: v.head_sha,
+            url: v.url,
+            fork: v.fork,
+            open: true,
+        })
+        .collect();
+    Some((pulls, complete))
 }
 
 /// Each spec ref's `changes/<id>/change.md` and `deltas/` names at its tip, or the archived

@@ -37,7 +37,10 @@ fn half_fetched() -> (Obj, Slot) {
     });
     let mut mem = Mem::default();
     replica.save(&mut mem);
-    mem.put("meta", json!({"tip": "111"}).to_string().into_bytes());
+    mem.put(
+        "meta",
+        json!({"version": 1, "tip": "111"}).to_string().into_bytes(),
+    );
     let slot = Slot::default();
     (
         clm_web_replica::Object::load("o/a", mem, slot.clone()),
