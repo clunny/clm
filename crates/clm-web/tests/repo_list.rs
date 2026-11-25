@@ -7,7 +7,7 @@ use serde_json::json;
 
 #[test]
 fn non_clm_repo() {
-    // req:web.worker/repo-list@b7761292
+    // req:web.worker/repo-list@e3c6595c
     let fake = Fake::default();
     fake.gh.add_repo("o/a", FakeRepo::new("111", clm_repo()));
     fake.gh.add_repo(
@@ -29,7 +29,7 @@ fn non_clm_repo() {
 
 #[test]
 fn many_installations_stay_within_budget() {
-    // req:web.worker/repo-list@b7761292
+    // req:web.worker/repo-list@e3c6595c
     let fake = Fake::default();
     let mut installs = Vec::new();
     for i in 0..60 {
@@ -70,7 +70,7 @@ fn list(fake: &Fake, cookie: &str) -> serde_json::Value {
 
 #[test]
 fn listed_again() {
-    // req:web.worker/repo-list@b7761292
+    // req:web.worker/repo-list@e3c6595c
     let (fake, cookie) = installed();
     let first = list(&fake, &cookie);
     assert_eq!(first[0]["name"], "a");
@@ -86,7 +86,7 @@ fn listed_again() {
 
 #[test]
 fn another_user() {
-    // req:web.worker/repo-list@b7761292
+    // req:web.worker/repo-list@e3c6595c
     let (fake, cookie_a) = installed();
     list(&fake, &cookie_a);
     // B's installations cover another CLM repo.
@@ -112,7 +112,7 @@ fn another_user() {
 
 #[test]
 fn empty_list() {
-    // req:web.worker/repo-list@b7761292
+    // req:web.worker/repo-list@e3c6595c
     let fake = Fake::default();
     let cookie = fake.user("u", &[]);
     assert_eq!(list(&fake, &cookie), json!([]));
