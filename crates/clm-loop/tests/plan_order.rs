@@ -47,6 +47,7 @@ fn names(snapshot: &Snapshot) -> Vec<String> {
             Launch::Draft { key, .. } => format!("draft:{key}"),
             Launch::Relaunch(name) => format!("relaunch:{name}"),
             Launch::Archive { id, .. } => format!("archive:{id}"),
+            Launch::Rebase { batch, .. } => format!("rebase:{batch}"),
             Launch::Fold { ids, .. } => format!("fold:{}", ids.join(",")),
             Launch::Land { batch } => format!("land:{batch}"),
             Launch::Verify { .. } => "verify".to_string(),

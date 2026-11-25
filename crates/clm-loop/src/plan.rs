@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use clm_view::{Loop, Next, QueueView, Running, Stop, WaitingOnYou};
 
-use crate::state::{Kind, LoopFile, RunState, StopMode, StoredHuman, StoredNext, StoredPlan};
+use crate::state::{
+    Kind, LoopFile, Rebase, RunState, StopMode, StoredHuman, StoredNext, StoredPlan,
+};
 
 /// One `group` line of `clm triage`: items to draft as one change.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,6 +100,12 @@ pub enum Launch {
     /// Fold the changes drafts left for review into one spec branch; it takes no place.
     Fold {
         ids: Vec<String>,
+        model: String,
+    },
+    /// Bring an approved fold batch whose land failed up to date with `main`, on its own
+    /// branch; it takes no place (`failed-batch-land-rebased`).
+    Rebase {
+        batch: String,
         model: String,
     },
     /// The session lands an approved fold batch.
@@ -235,8 +243,11 @@ fn fold_due(s: &Snapshot, resuming: bool) -> Option<Vec<String>> {
     if file.review.is_empty() || resuming {
         return None;
     }
+    // A `rebase:<batch>` run is no fold of the fold list (`failed-batch-land-rebased`).
     let busy = |r: &crate::state::Run| {
-        r.state != RunState::Returned && matches!(r.kind, Some(Kind::Draft | Kind::Fold))
+        r.state != RunState::Returned
+            && matches!(r.kind, Some(Kind::Draft | Kind::Fold))
+            && !r.name.starts_with("rebase:")
     };
     if file.runs.iter().any(busy) {
         return None;
@@ -411,7 +422,16 @@ pub fn plan_of(s: &Snapshot) -> Plan {
             });
         }
         for batch in file.batches.iter().filter(|b| b.approved) {
-            if !active(file, &format!("land:{}", batch.id)) {
+            // No land while its rebase is due or going (`failed-batch-land-rebased`).
+            if active(file, &format!("rebase:{}", batch.id)) {
+                continue;
+            }
+            if batch.rebase == Rebase::Due {
+                launches.push(Launch::Rebase {
+                    batch: batch.id.clone(),
+                    model: s.build_model.clone(),
+                });
+            } else if !active(file, &format!("land:{}", batch.id)) {
                 launches.push(Launch::Land {
                     batch: batch.id.clone(),
                 });

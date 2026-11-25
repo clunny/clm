@@ -436,6 +436,7 @@ fn every_draft_finish_says_what_it_kept() {
             approved: true,
             drafts: vec!["x".to_string()],
             since: clm_git::now(),
+            rebase: Default::default(),
         });
         Ok(())
     })

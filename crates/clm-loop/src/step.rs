@@ -11,7 +11,7 @@ use clm_orchestrator::DEFAULT_EXPIRY_HOURS;
 use crate::Options;
 use crate::cmd::{clm, clm_in, clm_ok, say};
 use crate::plan::{BacklogRow, Disk, Group, Launch, Snapshot, plan_of};
-use crate::state::{self, Kind, LoopFile, Run, RunState, StopMode};
+use crate::state::{self, Kind, LoopFile, Rebase, Run, RunState, StopMode};
 use crate::stops;
 
 /// A run's file `<dir>/<name>.md` under the directory that holds the loop's prompt files,
@@ -308,6 +308,27 @@ End with one line: `landed <sha>` or `stopped: <reason>`.\n"
     )
 }
 
+/// The prompt of the subagent that brings the approved fold batch `batch` up to date with
+/// `main` after its land failed; it lands nothing (`failed-batch-land-rebased`).
+fn rebase_prompt(batch: &str) -> String {
+    format!(
+        "Bring the approved fold batch `{batch}` up to date with `main`, in your own checkout. \
+Its land failed, which a merge of what landed on `main` since its fold may mend.\n\n\
+1. Continue its branch: `git switch -c spec/{batch} origin/spec/{batch}`. When a local \
+`spec/{batch}` already exists, run `git switch spec/{batch}` and `git reset --hard \
+origin/spec/{batch}` instead.\n\
+2. Run `clm rebase` until its last line is `rebase ok`, resolving what it reports (conflicted \
+files, stale deltas, check failures) and committing each fix. `rebase incomplete` leaves \
+something for you; `rebase failed` means git itself failed: run it once more, and stop when it \
+fails again.\n\
+3. Run `clm check`, then `clm gate --base origin/main`, and mend what they report.\n\
+4. Push with `clm branch push`.\n\n\
+Never land the branch and never approve it: the loop decides the land, and only a human \
+approves.\n\n\
+End with one line: `proposed {batch} review` once it is pushed, or `stopped: <reason>`.\n"
+    )
+}
+
 /// What preparing one launch came to.
 enum Prepared {
     /// A run, planned, to record.
@@ -434,6 +455,16 @@ fn prepare(
             let mut args = vec!["draft", "--fold"];
             args.extend(ids.iter().map(String::as_str));
             launch_run(options, run, &args, false, notes)
+        }
+        Launch::Rebase { batch, model } => {
+            let name = format!("rebase:{batch}");
+            let prompt = write_prompt(options, &name, &rebase_prompt(batch), notes)?;
+            Ok(Prepared::Run(Box::new(planned(
+                &name,
+                Some(Kind::Fold),
+                model,
+                Some(prompt),
+            ))))
         }
         Launch::Land { batch } => {
             let mut run = planned(&format!("land:{batch}"), None, "", None);
@@ -593,6 +624,35 @@ fn finish_gone_drafts(options: &Options) -> Result<Vec<String>, Failure> {
     Ok(says)
 }
 
+/// Drops each `rebase:<batch>` orphan rather than launching it again, putting its batch back in
+/// the human's queue as a rebase run that finishes with no closing line does; the `say` actions
+/// (`failed-batch-land-rebased`).
+fn drop_rebase_orphans(options: &Options) -> Result<Vec<String>, Failure> {
+    let Some(file) = state::read(&options.root) else {
+        return Ok(Vec::new());
+    };
+    if file.stop == Some(StopMode::Now) {
+        return Ok(Vec::new());
+    }
+    let mut says = Vec::new();
+    for run in file
+        .runs
+        .iter()
+        .filter(|r| r.orphan && r.name.starts_with("rebase:"))
+    {
+        says.push(crate::returned::rebase_failed(
+            options,
+            &run.name,
+            "its session ended before it returned",
+        )?);
+        state::update(&options.root, |f| {
+            f.runs.retain(|r| r.name != run.name);
+            Ok(())
+        })?;
+    }
+    Ok(says)
+}
+
 /// Runs the housekeeping and reads the snapshot, after a fetch the caller made.
 pub(crate) fn fresh_snapshot(options: &Options) -> Result<Snapshot, Failure> {
     // `clm wrap-up` removes landed worktrees and branches and frees the places that don't
@@ -733,6 +793,8 @@ pub fn approved(options: &Options, batch: &str) -> Result<Vec<String>, Failure> 
             .find(|b| b.id == batch)
             .ok_or_else(|| Failure::Refused(format!("the loop has no fold batch {batch}")))?;
         found.approved = true;
+        // A new approval allows a new rebase run (`failed-batch-land-rebased`).
+        found.rebase = Rebase::None;
         Ok(())
     })?;
     actions(options, &notes)
@@ -782,6 +844,7 @@ fn actions(options: &Options, notes: &str) -> Result<Vec<String>, Failure> {
     // Before the housekeeping, which removes a landed build's local branch.
     let mut say_lines = finish_gone_builds(options)?;
     say_lines.extend(finish_gone_drafts(options)?);
+    say_lines.extend(drop_rebase_orphans(options)?);
     let snapshot = fresh_snapshot(options)?;
     let plan = plan_of(&snapshot);
     // Each `left` line of the wrap-up is said once.
@@ -841,6 +904,12 @@ fn actions(options: &Options, notes: &str) -> Result<Vec<String>, Failure> {
                     if run.kind == Some(Kind::Fold) {
                         // The changes the fold takes leave the fold list.
                         f.review.retain(|id| !run.items.contains(id));
+                    }
+                    // A rebase run is counted when it is printed (`failed-batch-land-rebased`).
+                    if let Some(id) = run.name.strip_prefix("rebase:")
+                        && let Some(b) = f.batches.iter_mut().find(|b| b.id == id)
+                    {
+                        b.rebase = Rebase::Launched;
                     }
                     match f.run_mut(&run.name) {
                         Some(existing) => *existing = *run,

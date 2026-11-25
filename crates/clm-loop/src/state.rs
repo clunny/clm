@@ -47,8 +47,8 @@ pub enum RunState {
 /// One run of the loop: a build, a draft, a fold, an archive, or a command the session runs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Run {
-    /// `build:<component>`, `draft:<change-id>`, `fold:<first-id>`, `archive:<id>`,
-    /// `land:<batch>` or `verify`.
+    /// `build:<component>`, `draft:<change-id>`, `fold:<first-id>`, `rebase:<batch>` (of kind
+    /// fold), `archive:<id>`, `land:<batch>` or `verify`.
     pub name: String,
     /// None for a command the session runs itself (`land:<batch>`, `verify`).
     pub kind: Option<Kind>,
@@ -132,6 +132,23 @@ pub struct Batch {
     /// When the batch went to the human, Unix seconds.
     #[serde(default)]
     pub since: u64,
+    /// Where its `rebase:<batch>` run stands since its last approval
+    /// (`failed-batch-land-rebased`).
+    #[serde(default)]
+    pub rebase: Rebase,
+}
+
+/// A fold batch's `rebase:<batch>` run since the batch's last approval: one launch per approval.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Rebase {
+    /// None due, none launched.
+    #[default]
+    None,
+    /// A land failed: the plan launches one.
+    Due,
+    /// One was launched; a land that fails again goes back to the human.
+    Launched,
 }
 
 /// A `question` item the loop couldn't land yet.

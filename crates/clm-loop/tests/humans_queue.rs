@@ -68,12 +68,14 @@ fn every_kind_of_entry_oldest_first() {
         approved: false,
         drafts: Vec::new(),
         since: 90_000,
+        rebase: Default::default(),
     });
     file.batches.push(Batch {
         id: "done".to_string(),
         approved: true,
         drafts: Vec::new(),
         since: 1,
+        rebase: Default::default(),
     });
     file.escalations.push(Escalation {
         slug: "c-stops".to_string(),
