@@ -61,17 +61,22 @@ pub fn tests_in(path: &Path, text: &str) -> Vec<TestSpan> {
     found
 }
 
-/// The `req:` markers in `text` on no line of a test or group, as `Marker`s: nothing for a
-/// file of a language `tests_in` doesn't read.
+/// The `req:` markers in `text` on no line of a test, as `Marker`s, those on a group's own
+/// lines outside its tests included: nothing for a file of a language `tests_in` doesn't
+/// read.
 pub fn markers_outside_tests(path: &Path, text: &str) -> Vec<Marker> {
     split_markers(path, text).map_or_else(Vec::new, |(_, outside)| outside)
 }
 
 /// The `req:` markers of a file of a language `tests_in` reads, split into those on a line
-/// of a test or group and those on none; `None` for any other file.
+/// of a test and those on none, a group's own lines counting as none: a group's tests
+/// prove it severally (`a-marker-counts-for-its-own-test`). `None` for any other file.
 pub(crate) fn split_markers(path: &Path, text: &str) -> Option<(Vec<Marker>, Vec<Marker>)> {
     family(path)?;
-    let tests = tests_in(path, text);
+    let tests: Vec<TestSpan> = tests_in(path, text)
+        .into_iter()
+        .filter(|t| !t.group)
+        .collect();
     let (mut inside, mut outside) = (Vec::new(), Vec::new());
     for (i, line) in text.lines().enumerate() {
         let n = i + 1;

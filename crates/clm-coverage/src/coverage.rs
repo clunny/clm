@@ -301,8 +301,8 @@ fn proof(entry: &Requirement, current: &BTreeSet<String>) -> Option<Proof> {
 pub struct Scan {
     /// `req:<id>` markers.
     pub req: Vec<Marker>,
-    /// The `req:` markers on no line of a test or group of tests (`test-spans`), which
-    /// `req` leaves out (`markers-in-tests`).
+    /// The `req:` markers on no line of a test, a group's own lines included
+    /// (`test-spans`), which `req` leaves out (`markers-in-tests`).
     pub outside: Vec<Marker>,
     /// `clm:remove-by <change-id>` markers; each `id` is the change's.
     pub remove_by: Vec<Marker>,
