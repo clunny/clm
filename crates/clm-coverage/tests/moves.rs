@@ -79,7 +79,7 @@ fn renamed(d: &Path) {
 
 #[test]
 fn scenario_node_renamed_later_not_yet_built() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -93,7 +93,7 @@ fn scenario_node_renamed_later_not_yet_built() {
 
 #[test]
 fn scenario_node_renamed_later_built() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -110,7 +110,7 @@ fn scenario_node_renamed_later_built() {
 
 #[test]
 fn scenario_renamed_twice() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -131,7 +131,7 @@ fn scenario_renamed_twice() {
 
 #[test]
 fn a_split_counts_as_each_node_it_went_to() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -156,7 +156,7 @@ fn a_split_counts_as_each_node_it_went_to() {
 
 #[test]
 fn a_partial_split_counts_what_moved_and_what_stayed() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -192,7 +192,7 @@ fn a_partial_split_counts_what_moved_and_what_stayed() {
 #[test]
 fn progress_status_and_complete_changes_agree_on_a_rename() {
     // req:check.coverage/change-progress@e4335c5a
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -225,7 +225,7 @@ fn progress_status_and_complete_changes_agree_on_a_rename() {
 
 #[test]
 fn a_move_that_comes_back_is_followed_once() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -246,7 +246,7 @@ fn a_move_that_comes_back_is_followed_once() {
 
 #[test]
 fn only_applied_implementing_or_done_changes_move() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     for status in ["proposed", "approved", "abandoned"] {
         let dir = TempDir::new().unwrap();
         let d = dir.path();
@@ -264,7 +264,7 @@ fn only_applied_implementing_or_done_changes_move() {
 
 #[test]
 fn an_unapplied_change_follows_no_moves() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -279,7 +279,7 @@ fn an_unapplied_change_follows_no_moves() {
 
 #[test]
 fn an_id_the_spec_holds_is_not_followed_further() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -295,7 +295,7 @@ fn an_id_the_spec_holds_is_not_followed_further() {
 
 #[test]
 fn a_modified_requirement_makes_no_move() {
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -330,7 +330,7 @@ fn moved(d: &Path) -> Graph {
 
 #[test]
 fn moved_requirement_waits_for_the_move() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = TempDir::new().unwrap();
     let g = moved(dir.path());
     let markers = [marker("a/x", None, "t.rs", 4)];
@@ -351,7 +351,7 @@ fn moved_requirement_waits_for_the_move() {
 
 #[test]
 fn move_landed_marker_left_behind() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = TempDir::new().unwrap();
     let g = moved(dir.path());
     let markers = [
@@ -409,4 +409,88 @@ fn moved_to_follows_a_split_and_a_rename_sorted_and_only_live_removals() {
     archive(d, "20260101-s");
     let g = graph(d);
     assert!(moved_to(&g, "g/x").is_empty());
+}
+
+/// `change`'s `change.md`, `applied`, recording that it merged `from` into `to`.
+fn merges(root: &Path, change: &str, from: &str, to: &str) {
+    write(
+        root,
+        &format!("changes/{change}/change.md"),
+        &format!("---\nstatus: applied\nmoves:\n  - requirement: {from}\n    to: {to}\n---\n"),
+    );
+}
+
+#[test]
+fn scenario_merged_later() {
+    // req:check.coverage/status-report@476f39dd
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", &spec("[]", &["y"]));
+    change(d, "20260101-c", "applied");
+    adds(d, "20260101-c", "a", "x");
+    merges(d, "20260102-m", "a/x", "a/y");
+    write(
+        d,
+        "changes/20260102-m/deltas/a.md",
+        "---\ncomponent: a\n---\n## MODIFIED Requirements\n\n### Requirement: y <!-- base: 0123456789abcdef -->\ny.\n\n#### Scenario: s\n- ok\n\n## REMOVED Requirements\n\n### Requirement: x <!-- base: 0123456789abcdef -->\n",
+    );
+    let g = graph(d);
+    assert_eq!(g.changes["20260102-m"].moves.len(), 1);
+    let older = [marker("a/y", Some("00000000"), "t.rs", 1)];
+    assert_eq!(
+        row(&g, &older, "20260101-c"),
+        ["20260101-c", "0/1 requirements"]
+    );
+    assert!(complete_changes(&g, &older).is_empty());
+    let markers = [current(&g, "a/y", "t.rs", 1)];
+    assert_eq!(
+        row(&g, &markers, "20260101-c"),
+        ["20260101-c", "1/1 requirements", "complete"]
+    );
+    assert!(complete_changes(&g, &markers).contains(&"20260101-c".to_string()));
+}
+
+#[test]
+fn scenario_a_merge_into_a_requirement_of_the_same_component() {
+    // req:check.coverage/pending-report@f3f35088
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &spec("[]", &["new"]).replace("new.\n", "new.\n\n#### Needs\n- b/z\n"),
+    );
+    write(d, "specs/b/SPEC.md", &spec("[]", &["z"]));
+    merges(d, "20260101-m", "a/old", "a/new");
+    write(
+        d,
+        "changes/20260101-m/deltas/a.md",
+        "---\ncomponent: a\n---\n## ADDED Requirements\n\n### Requirement: new\nnew.\n\n#### Scenario: s\n- ok\n\n## REMOVED Requirements\n\n### Requirement: old <!-- base: 0123456789abcdef -->\n",
+    );
+    let g = graph(d);
+    let version = g.requirement("a/new").unwrap().version();
+    let on_a = |markers: &[Marker]| -> Vec<String> {
+        pending(&g, markers)
+            .iter()
+            .filter(|p| p.node == "a")
+            .map(|p| p.to_string())
+            .collect()
+    };
+    let old = marker("a/old", None, "t.rs", 3);
+    assert_eq!(
+        on_a(&[old.clone()]),
+        [
+            format!("a/new {version} unbuilt blocked b/z"),
+            "a/old obsolete t.rs:3 blocked a/new".into(),
+        ]
+    );
+    assert_eq!(
+        on_a(&[old, current(&g, "b/z", "u.rs", 1)]),
+        [
+            format!("a/new {version} unbuilt"),
+            "a/old obsolete t.rs:3".into(),
+        ]
+    );
 }

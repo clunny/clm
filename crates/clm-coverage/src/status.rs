@@ -162,7 +162,9 @@ fn progress<'g>(
 /// The moves the graph's changes record (`progress-follows-moves`), from each moved ID to
 /// the IDs it moved to: a change whose status is `applied`, `implementing` or `done`, in the
 /// archive or not, moves `<a>/<slug>` to `<b>/<slug>` when one of its deltas removes the
-/// first and another, for a node `<b>` other than `<a>`, adds the second, as a rename does.
+/// first and another, for a node `<b>` other than `<a>`, adds the second, as a rename does;
+/// and moves `<a>/<x>` to `<b>/<y>`, on any node, when its `moves` records that merge
+/// (`model/move-records`), which the model has checked against its deltas.
 pub(crate) fn moves(graph: &Graph) -> BTreeMap<String, BTreeSet<String>> {
     let mut moves: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let moving = graph.changes.values().filter(|c| {
@@ -185,6 +187,12 @@ pub(crate) fn moves(graph: &Graph) -> BTreeMap<String, BTreeSet<String>> {
                         .insert(format!("{}/{}", d.node, r.slug));
                 }
             }
+        }
+        for m in &c.moves {
+            moves
+                .entry(m.requirement.clone())
+                .or_default()
+                .insert(m.to.clone());
         }
     }
     moves

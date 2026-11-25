@@ -140,7 +140,7 @@ fn pending_in(
 
 #[test]
 fn scenario_states() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = repo();
     let d = dir.path();
     let g = graph(d);
@@ -164,7 +164,7 @@ fn scenario_states() {
 
 #[test]
 fn scenario_stale_marker_in_another_components_files() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(
@@ -201,7 +201,7 @@ fn scenario_stale_marker_in_another_components_files() {
 
 #[test]
 fn behind_lists_each_distinct_cited_version_and_none() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = repo();
     let d = dir.path();
     let g = graph(d);
@@ -219,7 +219,7 @@ fn behind_lists_each_distinct_cited_version_and_none() {
 
 #[test]
 fn scenario_blocked() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = repo();
     let d = dir.path();
     write(
@@ -248,7 +248,7 @@ fn scenario_blocked() {
 
 #[test]
 fn scenario_blocked_by_a_need() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = needs_repo();
     let d = dir.path();
     write(
@@ -266,7 +266,7 @@ fn scenario_blocked_by_a_need() {
 
 #[test]
 fn scenario_need_satisfied() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = needs_repo();
     let d = dir.path();
     let g = graph(d);
@@ -281,7 +281,7 @@ fn scenario_need_satisfied() {
 
 #[test]
 fn a_behind_need_still_blocks() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = needs_repo();
     let d = dir.path();
     let g = graph(d);
@@ -296,7 +296,7 @@ fn a_behind_need_still_blocks() {
 
 #[test]
 fn a_behind_requirement_names_a_repeated_need_once() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = needs_repo();
     let d = dir.path();
     let a = fs::read_to_string(d.join("specs/a/SPEC.md")).unwrap();
@@ -322,7 +322,7 @@ fn a_behind_requirement_names_a_repeated_need_once() {
 #[test]
 fn every_node_sorted_by_node_then_requirement() {
     // Scenario "every component".
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = repo();
     let d = dir.path();
     write(
@@ -350,7 +350,7 @@ fn every_node_sorted_by_node_then_requirement() {
 fn priority_is_the_highest_of_the_live_changes_touching_it() {
     // Scenario "a pending requirement's priority"; the removed component's two lines are
     // `moved_lines_keep_the_removing_changes_priority`'s.
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = repo();
     let d = dir.path();
     let modifies_x = "---\ncomponent: a\n---\n## MODIFIED Requirements\n### Requirement: x <!-- base: 0000000000000000 -->\nx.\n\n#### Scenario: s\n- ok\n";
@@ -397,7 +397,7 @@ fn priority_is_the_highest_of_the_live_changes_touching_it() {
 
 #[test]
 fn scenario_removed_node() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = removed_node_repo();
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
@@ -416,7 +416,7 @@ fn scenario_removed_node() {
 
 #[test]
 fn scenario_removed_node_files_of_two_nodes() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = removed_node_repo();
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
@@ -448,7 +448,7 @@ fn scenario_removed_node_files_of_two_nodes() {
 
 #[test]
 fn scenario_removed_node_unowned_file() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = removed_node_repo();
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
@@ -459,7 +459,7 @@ fn scenario_removed_node_unowned_file() {
 
 #[test]
 fn the_deepest_owner_then_the_first_by_id_takes_a_removed_nodes_marker() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = removed_node_repo();
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
@@ -492,7 +492,7 @@ fn the_deepest_owner_then_the_first_by_id_takes_a_removed_nodes_marker() {
 
 #[test]
 fn an_obsolete_marker_whose_node_exists_stays_on_that_node() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = repo();
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
@@ -511,7 +511,7 @@ fn an_obsolete_marker_whose_node_exists_stays_on_that_node() {
 
 #[test]
 fn a_node_gone_without_a_removal_delta_moves_too() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = repo();
     let d = dir.path();
     write(
@@ -526,7 +526,7 @@ fn a_node_gone_without_a_removal_delta_moves_too() {
 
 #[test]
 fn a_top_level_node_is_deeper_than_the_root() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = removed_node_repo();
     let d = dir.path();
     write(
@@ -543,7 +543,7 @@ fn a_top_level_node_is_deeper_than_the_root() {
 
 #[test]
 fn moved_lines_keep_the_removing_changes_priority() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = removed_node_repo();
     let d = dir.path();
     write(
