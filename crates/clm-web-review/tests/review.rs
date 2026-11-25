@@ -90,7 +90,7 @@ fn review_of(repo: FakeRepo) -> Value {
 
 #[test]
 fn modified_requirement() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let v = review();
     let nodes = v["nodes"].as_array().unwrap();
     let ids: Vec<&str> = nodes.iter().map(|n| n["id"].as_str().unwrap()).collect();
@@ -137,7 +137,7 @@ fn modified_requirement() {
 
 #[test]
 fn approval_state() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     // req:web.worker.review/fingerprint-from-trees@e49d6717
     let mut repo = spec_pr();
     let fingerprint = fingerprint(&repo);
@@ -166,7 +166,7 @@ fn approval_state() {
 
 #[test]
 fn no_ledger() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     // `spec_pr` opens #5 from `spec/c2`, which is that branch's page: take it away, so
     // the branch has no pull request and so no page.
     let mut repo = spec_pr();
@@ -179,7 +179,7 @@ fn no_ledger() {
 
 #[test]
 fn approval_of_an_older_diff() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     // An approval is pinned to the diff it was given for: a push that changes the diff
     // leaves it behind. The older diff differs in a decision, an authored file: the branch
     // adds a change, so its `specs/` don't count (`gate/fingerprint`).
@@ -201,7 +201,7 @@ fn approval_of_an_older_diff() {
 
 #[test]
 fn checked_head() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let mut repo = spec_pr();
     let tree: Vec<(String, String)> = repo.commits["222"]
         .iter()
@@ -235,7 +235,7 @@ fn checked_head() {
 
 #[test]
 fn checked_needs_the_whole_tree() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let mut repo = spec_pr();
     let tree: Vec<(String, String)> = repo.commits["222"]
         .iter()
@@ -264,7 +264,7 @@ fn checked_needs_the_whole_tree() {
 
 #[test]
 fn page_url() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let mut repo = spec_pr();
     repo.pages
         .push(("spec/c2".into(), 5, "https://github.com/o/a/pull/5".into()));
@@ -282,7 +282,7 @@ fn page_url() {
 
 #[test]
 fn only_spec_branches() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let mut repo = spec_pr();
     repo.branches.insert("impl/n".into(), "222".into());
     // `spec/x`'s ref lookup fails; `spec/y` names a commit GitHub can't compare.
@@ -310,7 +310,7 @@ fn only_spec_branches() {
 
 #[test]
 fn what_the_branch_changes_whole() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let caps = "## Capabilities\n\n### Capability: k\nOne can k.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
     let wider = caps.replace("One can k.", "One can k, fast.");
     let (before, after) = (node("", &["r"], "active"), node("", &["r", "s"], "active"));
@@ -353,7 +353,7 @@ fn what_the_branch_changes_whole() {
 
 #[test]
 fn a_binary_asset() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let mut repo = branch_from(
         &[("specs/n/SPEC.md", &node("", &["r"], "active"))],
         &[],
@@ -382,7 +382,7 @@ fn a_binary_asset() {
 
 #[test]
 fn the_page() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     // `spec_pr` opens #5 from `spec/c2` on `main`; a fork opens #6 from its own `spec/c2`.
     let mut repo = spec_pr();
     repo.pulls.push(FakePull {
@@ -408,8 +408,33 @@ fn the_page() {
 }
 
 #[test]
+fn a_pull_request_onto_another_base() {
+    // req:web.worker.review/pr-review@5982714a
+    // `spec/c3`'s only open pull request, #8, is onto `release`, not the default branch.
+    let mut repo = spec_pr();
+    assert_eq!(repo.default_branch, "main");
+    repo.branches.insert("spec/c3".into(), "222".into());
+    repo.pulls.push(FakePull {
+        number: 8,
+        state: "open".into(),
+        title: "Onto release".into(),
+        base_ref: "release".into(),
+        base_sha: "111".into(),
+        head_ref: "spec/c3".into(),
+        head_sha: "222".into(),
+        fork: false,
+    });
+    let fake = Fake::default();
+    fake.gh.add_repo("o/a", repo);
+    let cookie = fake.user("u", &["o/a"]);
+    let res = fake.handle(get("/api/repos/o/a/branches/spec/c3/review", &cookie));
+    assert_eq!(res.status, 200, "{res:?}");
+    assert_eq!(body_json(&res)["page"], Value::Null);
+}
+
+#[test]
 fn contract_frontmatter_and_assets() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let v = review();
     let m = &v["nodes"][0];
     assert_eq!(m["id"], "m");
@@ -442,7 +467,7 @@ fn contract_frontmatter_and_assets() {
 
 #[test]
 fn capabilities_edit_is_a_document() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let mut repo = spec_pr();
     let caps = "## Capabilities\n\n### Capability: k\nOne can k.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
     repo.commits
@@ -457,7 +482,7 @@ fn capabilities_edit_is_a_document() {
 
 #[test]
 fn change_intent_and_documents() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let v = review();
     let c = &v["change"];
     assert_eq!(c["id"], "c2");
@@ -1233,7 +1258,7 @@ fn comparison_cached_before_review_moved() {
 
 #[test]
 fn change_without_sections() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     let mut repo = spec_pr();
     repo.commits.get_mut("222").unwrap().insert(
         "changes/c2/change.md".into(),
@@ -1246,7 +1271,7 @@ fn change_without_sections() {
 
 #[test]
 fn change_with_empty_sections() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     // A heading with nothing under it is no section: the view then falls back to the whole intent.
     let mut repo = spec_pr();
     repo.commits.get_mut("222").unwrap().insert(
@@ -1285,7 +1310,7 @@ fn comparison_cached_with_a_patch_id() {
 
 #[test]
 fn truncated_listing() {
-    // req:web.worker.review/pr-review@f2b30179
+    // req:web.worker.review/pr-review@5982714a
     // req:web.worker.review/fingerprint-from-trees@e49d6717
     // GitHub truncating the merge base's listing leaves the review without a fingerprint,
     // so no approval shows, though one exists for the branch's real fingerprint.
