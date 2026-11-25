@@ -240,11 +240,11 @@ test.describe('the inspector is an overlay', () => {
   });
 });
 
-// req:web/markdown-styles@cf566a22
 test.describe('Markdown from the repository', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test('a long code line and a wide table scroll within their boxes, in JetBrains Mono, and the page does not scroll sideways', async ({ page, context }) => {
+    // req:web/markdown-styles@ef139cc3
     const mock = await mockApi(context);
     const row = (cells: string[]) => `| ${cells.join(' | ')} |`;
     const wide = ['alphabetical', 'bravo-column', 'charlie-column', 'delta-column', 'echo-column'];
