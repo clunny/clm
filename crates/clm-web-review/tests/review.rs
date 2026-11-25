@@ -1038,6 +1038,7 @@ fn comparison_cached_before_review_moved() {
             "compare4:o/a@111:222",
             "compare5:o/a@111:222",
             "compare6:o/a@111:222",
+            "compare7:o/a@111:222",
         ] {
             fake.cache_put(key, &old.to_string(), 86_400).await;
         }
@@ -1145,7 +1146,7 @@ fn is_files_key(key: &str) -> bool {
 
 #[test]
 fn unchanged_branch() {
-    // req:web.worker.review/review-cached@4c4b8baa
+    // req:web.worker.review/review-cached@5f4be262
     let fake = Fake::default();
     fake.gh.add_repo("o/a", spec_pr());
     let cookie = fake.user("u", &["o/a"]);
@@ -1165,7 +1166,7 @@ fn unchanged_branch() {
 
 #[test]
 fn truncated_listing_cached() {
-    // req:web.worker.review/review-cached@4c4b8baa
+    // req:web.worker.review/review-cached@5f4be262
     // A review without a fingerprint still comes from the Cache API: a commit's listing
     // never changes, so asking again would be truncated again.
     let mut repo = spec_pr();
@@ -1189,7 +1190,7 @@ fn truncated_listing_cached() {
 
 #[test]
 fn new_push_to_the_branch() {
-    // req:web.worker.review/review-cached@4c4b8baa
+    // req:web.worker.review/review-cached@5f4be262
     let mut repo = spec_pr();
     let mut moved = repo.commits["222"].clone();
     moved.insert(
@@ -1216,7 +1217,7 @@ fn new_push_to_the_branch() {
 
 #[test]
 fn default_branch_moved() {
-    // req:web.worker.review/review-cached@4c4b8baa
+    // req:web.worker.review/review-cached@5f4be262
     let mut repo = spec_pr();
     let mut moved = repo.commits["111"].clone();
     moved.insert(

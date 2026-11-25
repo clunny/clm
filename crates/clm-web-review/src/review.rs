@@ -311,10 +311,10 @@ pub async fn compare<P: Platform>(
 ) -> Option<Comparison> {
     let repo = access.full_name();
     let auth = access.auth();
-    // Named anew when the comparison changes shape or meaning, so none cached before is
-    // served: `compare7:` since a list whose text GitHub withholds at either side is named
-    // in the cuts in place of its lines (`pr-review`).
-    let key = format!("compare7:{repo}@{base_sha}:{head_sha}");
+    // Named anew when the comparison changes shape or meaning, so none an earlier build
+    // kept is served: `compare8:` since `review` and `cuts` come from the gate's one call
+    // (`gate-answer`, `approval-setting-branch`).
+    let key = format!("compare8:{repo}@{base_sha}:{head_sha}");
     if let Some(c) = p
         .cache_get(&key)
         .await
