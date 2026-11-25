@@ -318,6 +318,30 @@ fn a_reader_cant_hold_a_land() {
             &json!({"fingerprint": "older", "text": "Split it"}),
         );
         assert_eq!(res.status, 403, "{permission}: before 409");
+        // The branch and the fingerprint's absence are refused before the permission.
+        let body = json!({"fingerprint": "f", "text": "Split it"}).to_string();
+        let res = fake.handle(post(
+            "/api/repos/o/a/branches/spec/nope/request-changes",
+            &cookie,
+            body.as_bytes(),
+        ));
+        assert_eq!(
+            (res.status, body_json(&res)),
+            (422, json!({"error": "branch"}))
+        );
+        set(&fake, |r| {
+            r.truncated_trees.insert("222".into());
+        });
+        let res = send(
+            &fake,
+            &cookie,
+            "request-changes",
+            &json!({"fingerprint": "f", "text": "x"}),
+        );
+        assert_eq!(
+            (res.status, body_json(&res)),
+            (422, json!({"error": "fingerprint"}))
+        );
         assert!(fake.gh.writes().is_empty());
     }
 }

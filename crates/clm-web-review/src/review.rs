@@ -366,11 +366,9 @@ pub(crate) async fn compare<P: Platform>(
             side(&trees.base, &base_files),
             side(&trees.head, &head_files),
         );
-    let documents = changed
+    let mut documents: Vec<Document> = changed
         .iter()
-        .filter(|path| {
-            path.to_str().is_some_and(files::is_spec_path) || (setting && path.as_path() == policy)
-        })
+        .filter(|path| path.to_str().is_some_and(files::is_spec_path))
         .filter_map(|path| {
             let texts = Texts {
                 before: text(&base_files, path),
@@ -382,6 +380,23 @@ pub(crate) async fn compare<P: Platform>(
             })
         })
         .collect();
+    // A changed setting lists the file from the listings, so a side whose text GitHub
+    // withholds still shows, empty, and only a side without the file is null.
+    if setting {
+        let side = |listing: &keys::Listing, files: &Files| {
+            listing
+                .has(POLICY)
+                .then(|| text(files, policy).unwrap_or_default())
+        };
+        documents.push(Document {
+            path: POLICY.into(),
+            texts: Texts {
+                before: side(&trees.base, &base_files),
+                after: side(&trees.head, &head_files),
+            },
+        });
+        documents.sort_by(|a, b| a.path.cmp(&b.path));
+    }
 
     let (review, cuts) = gate(&trees, setting, &base_files, &head_files);
     let comparison = Comparison {
@@ -427,7 +442,8 @@ fn gate(
         listing
             .entries
             .iter()
-            .filter(|e| e.kind != "tree")
+            // A gitlink is no file the gate can read, as `git cat-file -e` says of it.
+            .filter(|e| e.kind == "blob")
             .filter_map(|e| String::from_utf8(e.path.clone()).ok())
             .collect()
     };
@@ -612,8 +628,8 @@ struct BranchReview {
     pub base: String,
     pub base_sha: String,
     pub head_sha: String,
-    /// The branch needs a human's review (`gate/needs-review-of`), a cut or a widened
-    /// exemption included (`gate/cuts`).
+    /// The branch needs a human's review, as `clm_gate::review_from_files` says
+    /// (`gate-answer`).
     pub review: bool,
     /// The `gate/cut` lines `clm gate` prints for what the branch cuts (`gate/cuts`).
     pub cuts: Vec<String>,
@@ -621,7 +637,8 @@ struct BranchReview {
     pub nodes: Vec<NodeChanges>,
     pub decisions: Vec<Record>,
     pub backlog: Vec<Record>,
-    /// Every changed text file the model reads, whole, for the full-document view.
+    /// Every changed spec path, and `clm.toml` when the approval setting changed, whole,
+    /// for the full-document view.
     pub documents: Vec<Document>,
     pub fingerprint: Option<String>,
     /// The default branch's tip holds `docs/allowed_signers` (`signed-repository`).

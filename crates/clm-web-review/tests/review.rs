@@ -969,6 +969,16 @@ fn truncated_base_listing_needs_review() {
     let mut repo = spec_pr();
     repo.truncated_trees.insert("111".into());
     assert_eq!(review_of(repo)["review"], true);
+    // A branch that removes `n/r`, with only its merge base's listing truncated: no cuts.
+    let mut repo = branch_from(
+        &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
+        &[],
+        &[("specs/n/SPEC.md", &node("", &["s"], "active"))],
+    );
+    repo.truncated_trees.insert("111".into());
+    let v = review_of(repo);
+    assert_eq!(v["review"], true, "{v}");
+    assert_eq!(cuts(&v), Vec::<&str>::new(), "{v}");
 }
 
 #[test]

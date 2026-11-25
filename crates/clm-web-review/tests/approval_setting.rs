@@ -142,20 +142,45 @@ fn the_file_no_longer_parses() {
 #[test]
 fn unreadable_text_counts_as_changed() {
     // req:web.worker.review/approval-setting-branch@7dd4d0b9
+    // A side whose text GitHub withholds shows empty, not null as a missing file does.
     let (fake, cookie) = setup();
-    assert_eq!(
-        documents(&review(&fake, &cookie, "spec/binary")),
-        ["clm.toml"]
-    );
+    let review = review(&fake, &cookie, "spec/binary");
+    assert_eq!(documents(&review), ["clm.toml"]);
+    assert_eq!(review["documents"][0]["before"], MAIN);
+    assert_eq!(review["documents"][0]["after"], "");
     let f = fingerprint(&fake, "spec/binary");
     assert_eq!(approve(&fake, &cookie, "spec/binary", &f), 200);
     assert_eq!(ledger(&fake).len(), 1);
 }
 
 #[test]
+fn withheld_on_both_sides() {
+    // req:web.worker.review/approval-setting-branch@7dd4d0b9
+    // GitHub withholds the file's text at the merge base and at the head: the setting
+    // counts as changed, and the review lists the file, empty on both sides.
+    let mut base = clm_repo();
+    base.insert("clm.toml".into(), b"approval = \"other\"\n\xff\n".to_vec());
+    let mut repo = FakeRepo::new("111", base.clone());
+    let mut head = base;
+    head.insert("clm.toml".into(), b"approval = \"any\"\n\xfe\n".to_vec());
+    repo.commits.insert("spec-both".into(), head);
+    repo.branches.insert("spec/both".into(), "spec-both".into());
+    let fake = Fake::default();
+    fake.gh.add_repo("o/a", repo);
+    let cookie = fake.user("u", &["o/a"]);
+    let review = review(&fake, &cookie, "spec/both");
+    assert_eq!(review["review"], true);
+    assert_eq!(documents(&review), ["clm.toml"]);
+    assert_eq!(review["documents"][0]["before"], "");
+    assert_eq!(review["documents"][0]["after"], "");
+}
+
+#[test]
 fn an_unchanged_file_fetches_nothing() {
     // req:web.worker.review/approval-setting-branch@7dd4d0b9
     let (fake, cookie) = setup();
+    assert!(documents(&review(&fake, &cookie, "spec/same")).is_empty());
+    let fake = setup().0;
     let f = fingerprint(&fake, "spec/same");
     assert_eq!(approve(&fake, &cookie, "spec/same", &f), 422);
     assert!(fake.gh.writes().is_empty());
