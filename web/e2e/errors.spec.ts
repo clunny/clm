@@ -142,6 +142,19 @@ test.describe('honest errors', () => {
   });
 
   // req:web/honest-errors@165e071b
+  test("a branch that goes while its review is on screen: the next refresh says it is no longer open", async ({ page, context }) => {
+    await page.clock.install();
+    const mock = await mockApi(context);
+    await page.goto('/app/#/o/a/prs/spec%2Fc');
+    await expect(page.locator('button.approve')).toBeVisible();
+    mock.fail('GET /api/repos/o/a/branches/spec/c/review', 404);
+    await expect(async () => {
+      await page.clock.runFor(10_000);
+      await expect(page.locator('.gone')).toContainText('spec/c is no longer open.', { timeout: 1_000 });
+    }).toPass({ timeout: 30_000 });
+  });
+
+  // req:web/honest-errors@165e071b
   test('no branch list: the PR list and Home say the spec branches couldn\'t be loaded, and the graph is drawn', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail('GET /api/repos/o/a/branches', 502);

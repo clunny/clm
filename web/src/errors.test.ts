@@ -1,7 +1,7 @@
 // The retry schedule and the words for each failure.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError, Offline } from './views/api';
-import { classify, failureText, retryDelay } from './errors';
+import { Undrawable, classify, failureText, retryDelay } from './errors';
 
 describe('retryDelay', () => {
   // req:web/honest-errors@165e071b
@@ -49,8 +49,10 @@ describe('failures', () => {
 
   // req:web/honest-errors@165e071b
   it("a view that can't be drawn from what the Worker answered says so, and not that CLM is retrying", () => {
-    expect(classify(new TypeError("Cannot read properties of undefined (reading 'nodes')"))).toEqual({ kind: 'undrawable' });
+    expect(classify(new Undrawable(new TypeError("Cannot read properties of undefined (reading 'nodes')")))).toEqual({ kind: 'undrawable' });
     expect(classify(new SyntaxError('Unexpected token'))).toEqual({ kind: 'undrawable' });
+    // A network failure while the body is read is no answer to draw from: it is asked again.
+    expect(classify(new TypeError('network error'))).toEqual({ kind: 'retry' });
     const { text } = failureText({ kind: 'undrawable' });
     expect(text).toBe("This view couldn't be drawn from what CLM answered.");
     expect(text).not.toMatch(/retrying/);

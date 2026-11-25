@@ -1,7 +1,7 @@
 // What the app says when a request for a repo's view fails (web/honest-errors): never more
 // than it knows.
 
-import { HttpError, Offline } from './views/api';
+import { HttpError } from './views/api';
 
 /** The seconds between asks after a failure: 5, 10, 20, then every 60. */
 const BACKOFF_S = [5, 10, 20, 60];
@@ -27,9 +27,18 @@ export type Failure =
   | { kind: 'undrawable' }
   ;
 
+/** A view that couldn't be drawn from what the Worker answered, with why. */
+export class Undrawable extends Error {
+  constructor(readonly why: unknown) {
+    super(`couldn't be drawn: ${why instanceof Error ? why.message : String(why)}`);
+  }
+}
+
 export function classify(e: unknown): Failure {
-  if (e instanceof Offline) return { kind: 'retry' };
-  if (!(e instanceof HttpError)) return { kind: 'undrawable' };
+  // A body that isn't JSON, or a view that threw while drawing from it.
+  if (e instanceof Undrawable || e instanceof SyntaxError) return { kind: 'undrawable' };
+  // A network failure, whether before the answer or while reading it, is asked again.
+  if (!(e instanceof HttpError)) return { kind: 'retry' };
   if (e.status === 403 || e.status === 404) return { kind: 'no-access' };
   if (e.status < 500) return { kind: 'failed', status: e.status };
   if (e.preparing !== null) return { kind: 'preparing', share: e.preparing };
