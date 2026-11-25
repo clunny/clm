@@ -15,7 +15,7 @@ fn setup() -> (Fake, String) {
 
 #[test]
 fn polls_within_30_seconds() {
-    // req:web.worker/views-from-replica@b85c6eb3
+    // req:web.worker/views-from-replica@05faf0d0
     let (fake, cookie) = setup();
     let view = json!({"sha": "111", "nodes": []});
     fake.set_view("o/a", "snapshot", view.clone());
@@ -40,7 +40,7 @@ fn polls_within_30_seconds() {
 
 #[test]
 fn views_are_kept_per_repo_and_name() {
-    // req:web.worker/views-from-replica@b85c6eb3
+    // req:web.worker/views-from-replica@05faf0d0
     let (fake, cookie) = setup();
     fake.gh.add_repo("o/b", FakeRepo::new("111", clm_repo()));
     fake.gh.grant("u", "o/b");
@@ -62,7 +62,7 @@ fn views_are_kept_per_repo_and_name() {
 
 #[test]
 fn preparing() {
-    // req:web.worker/views-from-replica@b85c6eb3
+    // req:web.worker/views-from-replica@05faf0d0
     let (fake, cookie) = setup();
     fake.set_answer("o/a", "snapshot", 503, json!({"preparing": 0.4}));
     for _ in 0..2 {
@@ -81,7 +81,7 @@ fn preparing() {
 
 #[test]
 fn object_down() {
-    // req:web.worker/views-from-replica@b85c6eb3
+    // req:web.worker/views-from-replica@05faf0d0
     let (fake, cookie) = setup();
     fake.replicas.bound.set(false);
     for route in ["capabilities", "snapshot", "implementation", "architecture"] {
@@ -89,16 +89,20 @@ fn object_down() {
         assert_eq!(res.status, 503, "{route}");
         assert_eq!(body_json(&res), json!({"error": "unavailable"}), "{route}");
     }
-    // An answer the Worker can't read is the same.
+    // An answer that is neither a view nor `preparing` is the same, and isn't kept.
     fake.replicas.bound.set(true);
     fake.set_answer("o/a", "architecture", 500, json!({"boom": true}));
-    let res = fake.handle(get("/api/repos/o/a/architecture", &cookie));
-    assert_eq!(body_json(&res), json!({"error": "unavailable"}));
+    for _ in 0..2 {
+        let res = fake.handle(get("/api/repos/o/a/architecture", &cookie));
+        assert_eq!(res.status, 503);
+        assert_eq!(body_json(&res), json!({"error": "unavailable"}));
+    }
+    assert_eq!(fake.replicas.asked("o/a").len(), 2, "asked twice: uncached");
 }
 
 #[test]
 fn proposals_for_each_reader() {
-    // req:web.worker/views-from-replica@b85c6eb3
+    // req:web.worker/views-from-replica@05faf0d0
     let fake = Fake::default();
     fake.assets.borrow_mut().insert(
         "/_clm/invited.json".into(),
@@ -150,7 +154,7 @@ fn proposals_for_each_reader() {
 
 #[test]
 fn a_view_without_proposals() {
-    // req:web.worker/views-from-replica@b85c6eb3
+    // req:web.worker/views-from-replica@05faf0d0
     let (fake, cookie) = setup();
     fake.set_view("o/a", "implementation", json!({"sha": "111"}));
     let view = body_json(&fake.handle(get("/api/repos/o/a/implementation", &cookie)));

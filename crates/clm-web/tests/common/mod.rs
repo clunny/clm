@@ -77,6 +77,8 @@ pub struct FakeReplicas {
     pub calls: RefCell<Vec<ReplicaCall>>,
     /// The scripted answer to `POST /write`, when the test scripts the object's writes.
     pub write: RefCell<Option<(u16, String)>>,
+    /// The objects that record each request and then fail it with 500.
+    pub fails: RefCell<BTreeSet<String>>,
     /// The real object, once [`Fake::real_object`] made it: it answers what isn't scripted.
     pub real: RefCell<Option<RealObject>>,
 }
@@ -120,6 +122,7 @@ impl Default for Fake {
                 views: RefCell::default(),
                 calls: RefCell::default(),
                 write: RefCell::default(),
+                fails: RefCell::default(),
                 real: RefCell::default(),
             },
             failing: RefCell::default(),
@@ -224,6 +227,9 @@ impl Replicas for Fake {
             path: path.into(),
             body: body.and_then(|b| serde_json::from_str(b).ok()),
         });
+        if self.replicas.fails.borrow().contains(name) {
+            return Some((500, String::new()));
+        }
         if path == "/write"
             && let Some((status, body)) = self.replicas.write.borrow().clone()
         {

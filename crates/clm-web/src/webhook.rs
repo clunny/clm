@@ -50,9 +50,7 @@ pub async fn handle<P: Platform + Replicas>(p: &P, req: &Request) -> Response {
         return Response::empty(401);
     }
     let event = req.header("x-github-event").unwrap_or_default();
-    let Some(body) = serde_json::from_slice::<Value>(&req.body).ok() else {
-        return Response::empty(if event == "push" { 400 } else { 204 });
-    };
+    // Any other kind is answered before its body is read, whatever the body holds.
     if ![
         "push",
         "pull_request",
@@ -63,6 +61,9 @@ pub async fn handle<P: Platform + Replicas>(p: &P, req: &Request) -> Response {
     {
         return Response::empty(204);
     }
+    let Ok(body) = serde_json::from_slice::<Value>(&req.body) else {
+        return Response::empty(400);
+    };
     let post = json!({
         "event": event,
         "delivery": req.header("x-github-delivery"),
