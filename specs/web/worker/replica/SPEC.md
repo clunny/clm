@@ -409,3 +409,18 @@ A binary file whose hash the replica keeps (`replica/asset-hashes`) SHALL be fet
 - GIVEN a repo holding `specs/b/assets/logo.png` and `specs/b/assets/big.png`, binary files, the second of 11 MiB, `specs/b/assets/lost.png`, whose blob the blob API fails, and `src/blob.bin`, another binary file; and a second object whose storage names no version, holding the same repo
 - WHEN the first build runs on an object that holds nothing, then the snapshot is read; and the second object is read, then read again after its alarms
 - THEN the blob API was asked for `logo.png` and `lost.png` only; the snapshot's `b` lists `logo.png` in `assets` with the hash `clm` gives and neither `big.png` nor `lost.png`, and the snapshot is ready; the second object first answers 503 `{"preparing": 0}`, then the same snapshot
+
+### Requirement: refetches-what-a-release-forgot
+When an object that holds a tip wakes with a replica whose `pending_fetch` lists files, as one a newer release loaded does (`replica/markers-of-this-release`), its first read or event SHALL set the alarm to now unless one is set, and its alarms SHALL fetch those files in slices, no request or alarm making more than 50 subrequests, and re-arm while any is left, whether or not the repo has open pages, recomputing and posting `{"delivery"}` to `/notify` as `alarm-batches` states. Until the recompute, a read SHALL answer the views the replica holds.
+
+#### Needs
+- replica/markers-of-this-release
+
+#### Scenario: a newer release
+- GIVEN an object at the tip GitHub gives, with no alarm set and no page open, whose stored replica a release `0.0.0` saved with `src/a.rs` citing a requirement, in a repo whose non-Markdown files more than one alarm's budget holds
+- WHEN the snapshot is read, then the object's alarms run until it re-arms no more, and the snapshot is read again
+- THEN the first read answers 200 with the stored snapshot and sets the alarm to now; no invocation made more than 50 subrequests; the second read's snapshot has coverage complete, counting `src/a.rs`'s marker, and a notice was posted
+
+#### Serves
+- capability/follow-from-browser
+- architecture/no-silent-drift
