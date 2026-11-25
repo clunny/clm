@@ -215,27 +215,26 @@ impl<'a> Repo<'a> {
         Ok(clm_gate::parse_ls_tree(&out))
     }
 
-    /// The live change IDs `head` adds or modifies relative to the base, sorted.
+    /// The live change IDs `head` adds, modifies or changes the type of relative to the base,
+    /// sorted, as `ledger`'s `change_ids` names them. Renames are off, so a renamed change
+    /// directory counts as added; `-z` keeps a non-ASCII ID unquoted, and `--relative` gives
+    /// the paths from the CLM root, the command's directory, so a root that is a subdirectory
+    /// of the repository still reads `changes/<id>/change.md`.
     pub fn changes(&self, head: &str) -> Result<Vec<String>, Error> {
         let base = self.merge_base(head)?;
         let names = self.git(&[
             "diff",
             "--name-only",
-            "--diff-filter=AM",
+            "--no-renames",
+            "--relative",
+            "-z",
+            "--diff-filter=AMT",
             &base,
             head,
             "--",
             "changes/",
         ])?;
-        let mut ids: Vec<String> = names
-            .lines()
-            .filter_map(|p| p.strip_prefix("changes/")?.strip_suffix("/change.md"))
-            .filter(|id| *id != "archive" && !id.contains('/'))
-            .map(str::to_string)
-            .collect();
-        ids.sort();
-        ids.dedup();
-        Ok(ids)
+        Ok(clm_ledger::change_ids(names.split('\0')))
     }
 
     /// Whether the fold holds an approval of `fingerprint` that counts, and, when none does,
