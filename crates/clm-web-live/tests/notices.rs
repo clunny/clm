@@ -11,7 +11,7 @@ fn item(slug: &str, kind: &str, title: &str) -> Item {
 
 #[test]
 fn two_questions_land() {
-    // req:web.live/notices@30857aa9
+    // req:web.live/notices@d495d235
     let previous = [item("i", "idea", "An idea")];
     let new = [
         item("i", "idea", "An idea"),
@@ -23,11 +23,20 @@ fn two_questions_land() {
         serde_json::to_value(&notice).unwrap(),
         json!({"title": "o/a: waiting on you", "body": "Which region? and 1 more", "url": "/app/#/o/a/backlog"})
     );
+    let new = [
+        item("i", "idea", "An idea"),
+        item("q", "question", "Which region?"),
+    ];
+    let notice = waiting_notice("o/a", &previous, &new).unwrap();
+    assert_eq!(
+        serde_json::to_value(&notice).unwrap(),
+        json!({"title": "o/a: waiting on you", "body": "Which region?", "url": "/app/#/o/a/backlog"})
+    );
 }
 
 #[test]
 fn one_waiting_item_is_named_alone() {
-    // req:web.live/notices@30857aa9
+    // req:web.live/notices@d495d235
     let new = [item("q", "question", "Which region?")];
     let notice = waiting_notice("o/a", &[], &new).unwrap();
     assert_eq!(notice.body, "Which region?");
@@ -35,7 +44,7 @@ fn one_waiting_item_is_named_alone() {
 
 #[test]
 fn nothing_new_waits() {
-    // req:web.live/notices@30857aa9
+    // req:web.live/notices@d495d235
     let previous = [item("q", "question", "Which region?")];
     let new = [
         item("q", "question", "Which region?"),
@@ -57,7 +66,7 @@ fn event(action: &str, head: &str, repo: &str, draft: bool) -> Value {
 
 #[test]
 fn opened_for_review() {
-    // req:web.live/notices@30857aa9
+    // req:web.live/notices@d495d235
     let notice = review_notice("o/a", &event("opened", "spec/x", "o/a", false));
     assert_eq!(
         notice,
@@ -83,7 +92,7 @@ fn opened_for_review() {
 
 #[test]
 fn branch_is_one_encoded_segment() {
-    // req:web.live/notices@30857aa9
+    // req:web.live/notices@d495d235
     let notice = review_notice("o/a", &event("opened", "spec/a b/ü", "o/a", false)).unwrap();
     assert_eq!(notice.url, "/app/#/o/a/prs/spec%2Fa%20b%2F%C3%BC");
 }

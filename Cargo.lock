@@ -802,6 +802,7 @@ dependencies = [
  "futures",
  "hkdf",
  "p256",
+ "percent-encoding",
  "serde",
  "serde_json",
  "sha2",
