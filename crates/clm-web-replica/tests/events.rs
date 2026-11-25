@@ -259,7 +259,7 @@ fn a_truncated_compare() {
 
 #[test]
 fn a_burst_of_pushes() {
-    // req:web.worker.replica/alarm-batches@7c4c8c7a
+    // req:web.worker.replica/alarm-batches@9c14a20a
     let fake = fake_with("111", repo_files(&[("t.rs", "fn t() {}")]));
     let (mut object, _mem, slot) = built(&fake);
     let described = view(&fake, &mut object, "snapshot");
@@ -307,6 +307,94 @@ fn notices(fake: &clm_web_platform::fake::Fake) -> Vec<String> {
         .filter(|c| c.path == "/notify")
         .map(|c| c.body.clone())
         .collect()
+}
+
+#[test]
+fn an_idle_alarm_pulled_in() {
+    // req:web.worker.replica/alarm-batches@9c14a20a
+    let fake = fake_with("111", repo_files(&[("t.rs", "fn t() {}")]));
+    let (mut object, _mem, slot) = built(&fake);
+    // Read a minute ago; the alarm is set ten minutes ahead for a resync.
+    view(&fake, &mut object, "snapshot");
+    fake.now.set(fake.now.get() + 60);
+    let now = fake.now.get();
+    slot.0.set(Some(now + 600));
+    commit(&fake, "222", repo_files(&[("t.rs", "fn t2() {}")]));
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    assert_eq!(slot.0.get(), Some(now + 60), "one minute after the push");
+    // An alarm due within that minute is kept.
+    slot.0.set(Some(now + 30));
+    commit(&fake, "333", repo_files(&[("t.rs", "fn t3() {}")]));
+    block_on(object.event(&fake, &event("push", "d2", push("main", "222", "333"))));
+    assert_eq!(slot.0.get(), Some(now + 30));
+}
+
+#[test]
+fn a_claim_lapses_while_a_page_is_open() {
+    // req:web.worker.replica/alarm-batches@9c14a20a
+    let fake = fake_with("111", repo_files(&[]));
+    let (mut object, _mem, slot) = built(&fake);
+    // A claim on `a` whose tip was made so that it lapses four hours on, at `lapse`.
+    let lapse = fake.now.get() + 200;
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        repo.commits
+            .insert("c1".into(), repo_files(&[("x.rs", "fn x() {}")]));
+        // GitHub lists the claim too, so a resync keeps it.
+        repo.claims
+            .push(("a".into(), "c1".into(), lapse - 4 * 3600));
+    }
+    let mut body = push("impl/a", "0", "c1");
+    body["created"] = json!(true);
+    body["head_commit"] = json!({"timestamp": clm_web_platform::fake::iso(lapse - 4 * 3600)});
+    block_on(object.event(&fake, &event("push", "d1", body)));
+    fake.now.set(slot.0.get().unwrap());
+    block_on(object.on_alarm(&fake));
+    let claimed = |v: &serde_json::Value| {
+        v["view"]["flight"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["node"] == "a" && n["state"] == "claimed")
+    };
+    // Read at 13:58, as it were.
+    fake.now.set(lapse - 120);
+    let before = view(&fake, &mut object, "implementation");
+    assert!(claimed(&before), "{before}");
+    let earlier = notices(&fake);
+    let mut fired = Vec::new();
+    // `replica`'s `recompute` names the lapse as the time the view next changes, but the
+    // claim reads live at that instant and lapsed a second on, so the alarms run to that
+    // second (`backlog/a-claim-reads-live-at-the-instant-recompute-says-it-lapses`).
+    while let Some(at) = slot.0.get().filter(|at| *at <= lapse + 1) {
+        fake.now.set(at);
+        block_on(object.on_alarm(&fake));
+        fired.push(at);
+    }
+    assert!(fired.contains(&lapse), "an alarm fired at {lapse}: {fired:?}");
+    let after = view(&fake, &mut object, "implementation");
+    assert!(!claimed(&after), "{after}");
+    let posted = notices(&fake).split_off(earlier.len());
+    assert!(!posted.is_empty(), "a notice was posted");
+    for body in &posted {
+        let notice: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert_eq!(notice.as_object().unwrap().len(), 1, "{notice}");
+        let delivery = notice["delivery"].as_str().unwrap();
+        assert_eq!(delivery.len(), 32, "{delivery}");
+        assert!(
+            delivery
+                .chars()
+                .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)),
+            "{delivery}"
+        );
+        // It names no event: neither the push's delivery nor an earlier notice's.
+        assert_ne!(delivery, "d1");
+        assert!(
+            !earlier.iter().any(|e| e.contains(delivery)),
+            "{delivery} named before"
+        );
+    }
 }
 
 #[test]
