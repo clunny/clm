@@ -836,14 +836,20 @@ fn the_gate_lists_by_cuts_or_unloaded() {
     // req:gate/cuts@b4d769db
     // `clm gate` lists what `cuts_or_unloaded` returns, the call `web.worker` makes too, so
     // the two list one thing; it holds no rule of its own for specs that don't load.
-    let lib = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs"),
-    )
-    .unwrap();
-    let lib: String = lib.split_whitespace().collect::<Vec<_>>().join(" ");
-    assert!(lib.contains("let listed = cuts_or_unloaded("));
-    assert!(lib.contains("Ok(ReadCuts { listed, widened, shortened_then,"));
-    assert!(!lib.contains("Cut::Unloaded { revision"));
+    // The one reading of a spec branch (`review-from-files`) holds the call.
+    let read = |file: &str| {
+        let text =
+            std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(file))
+                .unwrap();
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
+    let (lib, reading) = (read("src/lib.rs"), read("src/reading.rs"));
+    assert!(reading.contains("let cuts = cuts::cuts_or_unloaded("));
+    assert!(reading.contains("Ok(Read { changes, added, cuts, withheld,"));
+    assert!(lib.contains("cuts: read.cuts,"));
+    for text in [&lib, &reading] {
+        assert!(!text.contains("Cut::Unloaded { revision"));
+    }
 }
 
 /// A requirement `x` whose scenarios are `(name, lines)`, each block's lines as written.
