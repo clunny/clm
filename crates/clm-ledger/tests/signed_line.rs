@@ -38,6 +38,16 @@ fn a_signature_carried_not_checked() {
         // `cleared` counts the unsigned ones too, so only the signature tells them apart.
         assert_eq!(fold.cleared(request), !line.contains("dana"), "{line}");
     }
+    // A `sig` that isn't a string carries nothing.
+    for sig in ["5", "null", r#"["x"]"#] {
+        let line = approval("alice/1a2b3c4d", None).replace("]}", &format!(r#"],"sig":{sig}}}"#));
+        let fold = fold_of(&line);
+        assert!(!fold.carries_sig("a"), "{line}");
+        assert!(
+            !fold.cleared_by_sig(&fold.change_requests["spec/x"][0]),
+            "{line}"
+        );
+    }
     // A record the fold never read carries nothing.
     assert!(!fold_of(&approval("alice/1a2b3c4d", Some("x"))).carries_sig("nope"));
 }

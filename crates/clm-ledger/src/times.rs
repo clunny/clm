@@ -1,8 +1,10 @@
 //! A record's `at` written, and an RFC 3339 time read (`ledger/record-times`).
 
 /// The instant `secs` Unix seconds and `millis` milliseconds (below 1000) after it, as
-/// `YYYY-MM-DDTHH:MM:SS.mmmZ`, the form a record's `at` is written in.
+/// `YYYY-MM-DDTHH:MM:SS.mmmZ`, the form a record's `at` is written in, for an instant
+/// before the year 10000.
 pub fn rfc3339(secs: u64, millis: u32) -> String {
+    debug_assert!(millis < 1000, "{millis} milliseconds");
     let (days, rem) = (secs / 86_400, secs % 86_400);
     let (y, m, d) = civil(days as i64);
     format!(
