@@ -14,7 +14,7 @@ const { theme } = useData()
       <a class="rss" href="/blog/feed.xml" target="_self">RSS feed →</a>
     </header>
     <div v-if="posts.length > 0" class="blog-grid">
-      <a v-for="p in posts" :key="p.slug" class="blog-card" :href="`/blog/${p.slug}`">
+      <a v-for="p in posts" :key="p.slug" class="blog-card" :href="p.path">
         <div class="meta">
           <span v-if="p.part" class="part">Part {{ p.part }}</span>
           <span>{{ p.dateLabel }}</span>

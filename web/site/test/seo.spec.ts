@@ -3,11 +3,9 @@
 // clm:reads docs/guide/**
 // clm:reads docs/spec-format.md
 import { test, expect } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { guideSidebar, rewriteLinks } from '../.vitepress/guide'
-import { build, filesUnder, fixture, mainDist, read, repoDocs, siteDir } from './helpers'
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { blogFixture, build, filesUnder, fixture, mainDist, post, read, repoDocs, serve } from './helpers'
 
 const SITE = 'https://clm-app.dev'
 const meta = (html: string, attr: 'name' | 'property', key: string) =>
@@ -17,17 +15,32 @@ const canonical = (html: string) => /<link rel="canonical" href="([^"]*)"/.exec(
 const ldJson = (html: string) =>
   Array.from(html.matchAll(/<script type="application\/ld\+json">([^<]*)<\/script>/g), (m) => JSON.parse(m[1]))
 
+/** A guide file's `#` title, and its first paragraph after it as one line, read here from the
+ * file rather than pinned, so a reworded page doesn't fail the test. The quickstart's holds no
+ * Markdown marks, so the line is the plain text the head should carry. */
+function titleAndFirstParagraph(file: string): { heading: string; sentence: string } {
+  const lines = readFileSync(file, 'utf8').split('\n')
+  const at = lines.findIndex((l) => l.startsWith('# '))
+  let i = at + 1
+  while (lines[i].trim() === '') i++
+  const para: string[] = []
+  for (; i < lines.length && lines[i].trim() !== ''; i++) para.push(lines[i].trim())
+  const sentence = para.join(' ')
+  expect(sentence, 'the first paragraph holds no Markdown').not.toMatch(/[`*_[\]]/)
+  return { heading: lines[at].slice(2).trim(), sentence }
+}
+
 test("a guide page's head holds its metadata and its social card", () => {
-  // req:web.site/page-metadata@3f985405
+  // req:web.site/page-metadata@8d1c2456
   const html = read(mainDist, 'guide/quickstart.html')
-  const sentence = 'From nothing to your first change built, for a new project or an existing one.'
-  expect(title(html)).toBe('Quickstart | CLM guide')
+  const { heading, sentence } = titleAndFirstParagraph(join(repoDocs, 'guide/quickstart.md'))
+  expect(title(html)).toBe(`${heading} | CLM guide`)
   expect(meta(html, 'name', 'description')).toBe(sentence)
   expect(meta(html, 'property', 'og:description')).toBe(sentence)
   expect(meta(html, 'name', 'twitter:description')).toBe(sentence)
   expect(canonical(html)).toBe(`${SITE}/guide/quickstart`)
   expect(meta(html, 'property', 'og:url')).toBe(`${SITE}/guide/quickstart`)
-  expect(meta(html, 'property', 'og:title')).toBe('Quickstart | CLM guide')
+  expect(meta(html, 'property', 'og:title')).toBe(`${heading} | CLM guide`)
   expect(meta(html, 'property', 'og:type')).toBe('website')
   expect(meta(html, 'property', 'og:site_name')).toBe('CLM')
   expect(meta(html, 'name', 'twitter:card')).toBe('summary_large_image')
@@ -41,7 +54,7 @@ test("a guide page's head holds its metadata and its social card", () => {
 
 test('a summary paragraph loses its Markdown in the description', () => {
   test.setTimeout(180_000)
-  // req:web.site/page-metadata@3f985405
+  // req:web.site/page-metadata@8d1c2456
   const dir = fixture('plain', {
     'README.md': '# Guide\n\nThe guide.\n\n1. [Why CLM](why-clm.md)\n',
     'why-clm.md': '# Why\n\nRun `clm guide` or read [Why CLM](why-clm.md) and **more**.\n',
@@ -55,7 +68,7 @@ test('a summary paragraph loses its Markdown in the description', () => {
 
 test('a guide file with no summary paragraph fails the build, naming it', () => {
   test.setTimeout(180_000)
-  // req:web.site/page-metadata@3f985405
+  // req:web.site/page-metadata@8d1c2456
   const dir = fixture('nosummary', {
     'README.md': '# Guide\n\nThe guide.\n',
     'broken.md': '# Broken\n\n- a list\n- and no paragraph\n',
@@ -66,7 +79,7 @@ test('a guide file with no summary paragraph fails the build, naming it', () => 
 })
 
 test('the homepage, privacy and 404 pages have their own heads', () => {
-  // req:web.site/page-metadata@3f985405
+  // req:web.site/page-metadata@8d1c2456
   const home = read(mainDist, 'index.html')
   const privacy = read(mainDist, 'privacy.html')
   expect(canonical(home)).toBe(`${SITE}/`)
@@ -84,8 +97,45 @@ test('the homepage, privacy and 404 pages have their own heads', () => {
   expect(canonical(notFound)).toBeUndefined()
 })
 
+test('a guide file with no # title fails the build, naming it', () => {
+  test.setTimeout(180_000)
+  // req:web.site/page-metadata@8d1c2456
+  const dir = fixture('notitle', {
+    'README.md': '# Guide\n\nThe guide.\n',
+    'untitled.md': 'A page with no title line.\n\n## A section\n\nText.\n',
+  })
+  const { error } = build('notitle', { GUIDE_DIR: dir })
+  expect(error).toBeDefined()
+  expect(error).toContain('untitled.md')
+})
+
+test("each page has its own title and description, and the 404 page its own in the browser too", async ({ page }) => {
+  // req:web.site/page-metadata@8d1c2456
+  await page.goto('/')
+  const first = await page.evaluate(() => ({
+    headline: (document.querySelector('.hero h1') as HTMLElement).innerText,
+    line: (document.querySelector('.hero p') as HTMLElement).innerText,
+  }))
+  const flat = (s: string) => s.replace(/\s+/g, ' ').trim()
+  const sentence = /^.*?\.(?=\s|$)/.exec(flat(first.line))![0]
+  const home = read(mainDist, 'index.html')
+  expect(title(home)).toBe('CLM: declare the intent, AI builds the code to match')
+  expect(meta(home, 'name', 'description')).toBe(`${flat(first.headline)} ${sentence}`)
+  expect(title(read(mainDist, 'guide/index.html'))).toBe('CLM guide')
+  expect(title(read(mainDist, 'privacy.html'))).toBe('Privacy | CLM')
+  expect(title(read(mainDist, 'blog/index.html'))).toBe('CLM blog')
+  const notFound = read(mainDist, '404.html')
+  expect(title(notFound)).toBe('Page not found | CLM')
+  expect(Array.from(notFound.matchAll(/<meta name="description" content="([^"]*)"/g), (m) => m[1])).toEqual([
+    'This page does not exist.',
+  ])
+  expect(notFound).not.toMatch(/<meta (property|name)="(og|twitter):/)
+  await page.goto('/no-such-page')
+  await expect(page).toHaveTitle('Page not found | CLM')
+})
+
 test('robots.txt has one group for every crawler and names the sitemap', () => {
-  // req:web.site/crawler-files@7811e987
+  // req:web.site/crawler-files@08777c25
   const lines = read(mainDist, 'robots.txt').split('\n').map((l) => l.trim()).filter(Boolean)
   expect(lines.filter((l) => /^user-agent:/i.test(l))).toEqual(['User-agent: *'])
   expect(lines.filter((l) => /^allow:/i.test(l))).toEqual([])
@@ -98,7 +148,7 @@ test('robots.txt has one group for every crawler and names the sitemap', () => {
 })
 
 test('the sitemap lists the pages and nothing under /app/', () => {
-  // req:web.site/crawler-files@7811e987
+  // req:web.site/crawler-files@08777c25
   const urls = Array.from(read(mainDist, 'sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g), (m) => m[1])
   for (const path of ['/', '/guide/', '/guide/quickstart', '/guide/spec-format', '/privacy']) {
     expect(urls).toContain(SITE + path)
@@ -109,7 +159,7 @@ test('the sitemap lists the pages and nothing under /app/', () => {
 })
 
 test('the homepage describes CLM as a SoftwareApplication', () => {
-  // req:web.site/structured-data@56e1b2db
+  // req:web.site/structured-data@7aab789a
   const [app, ...rest] = ldJson(read(mainDist, 'index.html'))
   expect(rest).toEqual([])
   expect(app['@type']).toBe('SoftwareApplication')
@@ -122,7 +172,7 @@ test('the homepage describes CLM as a SoftwareApplication', () => {
 
 test("the FAQ's structured data follows its file", () => {
   test.setTimeout(180_000)
-  // req:web.site/structured-data@56e1b2db
+  // req:web.site/structured-data@7aab789a
   const dir = fixture('faq', {
     'README.md': '# Guide\n\nThe guide.\n\n1. [FAQ](faq.md)\n',
     'faq.md':
@@ -141,46 +191,109 @@ test("the FAQ's structured data follows its file", () => {
   expect(ldJson(read(out, 'guide/index.html'))).toEqual([])
 })
 
-test("each guide file's Markdown copy is its text with the links rewritten", () => {
-  // req:web.site/agent-markdown@6ed9b7f5
-  const pages = guideSidebar()
-  expect(pages.length).toBeGreaterThan(3)
-  for (const name of readdirSync(join(repoDocs, 'guide')).filter((f) => f.endsWith('.md'))) {
-    const page = name === 'README.md' ? 'index' : name.slice(0, -3)
-    const file = join(repoDocs, 'guide', name)
-    const copy = read(mainDist, `guide/${page}.md`)
-    const guide = { name: page, file, title: '', summary: '' }
-    expect(copy, name).toBe(rewriteLinks(readFileSync(file, 'utf8'), guide, SITE, 'clunny' + '/clm'))
-    // No link to another guide file or into the repository stays relative.
-    expect(copy.replace(/```[\s\S]*?```/g, ''), name).not.toMatch(/\]\((\.\.?\/|[\w-]+\.md)/)
+/** A line with each inline link's target, outside code spans, made `<>`: what a copy may change. */
+const targetsHidden = (line: string) =>
+  line
+    .split(/(`[^`]*`)/)
+    .map((piece, i) => (i % 2 ? piece : piece.replace(/(?<!!)(\[[^\]]*\]\()[^)\s]+\)/g, '$1<>)')))
+    .join('')
+
+/** The lines of `text` outside fenced code, code spans taken out. */
+const proseLines = (text: string) => {
+  let fenced = false
+  return text.split('\n').filter((line) => {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced
+    else if (!fenced) return true
+    return false
+  }).map((line) => line.replace(/`[^`]*`/g, ''))
+}
+
+test("each guide file's Markdown copy is its file with only link targets changed", () => {
+  // req:web.site/agent-markdown@e6e9273a
+  const files = readdirSync(join(repoDocs, 'guide')).filter((f) => f.endsWith('.md'))
+  const copies: string[] = []
+  for (const [file, name] of [
+    ...files.map((f) => [join(repoDocs, 'guide', f), f === 'README.md' ? 'index' : f.slice(0, -3)]),
+    [join(repoDocs, 'spec-format.md'), 'spec-format'],
+  ]) {
+    copies.push(`${name}.md`)
+    const source = readFileSync(file, 'utf8').split('\n')
+    const copy = read(mainDist, `guide/${name}.md`).split('\n')
+    expect(copy.length, name).toBe(source.length)
+    for (let i = 0; i < copy.length; i++) expect(targetsHidden(copy[i]), `${name}:${i + 1}`).toBe(targetsHidden(source[i]))
+    // No inline link outside fenced code is left relative.
+    for (const line of proseLines(copy.join('\n'))) {
+      for (const m of line.matchAll(/(?<!!)\[[^\]]*\]\(([^)\s]+)\)/g)) {
+        expect(m[1], `${name}: ${line}`).toMatch(/^([a-z][a-z0-9+.-]*:|#|\/)/i)
+      }
+    }
   }
-  expect(read(mainDist, 'guide/spec-format.md').split('\n')[0]).toBe('# Spec format (v0, provisional)')
+  expect(read(mainDist, 'guide/reference.md')).toContain(`](${SITE}/guide/spec-format.md)`)
+  const built = filesUnder(join(mainDist, 'guide')).filter((f) => f.endsWith('.md'))
+  expect(built.sort()).toEqual(copies.sort())
 })
 
-test('links in a Markdown copy are absolute, and code is left alone', () => {
+test('links into the repository name the file on GitHub in the copies and on the pages', async ({ page }) => {
   test.setTimeout(180_000)
-  // req:web.site/agent-markdown@6ed9b7f5
-  const dir = fixture('copies', {
-    'README.md': '# Guide\n\nThe guide.\n\n1. [Reference](reference.md)\n',
-    'reference.md':
-      '# Reference\n\nSee the [spec format](../spec-format.md#top), the [guide](README.md),\n\n```\n[not a link](../spec-format.md)\n```\n',
-  })
-  const { out, error } = build('copies', { GUIDE_DIR: dir })
-  expect(error).toBeUndefined()
-  const copy = read(out, 'guide/reference.md')
-  expect(copy).toContain(`[spec format](${SITE}/guide/spec-format.md#top)`)
-  expect(copy).toContain(`[guide](${SITE}/guide/index.md)`)
-  expect(copy).toContain('[not a link](../spec-format.md)')
-  // A link into the repository names the file on GitHub's `main`, a directory by `tree`.
-  const page = { name: 'reference', file: '', title: '', summary: '' }
+  // req:web.site/agent-markdown@e6e9273a
   const repo = 'someone/clm-public'
-  expect(rewriteLinks('[c](../../crates/) [r](../../README.md#top) [x](https://example.com/a.md)', page, SITE, repo)).toBe(
-    `[c](https://github.com/${repo}/tree/main/crates) [r](https://github.com/${repo}/blob/main/README.md#top) [x](https://example.com/a.md)`,
-  )
+  const dir = fixture('repolinks', {
+    'README.md': '# Guide\n\nThe guide.\n\n1. [Reference](reference.md)\n',
+    'reference.md': [
+      '# Reference',
+      '',
+      'See the [spec format](../spec-format.md#top), the [guide](README.md), the [crates](../../crates/),',
+      'the [readme](../../README.md#top), the [privacy page](/privacy) and [elsewhere](https://example.com/a.md).',
+      '',
+      '```',
+      '[not a link](../spec-format.md)',
+      '```',
+      '',
+      'And `[x](../y.md)` as code.',
+      '',
+    ].join('\n'),
+  })
+  const blog = blogFixture('repolinks', {
+    'alpha.md': post(
+      { title: 'Alpha', summary: 'First.', date: '2026-11-05', draft: false },
+      'The [readme](../../../README.md#top), the [next part](next.md) and ![pic](next.md).',
+    ),
+    'next.md': post({ title: 'Next', summary: 'Later.', date: '2026-11-06', draft: true }, 'Soon.'),
+  })
+  const { out, error } = build('repolinks', { GUIDE_DIR: dir, BLOG_DIR: blog, INSTALL_REPO: repo })
+  expect(error).toBeUndefined()
+  const tree = `https://github.com/${repo}/tree/main/crates`
+  const readme = `https://github.com/${repo}/blob/main/README.md#top`
+  const copy = read(out, 'guide/reference.md')
+  for (const want of [
+    `[spec format](${SITE}/guide/spec-format.md#top)`,
+    `[guide](${SITE}/guide/index.md)`,
+    `[crates](${tree})`,
+    `[readme](${readme})`,
+    '[privacy page](/privacy)',
+    '[elsewhere](https://example.com/a.md)',
+    '[not a link](../spec-format.md)',
+    '`[x](../y.md)`',
+  ]) {
+    expect(copy).toContain(want)
+  }
+  const server = await serve(out)
+  try {
+    await page.goto(`${server.url}/guide/reference`)
+    const hrefs = await page.locator('.vp-doc a').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+    expect(hrefs).toEqual(expect.arrayContaining([tree, readme]))
+    await page.goto(`${server.url}/blog/alpha`)
+    await expect(page.locator('.post-body a', { hasText: 'readme' })).toHaveAttribute('href', readme)
+  } finally {
+    await server.close()
+  }
+  const postCopy = read(out, 'blog/alpha.md')
+  expect(postCopy).toContain(`[readme](${readme})`)
+  expect(postCopy).toContain('the next part and ![pic](next.md).')
 })
 
 test('llms.txt lists the copies in the sidebar order', () => {
-  // req:web.site/agent-markdown@6ed9b7f5
+  // req:web.site/agent-markdown@e6e9273a
   const text = read(mainDist, 'llms.txt')
   expect(text.startsWith('# CLM\n\n> ')).toBe(true)
   expect(text).toContain('/plugin marketplace add ' + 'clunny' + '/clm')
@@ -188,14 +301,14 @@ test('llms.txt lists the copies in the sidebar order', () => {
   const quickstart = text.indexOf(`${SITE}/guide/quickstart.md`)
   expect(why).toBeGreaterThan(0)
   expect(why).toBeLessThan(quickstart)
-  const summary = 'From nothing to your first change built, for a new project or an existing one.'
-  expect(text).toContain(`[Quickstart](${SITE}/guide/quickstart.md): ${summary}`)
+  const { heading, sentence } = titleAndFirstParagraph(join(repoDocs, 'guide/quickstart.md'))
+  expect(text).toContain(`[${heading}](${SITE}/guide/quickstart.md): ${sentence}`)
   expect(text).toContain(`${SITE}/llms-full.txt`)
 })
 
 test('llms-full.txt and llms.txt follow the guide files with no edit under web/site', () => {
   test.setTimeout(240_000)
-  // req:web.site/agent-markdown@6ed9b7f5
+  // req:web.site/agent-markdown@e6e9273a
   const dir = fixture('drift', {
     'README.md': '# Guide\n\nThe guide.\n\n1. [Why](why.md)\n',
     'why.md': '# Why\n\nBecause.\n',
@@ -214,14 +327,6 @@ test('llms-full.txt and llms.txt follow the guide files with no edit under web/s
   expect(full).toContain('A new file.')
   expect(full).toContain(`<!-- ${SITE}/guide/extra -->`)
   expect(read(second.out, 'llms.txt')).toContain(`${SITE}/guide/extra.md`)
-})
-
-test('no built agent file is committed', () => {
-  // req:web.site/agent-markdown@6ed9b7f5
-  const tracked = execFileSync('git', ['ls-files'], { cwd: resolve(siteDir, '../..'), encoding: 'utf8' }).split('\n')
-  expect(tracked.filter((f) => /(^|\/)llms(-full)?\.txt$/.test(f))).toEqual([])
-  expect(tracked.filter((f) => f.startsWith('web/site/public/') && f.endsWith('.md'))).toEqual([])
-  expect(existsSync(join(siteDir, 'public'))).toBe(true)
 })
 
 test.describe('with script disabled', () => {

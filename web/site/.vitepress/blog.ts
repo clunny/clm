@@ -1,12 +1,14 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, posix, resolve } from 'node:path'
 import { parse } from 'yaml'
-import { repoLink } from './guide'
+import { outsideCode, pageImages, relativeTarget, repoLink } from './guide'
 
 // The directory the posts are read from (`BLOG_DIR` points tests at a fixture, as `GUIDE_DIR`
 // does for the guide); a missing or empty one builds a blog with no posts.
 const blogDir = () =>
   process.env.BLOG_DIR ? resolve(process.env.BLOG_DIR) : resolve(import.meta.dirname, '../blog')
+// The posts' place in the repository, whatever directory `BLOG_DIR` reads them from.
+const BLOG_IN_REPO = 'web/site/blog'
 
 export interface Post {
   slug: string
@@ -132,11 +134,16 @@ export function publishedPosts(posts: Post[] = loadPosts()): Post[] {
 export const series = (published: Post[]): Post[] =>
   published.filter((p) => p.part !== undefined).sort((a, b) => a.part! - b.part!)
 
+/** A post's page as a path on the site: its slug percent-encoded, so a slug holding `&`, a space
+ * or another character a URL or XML can't carry still leads to its page. Every URL the site
+ * writes for a post is made from it (`blog-post-page`). */
+export const postPath = (slug: string): string => `/blog/${encodeURIComponent(slug)}`
+
 /** What a post's page shows, as plain data the page's component reads from its route's params. */
 export function postView(post: Post, published: Post[]) {
   const parts = series(published)
   const at = post.part === undefined ? -1 : parts.findIndex((p) => p.slug === post.slug)
-  const ref = (p?: Post) => (p ? { slug: p.slug, title: p.title } : null)
+  const ref = (p?: Post) => (p ? { path: postPath(p.slug), title: p.title } : null)
   return {
     slug: post.slug,
     title: post.title,
@@ -148,52 +155,43 @@ export function postView(post: Post, published: Post[]) {
     minutes: post.minutes,
     tags: post.tags,
     part: post.part ?? null,
-    series: at < 0 ? [] : parts.map((p) => ({ slug: p.slug, title: p.title, part: p.part! })),
+    series: at < 0 ? [] : parts.map((p) => ({ slug: p.slug, path: postPath(p.slug), title: p.title, part: p.part! })),
     prev: ref(at > 0 ? parts[at - 1] : undefined),
     next: ref(at >= 0 ? parts[at + 1] : undefined),
   }
 }
 
-/** A post's text with the links between posts resolved (`blog-post-page`, `agent-markdown`): a
- * link `<slug>.md` to a published post leads to its page, or in a Markdown copy to its copy; a
- * link to a draft is left as its text; one to no post fails the build. In a copy, any other
- * relative link names its file on GitHub's `main`, as a guide copy's does. */
+/** A post's text with the targets of its inline links outside code resolved (`blog-post-page`,
+ * `agent-markdown`): a link `<slug>.md` to a published post leads to its page, or in a Markdown
+ * copy to its copy; a link to a draft is left as its text; one to no post fails the build; any
+ * other relative link names its file on GitHub's `main`, as a guide file's does. An image is
+ * never taken for a link. */
 export function resolvePostLinks(
   post: Post,
   all: Post[],
-  mode: { kind: 'page' } | { kind: 'copy'; siteUrl: string; repo: string },
+  repo: string,
+  mode: { kind: 'page' } | { kind: 'copy'; siteUrl: string },
 ): string {
-  let fenced = false
-  return post.body
-    .split('\n')
-    .map((line) => {
-      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced
-      if (fenced) return line
-      return line.replace(
-        /(?<!!)\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g,
-        (whole, label: string, target: string) => {
-          if (/^([a-z][a-z0-9+.-]*:|#|\/)/i.test(target)) return whole
-          const hash = target.indexOf('#')
-          const path = hash < 0 ? target : target.slice(0, hash)
-          const anchor = hash < 0 ? '' : target.slice(hash)
-          const sibling = /^([^/?]+)\.md$/.exec(path)
-          if (sibling) {
-            const other = all.find((p) => p.slug === sibling[1])
-            if (!other) throw new Error(`${post.file}: the link to ${target} names no post`)
-            if (other.draft) return label
-            return mode.kind === 'page'
-              ? `[${label}](/blog/${other.slug}${anchor})`
-              : `[${label}](${mode.siteUrl}/blog/${other.slug}.md${anchor})`
-          }
-          if (mode.kind === 'page' || path === '') return whole
-          const inRepo = posix.normalize(posix.join('web/site/blog', path))
-          return `[${label}](${repoLink(inRepo, path.endsWith('/'), anchor, mode.repo)})`
-        },
-      )
-    })
-    .join('\n')
+  return outsideCode(post.body, (piece) =>
+    (mode.kind === 'page' ? pageImages(piece, BLOG_IN_REPO, repo) : piece).replace(/(?<!!)\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (whole, label: string, target: string) => {
+      const rel = relativeTarget(target)
+      if (!rel || rel.path === '') return whole
+      const { path, anchor } = rel
+      const sibling = /^([^/?]+)\.md$/.exec(path)
+      if (sibling) {
+        const other = all.find((p) => p.slug === sibling[1])
+        if (!other) throw new Error(`${post.file}: the link to ${target} names no post`)
+        if (other.draft) return label
+        return mode.kind === 'page'
+          ? `[${label}](${postPath(other.slug)}${anchor})`
+          : `[${label}](${mode.siteUrl}${postPath(other.slug)}.md${anchor})`
+      }
+      const inRepo = posix.normalize(posix.join(BLOG_IN_REPO, path))
+      return `[${label}](${repoLink(inRepo, path.endsWith('/'), anchor, repo)})`
+    }),
+  )
 }
 
 /** A post's Markdown copy: its text under a `#` line with its title (`agent-markdown`). */
 export const postCopy = (post: Post, all: Post[], siteUrl: string, repo: string): string =>
-  `# ${post.title}\n\n${resolvePostLinks(post, all, { kind: 'copy', siteUrl, repo }).replace(/^\s+/, '')}`
+  `# ${post.title}\n\n${resolvePostLinks(post, all, repo, { kind: 'copy', siteUrl }).replace(/^\s+/, '')}`

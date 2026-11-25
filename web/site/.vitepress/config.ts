@@ -6,13 +6,9 @@ import { robotsTxt, writeAgentFiles } from './agents'
 import { describePage, notFoundHtml, pageHead } from './head'
 import { readStars } from './stars'
 import { loadPosts } from './blog'
+import { pageDataSafeInScript } from './page-data'
+import { installRepo, siteUrl } from './site'
 
-// The repository the install commands name: the one place it is written (`install-repository`).
-// Until launch it is the private repository; at launch, the public one.
-const installRepo = process.env.INSTALL_REPO || 'clunny/clm'
-
-// The site's address: every absolute URL the build writes is made from it.
-const siteUrl = 'https://clm-app.dev'
 
 // The homepage's headline and its first screen's line: read by `Home.vue`, the heads and `llms.txt`.
 const headline = 'Declare the intent. AI builds the code to match. CLM keeps it matching.'
@@ -51,12 +47,19 @@ export default defineConfig({
   outDir: resolve(process.env.SITE_OUT || 'dist'),
   cleanUrls: true,
   appearance: true,
-  sitemap: { hostname: siteUrl },
+  sitemap: {
+    hostname: siteUrl,
+    // Each page's path percent-encoded, so a post's URL is the one `postPath` writes everywhere
+    // else (`blog-post-page`).
+    transformItems: (items) =>
+      items.map((item) => ({ ...item, url: item.url.split('/').map(encodeURIComponent).join('/') })),
+  },
   vite: {
     // The social card and the like live in `web/site/public/`, beside `pages/`.
     publicDir: resolve(import.meta.dirname, '../public'),
     // A guide read from outside the package, as `GUIDE_DIR` or the repository's `docs/` says.
     server: { fs: { strict: false } },
+    plugins: [pageDataSafeInScript()],
   },
   transformPageData(pageData) {
     describePage(pageData, facts)

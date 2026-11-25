@@ -1,4 +1,5 @@
 import { loadPosts, postView, publishedPosts, resolvePostLinks } from '../../.vitepress/blog'
+import { installRepo } from '../../.vitepress/site'
 
 // One page for each published post; a draft has no page (`blog-drafts-left-out`).
 export default {
@@ -7,7 +8,7 @@ export default {
     const published = publishedPosts(all)
     return published.map((post) => ({
       params: postView(post, published),
-      content: resolvePostLinks(post, all, { kind: 'page' }),
+      content: resolvePostLinks(post, all, installRepo, { kind: 'page' }),
     }))
   },
 }

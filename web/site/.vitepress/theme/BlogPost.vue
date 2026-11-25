@@ -2,10 +2,10 @@
 import { computed } from 'vue'
 import { useData } from 'vitepress'
 
+// Another post: `path` is its page, as `postPath` writes it.
 interface Ref {
-  slug: string
+  path: string
   title: string
-  part?: number
 }
 
 // The route's params, made by `pages/blog/[slug].paths.ts` from the published posts alone.
@@ -21,7 +21,7 @@ const post = computed(() => params.value as {
   minutes: number
   tags: string[]
   part: number | null
-  series: Required<Ref>[]
+  series: (Ref & { slug: string; part: number })[]
   prev: Ref | null
   next: Ref | null
 })
@@ -55,15 +55,15 @@ const post = computed(() => params.value as {
           <ol>
             <li v-for="s in post.series" :key="s.slug" :class="{ cur: s.slug === post.slug }">
               <template v-if="s.slug === post.slug">{{ s.title }}</template>
-              <a v-else :href="`/blog/${s.slug}`">{{ s.title }}</a>
+              <a v-else :href="s.path">{{ s.title }}</a>
             </li>
           </ol>
         </div>
       </aside>
     </div>
     <nav v-if="post.prev || post.next" class="post-nav">
-      <a v-if="post.prev" class="prev" :href="`/blog/${post.prev.slug}`">← Previous<b>{{ post.prev.title }}</b></a>
-      <a v-if="post.next" class="next" :href="`/blog/${post.next.slug}`">Next →<b>{{ post.next.title }}</b></a>
+      <a v-if="post.prev" class="prev" :href="post.prev.path">← Previous<b>{{ post.prev.title }}</b></a>
+      <a v-if="post.next" class="next" :href="post.next.path">Next →<b>{{ post.next.title }}</b></a>
     </nav>
   </article>
 </template>
