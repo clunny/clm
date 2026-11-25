@@ -59,6 +59,18 @@ fn write_value(value: &Value, out: &mut String) {
     }
 }
 
+/// Why a record that parsed is still no record: a `mutated` one whose `failed` names an ID
+/// its `left` doesn't (`mutated-record`). Its keys are then requirement IDs, as `left`'s are.
+pub(crate) fn unfit(record: &Record) -> Option<String> {
+    let Body::Mutated { left, failed, .. } = &record.body else {
+        return None;
+    };
+    failed
+        .keys()
+        .find(|id| !left.contains(id))
+        .map(|id| format!("`failed` names `{id}`, which `left` doesn't"))
+}
+
 /// One line of `records.jsonl`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Record {
@@ -251,6 +263,14 @@ pub enum Body {
             skip_serializing_if = "Vec::is_empty"
         )]
         left: Vec<String>,
+        /// Why the pass left a requirement, by its ID, each one `left` holds; absent, as in
+        /// records written before the field, it is empty.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        failed: BTreeMap<String, String>,
+        /// How the pass ended when it ended early; absent, as in records written before the
+        /// field, it is none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ended: Option<String>,
     },
 }
 
@@ -461,6 +481,8 @@ impl Body {
             unproven,
             not_judged,
             left: vec![],
+            failed: BTreeMap::new(),
+            ended: None,
         }
     }
 
@@ -469,6 +491,22 @@ impl Body {
     pub fn with_left(mut self, left: Vec<String>) -> Body {
         if let Body::Mutated { left: slot, .. } = &mut self {
             *slot = left;
+        }
+        self
+    }
+
+    /// A `mutated` body with `failed` as its `failed`, and any other body unchanged.
+    pub fn with_failed(mut self, failed: BTreeMap<String, String>) -> Body {
+        if let Body::Mutated { failed: slot, .. } = &mut self {
+            *slot = failed;
+        }
+        self
+    }
+
+    /// A `mutated` body with `ended` as its `ended`, and any other body unchanged.
+    pub fn with_ended(mut self, ended: String) -> Body {
+        if let Body::Mutated { ended: slot, .. } = &mut self {
+            *slot = Some(ended);
         }
         self
     }

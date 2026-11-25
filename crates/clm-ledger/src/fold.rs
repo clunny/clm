@@ -196,6 +196,9 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
             }
             let parsed = parsed.and_then(|value| {
                 let record = Record::deserialize(&value)?;
+                if let Some(why) = crate::record::unfit(&record) {
+                    return Err(serde::de::Error::custom(why));
+                }
                 match value {
                     Value::Object(object) => Ok((record, object)),
                     _ => Err(serde::de::Error::custom("not a JSON object")),
