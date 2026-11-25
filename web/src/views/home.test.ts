@@ -29,8 +29,8 @@ const section = (e: HTMLElement, name: string) => e.querySelector<HTMLElement>(`
 const buttons = (s: HTMLElement | null) => [...(s?.querySelectorAll<HTMLElement>('.hent-row') ?? [])].map((r) => [...r.querySelectorAll('button.answer')].map((b) => b.textContent));
 const entries = (s: HTMLElement | null) => [...(s?.querySelectorAll<HTMLAnchorElement>('a.hent') ?? [])].map((a) => [a.textContent, a.getAttribute('href')]);
 
-// req:web.views/home-waiting-on-you@46bb33db
 describe('home: waiting on you', () => {
+  // req:web.views/home-waiting-on-you@76d80a78
   it('what waits: Review, Answer, Flagged and Answer in a session, in that order, with the badge at 3', () => {
     const snap = waiting();
     const view = renderHome({ snap, reviews: reviews(), caps: flagged(), arch: noneFlagged(), ...links });
@@ -51,12 +51,14 @@ describe('home: waiting on you', () => {
     expect(homeCount(snap, reviews())).toBe(3);
   });
 
+  // req:web.views/home-waiting-on-you@76d80a78
   it('flagged architectural constraints are listed with the capabilities', () => {
     const arch = architecture({ architecture: [constraint('e', 5, { flagged: true }), constraint('g', 0)] });
     const view = renderHome({ snap: snapshot(), reviews: [], caps: unflagged(), arch, ...links });
     expect(entries(section(view, 'flagged'))).toEqual([['e', '#/o/a/architecture/e']]);
   });
 
+  // req:web.views/home-waiting-on-you@76d80a78
   it('nothing waits: it says so and lists no section', () => {
     const snap = snapshot({ backlog: [item('i', 'idea'), item('b', 'bug')] });
     const view = renderHome({ snap, reviews: [review({ review: false })], caps: unflagged(), arch: noneFlagged(), ...links });
@@ -65,6 +67,7 @@ describe('home: waiting on you', () => {
     expect(homeCount(snap, [review({ review: false })])).toBe(0);
   });
 
+  // req:web.views/home-waiting-on-you@76d80a78
   it('counts only the reviews that have arrived, and draws without the reports', () => {
     const view = renderHome({ snap: waiting(), reviews: [], caps: null, arch: null, ...links });
     expect(section(view, 'review')).toBeNull();
@@ -72,5 +75,12 @@ describe('home: waiting on you', () => {
     expect(entries(section(view, 'answer'))).toHaveLength(2);
     expect(view.textContent).not.toContain('Nothing waits on you');
     expect(homeCount(waiting(), [])).toBe(2);
+  });
+
+  // req:web.views/home-waiting-on-you@76d80a78
+  it('the crumb: a snapshot of o/a reads o/a, as the snapshot names its repo', () => {
+    const crumb = (snap: Snapshot) => renderHome({ snap, reviews: [], caps: null, arch: null, ...links }).querySelector('.crumb')?.textContent;
+    expect(crumb(snapshot())).toBe('o/a');
+    expect(crumb(snapshot({ repo: 'Other/Repo' }))).toBe('Other/Repo');
   });
 });
