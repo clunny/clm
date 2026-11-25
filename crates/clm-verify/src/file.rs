@@ -85,9 +85,8 @@ fn try_file(ctx: &Ctx, stop: &AtomicBool) -> Result<Option<Filed>, Error> {
 /// The items still to file: the entries each `mutated` record on the chain holds, by commit
 /// and component, and the requirements whose run of records counting them against them
 /// holds two or more, by the commit of the second oldest of the run and component; each
-/// left out when a commit after
-/// the one it is named after already added an item of its kind and component named by any
-/// prefix of that commit at least 7 characters long.
+/// left out when a commit after the one it is named after already added an item of its kind
+/// and component named by any prefix of that commit at least 7 characters long.
 fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
     let component = |id: &str| id.split('/').next().unwrap_or_default().to_string();
     let mut unproven: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
@@ -319,7 +318,8 @@ fn unjudged_text(ctx: &Ctx, component: &str, runs: &[Run]) -> Result<String, Err
         "---\ntitle: The mutation pass can't judge requirements of {component}\nkind: bug\n\
          components: [{component}]\n---\n\n\
          Each of the mutation passes after the lands named left these requirements of \
-         `{component}` without a verdict, two or more in a row:\n\n"
+         `{component}` without a verdict. A pass that was stopped, or that left one only \
+         because another requirement's block failed, isn't listed:\n\n"
     );
     for (id, run) in runs {
         out.push_str(&format!("- `{id}`:\n"));
@@ -332,8 +332,8 @@ fn unjudged_text(ctx: &Ctx, component: &str, runs: &[Run]) -> Result<String, Err
         }
     }
     out.push_str(
-        "\nEach pass after the first tried them first. Mend what keeps the pass from its \
-         verdict (the failing tool, or `mutate_minutes`), then delete this item.\n",
+        "\nMend what keeps the pass from its verdict (the failing tool, or `mutate_minutes`), \
+         then delete this item.\n",
     );
     Ok(out)
 }
