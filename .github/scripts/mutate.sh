@@ -881,23 +881,55 @@ EOF
 }
 
 # The rules of the `.gitignore` files git reads that reach the npm directory $1, for StrykerJS's
-# `ignorePatterns`, each a JSON string and a comma: the top's first, then those under $1, tracked
-# or untracked and not ignored, shallower before deeper, so the last rule that matches wins as in
-# git. StrykerJS tries a pattern against an entry's name and its path from $1, so each is
-# re-rooted at $1 and anchored there: an unanchored rule gains `/**/` (`.test-dist/` in
-# `site/.gitignore` is `/site/**/.test-dist/`), since StrykerJS would match it only at the top,
-# and a rule with a slash before its end is joined to its own file's directory, or left out when
-# that lies outside $1. Rules, not the paths that exist, so a directory another run makes while
-# StrykerJS copies is left out too. Comments, blank lines and trailing spaces go; a `!` stays in
-# front.
+# `ignorePatterns`, each a JSON string and a comma: the top's and those of the directories down
+# to $1 first, then those under $1, tracked or untracked and not ignored, but none in a StrykerJS
+# sandbox of this script's, shallower before deeper, so the last rule that matches wins as in git.
+# StrykerJS tries a pattern against an entry's name and its path from $1, so each is re-rooted at
+# $1 and anchored there: an unanchored rule gains `/**/` (`.test-dist/` in `site/.gitignore` is
+# `/site/**/.test-dist/`), since StrykerJS would match it only at the top, and a rule with a
+# slash before its end is joined to its own file's directory, its leading parts matched, as
+# globs, against $1's, and left out when they don't match. Rules, not the paths that exist, so a
+# directory another run makes while StrykerJS copies is left out too. Comments, blank lines and
+# trailing spaces go; a `!` stays in front. A file that is gone by the time it is read, as one in
+# another run's sandbox may be, is skipped.
 stryker_ignores() {
-  local dir=$1 files f
-  files=$(git -C "$root" -c core.quotePath=false ls-files --cached --others --exclude-standard -- "$dir" |
-    awk -F/ '$NF == ".gitignore" { print NF "\t" $0 }' | sort -n -s -k1,1 | cut -f2) || return 1
-  for f in .gitignore $files; do
+  local dir=$1 up= part f files=()
+  files+=(.gitignore)
+  while IFS= read -r -d / part; do
+    up=$up$part/
+    [ "$up" = "$dir/" ] || files+=("${up}.gitignore")
+  done <<<"$dir/"
+  while IFS= read -r -d '' f; do
+    files+=("$f")
+  done < <(git -C "$root" ls-files -z --cached --others --exclude-standard -- "$dir" |
+    awk -v RS='\0' -v ORS='\0' -F/ '
+      $NF == ".gitignore" && $0 !~ /(^|\/)\.stryker-tmp-clm-[^\/]*\// { print NF "\t" $0 }' |
+    sort -z -n -s -k1,1 | cut -z -f2)
+  for f in "${files[@]}"; do
     [ -f "$root/$f" ] || continue
     awk -v d="$(dirname "$f")" -v n="$dir" '
-      BEGIN { if (d == ".") d = "" }
+      # A regular expression matching the glob $1, one part of a path.
+      function globre(g,   re, i, c, j) {
+        re = "^"
+        for (i = 1; i <= length(g); i++) {
+          c = substr(g, i, 1)
+          if (c == "*") re = re "[^/]*"
+          else if (c == "?") re = re "[^/]"
+          else if (c == "[" && (j = index(substr(g, i + 2), "]")) > 0) {
+            c = substr(g, i + 1, j)
+            if (substr(c, 1, 1) == "!") c = "^" substr(c, 2)
+            re = re "[" c "]"
+            i += j + 1
+          } else {
+            if (c == "\\" && i < length(g)) c = substr(g, ++i, 1)
+            if (c ~ /[A-Za-z0-9]/) re = re c
+            else if (c == "\\" || c == "^") re = re "\\" c
+            else re = re "[" c "]"
+          }
+        }
+        return re "$"
+      }
+      BEGIN { if (d == ".") d = ""; k = split(n, np, "/") }
       {
         r = $0
         sub(/\r$/, "", r)
@@ -912,9 +944,16 @@ stryker_ignores() {
         else anchored = index(body, "/") > 0
         if (anchored) {
           sub(/^\//, "", r)
-          full = (d == "" ? r : d "/" r)
-          if (index(full, n "/") != 1) next
-          out = "/" substr(full, length(n) + 2)
+          m = split(d == "" ? r : d "/" r, fp, "/")
+          out = ""
+          for (i = 1; i <= k; i++) {
+            if (fp[i] == "**") { out = "/**"; i++; break }
+            # The rule names $1 itself or a directory above it, or misses it.
+            if (i >= m || fp[i] == "" || np[i] !~ globre(fp[i])) next
+          }
+          for (; i <= m; i++) out = out "/" fp[i]
+          # Nothing left below $1: the rule names $1 itself.
+          if (out ~ /^[\/*]*$/) next
         } else if (index(d "/", n "/") == 1 && d != n) {
           out = "/" substr(d, length(n) + 2) "/**/" r
         } else {
@@ -924,7 +963,7 @@ stryker_ignores() {
         gsub(/\\/, "\\\\", out)
         gsub(/"/, "\\\"", out)
         printf "\"%s\",", out
-      }' "$root/$f" || return 1
+      }' "$root/$f" || [ ! -e "$root/$f" ] || return 1
   done
 }
 

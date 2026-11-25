@@ -3446,6 +3446,8 @@ fn the_stryker_fixture_reads_a_file_of_the_repository() {
 fn the_stryker_fixture_fails_on_what_git_ignores() {
     // req:ci/mutate-script@10276cb4
     let tree = mutate_tree(WEB_BLOCK);
+    fs::create_dir_all(tree.work().join("web/site")).unwrap();
+    fs::write(tree.work().join("web/site/.gitignore"), ".test-dist/\n").unwrap();
     tree.report("stryker-killed", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
@@ -3526,18 +3528,26 @@ fn stryker_copies_nothing_git_ignores() {
     let tree = mutate_tree(WEB_BLOCK);
     let work = tree.work();
     // The top's rules: one anchored under another directory, one anchored under `web/`, and
-    // unanchored ones that reach any depth.
+    // unanchored ones that reach any depth, one led by `**/` and one ending in a carriage return.
     fs::write(
         work.join(".gitignore"),
-        "/target/\nweb/node_modules/\n.wrangler/\ncrates/x/build/\n# a comment\n\n.clm/   \n",
+        "/target/\nweb/node_modules/\n.wrangler/\ncrates/x/build/\n# a comment\n\n.clm/   \n*.tmp\n**/clm-any/\ncrlf-dir/\r\n*/clm-glob/\n/w?b/clm-q/\n/[wx]eb/clm-class/\nweb/**/clm-deep/\n",
     )
     .unwrap();
-    // The site's own, untracked, as git reads it too; and one inside an ignored directory,
-    // which git never reads.
+    // The site's own, untracked, as git reads it too, whose negations come after the top's
+    // rules and its own, and whose rules hold a quote, an escape and an escaped trailing space;
+    // and one inside an ignored directory, which git never reads.
     fs::create_dir_all(work.join("web/site")).unwrap();
     fs::write(
         work.join("web/site/.gitignore"),
-        ".test-dist/\n.vitepress/cache/\n",
+        ".test-dist/\n.vitepress/cache/\n*.log\n!keep.log\n!keep.tmp\nquote\"d/\nback\\#slash/\nsp\\ \n",
+    )
+    .unwrap();
+    // Nor one in another run's StrykerJS sandbox, which may vanish while it is read.
+    fs::create_dir_all(work.join("web/.stryker-tmp-clm-old/x")).unwrap();
+    fs::write(
+        work.join("web/.stryker-tmp-clm-old/x/.gitignore"),
+        "clm-sandbox-rule/\n",
     )
     .unwrap();
     fs::create_dir_all(work.join("web/node_modules/pkg")).unwrap();
@@ -3572,7 +3582,10 @@ fn stryker_copies_nothing_git_ignores() {
             p.strip_prefix('!').unwrap_or(p).starts_with('/'),
             "{p} in {patterns:?}"
         );
-        assert!(!p.contains("clm-not-read"), "{patterns:?}");
+        assert!(
+            !p.contains("clm-not-read") && !p.contains("clm-sandbox-rule"),
+            "{patterns:?}"
+        );
     }
     // Read as `.gitignore` rules from `web/`, by git itself.
     let web = TempDir::new().unwrap();
@@ -3585,6 +3598,18 @@ fn stryker_copies_nothing_git_ignores() {
         "site/.clm",
         "node_modules",
         "site/.vitepress/cache",
+        "src/.test-dist",
+        "src/.vitepress/cache",
+        "src/clm-any",
+        "src/crlf-dir",
+        "site/quote\"d",
+        "site/back#slash",
+        "clm-glob",
+        "clm-q",
+        "clm-class",
+        "src/a/clm-deep",
+        "target",
+        "crates/x/build",
         "src",
         "test",
     ] {
@@ -3597,10 +3622,35 @@ fn stryker_copies_nothing_git_ignores() {
         "site/.clm",
         "site/.vitepress/cache",
         "node_modules",
+        "src/clm-any",
+        "src/crlf-dir",
+        "site/x.log",
+        "site/x.tmp",
+        "src/x.tmp",
+        "site/quote\"d",
+        "site/back#slash",
+        "site/sp ",
+        "clm-glob",
+        "clm-q",
+        "clm-class",
+        "src/a/clm-deep",
     ] {
         assert!(git_ignores(web.path(), ignored), "{ignored}: {patterns:?}");
     }
-    for kept in ["src/app.ts", "test/app.test.ts", "target", "crates/x/build"] {
+    // A sub-directory's rule reaches no further than its own directory, and a later file's
+    // negation wins.
+    for kept in [
+        "src/app.ts",
+        "test/app.test.ts",
+        "target",
+        "crates/x/build",
+        "src/.test-dist",
+        "src/.vitepress/cache",
+        "src/x.log",
+        "site/keep.log",
+        "site/keep.tmp",
+        "site/sp",
+    ] {
         assert!(!git_ignores(web.path(), kept), "{kept}: {patterns:?}");
     }
 }
