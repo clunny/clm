@@ -7,7 +7,7 @@ use common::*;
 
 #[test]
 fn a_large_repository_saves_in_chunks_and_loads_back() {
-    // req:replica/stores-in-chunks@548edbd9
+    // req:replica/stores-in-chunks@0a3cc96c
     let mut f = clm_repo();
     // A decision of about 5 MiB, so the serialised state is over 5 MiB.
     let body = "Why, at length.\n".repeat(5 * 1024 * 1024 / 16);
@@ -50,7 +50,7 @@ fn a_large_repository_saves_in_chunks_and_loads_back() {
 
 #[test]
 fn an_empty_or_unreadable_store_gives_a_new_replica() {
-    // req:replica/stores-in-chunks@548edbd9
+    // req:replica/stores-in-chunks@0a3cc96c
     let mut store = MapStore::default();
     assert_eq!(Replica::load(&store), Replica::default());
 
