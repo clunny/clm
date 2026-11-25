@@ -8,7 +8,7 @@ import type { Proposal, Taken } from './types';
 const slugs = (e: HTMLElement) => [...e.querySelectorAll<HTMLElement>('.bi')].map((b) => b.dataset.slug);
 
 describe('backlog view', () => {
-  // req:web.views/backlog-view@c6475681
+  // req:web.views/backlog-view@8c5ab166
   it('filter: only items on the chosen node are shown', () => {
     const view = renderBacklog(snapshot(), null, 'a', () => {});
     expect(slugs(view).sort()).toEqual(['crash', 'setup']);
@@ -16,7 +16,7 @@ describe('backlog view', () => {
     expect(slugs(all).sort()).toEqual(['crash', 'later', 'setup']);
   });
 
-  // req:web.views/backlog-view@c6475681
+  // req:web.views/backlog-view@8c5ab166
   it('waiting on you: human-task and question items come first, naming the requirements they block', () => {
     const view = renderBacklog(snapshot(), null, null, () => {});
     const row = view.querySelector<HTMLElement>('.waiting')!;
@@ -28,7 +28,7 @@ describe('backlog view', () => {
     expect(waiting(snapshot()).map((w) => [w.item.slug, w.blocks])).toEqual([['setup', ['c/a']]]);
   });
 
-  // req:web.views/backlog-view@c6475681
+  // req:web.views/backlog-view@8c5ab166
   it('a question blocking nothing yet still waits on you', () => {
     const snap = snapshot();
     snap.backlog.push({ slug: 'which', kind: 'question', title: 'Which?', nodes: ['b'], origin: null, blocks: [] });
@@ -38,7 +38,7 @@ describe('backlog view', () => {
     expect(row.querySelector<HTMLElement>('.bi[data-slug=which] .blocks')).toBeNull();
   });
 
-  // req:web.views/backlog-view@c6475681
+  // req:web.views/backlog-view@8c5ab166
   it('groups the rest by kind, each card with title, nodes and slug', () => {
     const view = renderBacklog(snapshot(), null, null, () => {});
     const bugs = view.querySelector<HTMLElement>('.col[data-kind=bug]')!;
@@ -49,7 +49,7 @@ describe('backlog view', () => {
     expect(view.querySelector('.col[data-kind=idea] .bi[data-slug=later]')).not.toBeNull();
   });
 
-  // req:web.views/backlog-view@c6475681
+  // req:web.views/backlog-view@8c5ab166
   it("an item opens its page: 'later' links to #/o/a/backlog/later, and that route shows the item", () => {
     const link = (slug: string) => `#/o/a/backlog/${slug}`;
     const view = renderBacklog(snapshot(), null, null, () => {}, undefined, link);
@@ -63,22 +63,45 @@ describe('backlog view', () => {
     expect(page.textContent).toContain('c/a');
   });
 
-  // req:web.views/backlog-view@c6475681
+  // req:web.views/backlog-view@8c5ab166
   it('a slug the backlog does not hold says so and links to the Backlog', () => {
     const page = renderBacklogItem(snapshot(), 'gone', null, '#/o/a/backlog');
     expect(page.textContent).toContain("isn't in the backlog");
     expect(page.querySelector('a')!.getAttribute('href')).toBe('#/o/a/backlog');
   });
 
+  // req:web.views/backlog-view@8c5ab166
   it('picking a node pill filters', () => {
     let picked: string | null = 'x';
     const view = renderBacklog(snapshot(), null, null, (n) => (picked = n));
     view.querySelector<HTMLElement>('.filter button[data-node=b]')!.click();
     expect(picked).toBe('b');
   });
+
+  // req:web.views/backlog-view@8c5ab166
+  it('other kinds and the filter: Bugs, Deferred, Ideas, then each other kind; the filter lists all and the sorted components, Waiting on you included', () => {
+    const snap = snapshot();
+    snap.backlog = [
+      { slug: 'crash', kind: 'bug', title: 'It crashes', nodes: ['b'], origin: null, blocks: [] },
+      { slug: 'later', kind: 'idea', title: 'Later', nodes: ['a'], origin: null, blocks: [] },
+      { slug: 'tidy', kind: 'chore', title: 'Tidy up', nodes: ['a'], origin: null, blocks: [] },
+      { slug: 'which', kind: 'question', title: 'Which?', nodes: ['b'], origin: null, blocks: [] },
+    ];
+    const picked: (string | null)[] = [];
+    const view = renderBacklog(snap, null, null, (n) => picked.push(n));
+    const heads = [...view.querySelectorAll<HTMLElement>('.col')].map((c) => c.querySelector('.colh')!.childNodes[1].textContent);
+    expect(heads).toEqual(['Bugs', 'Deferred', 'Ideas', 'chore']);
+    expect([...view.querySelectorAll('.filter button')].map((b) => b.textContent)).toEqual(['all', 'a', 'b']);
+    view.querySelector<HTMLElement>('.filter button[data-node=a]')!.click();
+    expect(picked).toEqual(['a']);
+    const onA = renderBacklog(snap, null, 'a', () => {});
+    expect(onA.querySelector('.waiting')).toBeNull();
+    expect(slugs(onA.querySelector<HTMLElement>('.col[data-kind=bug]')!)).toEqual([]);
+    expect(slugs(onA)).toEqual(['later', 'tidy']);
+    expect(slugs(view.querySelector<HTMLElement>('.waiting')!)).toEqual(['which']);
+  });
 });
 
-// req:web.views/backlog-taken@7225a6a8
 describe('taken marks', () => {
   const snap = () => {
     const s = snapshot();
@@ -87,7 +110,7 @@ describe('taken marks', () => {
   };
   const mark = (view: HTMLElement, slug: string) => view.querySelector<HTMLElement>(`.bi[data-slug=${slug}] .taken`)?.textContent ?? null;
 
-  // req:web.views/backlog-view@c6475681
+  // req:web.views/backlog-taken@7225a6a8
   it('marks: a resolved by x, b proposed in y, c claimed, d unmarked', () => {
     const taken: Taken = {
       changes: [
@@ -100,7 +123,7 @@ describe('taken marks', () => {
     expect(['a', 'b', 'c', 'd'].map((s) => mark(view, s))).toEqual(['resolved by x', 'proposed in y', 'claimed', null]);
   });
 
-  // req:web.views/backlog-view@c6475681
+  // req:web.views/backlog-taken@7225a6a8
   it('a change on main wins over proposed work, and proposed work over a bare claim', () => {
     const taken: Taken = {
       changes: [
@@ -113,6 +136,7 @@ describe('taken marks', () => {
     expect([mark(view, 'a'), mark(view, 'b')]).toEqual(['resolved by x', 'proposed in y']);
   });
 
+  // req:web.views/backlog-taken@7225a6a8
   it('before the implementation state: the backlog is drawn, unmarked', () => {
     const view = renderBacklog(snap(), null, null, () => {});
     expect(slugs(view)).toEqual(['a', 'b', 'c', 'd']);
@@ -143,7 +167,6 @@ describe('proposals', () => {
   };
   beforeEach(() => drafts.clear());
 
-  // req:web.views/backlog-view@c6475681
   it("proposed: one post of the title and intent for two quick submits, then the form closes", async () => {
     let done: (v: string | null) => void = () => undefined;
     const onPropose = vi.fn(() => new Promise<string | null>((go) => (done = go)));
@@ -161,7 +184,6 @@ describe('proposals', () => {
     expect(view.querySelector('.fbform.proposal')).toBeNull();
   });
 
-  // req:web.views/backlog-view@c6475681
   it('Proposed lists each proposal with its title, proposer, time and the note, between Waiting on you and the columns', () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ proposals: [proposal()] }));
     const row = view.querySelector<HTMLElement>('.proposed')!;
@@ -175,7 +197,6 @@ describe('proposals', () => {
     expect(order.slice(0, 3)).toEqual(['waiting', 'proposed', 'col']);
   });
 
-  // req:web.views/backlog-view@c6475681
   it('title taken: a refusal keeps the form open with its reason', async () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose: () => Promise.resolve('That title is taken: choose another.') }));
     const form = openForm(view);
@@ -186,7 +207,6 @@ describe('proposals', () => {
     expect(view.querySelector<HTMLInputElement>('.fbform.proposal input[name=title]')?.value).toBe('Export CSV');
   });
 
-  // req:web.views/backlog-view@c6475681
   it('sends nothing without a title', async () => {
     const onPropose = vi.fn(() => Promise.resolve(null));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose }));
@@ -198,7 +218,6 @@ describe('proposals', () => {
     expect(form.querySelector('.err')?.textContent).toContain('title');
   });
 
-  // req:web.views/backlog-view@c6475681
   it('what was typed survives a redraw', () => {
     fill(openForm(renderBacklog(snapshot(), null, null, () => {}, proposing())), 'Half', 'a thought');
     const form = renderBacklog(snapshot(), null, null, () => {}, proposing()).querySelector<HTMLElement>('.fbform.proposal')!;
@@ -206,7 +225,6 @@ describe('proposals', () => {
     expect(form.querySelector('textarea')?.value).toBe('a thought');
   });
 
-  // req:web.views/backlog-view@c6475681
   it('withdraw: only mine carries Withdraw, and a tap sends one withdrawal', () => {
     const onWithdraw = vi.fn(() => new Promise<string | null>(() => undefined));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onWithdraw, proposals: [proposal(), proposal({ id: 'p2', writer: 'bob/web', mine: false, title: 'Other' })] }));
@@ -218,7 +236,6 @@ describe('proposals', () => {
     expect(onWithdraw).toHaveBeenCalledWith('p1');
   });
 
-  // req:web.views/backlog-view@c6475681
   it('a refused withdrawal says so under the proposal and can be tapped again', async () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onWithdraw: () => Promise.resolve('Not withdrawn (404).'), proposals: [proposal()] }));
     const w = view.querySelector<HTMLButtonElement>('.prop[data-id=p1] button.withdraw')!;
@@ -228,14 +245,12 @@ describe('proposals', () => {
     expect(w.disabled).toBe(false);
   });
 
-  // req:web.views/backlog-view@c6475681
   it('both disabled offline', () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ offline: true, proposals: [proposal()] }));
     expect(view.querySelector<HTMLButtonElement>('button.propose')!.disabled).toBe(true);
     expect(view.querySelector<HTMLButtonElement>('button.withdraw')!.disabled).toBe(true);
   });
 
-  // req:web.views/backlog-view@c6475681
   it('no Proposed row without proposals, or before the implementation state', () => {
     expect(renderBacklog(snapshot(), null, null, () => {}, proposing()).querySelector('.proposed')).toBeNull();
     expect(renderBacklog(snapshot(), null, null, () => {}, proposing({ proposals: null })).querySelector('.proposed')).toBeNull();
