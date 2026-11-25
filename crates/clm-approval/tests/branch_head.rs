@@ -197,6 +197,56 @@ fn a_branchs_change_ids() {
     assert_eq!(ids, ["a", "a-b", "b", "new"]);
 }
 
+/// A `change.md` whose type changes names its change, and a non-ASCII ID comes through
+/// whole, whatever the user's `diff.relative`.
+#[cfg(unix)]
+#[test]
+fn a_type_change_and_a_non_ascii_id() {
+    // req:land.approval/branch-head@781206cc
+    let f = Fixture::new("");
+    let work = f.work();
+    f.commit_files(&[("changes/t/change.md", "t\n")], "t on main");
+    f.git(&work, &["push", "-q", "origin", "main"]);
+    f.git(&work, &["fetch", "-q", "origin"]);
+    f.git(&work, &["config", "diff.relative", "true"]);
+    f.git(&work, &["checkout", "-q", "-b", "spec/z"]);
+    fs::remove_file(work.join("changes/t/change.md")).unwrap();
+    std::os::unix::fs::symlink("../../a.txt", work.join("changes/t/change.md")).unwrap();
+    f.commit_files(&[("changes/café/change.md", "c\n")], "spec/z");
+    let head = f.git(&work, &["rev-parse", "HEAD"]);
+    f.git(&work, &["checkout", "-q", "main"]);
+    let ids = f.with_repo(|repo| repo.changes(&head)).unwrap();
+    assert_eq!(ids, ["café", "t"]);
+}
+
+/// The paths are read relative to a CLM root that is a subdirectory of the repository.
+#[test]
+fn change_ids_under_a_subdirectory_root() {
+    // req:land.approval/branch-head@781206cc
+    let f = Fixture::new("");
+    let work = f.work();
+    f.commit_files(&[("s/clm.toml", "")], "s on main");
+    f.git(&work, &["push", "-q", "origin", "main"]);
+    f.git(&work, &["fetch", "-q", "origin"]);
+    f.git(&work, &["checkout", "-q", "-b", "spec/z"]);
+    f.commit_files(
+        &[
+            ("s/changes/x/change.md", "x\n"),
+            ("changes/y/change.md", "y\n"),
+        ],
+        "spec/z",
+    );
+    let head = f.git(&work, &["rev-parse", "HEAD"]);
+    f.git(&work, &["checkout", "-q", "main"]);
+    let env = f.isolated_env();
+    let root = fs::canonicalize(work.join("s")).unwrap();
+    let settings = clm_config::load(Some(&root), &env).unwrap();
+    let ids = clm_approval::Repo::new(&root, &env, &settings)
+        .changes(&head)
+        .unwrap();
+    assert_eq!(ids, ["x"]);
+}
+
 #[test]
 fn the_fingerprint_is_against_the_base_given() {
     // req:land.approval/branch-head@781206cc

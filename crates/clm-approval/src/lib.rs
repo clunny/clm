@@ -217,15 +217,16 @@ impl<'a> Repo<'a> {
 
     /// The live change IDs `head` adds, modifies or changes the type of relative to the base,
     /// sorted, as `ledger`'s `change_ids` names them. Renames are off, so a renamed change
-    /// directory counts as added; `-z` keeps a non-ASCII ID unquoted, and `--no-relative`
-    /// keeps a user's `diff.relative` from emptying the list.
+    /// directory counts as added; `-z` keeps a non-ASCII ID unquoted, and `--relative` gives
+    /// the paths from the CLM root, the command's directory, so a root that is a subdirectory
+    /// of the repository still reads `changes/<id>/change.md`.
     pub fn changes(&self, head: &str) -> Result<Vec<String>, Error> {
         let base = self.merge_base(head)?;
         let names = self.git(&[
             "diff",
             "--name-only",
             "--no-renames",
-            "--no-relative",
+            "--relative",
             "-z",
             "--diff-filter=AMT",
             &base,
