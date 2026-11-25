@@ -3,7 +3,7 @@
 mod common;
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use clm_git::Failure;
 use clm_loop::{
@@ -22,6 +22,29 @@ fn prompt(actions: &[String], name: &str) -> String {
         .unwrap()
         .to_string();
     fs::read_to_string(path).unwrap()
+}
+
+/// The run's copy of the notes, `.clm/prompts/loop/notes/<name>.md` with `:` written `-`.
+fn copy_of(fx: &Fixture, name: &str) -> PathBuf {
+    std::path::absolute(&fx.work)
+        .unwrap()
+        .join(".clm/prompts/loop/notes")
+        .join(format!("{}.md", name.replace(':', "-")))
+}
+
+/// Asserts that `text`, a prompt, ends with the notes' section holding one line that names the
+/// absolute path of `copy`, that `copy` holds `notes` unchanged, and that the prompt doesn't.
+fn names_the_copy(text: &str, copy: &Path, notes: &str) {
+    let (_, section) = text
+        .rsplit_once(SECTION)
+        .unwrap_or_else(|| panic!("no notes section: {text}"));
+    assert_eq!(section.lines().count(), 1, "{section:?}");
+    assert!(section.ends_with('\n'), "{section:?}");
+    let path = copy.display().to_string();
+    assert!(copy.is_absolute(), "{path}");
+    assert!(section.contains(&path), "{section:?} doesn't name {path}");
+    assert_eq!(fs::read_to_string(copy).unwrap(), notes);
+    assert!(!text.contains(notes.trim()), "{text}");
 }
 
 fn unreachable_origin(fx: &Fixture) {
@@ -44,23 +67,21 @@ fn reachable_origin(fx: &Fixture) {
 
 #[test]
 fn notes_reach_every_launch() {
-    // req:orchestrator.loop/notes-reach-every-launch@025f71af
+    // req:orchestrator.loop/notes-reach-every-launch@74d6b3af
     let fx = Fixture::new();
     fx.set("next", "a\n");
     fs::write(fx.work.join("notes.md"), "Keep the old tests.\n").unwrap();
     let notes = Path::new("notes.md");
     let first = start_with_notes(&fx.options(), "opus", false, notes).unwrap();
-    let ends = format!("{SECTION}Keep the old tests.\n");
-    assert!(
-        prompt(&first, "build:a").ends_with(&ends),
-        "{}",
-        prompt(&first, "build:a")
-    );
+    let copy = copy_of(&fx, "build:a");
+    names_the_copy(&prompt(&first, "build:a"), &copy, "Keep the old tests.\n");
 
-    // After the lease lapses, a start without notes relaunches `build:a` with them.
+    // After the lease lapses, a start without notes relaunches `build:a` with them, writing the
+    // copy again with the prompt, replacing what the file held.
     fx.set_lease(20);
+    fs::write(&copy, "Stale.").unwrap();
     let adopted = start(&fx.options(), "opus", false).unwrap();
-    assert!(prompt(&adopted, "build:a").ends_with(&ends));
+    names_the_copy(&prompt(&adopted, "build:a"), &copy, "Keep the old tests.\n");
     let runs_of_a = fx
         .calls()
         .iter()
@@ -99,7 +120,7 @@ fn notes_reach_every_launch() {
 
 #[test]
 fn unreadable_notes_stop_every_launch() {
-    // req:orchestrator.loop/notes-reach-every-launch@025f71af
+    // req:orchestrator.loop/notes-reach-every-launch@74d6b3af
     let fx = Fixture::new();
     fx.set("next", "a\n");
     fx.add_run(run(
@@ -162,17 +183,17 @@ fn unreadable_notes_stop_every_launch() {
     // `start --notes` replaces them without reading the old file.
     fs::write(fx.work.join("notes.md"), "New notes.").unwrap();
     let actions = start_with_notes(&fx.options(), "opus", true, Path::new("notes.md")).unwrap();
-    assert!(
-        prompt(&actions, "build:a").ends_with(&format!("{SECTION}New notes.")),
-        "{}",
-        prompt(&actions, "build:a")
+    names_the_copy(
+        &prompt(&actions, "build:a"),
+        &copy_of(&fx, "build:a"),
+        "New notes.",
     );
     assert_eq!(fs::read_to_string(&notes_file).unwrap(), "New notes.");
 }
 
 #[test]
 fn notes_of_white_space_add_no_section() {
-    // req:orchestrator.loop/notes-reach-every-launch@025f71af
+    // req:orchestrator.loop/notes-reach-every-launch@74d6b3af
     let fx = Fixture::new();
     fx.set("next", "a\n");
     fs::write(fx.work.join("blank.md"), "  \n\t\n").unwrap();
@@ -181,4 +202,5 @@ fn notes_of_white_space_add_no_section() {
         prompt(&actions, "build:a"),
         "loop run build:a\nlauncher for a\n"
     );
+    assert!(!copy_of(&fx, "build:a").exists());
 }

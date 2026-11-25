@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-launch-prompt-carries-the-loop-s-notes-inline-so-the-session]
 ---
 
