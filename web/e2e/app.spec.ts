@@ -1055,7 +1055,7 @@ test.describe('PWA', () => {
     await expect(page.locator('.offline')).toHaveText('Offline');
   });
 
-  // req:web/answer-from-app@074f7d4c
+  // req:web/answer-from-app@ba9bce6f
   test('offline: an item page drawn from the kept copy has its answer buttons disabled', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
@@ -1413,11 +1413,10 @@ test.describe('a backlog item opens its page', () => {
   });
 });
 
-// req:web/home-first@3681eee1
-// req:web/answer-from-app@074f7d4c
 test.describe('Home first', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  // req:web/home-first@fb20db87
   test('a repo opens on Home, the sidebar\'s first view, badged with what waits', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos'] = [
@@ -1440,6 +1439,7 @@ test.describe('Home first', () => {
     await expect(page.locator('[data-section=answer] a.hent')).toHaveAttribute('href', '#/o/a/backlog/setup');
   });
 
+  // req:web/home-first@fb20db87
   test('Home is drawn from the snapshot at once and adds each section as its response arrives', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.hold('GET /api/repos/o/a/implementation');
@@ -1455,19 +1455,36 @@ test.describe('Home first', () => {
     mock.release('GET /api/repos/o/a/implementation');
   });
 
-  test('a backlog item\'s page opens at its route, with its answer buttons, and a tap posts one answer', async ({ page, context }) => {
+  // req:web/home-first@fb20db87
+  test('a backlog item\'s page opens at its route', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
     await page.goto('/app/#/o/a/backlog/q');
     await expect(page.locator('h1')).toContainText('Ship it?');
     await expect(page.locator('strong')).toHaveText('ship');
-    await page.locator('button.answer[data-answer=yes]').dblclick();
-    await expect.poll(() => mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
-    // The implementation state is asked for again, so the answer shows from its `answers`.
-    await expect.poll(() => mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length).toBeGreaterThan(1);
-    expect(mock.urls.filter((k) => k.startsWith('GET /api/repos/o/a/implementation?fresh=')).length).toBeGreaterThan(0);
+    await expect(page.locator('button.answer[data-answer=yes]')).toBeVisible();
   });
 
+  // req:web/answer-from-app@ba9bce6f
+  test('answered on the item\'s page: one post, the implementation state asked again with fresh, and yes drawn chosen', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    mock.onPost = () => {
+      const impl = implementation();
+      impl.answers = [{ id: 'x1', writer: 'alice/web', at: '2026-11-13T00:00:00Z', item: 'q', answer: 'yes', mine: true }];
+      mock.routes['GET /api/repos/o/a/implementation'] = impl;
+    };
+    await page.goto('/app/#/o/a/backlog/q');
+    await page.locator('button.answer[data-answer=yes]').dblclick();
+    await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
+    expect(mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
+    // The implementation state is asked for again, from the Worker anew, so the answer shows from its `answers`.
+    const asked = mock.urls.filter((k) => k.startsWith('GET /api/repos/o/a/implementation'));
+    expect(asked.length).toBeGreaterThan(1);
+    expect(asked.at(-1)).toMatch(/\?fresh=/);
+  });
+
+  // req:web/answer-from-app@ba9bce6f
   test('an answer the Worker refuses says why and keeps the buttons enabled', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
@@ -1482,7 +1499,8 @@ test.describe('Home first', () => {
     expect(mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length).toBe(before);
   });
 
-  test('an answer shows on Home, drawn chosen, from the next implementation state', async ({ page, context }) => {
+  // req:web/answer-from-app@ba9bce6f
+  test('answered on Home: one post to q\'s route, and Home draws yes chosen', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
     mock.onPost = () => {
@@ -1492,28 +1510,36 @@ test.describe('Home first', () => {
     };
     await page.goto('/app/#/o/a');
     await page.locator('button.answer[data-answer=yes]').click();
-    await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
+    await expect(page.locator('.home button.answer[data-answer=yes]')).toHaveClass(/chosen/);
+    expect(mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
   });
 
-  test('on an item page: the answer is drawn chosen, a 404 says the item is gone, and any other status is named', async ({ page, context }) => {
+  // req:web/answer-from-app@ba9bce6f
+  test('refused on the item\'s page: a 422, a 404 and a 500 each say why under the buttons, which stay enabled, and nothing is asked again', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
-    mock.onPost = () => {
-      const impl = implementation();
-      impl.answers = [{ id: 'x1', writer: 'alice/web', at: '2026-11-13T00:00:00Z', item: 'q', answer: 'yes', mine: true }];
-      mock.routes['GET /api/repos/o/a/implementation'] = impl;
-    };
     await page.goto('/app/#/o/a/backlog/q');
-    await page.locator('button.answer[data-answer=yes]').click();
-    await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
-    mock.fail(ANSWER, 404);
-    await page.locator('button.answer[data-answer=no]').click();
-    await expect(page.locator('.answers .err')).toHaveText('That item is no longer in the backlog.');
-    mock.fail(ANSWER, 500);
-    await page.locator('button.answer[data-answer=no]').click();
-    await expect(page.locator('.answers .err')).toHaveText("The answer wasn't recorded (500).");
+    const yes = page.locator('button.answer[data-answer=yes]');
+    await expect(yes).toBeEnabled();
+    const asked = () => mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length;
+    await expect.poll(asked).toBeGreaterThan(0);
+    const before = asked();
+    const cases: [number, unknown, string][] = [
+      [422, { error: 'answer' }, 'The answer was refused.'],
+      [404, undefined, 'That item is no longer in the backlog.'],
+      [500, undefined, "The answer wasn't recorded (500)."],
+    ];
+    for (const [status, body, says] of cases) {
+      mock.fail(ANSWER, status, body);
+      await yes.click();
+      await expect(page.locator('.answers .err')).toHaveText(says);
+      await expect(yes).toBeEnabled();
+    }
+    expect(mock.posts).toHaveLength(3);
+    expect(asked()).toBe(before);
   });
 
+  // req:web/home-first@fb20db87
   test('the phone tab bar badges Home with what waits', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 390, height: 844 });
