@@ -1,7 +1,7 @@
 //! Merge gate: decides whether `HEAD` may merge into a base ref (see specs/gate/SPEC.md).
 
 use std::cell::OnceCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -12,6 +12,7 @@ mod command;
 mod cuts;
 mod light;
 mod policy;
+mod reading;
 
 pub use cuts::{
     Cut, ListLine, Side, TestList, cuts, cuts_or_unloaded, list_lines, places_a_test, sentences,
@@ -26,6 +27,8 @@ pub use clm_fingerprint::{
 };
 pub use policy::{approval_changed, needs_review_of, settings_unchanged, upgrade_stamp_only};
 use policy::{change_needs_review, path_needs_review};
+use reading::{AddedExemption, GitSide};
+pub use reading::{FileReview, FileSide, review_from_files};
 
 const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];
 const SPECS: &str = "specs/";
@@ -186,6 +189,8 @@ pub fn evaluate_by(
     // IDs of changes archived in their own spec PR (`archive-in-spec-pr`): their
     // `change.md` is added under `changes/archive/<id>/` other than by an archive move.
     let mut new_archived = BTreeSet::new();
+    // IDs of changes whose `change.md` an archive move takes into the archive.
+    let mut moved = BTreeSet::new();
     for &(status, file) in &entries {
         if let Some(rest) = file.strip_prefix(ARCHIVE) {
             if status != 'A' {
@@ -194,7 +199,14 @@ pub fn evaluate_by(
                     rule: "gate/archive-immutable",
                     message: "archived changes are history and can't be modified or deleted".into(),
                 });
-            } else if !is_archive_move(&format!("{CHANGES}{rest}"), file)? {
+            } else if is_archive_move(&format!("{CHANGES}{rest}"), file)? {
+                if let Some(id) = rest
+                    .strip_suffix("/change.md")
+                    .filter(|id| !id.contains('/'))
+                {
+                    moved.insert(id);
+                }
+            } else {
                 if archived_at_base(&at, rest)? {
                     violations.push(Violation {
                         path: PathBuf::from(file),
@@ -273,7 +285,7 @@ pub fn evaluate_by(
     let part = SpecPart {
         at: &at,
         entries: &entries,
-        new_archived: &new_archived,
+        moved: &moved,
         replayed: replayed.as_deref(),
         setting_changed,
         rules,
@@ -294,7 +306,8 @@ pub fn evaluate_by(
         // still carry the burdens it files (`undeclared-burden`).
         Kind::Spec => {
             if stamp_only {
-                let changes = change_frontmatters(&at, &entries, &new_archived)?;
+                let head = GitSide { at: &at, rev: head };
+                let changes = reading::change_frontmatters(&head, &entries, &moved)?;
                 violations.extend(undeclared_burdens(&at, &entries, &changes));
             }
         }
@@ -372,7 +385,8 @@ pub fn evaluate_by(
 struct SpecPart<'a> {
     at: &'a At<'a>,
     entries: &'a [(char, &'a str)],
-    new_archived: &'a BTreeSet<&'a str>,
+    /// The changes whose `change.md` an archive move takes into the archive.
+    moved: &'a BTreeSet<&'a str>,
     replayed: Option<&'a str>,
     setting_changed: bool,
     rules: u32,
@@ -404,29 +418,34 @@ impl SpecPart<'_> {
         let SpecPart {
             at,
             entries,
-            new_archived,
+            moved,
             replayed,
             setting_changed,
             rules,
         } = *self;
-        // Every path the diff touches, and every change one of whose files it adds or
-        // modifies, a status-only edit included, as the Worker passes them.
-        let changes = change_frontmatters(at, entries, new_archived)?;
+        // One reading of the branch's files (`review-from-files`): every path the diff
+        // touches, and every change one of whose files it adds or modifies, a status-only
+        // edit included, as the Worker passes them.
+        let base = GitSide {
+            at,
+            rev: at.merge_base,
+        };
+        let head = GitSide { at, rev: at.head };
+        let read = reading::read_branch(&base, &head, entries, moved, rules, true)?;
+        violations.extend(read.deleted_tests.iter().cloned());
+        let (changes, cut) = (&read.changes, &read.cuts);
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
-        let read = read_cuts(at, entries, rules, violations)?;
-        let cut = read.listed;
         // Under versions 1 to 7 a shortened merge makes no branch need review. Under versions
         // 2 to 5 a shortened requirement is counted as that version counted its sentences,
         // `shortened_then`, rather than by today's cut; version 1 counts none.
         let counted_before_v8 = |c: &Cut| !matches!(c, Cut::Merged { .. });
         let counted_before_v6 =
             |c: &Cut| counted_before_v8(c) && !matches!(c, Cut::Shortened { .. });
-        let added = added_exemptions(at, entries)?;
         // Read from the two graphs, or from the text when they don't load, under every
         // version, so the versions differ only by the cuts.
-        let widened = read.widened.unwrap_or(!added.is_empty());
+        let widened = read.widened.unwrap_or(!read.added.is_empty());
         let shortened_then = read.shortened_then;
-        let by_paths = || needs_review_of(&paths, setting_changed, &changes);
+        let by_paths = || needs_review_of(&paths, setting_changed, changes);
         let review = match replayed {
             // Its replayed edits to the human layers change no intent (`needs-review`).
             Some(text) => {
@@ -453,14 +472,15 @@ impl SpecPart<'_> {
             }
             // Versions 6 and 7, before a shortened merge needed review.
             None if rules < 8 => by_paths() || widened || cut.iter().any(counted_before_v8),
-            // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
-            None => by_paths() || widened || !cut.is_empty(),
+            // Relaxing a rule, or widening a relaxation, and a cut are always seen by a
+            // human: the review `review_from_files` gives.
+            None => read.review(by_paths()),
         };
         Ok(ReadPart {
             review,
-            cuts: cut,
-            changes,
-            added,
+            cuts: read.cuts,
+            changes: read.changes,
+            added: read.added,
             graphs: read.graphs,
         })
     }
@@ -473,146 +493,6 @@ fn code_entries<'a>(entries: &[(char, &'a str)], code: &[&str]) -> Vec<(char, &'
         .filter(|(_, f)| code.contains(f))
         .copied()
         .collect()
-}
-
-/// A change's `deleted-tests.txt`, live or archived: `changes/[archive/]<id>/deleted-tests.txt`.
-fn test_list(file: &str) -> Option<&str> {
-    let rest = file.strip_prefix(CHANGES)?;
-    let rest = rest.strip_prefix("archive/").unwrap_or(rest);
-    let (id, name) = rest.split_once('/')?;
-    (name == "deleted-tests.txt" && id != "archive").then_some(id)
-}
-
-/// What a `spec` branch cuts, and whether it adds or widens an exemption (`cuts`,
-/// `needs-review-of`), read from the spec graphs at the merge base and the head, loaded only
-/// when the diff touches `specs/` or a `deleted-tests.txt`. Adds a `gate/deleted-tests`
-/// violation for each line a list gains that names no citing test at the head. When either
-/// side's specs don't load, the one cut says so and whether an exemption widened is `None`.
-/// The third value says whether a requirement states fewer sentences as rules version
-/// `rules` counted them, when it is below 6 (`rules-version`), false when a side doesn't
-/// load or `rules` is 6 or above, whose count is the cut's.
-fn read_cuts(
-    at: &At,
-    entries: &[(char, &str)],
-    rules: u32,
-    violations: &mut Vec<Violation>,
-) -> Result<ReadCuts, String> {
-    let lists: Vec<&str> = entries
-        .iter()
-        .filter(|(status, file)| matches!(status, 'A' | 'M') && test_list(file).is_some())
-        .map(|&(_, file)| file)
-        .collect();
-    if lists.is_empty() && !entries.iter().any(|(_, f)| f.starts_with(SPECS)) {
-        return Ok(ReadCuts {
-            listed: Vec::new(),
-            widened: Some(false),
-            shortened_then: false,
-            graphs: None,
-        });
-    }
-    let mut texts = Vec::new();
-    for path in lists {
-        let head = text_if_any(at, at.head, path)?.unwrap_or_default();
-        let mut base = text_if_any(at, at.merge_base, path)?;
-        // An archived list with no text of its own at the merge base takes the live one's.
-        if base.is_none()
-            && path.starts_with(ARCHIVE)
-            && let Some(id) = test_list(path)
-        {
-            base = text_if_any(
-                at,
-                at.merge_base,
-                &format!("{CHANGES}{id}/deleted-tests.txt"),
-            )?;
-        }
-        texts.push((path, head, base));
-    }
-    let lists: Vec<TestList> = texts
-        .iter()
-        .map(|(path, head, base)| TestList {
-            path,
-            head,
-            base: base.as_deref(),
-        })
-        .collect();
-    // Each test file's text at the head, read once.
-    let mut files: BTreeMap<String, String> = BTreeMap::new();
-    for list in &lists {
-        for line in cuts::added_lines(list) {
-            let message = match line {
-                Err(line) => format!(
-                    "`{line}` is no list line: write `DELETE <file>::<name>`, a `#` comment or a blank line"
-                ),
-                Ok(ListLine { file, name }) => {
-                    let text = match files.get(&file) {
-                        Some(text) => text,
-                        None => {
-                            let text = text_if_any(at, at.head, &file)?.unwrap_or_default();
-                            files.entry(file.clone()).or_insert(text)
-                        }
-                    };
-                    if cuts::names_a_test(Path::new(&file), text, &name) {
-                        continue;
-                    }
-                    format!("`DELETE {file}::{name}` names no test with a marker in `{file}`")
-                }
-            };
-            violations.push(Violation {
-                path: PathBuf::from(list.path),
-                rule: "gate/deleted-tests",
-                message,
-            });
-        }
-    }
-
-    let (base, base_violations) = load_graph_at(at, at.merge_base, true)?;
-    let (head, head_violations) = load_graph_at(at, at.head, true)?;
-    let listed = cuts_or_unloaded(
-        &Side {
-            graph: &base,
-            violations: &base_violations,
-            revision: at.merge_base,
-        },
-        &Side {
-            graph: &head,
-            violations: &head_violations,
-            revision: at.head,
-        },
-        &lists,
-    );
-    let loaded = !listed.iter().any(|c| matches!(c, Cut::Unloaded { .. }));
-    let widened = loaded.then(|| !widened_exemptions(&base, &head).is_empty());
-    let shortened_then = loaded && rules < 6 && cuts::shortened_under(&base, &head, rules);
-    Ok(ReadCuts {
-        listed,
-        widened,
-        shortened_then,
-        graphs: Some(Graphs {
-            base: (base, base_violations),
-            head: (head, head_violations),
-        }),
-    })
-}
-
-/// What `read_cuts` reads.
-struct ReadCuts {
-    listed: Vec<Cut>,
-    widened: Option<bool>,
-    shortened_then: bool,
-    graphs: Option<Graphs>,
-}
-
-/// The text of the root's file at `path` at `rev`, invalid UTF-8 replaced, or `None` when
-/// `rev` holds no such file; any other failure of git fails the gate.
-fn text_if_any(at: &At, rev: &str, path: &str) -> Result<Option<String>, String> {
-    let object = at.object(rev, path);
-    match clm_git::git(at.repo, &["cat-file", "-e", &object]) {
-        Ok(_) => {}
-        Err(clm_git::Error::Failed { .. }) => return Ok(None),
-        Err(e) => return Err(e.to_string()),
-    }
-    let bytes = show_bytes(at.repo, &object)?;
-    Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
 
 /// The files `head` changes against `base` from their merge base, as `classify` reads them,
@@ -709,37 +589,6 @@ fn records_term_rename(text: &str) -> bool {
     renames_of(text).is_some_and(|r| r.iter().any(|entry| entry.get("term").is_some()))
 }
 
-/// The frontmatter at `HEAD` of the `change.md` of each change, live or new archived, one
-/// of whose files is among the `entries` the branch adds or modifies; `None` for one that
-/// is missing, isn't UTF-8 or whose frontmatter doesn't parse (`needs-review`).
-fn change_frontmatters(
-    at: &At,
-    entries: &[(char, &str)],
-    new_archived: &BTreeSet<&str>,
-) -> Result<Vec<Option<clm_model::ChangeFrontmatter>>, String> {
-    let dirs: BTreeSet<&str> = entries
-        .iter()
-        .filter(|(status, _)| matches!(status, 'A' | 'M'))
-        .filter_map(|(_, file)| added_change(file, new_archived).map(|(dir, _, _)| dir))
-        .collect();
-    let mut out = Vec::new();
-    for dir in dirs {
-        let path = format!("{dir}change.md");
-        // Listed in the tree, it is read, and a file git can't read fails the gate.
-        let listed = clm_git::git(at.repo, &["ls-tree", "--name-only", at.head, "--", &path])
-            .map_err(|e| e.to_string())?;
-        let fm = if !listed.is_empty() {
-            String::from_utf8(show_bytes(at.repo, &at.object(at.head, &path))?)
-                .ok()
-                .and_then(|t| clm_model::parse_change_frontmatter(&t))
-        } else {
-            None
-        };
-        out.push(fm);
-    }
-    Ok(out)
-}
-
 /// `gate/undeclared-burden`: each `kind: human-task` backlog item (or its old word `human`)
 /// the branch adds, when none of `changes` declares `human_burdens`.
 fn undeclared_burdens(
@@ -763,89 +612,6 @@ fn undeclared_burdens(
             message: "a `kind: human-task` item is a step only the human can take: declare it in a `change.md`'s `human_burdens`".into(),
         })
         .collect()
-}
-
-/// One entry of a component's `exemptions` as written: its rule, files and `until`.
-type RawExemption = (String, Vec<String>, String);
-
-/// The `exemptions` a `SPEC.md`'s frontmatter holds, in order; an entry of the wrong shape is
-/// left out, since loading rejects it (`model/exemptions`).
-fn exemptions_in(text: &str) -> Vec<RawExemption> {
-    let text = text.replace("\r\n", "\n");
-    let Some((yaml, _)) = clm_model::split_frontmatter(&text) else {
-        return Vec::new();
-    };
-    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(yaml) else {
-        return Vec::new();
-    };
-    let Some(list) = value.get("exemptions").and_then(|v| v.as_sequence()) else {
-        return Vec::new();
-    };
-    list.iter()
-        .filter_map(|entry| {
-            let rule = entry.get("rule")?.as_str()?.to_string();
-            let until = entry.get("until")?.as_str()?.to_string();
-            let files = entry
-                .get("files")?
-                .as_sequence()?
-                .iter()
-                .map(|f| f.as_str().map(str::to_string))
-                .collect::<Option<Vec<_>>>()?;
-            Some((rule, files, until))
-        })
-        .collect()
-}
-
-/// An exemption a component's `SPEC.md` holds at `head` that its file at the merge base
-/// doesn't cover: added or widened, as `needs-review` counts them (`temporary-exemptions`).
-struct AddedExemption {
-    file: String,
-    rule: String,
-    until: String,
-}
-
-/// Every added or widened exemption: one with no exemption of the same `rule` and `until`
-/// at the merge base whose `files` hold all of its own, every exemption of a new
-/// component counting.
-fn added_exemptions(at: &At, entries: &[(char, &str)]) -> Result<Vec<AddedExemption>, String> {
-    let mut out = Vec::new();
-    for &(status, file) in entries {
-        let is_component = file
-            .strip_prefix(SPECS)
-            .is_some_and(|f| f.ends_with("SPEC.md"))
-            && file != "specs/SPEC.md";
-        if !is_component || !matches!(status, 'A' | 'M') {
-            continue;
-        }
-        let now = exemptions_in(&String::from_utf8_lossy(&show_bytes(
-            at.repo,
-            &at.object(at.head, file),
-        )?));
-        if now.is_empty() {
-            continue;
-        }
-        let before = if status == 'A' {
-            Vec::new()
-        } else {
-            exemptions_in(&String::from_utf8_lossy(&show_bytes(
-                at.repo,
-                &at.object(at.merge_base, file),
-            )?))
-        };
-        for (rule, files, until) in now {
-            let covered = before.iter().any(|(r, fs, u)| {
-                *r == rule && *u == until && files.iter().all(|f| fs.contains(f))
-            });
-            if !covered {
-                out.push(AddedExemption {
-                    file: file.to_string(),
-                    rule,
-                    until,
-                });
-            }
-        }
-    }
-    Ok(out)
 }
 
 /// `gate/exemption-names-its-item`: each added or widened exemption whose `until` names no
@@ -945,12 +711,17 @@ struct At<'a> {
 }
 
 impl At<'_> {
-    /// The specs at the merge base, as `load_specs_at` loads them, loaded once.
+    /// The specs at the merge base, as `GitSide::load` loads them without the human layers,
+    /// load violations ignored (`clm check` reports them), loaded once.
     fn base_specs(&self) -> Result<&clm_model::Graph, String> {
         if let Some(graph) = self.base_specs.get() {
             return Ok(graph);
         }
-        let graph = load_specs_at(self, self.merge_base)?;
+        let side = GitSide {
+            at: self,
+            rev: self.merge_base,
+        };
+        let graph = side.load(false)?.0;
         Ok(self.base_specs.get_or_init(|| graph))
     }
 
@@ -1000,21 +771,6 @@ fn changed_files(repo: &Path, root: &Root, range: &str) -> Result<Vec<(char, Str
         .collect())
 }
 
-/// `(dir, id, rest)` for a file at `<dir><rest>` of a change the PR adds: a live
-/// `changes/<id>/`, or a new archived `changes/archive/<id>/` whose `id` is in
-/// `new_archived` (`archive-in-spec-pr`).
-fn added_change<'a>(
-    file: &'a str,
-    new_archived: &BTreeSet<&str>,
-) -> Option<(&'a str, &'a str, &'a str)> {
-    let (id, rest) = live_change(file).or_else(|| {
-        file.strip_prefix(ARCHIVE)?
-            .split_once('/')
-            .filter(|(id, _)| new_archived.contains(id))
-    })?;
-    Some((&file[..file.len() - rest.len()], id, rest))
-}
-
 /// The value of `key` in the frontmatter of the backlog file at `<rev>:<file>`, read alone
 /// so that a key the model rejects can't hide it. `None` when the file isn't UTF-8, its
 /// frontmatter doesn't parse, or `key` is missing.
@@ -1046,62 +802,6 @@ fn backlog_components(at: &At, rev: &str, file: &str) -> Option<Vec<String>> {
         (Some(list), None) | (None, Some(list)) => serde_yaml::from_value(list).ok(),
         (None, None) => Some(Vec::new()),
     }
-}
-
-/// Loads `specs/` as committed at `rev`, with the `change.md` of each live change there, so
-/// the node frontmatter keys they declare are accepted (`declared-keys-loaded`). Each file
-/// holds what a checkout of `rev` writes (`base-specs-as-checkout`); load violations are
-/// ignored (`clm check` reports them). A `rev` without `specs/` loads empty.
-fn load_specs_at(at: &At, rev: &str) -> Result<clm_model::Graph, String> {
-    Ok(load_graph_at(at, rev, false)?.0)
-}
-
-/// Loads the graph at `rev` as `load_specs_at` does, with its load violations, and, when
-/// `layers`, with `ARCHITECTURE.md` and `CAPABILITIES.md` where they exist, so the rules'
-/// `serves` resolve and a graph that loads in a checkout loads here (`cuts`). The files are
-/// the root's: `extract_paths` takes paths from the repository's top, so each is named with
-/// the root's prefix and the graph loaded from the prefix's directory of the extraction.
-fn load_graph_at(
-    at: &At,
-    rev: &str,
-    layers: bool,
-) -> Result<(clm_model::Graph, Vec<Violation>), String> {
-    let repo = at.repo;
-    let mut paths = Vec::new();
-    let tops: &[&str] = if layers {
-        &["specs", "ARCHITECTURE.md", "CAPABILITIES.md"]
-    } else {
-        &["specs"]
-    };
-    for top in tops {
-        // Only git's own refusal means "no such path"; a git that can't run fails the gate.
-        match clm_git::git(repo, &["cat-file", "-e", &at.object(rev, top)]) {
-            Ok(_) => paths.push(top.to_string()),
-            Err(clm_git::Error::Failed { .. }) => {}
-            Err(e) => return Err(e.to_string()),
-        }
-    }
-    // `extract_paths` takes its paths literally, so only files that exist are named: a path
-    // that isn't UTF-8 can't be named exactly, and is left out rather than failing the gate.
-    let listed = clm_git::run(
-        repo,
-        "git",
-        &["ls-tree", "-r", "-z", "--name-only", rev, "--", CHANGES],
-        Default::default(),
-    )
-    .map_err(|e| e.to_string())?;
-    paths.extend(
-        listed
-            .split(|&b| b == 0)
-            .filter_map(|f| std::str::from_utf8(f).ok())
-            .filter(|f| live_change(f).is_some_and(|(_, rest)| rest == "change.md"))
-            .map(str::to_string),
-    );
-    let prefix = &at.root.prefix;
-    let paths: Vec<String> = paths.iter().map(|p| format!("{prefix}{p}")).collect();
-    let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
-    let tmp = clm_git::extract_paths(repo, rev, &paths).map_err(|e| e.to_string())?;
-    Ok(clm_model::load(&tmp.path().join(prefix)))
 }
 
 /// The file at `<rev>:<path>` as committed: untrimmed, and an error unless it is UTF-8.

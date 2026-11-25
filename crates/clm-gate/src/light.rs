@@ -8,7 +8,7 @@ use std::path::Path;
 use clm_model::{ChangeStatus, Graph, Node, Requirement};
 
 use crate::{
-    ARCHIVE, At, Graphs, ReadPart, foreign_in, load_graph_at, renames_of, show, show_bytes,
+    ARCHIVE, At, Graphs, ReadPart, foreign_in, reading::GitSide, renames_of, show, show_bytes,
 };
 
 /// `Ok(Ok(c))` when `light` takes the branch, `c` its component; `Ok(Err(why))` naming the
@@ -27,8 +27,12 @@ pub(crate) fn judge(
         Some(graphs) => graphs,
         None => {
             loaded = Graphs {
-                base: load_graph_at(at, at.merge_base, true)?,
-                head: load_graph_at(at, at.head, true)?,
+                base: GitSide {
+                    at,
+                    rev: at.merge_base,
+                }
+                .load(true)?,
+                head: GitSide { at, rev: at.head }.load(true)?,
             };
             &loaded
         }
