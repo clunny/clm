@@ -288,7 +288,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
         } else if branch.starts_with("clm/ledger/") {
             self.move_ledger(p, b, branch, (!deleted).then_some(after))
                 .await;
-        } else if is_read_ref(branch) {
+        } else if clm_replica::reads_ref(branch) {
             self.move_ref(p, b, branch, (!deleted).then_some(after), at)
                 .await;
         }
@@ -981,7 +981,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
         {
             self.move_tip(p, b, &tip).await;
         }
-        for prefix in ["impl/", "spec/", "autosync/spec/", "propose/"] {
+        for prefix in clm_replica::REF_PREFIXES {
             let Some(tips) = source::tips(p, auth, &repo, prefix, b).await else {
                 continue;
             };
@@ -994,8 +994,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 .refs
                 .keys()
                 .filter(|n| {
-                    n.strip_prefix(prefix).is_some_and(|r| !r.contains('/'))
-                        && !listed.contains_key(*n)
+                    n.starts_with(prefix) && clm_replica::reads_ref(n) && !listed.contains_key(*n)
                 })
                 .cloned()
                 .collect();
@@ -1166,18 +1165,6 @@ impl<S: Store, A: Alarm> Object<S, A> {
             p.log(&format!("replica {}: the pages weren't told", self.name));
         }
     }
-}
-
-/// A branch whose ref the views read: `impl/*`, `spec/*`, `autosync/spec/*`, `propose/*`,
-/// not nested.
-fn is_read_ref(branch: &str) -> bool {
-    ["impl/", "spec/", "autosync/spec/", "propose/"]
-        .iter()
-        .any(|prefix| {
-            branch
-                .strip_prefix(prefix)
-                .is_some_and(|rest| !rest.is_empty() && !rest.contains('/'))
-        })
 }
 
 /// A push's head commit time: the instant its RFC 3339 timestamp names, offset counted.
