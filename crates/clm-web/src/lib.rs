@@ -134,7 +134,7 @@ async fn repo_route<P: Platform + Replicas>(
 ) -> Response {
     let fresh = views::is_fresh(req);
     match (req.method.as_str(), parts, body) {
-        ("GET", ["snapshot"], _) => views::get(p, access, "snapshot", fresh).await,
+        ("GET", ["snapshot"], _) => views::snapshot(p, access, fresh).await,
         ("GET", ["live"], _) => live_socket(p, req, access).await,
         ("GET", ["push"], _) => push::state(p, req, access, login).await,
         ("POST", ["push"], _) => push::subscribe(p, req, access, login).await,

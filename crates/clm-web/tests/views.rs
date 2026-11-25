@@ -22,7 +22,9 @@ fn polls_within_30_seconds() {
     for _ in 0..3 {
         let res = fake.handle(get("/api/repos/o/a/snapshot", &cookie));
         assert_eq!(res.status, 200);
-        assert_eq!(body_json(&res), view);
+        let mut want = view.clone();
+        want["repo"] = json!("o/a");
+        assert_eq!(body_json(&res), want, "the view with `repo` added");
     }
     let asked = fake.replicas.asked("o/a");
     assert_eq!(asked.len(), 1, "the object was asked once");
@@ -42,16 +44,16 @@ fn views_are_kept_per_repo_and_name() {
     let (fake, cookie) = setup();
     fake.gh.add_repo("o/b", FakeRepo::new("111", clm_repo()));
     fake.gh.grant("u", "o/b");
-    fake.set_view("o/a", "snapshot", json!({"repo": "a"}));
-    fake.set_view("o/b", "snapshot", json!({"repo": "b"}));
+    fake.set_view("o/a", "snapshot", json!({"mark": "a"}));
+    fake.set_view("o/b", "snapshot", json!({"mark": "b"}));
     fake.set_view("o/a", "capabilities", json!({"report": "a"}));
     let one = body_json(&fake.handle(get("/api/repos/o/a/snapshot", &cookie)));
     let two = body_json(&fake.handle(get("/api/repos/o/b/snapshot", &cookie)));
     let three = body_json(&fake.handle(get("/api/repos/o/a/capabilities", &cookie)));
     assert_eq!(
         (
-            one["repo"].clone(),
-            two["repo"].clone(),
+            one["mark"].clone(),
+            two["mark"].clone(),
             three["report"].clone()
         ),
         (json!("a"), json!("b"), json!("a"))
