@@ -47,9 +47,6 @@ Done once on 2026-10-22. Nothing here needs doing again unless something is lost
   account. The site's Worker (`clm-site`) holds it as its Custom Domain; `wrangler.toml`
   routes only the app's paths on the zone to this Worker, ahead of it.
 - **Worker.** `clm`, holding the secrets below.
-- **KV namespace.** `clm-cache`, id `9fa493aaa0a54d219b2dfebb5f681b9e`, bound as `CLM`. To
-  create one again: `npx wrangler kv namespace create clm-cache`, then put its id in
-  `wrangler.toml`. Everything in it is a cache derived from GitHub and can be deleted.
 - **GitHub App.** `clm-spec-review` ("CLM Spec Review", App ID 5433936), owned by `clunny`.
   People install it from https://github.com/apps/clm-spec-review/installations/new. To
   create it again, post this manifest through GitHub's

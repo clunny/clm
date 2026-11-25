@@ -49,6 +49,14 @@ describe('wrangler.toml', () => {
     expect(rawConfig.triggers?.crons).toEqual([]);
   });
 
+  // Part of `web/worker-deploy`'s `binding` scenario, uncited while that requirement waits on
+  // its Needs: its build cites this test there, with the three above.
+  it('binds nothing but LIVE, REPLICA and ASSETS, and no KV namespace', () => {
+    expect(rawConfig.kv_namespaces ?? []).toEqual([]);
+    expect((rawConfig.durable_objects?.bindings ?? []).map((b: { name: string }) => b.name).sort()).toEqual(['LIVE', 'REPLICA']);
+    expect(config.assets?.binding).toBe('ASSETS');
+  });
+
   // How Workers assets read `run_worker_first`: a path goes to the Worker when it matches a
   // pattern and no `!` pattern, `*` standing for any run of characters.
   const toWorker = (path: string): boolean => {
