@@ -41,6 +41,9 @@ enum Verdict {
     Killed,
     Survived(u64),
     NotJudged,
+    /// The command's block for the requirement failed, with the text it gave: the
+    /// requirement is left, with that text as its why.
+    Failed(String),
 }
 
 /// How the command ended.
@@ -97,6 +100,7 @@ fn run_pass(
     }
     let mut notes = Vec::new();
     let mut verdicts = BTreeMap::new();
+    let mut ending = None;
     if !blocks.is_empty() {
         let scratch = scratch(ctx)?;
         let plan = scratch.path().join("plan");
@@ -106,35 +110,48 @@ fn run_pass(
             write_plan(&tree.dir, &graph, &commit, &blocks, &cites, scratch.path())?,
         )?;
         fs::write(&result, "")?;
-        match launch(ctx, call, &tree.dir, &commit, command, &plan, &result)? {
-            Ended::Exited(status) if status.success() => {}
+        ending = match launch(ctx, call, &tree.dir, &commit, command, &plan, &result)? {
+            Ended::Exited(status) if status.success() => None,
             Ended::Exited(status) => match status.signal() {
                 Some(n) => {
                     let name = signal_name(n).map_or(String::new(), |s| format!(" ({s})"));
                     notes.push(format!("mutation: {command} was ended by signal {n}{name}"));
+                    Some(format!("signal {n}"))
                 }
                 None => {
                     let code = status
                         .code()
                         .map_or_else(|| status.to_string(), |c| c.to_string());
                     notes.push(format!("mutation: {command} failed with status {code}"));
+                    Some(format!("status {code}"))
                 }
             },
-            Ended::Limit(minutes) => notes.push(format!(
-                "mutation: stopped at its limit of {minutes} minutes"
-            )),
-            Ended::Stopped => notes.push("mutation: stopped".to_string()),
-        }
+            Ended::Limit(minutes) => {
+                notes.push(format!(
+                    "mutation: stopped at its limit of {minutes} minutes"
+                ));
+                Some(format!("limit {minutes}"))
+            }
+            Ended::Stopped => {
+                notes.push("mutation: stopped".to_string());
+                Some("stopped".to_string())
+            }
+        };
         verdicts = read_verdicts(&String::from_utf8_lossy(&fs::read(&result)?));
     }
     let (mut killed, mut unproven, mut not_judged, mut left) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let mut failed = BTreeMap::new();
     for (id, _) in &blocks {
         match verdicts.get(id) {
             Some(Verdict::Killed) => killed.push(id.clone()),
             Some(Verdict::Survived(n)) if *n > 0 => {
                 let version = graph.requirement(id).map(|r| r.version().to_string());
                 unproven.push(format!("{id}@{}", version.unwrap_or_default()));
+            }
+            Some(Verdict::Failed(why)) => {
+                failed.insert(id.clone(), why.clone());
+                left.push(id.clone());
             }
             Some(_) => not_judged.push(id.clone()),
             None => left.push(id.clone()),
@@ -150,11 +167,13 @@ fn run_pass(
         counts.push_str(&format!(", {} left", left.len()));
     }
     notes.push(counts);
-    clm_ledger::append(
-        &ctx.root,
-        Body::mutated(commit, since, killed, unproven, not_judged).with_left(left),
-        ctx.env,
-    )?;
+    let mut body = Body::mutated(commit, since, killed, unproven, not_judged)
+        .with_left(left)
+        .with_failed(failed);
+    if let Some(ended) = ending {
+        body = body.with_ended(ended);
+    }
+    clm_ledger::append(&ctx.root, body, ctx.env)?;
     Ok(notes)
 }
 
@@ -481,11 +500,15 @@ fn signal_name(n: i32) -> Option<&'static str> {
 }
 
 /// The verdict lines of the result file that end in a newline, the last for a requirement
-/// holding: `<id> killed`, `<id> survived <n>` and `<id> not-judged`; a line that doesn't
-/// parse is ignored.
+/// holding: `<id> killed`, `<id> survived <n>`, `<id> not-judged` and `<id> failed`, alone or
+/// followed by a space and its why to the line's end; a line that doesn't parse is ignored.
 fn read_verdicts(text: &str) -> BTreeMap<String, Verdict> {
     let mut out = BTreeMap::new();
     for line in text.split_inclusive('\n').filter(|l| l.ends_with('\n')) {
+        if let Some((id, why)) = failed_line(line.trim_end_matches('\n').trim_end_matches('\r')) {
+            out.insert(id.to_string(), Verdict::Failed(why.to_string()));
+            continue;
+        }
         let words: Vec<&str> = line.split_whitespace().collect();
         let verdict = match words.as_slice() {
             [_, "killed"] => Verdict::Killed,
@@ -501,13 +524,24 @@ fn read_verdicts(text: &str) -> BTreeMap<String, Verdict> {
     out
 }
 
+/// A `<id> failed` line, without its newline, as the ID and the why: the text after
+/// `failed `, or empty for `failed` alone.
+fn failed_line(line: &str) -> Option<(&str, &str)> {
+    let (id, rest) = line.trim_start().split_once(char::is_whitespace)?;
+    let rest = rest.trim_start().strip_prefix("failed")?;
+    match rest {
+        "" => Some((id, "")),
+        _ => rest.strip_prefix(' ').map(|why| (id, why)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn a_signal_is_named_only_when_listed() {
-        // req:verify/mutation-pass@66d709f6
+        // req:verify/mutation-pass@6c7a3c85
         assert_eq!(signal_name(libc::SIGKILL), Some("SIGKILL"));
         assert_eq!(signal_name(libc::SIGTERM), Some("SIGTERM"));
         assert_eq!(signal_name(libc::SIGSYS), Some("SIGSYS"));
