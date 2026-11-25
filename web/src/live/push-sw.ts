@@ -68,10 +68,15 @@ export function onNotificationClick(self: PushScope, event: Waits & { notificati
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windows) => {
       const open = windows.find((w) => w.url.startsWith(`${self.location.origin}${APP}`));
       if (!open) return self.clients.openWindow(url);
-      await open.focus();
       // `navigate` rejects for a window this worker doesn't control (one hard-reloaded, or
-      // opened before it took over): that one opens a window at the url instead.
-      return open.navigate(url).catch(() => self.clients.openWindow(url));
+      // opened before it took over), and a window that can't be focused shows nothing: either
+      // opens a window at the url instead.
+      try {
+        await open.focus();
+        return await open.navigate(url);
+      } catch {
+        return self.clients.openWindow(url);
+      }
     }),
   );
 }

@@ -49,7 +49,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('the live socket', () => {
-  // req:web.client-live/live-updates@468e272c
+  // req:web.client-live/live-updates@620f1f13
   it('holds one socket for the repo on screen, and moves it when the repo changes', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -60,20 +60,20 @@ describe('the live socket', () => {
     expect(t.sockets.map((s) => s.url)).toEqual([URL_A, URL_B]);
   });
 
-  // req:web.client-live/live-updates@468e272c
+  // req:web.client-live/live-updates@620f1f13
   it('hidden: the socket is closed while hidden, and a new one opened when shown', () => {
     const t = setup();
     t.live.want(URL_A);
     t.last().open();
     t.live.want(null);
     expect(t.sockets[0].closed).toBe(true);
-    vi.advanceTimersByTime(180_000);
+    vi.advanceTimersByTime(300_000);
     expect(t.sockets).toHaveLength(1);
     t.live.want(URL_A);
     expect(t.sockets).toHaveLength(2);
   });
 
-  // req:web.client-live/live-updates@468e272c
+  // req:web.client-live/live-updates@620f1f13
   it('a notice refreshes with its delivery; a pong is no notice', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -81,10 +81,12 @@ describe('the live socket', () => {
     t.last().message('{"delivery":"d1"}');
     t.last().message('pong');
     t.last().message('not json');
-    expect(t.notices).toEqual(['d1', undefined]);
+    t.last().message('{"x":1}');
+    t.last().message('{"delivery":5}');
+    expect(t.notices).toEqual(['d1', undefined, undefined, undefined]);
   });
 
-  // req:web.client-live/live-updates@468e272c
+  // req:web.client-live/live-updates@620f1f13
   it('a silent drop: no pong within 10 seconds of a ping closes the socket and opens another', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -93,11 +95,12 @@ describe('the live socket', () => {
     expect(t.sockets[0].sent).toEqual(['ping']);
     vi.advanceTimersByTime(10_000);
     expect(t.sockets[0].closed).toBe(true);
+    expect(t.sockets).toHaveLength(1);
     vi.advanceTimersByTime(1_000);
     expect(t.sockets).toHaveLength(2);
   });
 
-  // req:web.client-live/live-updates@468e272c
+  // req:web.client-live/live-updates@620f1f13
   it('a pong keeps the socket', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -112,7 +115,7 @@ describe('the live socket', () => {
     expect(t.sockets[0].sent).toEqual(['ping', 'ping', 'ping']);
   });
 
-  // req:web.client-live/live-updates@468e272c
+  // req:web.client-live/live-updates@620f1f13
   it('retries after any close, from 1 second doubling to at most 60', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -130,7 +133,7 @@ describe('the live socket', () => {
     expect(waits).toEqual([1, 2, 4, 8, 16, 32, 60, 60]);
   });
 
-  // req:web.client-live/live-updates@468e272c
+  // req:web.client-live/live-updates@620f1f13
   it('the delay resets to 1 second once a socket stays open for a minute', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -149,7 +152,7 @@ describe('the live socket', () => {
     expect(t.sockets.length).toBe(n + 1);
   });
 
-  // req:web.client-live/live-updates@468e272c
+  // req:web.client-live/live-updates@620f1f13
   it('closing on purpose retries nothing', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -158,5 +161,27 @@ describe('the live socket', () => {
     t.sockets[0].fail();
     vi.advanceTimersByTime(120_000);
     expect(t.sockets).toHaveLength(1);
+  });
+
+  // req:web.client-live/live-updates@620f1f13
+  it("a socket that can't be opened is retried", () => {
+    const sockets: FakeSocket[] = [];
+    let calls = 0;
+    const live = new LiveSocket(
+      (url) => {
+        calls++;
+        if (calls === 1) throw new SyntaxError('refused');
+        const s = new FakeSocket(url);
+        sockets.push(s);
+        return s;
+      },
+      () => undefined,
+    );
+    expect(() => live.want(URL_A)).not.toThrow();
+    expect(sockets).toHaveLength(0);
+    vi.advanceTimersByTime(999);
+    expect(sockets).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(sockets.map((s) => s.url)).toEqual([URL_A]);
   });
 });

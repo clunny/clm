@@ -1,9 +1,9 @@
-// The repo's live socket (web.client-live/live-updates): while the page is visible and online, one
-// WebSocket to the Worker's `/live` route for the repo on screen. Its `Live` object sends a
-// notice, `{"delivery"}`, when the repo changes, and the app refreshes at once. A browser
-// reports nothing about a failed handshake, so every close or failure is retried alike, after
-// 1 second doubling to 60; a `ping` every 50 seconds that gets no `pong` within 10 finds a
-// socket a phone's network dropped without a word.
+// The repo's live socket (web.client-live/live-updates): one socket, made by the `open` it is
+// given, to the URL `web` last wanted. The Worker's `Live` object sends a notice, `{"delivery"}`,
+// when the repo changes. A browser reports nothing about a failed handshake, so every close or
+// failure is retried alike, an `open` that throws included, after 1 second doubling to 60; a
+// `ping` every 50 seconds that gets no `pong` within 10 finds a socket a phone's network
+// dropped without a word.
 
 /** What the app uses of a `WebSocket`. */
 export interface SocketLike {
@@ -37,8 +37,8 @@ export class LiveSocket {
     private onNotice: (delivery: string | undefined) => void,
   ) {}
 
-  /** The live URL of the repo on screen while the page is visible and online, else null:
-   * a different URL closes the socket held and opens one for it. */
+  /** The URL to hold a socket to, or null for none: a different URL closes the socket held
+   * and opens one for it, and the same URL again changes nothing. */
   want(url: string | null) {
     if (url === this.url) return;
     this.stop();
@@ -48,7 +48,14 @@ export class LiveSocket {
   }
 
   private connect() {
-    const ws = this.open(this.url!);
+    let ws: SocketLike;
+    try {
+      ws = this.open(this.url!);
+    } catch {
+      // A URL the browser refuses: retried as after a close.
+      this.drop();
+      return;
+    }
     this.ws = ws;
     ws.onopen = () => {
       this.timers.push(setTimeout(() => (this.delay = FIRST_DELAY_MS), STEADY_MS));

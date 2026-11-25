@@ -1,8 +1,8 @@
-// The Notify me switch for the repo on screen (web.client-live/notify-switch): it subscribes the service
-// worker's push manager with the Worker's key and posts the subscription to the repo's push
-// route, which records it in the person's web ledger (`push-subscriptions-in-ledger`), and
+// The Notify me switch for a repo (web.client-live/notify-switch, notify-toggle, push-renewal):
+// it subscribes the push manager with the Worker's key and posts the subscription to the repo's
+// push route, which records it in the person's web ledger (`push-subscriptions-in-ledger`), and
 // deletes it there when turned off. What the browser can do and what the Worker answers come
-// in through `NotifyEnv`, so the tests fake them.
+// in through `NotifyEnv`, which `web` gives, so the tests fake them.
 
 export interface SubscriptionLike {
   endpoint: string;
@@ -16,14 +16,14 @@ export interface PushManagerLike {
 }
 
 export interface NotifyEnv {
-  /** The registered service worker's push manager, or null where the browser lacks
-   * `Notification` or `PushManager`, or no service worker is registered. */
+  /** The push manager, or null where the browser can't take push messages. */
   pushManager(): Promise<PushManagerLike | null>;
-  /** `GET /api/push/key`'s key, or null when it answers 404; throws on other failures. */
+  /** The Worker's push key, or null when it has none; rejects when it can't be fetched. */
   key(): Promise<string | null>;
   permission(): NotificationPermission;
   requestPermission(): Promise<NotificationPermission>;
-  /** `GET <base>/push?endpoint=`'s `subscribed`, with `fresh` when a notice asked. */
+  /** Whether the Worker holds `endpoint` for the repo whose API base is `base`, asked with
+   * `fresh` when one is given. */
   subscribed(base: string, endpoint: string, fresh?: string): Promise<boolean>;
   send(method: 'POST' | 'DELETE', path: string, body: unknown): Promise<Response>;
   /** The repo's API base, `/api/repos/<o>/<r>`. */
@@ -60,13 +60,18 @@ export class Notify {
   /** The last state shown per repo, so a redraw doesn't flicker. */
   private states = new Map<string, boolean>();
   private drawn: Drawn[] = [];
+  /** The switches drawn in the current task: kept by a later draw though not in the document
+   * yet, since they are drawn together and then put in it. */
+  private drawing = new Set<Drawn>();
 
   constructor(private env: NotifyEnv) {}
 
   private remembered(): Record<string, string> {
     try {
-      const v = JSON.parse(this.env.storage.getItem(STORE) ?? '{}');
-      return v && typeof v === 'object' ? v : {};
+      const v: unknown = JSON.parse(this.env.storage.getItem(STORE) ?? '{}');
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+      // Only `<owner>/<repo>` to an endpoint counts.
+      return Object.fromEntries(Object.entries(v).filter(([k, e]) => /^[^/]+\/[^/]+$/.test(k) && typeof e === 'string' && e !== '')) as Record<string, string>;
     } catch {
       return {};
     }
@@ -149,6 +154,8 @@ export class Notify {
     const msg = el('span', { class: 'note' });
     const wrap = el('div', { class: 'notify', hidden: known === undefined }, el('label', {}, box, ' Notify me'), msg);
     let busy = false;
+    /** Turn-ons and turn-offs started, so an update that asked before one draws nothing after. */
+    let changes = 0;
     const draw = (on: boolean) => {
       this.states.set(id, on);
       box.checked = on;
@@ -156,6 +163,7 @@ export class Notify {
       wrap.hidden = false;
     };
     const update = async (fresh?: string) => {
+      const at = changes;
       const ready = await this.available();
       if (!ready) {
         wrap.hidden = true;
@@ -165,7 +173,7 @@ export class Notify {
       const sub = await ready.pm.getSubscription().catch(() => null);
       if (sub) await this.renew(sub).catch(() => undefined);
       const on = sub ? await this.ask(base, sub.endpoint, fresh).catch(() => this.states.get(id) ?? false) : false;
-      if (!busy) draw(on);
+      if (!busy && at === changes) draw(on);
     };
     const turnOn = async (ready: Ready): Promise<boolean> => {
       if (this.env.permission() !== 'granted' && (await this.env.requestPermission()) !== 'granted') {
@@ -193,18 +201,27 @@ export class Notify {
         }
       }
       this.remember(id, null);
-      if (sub && this.stored && Object.keys(this.remembered()).length === 0) await sub.unsubscribe();
+      if (sub && this.stored && Object.keys(this.remembered()).length === 0) await sub.unsubscribe().catch(() => undefined);
       return false;
     };
     box.addEventListener('change', async () => {
-      const ready = await this.available();
-      if (!ready || busy) return;
+      // Checked before any await, so a change made while one is in flight does nothing.
+      if (busy) return;
       const want = box.checked;
       busy = true;
+      changes++;
       msg.textContent = '';
       box.disabled = true;
       let on = !want;
       try {
+        const ready = await this.available();
+        if (!ready) {
+          // The key or push manager is gone: the switch is hidden, as at an update.
+          busy = false;
+          box.disabled = !this.env.online();
+          wrap.hidden = true;
+          return;
+        }
         on = want ? await turnOn(ready) : await turnOff(ready);
       } catch {
         msg.textContent = want ? 'Not turned on: try again.' : 'Not turned off: try again.';
@@ -212,7 +229,11 @@ export class Notify {
       busy = false;
       draw(on);
     });
-    this.drawn = [...this.drawn.filter((d) => d.el.isConnected), { el: wrap, update }];
+    const drawn = { el: wrap, update };
+    this.drawn = this.drawn.filter((d) => d.el.isConnected || this.drawing.has(d));
+    this.drawn.push(drawn);
+    if (this.drawing.size === 0) setTimeout(() => this.drawing.clear(), 0);
+    this.drawing.add(drawn);
     void update();
     return wrap;
   }
