@@ -312,8 +312,9 @@ pub(crate) async fn compare<P: Platform>(
     let repo = access.full_name();
     let auth = access.auth();
     // Named anew when the comparison changes shape or meaning, so none an earlier build
-    // kept is served: `compare8:` since `review` and `cuts` come from the gate's one call
-    // (`gate-answer`, `approval-setting-branch`).
+    // kept is served: `compare8:` since `documents` hold every spec path and `review` and
+    // `cuts` come from the gate's one call (`gate-answer`, `approval-setting-branch`). No
+    // release served `compare8:` before `documents` came from the listings.
     let key = format!("compare8:{repo}@{base_sha}:{head_sha}");
     if let Some(c) = p
         .cache_get(&key)
@@ -354,7 +355,6 @@ pub(crate) async fn compare<P: Platform>(
 
     // `clm.toml` is a spec document only when its approval setting changed; the other
     // files fetched for sizes are none.
-    let policy = Path::new(POLICY);
     fn side<'a>(listing: &keys::Listing, files: &'a Files) -> Option<Option<&'a [u8]>> {
         let policy = Path::new(POLICY);
         listing
@@ -366,37 +366,30 @@ pub(crate) async fn compare<P: Platform>(
             side(&trees.base, &base_files),
             side(&trees.head, &head_files),
         );
-    let mut documents: Vec<Document> = changed
-        .iter()
-        .filter(|path| path.to_str().is_some_and(files::is_spec_path))
-        .filter_map(|path| {
-            let texts = Texts {
-                before: text(&base_files, path),
-                after: text(&head_files, path),
+    // Every changed spec path, and `clm.toml` when the setting changed, from the listings,
+    // not the files fetched: a side whose text GitHub withholds still shows, empty, and
+    // only a side whose listing lacks the path is null, so the person sees every path an
+    // approve would accept.
+    let documents: Vec<Document> = trees
+        .head
+        .changed_paths(&trees.base)
+        .into_iter()
+        .filter(|path| clm_gate::is_spec_path(path) || (setting && path == POLICY))
+        .map(|path| {
+            let side = |listing: &keys::Listing, files: &Files| {
+                listing
+                    .has(&path)
+                    .then(|| text(files, Path::new(&path)).unwrap_or_default())
             };
-            (texts.before.is_some() || texts.after.is_some()).then(|| Document {
-                path: path.to_string_lossy().into_owned(),
-                texts,
-            })
+            Document {
+                texts: Texts {
+                    before: side(&trees.base, &base_files),
+                    after: side(&trees.head, &head_files),
+                },
+                path,
+            }
         })
         .collect();
-    // A changed setting lists the file from the listings, so a side whose text GitHub
-    // withholds still shows, empty, and only a side without the file is null.
-    if setting {
-        let side = |listing: &keys::Listing, files: &Files| {
-            listing
-                .has(POLICY)
-                .then(|| text(files, policy).unwrap_or_default())
-        };
-        documents.push(Document {
-            path: POLICY.into(),
-            texts: Texts {
-                before: side(&trees.base, &base_files),
-                after: side(&trees.head, &head_files),
-            },
-        });
-        documents.sort_by(|a, b| a.path.cmp(&b.path));
-    }
 
     let (review, cuts) = gate(&trees, setting, &base_files, &head_files);
     let comparison = Comparison {

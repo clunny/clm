@@ -3,6 +3,8 @@
 
 mod common;
 
+use clm_web_platform::access;
+use clm_web_review::branches;
 use common::*;
 use serde_json::{Value, json};
 
@@ -28,6 +30,8 @@ fn repo() -> FakeRepo {
         ("spec/b", "222"),
         ("impl/c", "333"),
         ("spec/.hidden", "444"),
+        ("spec/a..b", "445"),
+        ("spec/x.lock", "446"),
         ("specs/d", "555"),
     ] {
         repo.branches.insert(branch.into(), sha.into());
@@ -44,7 +48,7 @@ fn repo() -> FakeRepo {
 
 #[test]
 fn with_and_without_a_page() {
-    // req:web.worker.review/spec-branches@a0bae05a
+    // req:web.worker.review/spec-branches@3a863b51
     let fake = Fake::default();
     fake.gh.add_repo("o/a", repo());
     let cookie = fake.user("u", &["o/a"]);
@@ -65,7 +69,7 @@ fn with_and_without_a_page() {
 
 #[test]
 fn answered_from_the_live_state() {
-    // req:web.worker.review/spec-branches@a0bae05a
+    // req:web.worker.review/spec-branches@3a863b51
     let fake = Fake::default();
     fake.gh.add_repo("o/a", repo());
     let cookie = fake.user("u", &["o/a"]);
@@ -90,4 +94,27 @@ fn answered_from_the_live_state() {
         .map(|b| b["branch"].as_str().unwrap())
         .collect();
     assert_eq!(names, ["spec/a", "spec/b", "spec/c"]);
+}
+
+#[test]
+fn github_fails_the_list() {
+    // req:web.worker.review/spec-branches@3a863b51
+    let list = |fake: &Fake| {
+        block_on(async {
+            let access = access::check(fake, "u", "o", "a").await.expect("access");
+            branches::list(fake, &access).await
+        })
+    };
+    let fake = Fake::default();
+    let mut failing = repo();
+    failing.fail_paths.push("git/matching-refs".into());
+    fake.gh.add_repo("o/a", failing);
+    fake.user("u", &["o/a"]);
+    assert_eq!(list(&fake), None, "the refs can't be listed");
+
+    let fake = Fake::default();
+    fake.gh.add_repo("o/a", repo());
+    fake.user("u", &["o/a"]);
+    fake.gh.graphql_null.borrow_mut().insert("Pulls".into());
+    assert_eq!(list(&fake), None, "the pull requests can't be listed");
 }
