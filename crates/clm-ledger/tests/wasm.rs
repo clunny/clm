@@ -98,6 +98,12 @@ fn cleared_without_default_features() {
 }
 
 #[test]
+fn change_ids_without_default_features() {
+    // req:ledger/change-ids@2fa5960d
+    test_without_default_features("change_ids");
+}
+
+#[test]
 fn fold_records_is_the_fold() {
     // req:ledger/ledger-builds-for-wasm@85a2d194
     let line = r#"{"id":"1","kind":"landed","writer":"x/1","at":"2026-01-01T00:00:00.000Z","commit":"c","branch":"b","land_kind":"spec","review":false,"fingerprint":"f","changes":["x"]}"#;

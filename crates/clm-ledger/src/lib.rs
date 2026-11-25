@@ -1,10 +1,12 @@
 //! Approvals, checks and lands as records in per-writer ledger branches
 //! (specs/ledger/SPEC.md, `per-writer-ledgers`).
 
+mod change_ids;
 mod doc_only;
 mod fold;
 mod record;
 
+pub use change_ids::change_ids;
 pub use doc_only::{doc_only, legacy_doc_only};
 pub use fold::{Fold, TimedLand, fold_records, person, show, slug};
 pub use record::{
