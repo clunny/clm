@@ -3,7 +3,7 @@
 // Deploy): wrangler finds the file and reads it itself, so the test sees what a deploy run
 // there sees.
 import { fileURLToPath } from 'node:url';
-import { experimental_readRawConfig, unstable_readConfig } from 'wrangler';
+import { experimental_readRawConfig, unstable_convertConfigBindingsToStartWorkerBindings, unstable_readConfig } from 'wrangler';
 import { describe, expect, it } from 'vitest';
 
 /** `web/`, where the deploy runs `wrangler`. */
@@ -25,36 +25,33 @@ describe('wrangler.toml', () => {
   const { rawConfig } = inWeb(() => experimental_readRawConfig({}));
   const config = inWeb(() => unstable_readConfig({}, {}));
 
-  it('binds the Live class as LIVE in a SQLite migration (req:web/live-binding@a60502c6)', () => {
-    expect(rawConfig.durable_objects?.bindings).toContainEqual(
-      expect.objectContaining({ name: 'LIVE', class_name: 'Live' }),
-    );
-    expect(rawConfig.migrations).toContainEqual(
-      expect.objectContaining({ tag: 'v1', new_sqlite_classes: expect.arrayContaining(['Live']) }),
-    );
+  // The bindings a deploy creates, as wrangler converts them from the configuration.
+  const bindings = unstable_convertConfigBindingsToStartWorkerBindings(config) ?? {};
+  const migrations: { new_sqlite_classes?: string[] }[] = rawConfig.migrations ?? [];
+  const migrationOf = (cls: string) => migrations.findIndex((m) => m.new_sqlite_classes?.includes(cls));
+
+  // req:web/worker-deploy@4d72cb08
+  it('binds the Live class as LIVE in a SQLite migration', () => {
+    expect(bindings.LIVE).toEqual({ type: 'durable_object_namespace', class_name: 'Live' });
+    expect(migrationOf('Live')).toBeGreaterThanOrEqual(0);
   });
 
-  it('binds the Replica class as REPLICA, declared in a SQLite migration after the Live one (req:web/replica-binding@69721fd8)', () => {
-    expect(rawConfig.durable_objects?.bindings).toContainEqual(
-      expect.objectContaining({ name: 'REPLICA', class_name: 'Replica' }),
-    );
-    const migrations: { new_sqlite_classes?: string[] }[] = rawConfig.migrations ?? [];
-    const live = migrations.findIndex((m) => m.new_sqlite_classes?.includes('Live'));
-    const replica = migrations.findIndex((m) => m.new_sqlite_classes?.includes('Replica'));
-    expect(live).toBeGreaterThanOrEqual(0);
-    expect(replica).toBeGreaterThan(live);
+  // req:web/worker-deploy@4d72cb08
+  it('binds the Replica class as REPLICA, declared in a SQLite migration after the Live one', () => {
+    expect(bindings.REPLICA).toEqual({ type: 'durable_object_namespace', class_name: 'Replica' });
+    expect(migrationOf('Replica')).toBeGreaterThan(migrationOf('Live'));
   });
 
-  it('keeps an empty crons list, so a deploy clears the Cron Trigger (req:web/no-cron-trigger@6ab19e2c)', () => {
+  // req:web/worker-deploy@4d72cb08
+  it('keeps an empty crons list, so a deploy clears the Cron Trigger', () => {
     expect(rawConfig.triggers?.crons).toEqual([]);
   });
 
-  // Part of `web/worker-deploy`'s `binding` scenario, uncited while that requirement waits on
-  // its Needs: its build cites this test there, with the three above.
+  // req:web/worker-deploy@4d72cb08
   it('binds nothing but LIVE, REPLICA and ASSETS, and no KV namespace', () => {
+    expect(Object.keys(bindings).sort()).toEqual(['ASSETS', 'LIVE', 'REPLICA']);
+    expect(bindings.ASSETS).toEqual({ type: 'assets' });
     expect(rawConfig.kv_namespaces ?? []).toEqual([]);
-    expect((rawConfig.durable_objects?.bindings ?? []).map((b: { name: string }) => b.name).sort()).toEqual(['LIVE', 'REPLICA']);
-    expect(config.assets?.binding).toBe('ASSETS');
   });
 
   // How Workers assets read `run_worker_first`: a path goes to the Worker when it matches a
