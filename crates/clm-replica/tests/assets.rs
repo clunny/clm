@@ -79,7 +79,7 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 
 #[test]
 fn a_binary_asset() {
-    // req:replica/asset-hashes@f1d76b71
+    // req:replica/asset-hashes@271c1158
     for (path, kept) in [
         (LOGO, true),
         ("specs/b/x/assets/y.bin", true),
@@ -153,23 +153,30 @@ fn a_binary_asset() {
 
 #[test]
 fn a_store_saved_before_hashes_loads_as_it_did() {
-    // req:replica/asset-hashes@f1d76b71
+    // req:replica/asset-hashes@271c1158
     // Saved by the replica before it held hashes: `repo()` ready at `111`, at time 100, with
-    // `specs/b/assets/old.png` held binary, as it held every binary file then, and a ref
-    // `impl/archive/x`, which it no longer reads.
+    // `specs/b/assets/old.png` held binary, as it held every binary file then, `src/a.rs`
+    // scanned, whose text it never kept, and a ref `impl/archive/x`, which it no longer reads.
     let old = include_bytes!("fixtures/old-store.json");
     assert!(!contains(old, b"\"hash\""));
+    assert!(!contains(old, b"\"release\""));
     let mut store = MapStore::default();
     store.put("replica", b"1".to_vec());
     store.put("replica/0", old.to_vec());
     let mut loaded = Replica::load(&store);
     assert_ne!(loaded, Replica::default());
-    assert!(loaded.pending_fetch().is_empty());
+    // It names no release, so its scannable file that isn't a spec file is to fetch again
+    // (`markers-of-this-release`), and nothing else is.
+    assert_eq!(loaded.pending_fetch(), ["src/a.rs"]);
+    assert!(loaded.stale());
     let mut f = repo();
     f.insert(
         "specs/b/assets/old.png".into(),
         vec![0xff, 0x00, 0xfe, 0x01],
     );
+    f.insert("src/a.rs".into(), b"fn a() {}\n".to_vec());
+    fetch(&mut loaded, &f, "111");
+    assert!(loaded.pending_fetch().is_empty());
     let mut fresh = given_as(&f, "specs/b/assets/old.png", as_binary);
     fresh.recompute(200);
     loaded.recompute(200);

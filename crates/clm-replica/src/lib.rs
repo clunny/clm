@@ -292,6 +292,23 @@ fn scannable(path: &str) -> bool {
     !path.ends_with(".md")
 }
 
+/// The markers that count in a file: none in a binary or Markdown one, or one with no text.
+fn scan(path: &str, binary: bool, text: Option<&str>) -> Vec<Found> {
+    match text {
+        Some(t) if scannable(path) && !binary => {
+            clm_coverage::markers_in(std::path::Path::new(path), t)
+                .into_iter()
+                .map(|m: Marker| Found {
+                    id: m.id,
+                    version: m.version,
+                    line: m.line,
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
 pub(crate) fn regular(mode: &str) -> bool {
     matches!(mode, "100644" | "100755")
 }
@@ -328,19 +345,7 @@ impl State {
             .as_deref()
             .is_some_and(|t| t.bytes().take(BINARY_PROBE).any(|b| b == 0));
         let binary = binary || nul;
-        let markers = match &text {
-            Some(t) if scannable(&path) && !binary => {
-                clm_coverage::markers_in(std::path::Path::new(&path), t)
-                    .into_iter()
-                    .map(|m: Marker| Found {
-                        id: m.id,
-                        version: m.version,
-                        line: m.line,
-                    })
-                    .collect()
-            }
-            _ => Vec::new(),
-        };
+        let markers = scan(&path, binary, text.as_deref());
         let text = if keeps_text(&path) { text } else { None };
         let hash = bytes
             .filter(|_| keeps_hash(&path))
@@ -355,6 +360,19 @@ impl State {
                 hash,
             },
         );
+    }
+
+    /// Counts the held markers with this release's scanner (`replica/markers-of-this-release`):
+    /// a kept text is scanned again, and a file held with neither text nor binary is
+    /// forgotten, so `pending_fetch` lists it again.
+    fn rescan(&mut self) {
+        self.held.retain(|path, h| {
+            if h.text.is_none() && !h.binary {
+                return false;
+            }
+            h.markers = scan(path, h.binary, h.text.as_deref());
+            true
+        });
     }
 
     /// Whether the replica holds the blob the tree lists at `path`.
@@ -511,17 +529,42 @@ pub enum Answer {
     Preparing { done: f64 },
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Replica {
     state: State,
     views: Option<Views>,
     stale: bool,
 }
 
+/// The release whose scanner counted a saved state's markers: this crate's version
+/// (`replica/markers-of-this-release`).
+const RELEASE: &str = env!("CARGO_PKG_VERSION");
+
+/// A replica as `save` writes it.
+#[derive(Serialize)]
+struct Saving<'a> {
+    release: &'a str,
+    state: &'a State,
+    views: &'a Option<Views>,
+    stale: bool,
+}
+
+/// A replica as `load` reads it; a store saved before releases were recorded names none.
+#[derive(Deserialize)]
+struct Saved {
+    #[serde(default)]
+    release: Option<String>,
+    state: State,
+    views: Option<Views>,
+    stale: bool,
+}
+
 impl Replica {
-    /// The replica `save` wrote to `store`, or a new one when it holds none that reads.
+    /// The replica `save` wrote to `store`, or a new one when it holds none that reads. A
+    /// state another release saved, or one that names none, has its markers counted again
+    /// and is stale (`replica/markers-of-this-release`).
     pub fn load(store: &impl Store) -> Replica {
-        let read = || -> Option<Replica> {
+        let read = || -> Option<Saved> {
             let count: usize = String::from_utf8(store.get(KEY)?).ok()?.parse().ok()?;
             let mut bytes = Vec::new();
             for n in 0..count {
@@ -529,12 +572,31 @@ impl Replica {
             }
             serde_json::from_slice(&bytes).ok()
         };
-        read().unwrap_or_default()
+        let Some(saved) = read() else {
+            return Replica::default();
+        };
+        let mut replica = Replica {
+            state: saved.state,
+            views: saved.views,
+            stale: saved.stale,
+        };
+        if saved.release.as_deref() != Some(RELEASE) {
+            replica.state.rescan();
+            replica.stale = true;
+        }
+        replica
     }
 
-    /// Writes the replica to `store`, in values of at most 1 MiB.
+    /// Writes the replica to `store`, in values of at most 1 MiB, with the release that
+    /// saved it.
     pub fn save(&self, store: &mut impl Store) {
-        let bytes = serde_json::to_vec(self).unwrap_or_default();
+        let saving = Saving {
+            release: RELEASE,
+            state: &self.state,
+            views: &self.views,
+            stale: self.stale,
+        };
+        let bytes = serde_json::to_vec(&saving).unwrap_or_default();
         store.delete_all();
         let mut count = 0;
         for chunk in bytes.chunks(CHUNK) {
