@@ -903,6 +903,29 @@ fn a_stop_between_two_failures() {
     );
     assert!(!text.contains(&p.short(1)), "{text}");
     assert!(text.contains("the command failed with status 1"), "{text}");
+    // A pass that left it only because another requirement's block failed neither adds to
+    // the run nor ends it either.
+    let p = Passes::new();
+    let both: &[&str] = &["a/thing", "b/y"];
+    p.record(&[
+        (0, a, &[], Some("status 1")),
+        (1, both, &[("b/y", STRYKER)], Some("status 1")),
+        (2, a, &[], Some("status 1")),
+    ]);
+    let out = p.f.due();
+    assert!(said(&out, "unjudged: filed 1 items").is_some(), "{out:?}");
+    let items = p.unjudged();
+    let a_item: Vec<_> = items
+        .iter()
+        .filter(|(path, _)| path.starts_with("backlog/unjudged-a-"))
+        .collect();
+    assert_eq!(a_item.len(), 1, "{items:?}");
+    let (path, text) = a_item[0];
+    assert_eq!(path, &format!("backlog/unjudged-a-{}.md", p.short(2)));
+    assert!(
+        text.contains(&p.short(0)) && !text.contains(&p.short(1)),
+        "{text}"
+    );
 }
 
 #[test]
