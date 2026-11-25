@@ -99,7 +99,7 @@ fn decrypt(body: &[u8], secret: &SecretKey, auth: &[u8]) -> Vec<u8> {
 
 #[test]
 fn the_browser_can_read_it() {
-    // req:web.live/web-push-request@81a115ff
+    // req:web.live/web-push-request@67ba9fd3
     let req = web_push(
         &subscription("https://push.example/s/1"),
         br#"{"title":"t"}"#,
@@ -139,7 +139,7 @@ fn the_browser_can_read_it() {
 
 #[test]
 fn rfc_8291_example() {
-    // req:web.live/web-push-request@81a115ff
+    // req:web.live/web-push-request@67ba9fd3
     let mut random = [0; 48];
     random[..32].copy_from_slice(&unb64("yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw"));
     random[32..].copy_from_slice(&unb64("DGv6ra1nlYgDCS1FRnbzlw"));
@@ -165,7 +165,7 @@ fn error(sub: Subscription, vapid: Vapid, payload: &[u8]) -> PushError {
 
 #[test]
 fn a_bad_key() {
-    // req:web.live/web-push-request@81a115ff
+    // req:web.live/web-push-request@67ba9fd3
     let mut sub = subscription("https://push.example/s/1");
     sub.auth = b64(&[1; 15]);
     let err = error(sub, vapid(), b"{}");
@@ -173,50 +173,121 @@ fn a_bad_key() {
     assert!(err.to_string().contains("auth"), "{err}");
 }
 
+/// The error `web_push` gives, which must name `input` in its text.
+fn named(sub: Subscription, vapid: Vapid, input: &str) -> PushError {
+    let err = error(sub, vapid, b"{}");
+    assert!(err.to_string().contains(input), "{err} names {input}");
+    err
+}
+
 #[test]
 fn bad_inputs_are_named() {
-    // req:web.live/web-push-request@81a115ff
+    // req:web.live/web-push-request@67ba9fd3
     let mut sub = subscription("https://push.example/s/1");
     sub.p256dh = b64(&[4; 65]); // 65 bytes, but not a point on the curve
-    assert_eq!(error(sub, vapid(), b"{}"), PushError::P256dh);
+    assert_eq!(named(sub, vapid(), "p256dh"), PushError::P256dh);
     let mut sub = subscription("https://push.example/s/1");
     let (secret, _) = browser();
     let compressed = secret.public_key().to_encoded_point(true);
     sub.p256dh = b64(compressed.as_bytes());
-    assert_eq!(error(sub, vapid(), b"{}"), PushError::P256dh);
+    assert_eq!(named(sub, vapid(), "p256dh"), PushError::P256dh);
     for endpoint in [
         "http://push.example/s/1",
         "https:///s/1",
         "push.example/s/1",
         "https://user@push.example/s/1",
+        "https://push .example/s",
+        "https://:8443/s",
     ] {
-        let err = error(subscription(endpoint), vapid(), b"{}");
+        let err = named(subscription(endpoint), vapid(), "endpoint");
         assert_eq!(err, PushError::Endpoint, "{endpoint}");
-        assert!(err.to_string().contains("endpoint"), "{err}");
     }
     let mut bad = vapid();
     bad.private_key = b64(&[0; 32]);
     assert_eq!(
-        error(subscription("https://push.example/s/1"), bad, b"{}"),
+        named(subscription("https://push.example/s/1"), bad, "VAPID"),
         PushError::Vapid
     );
     let mut bad = vapid();
     bad.public_key = "not base64!".into();
     assert_eq!(
-        error(subscription("https://push.example/s/1"), bad, b"{}"),
+        named(subscription("https://push.example/s/1"), bad, "VAPID"),
         PushError::Vapid
     );
 }
 
 #[test]
 fn a_payload_too_long_for_one_record() {
-    // req:web.live/web-push-request@81a115ff
+    // req:web.live/web-push-request@67ba9fd3
     let sub = || subscription("https://push.example/s/1");
     // Push services take at most 4096 bytes of body: the 86-byte header, the payload, its
     // delimiter and the 16-byte tag.
     let req = web_push(&sub(), &[b'a'; 3993], &vapid(), NOW, random()).unwrap();
     assert_eq!(req.body.len(), 4096);
-    assert_eq!(error(sub(), vapid(), &[b'a'; 3994]), PushError::Payload);
+    let err = error(sub(), vapid(), &[b'a'; 3994]);
+    assert_eq!(err, PushError::Payload);
+    assert!(err.to_string().contains("payload"), "{err}");
+}
+
+#[test]
+fn random_that_is_not_a_key() {
+    // req:web.live/web-push-request@67ba9fd3
+    for first in [0x00, 0xff] {
+        let mut random = random();
+        random[..32].fill(first);
+        let err = web_push(
+            &subscription("https://push.example/s/1"),
+            b"{}",
+            &vapid(),
+            NOW,
+            random,
+        )
+        .unwrap_err();
+        assert_eq!(err, PushError::Random, "{first:#x}");
+        assert!(err.to_string().contains("random"), "{err}");
+    }
+}
+
+#[test]
+fn padded_keys() {
+    // req:web.live/web-push-request@67ba9fd3
+    use base64::engine::general_purpose::URL_SAFE;
+    let (secret, auth) = browser();
+    let vapid_secret = vapid_secret();
+    let padded_sub = Subscription {
+        endpoint: "https://push.example/s/1".into(),
+        p256dh: URL_SAFE.encode(public(&secret)),
+        auth: URL_SAFE.encode(auth),
+    };
+    let padded_vapid = Vapid {
+        public_key: URL_SAFE.encode(public(&vapid_secret)),
+        private_key: URL_SAFE.encode(vapid_secret.to_bytes()),
+    };
+    assert!(padded_sub.p256dh.ends_with('=') && padded_sub.auth.ends_with('='));
+    assert!(padded_vapid.public_key.ends_with('=') && padded_vapid.private_key.ends_with('='));
+    let payload = br#"{"title":"t"}"#;
+    let padded = web_push(&padded_sub, payload, &padded_vapid, NOW, random()).unwrap();
+    let bare = web_push(
+        &subscription("https://push.example/s/1"),
+        payload,
+        &vapid(),
+        NOW,
+        random(),
+    )
+    .unwrap();
+    assert_eq!(padded.url, bare.url);
+    assert_eq!(padded.body, bare.body);
+    let k = |r: &clm_web_live::PushRequest| {
+        header(&r.headers, "Authorization")
+            .split_once(", k=")
+            .unwrap()
+            .1
+            .to_owned()
+    };
+    assert_eq!(k(&padded), k(&bare));
+    assert_eq!(k(&padded), vapid().public_key);
+    assert_eq!(decrypt(&padded.body, &secret, &auth), payload);
+    assert_eq!(decrypt(&bare.body, &secret, &auth), payload);
 }
 
 /// The JWT's claims, from a request's `Authorization` header.
@@ -233,7 +304,7 @@ fn claims(headers: &[(String, String)]) -> Value {
 
 #[test]
 fn the_audience_is_the_normalised_origin() {
-    // req:web.live/web-push-request@81a115ff
+    // req:web.live/web-push-request@67ba9fd3
     for (endpoint, aud) in [
         ("https://Push.Example:443/s/1", "https://push.example"),
         (

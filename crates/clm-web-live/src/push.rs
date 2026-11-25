@@ -37,7 +37,8 @@ pub enum PushError {
     P256dh,
     /// `auth` isn't 16 bytes.
     Auth,
-    /// The endpoint isn't an `https` URL.
+    /// The endpoint isn't an `https` URL with a host, or its authority holds user info or
+    /// whitespace.
     Endpoint,
     /// A VAPID key doesn't parse.
     Vapid,
@@ -52,7 +53,7 @@ impl fmt::Display for PushError {
         f.write_str(match self {
             PushError::P256dh => "p256dh is not a 65-byte uncompressed P-256 point",
             PushError::Auth => "auth is not 16 bytes",
-            PushError::Endpoint => "endpoint is not an https URL",
+            PushError::Endpoint => "endpoint is not an https URL with a host",
             PushError::Vapid => "a VAPID key does not parse",
             PushError::Random => "random's first 32 bytes are not a P-256 private key",
             PushError::Payload => "payload does not fit in a 4096-byte body",
@@ -112,17 +113,19 @@ fn uncompressed_point(s: &str) -> Option<p256::PublicKey> {
 
 /// The endpoint's origin, as the push service compares the JWT's `aud` with it: `https://`
 /// and the host in lower case, with its port unless it is the default 443. An endpoint
-/// with user info isn't one a browser gives.
+/// with no host before its port, or with user info or whitespace in its authority, isn't
+/// one a browser gives.
 pub(crate) fn origin(endpoint: &str) -> Result<String, PushError> {
     let rest = endpoint
         .strip_prefix("https://")
         .ok_or(PushError::Endpoint)?;
     let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-    let host = authority.strip_suffix(":443").unwrap_or(authority);
-    if host.is_empty() || host.contains(|c: char| c.is_whitespace() || c == '@') {
+    let host = authority.split(':').next().unwrap_or_default();
+    if host.is_empty() || authority.contains(|c: char| c.is_whitespace() || c == '@') {
         return Err(PushError::Endpoint);
     }
-    Ok(format!("https://{}", host.to_ascii_lowercase()))
+    let authority = authority.strip_suffix(":443").unwrap_or(authority);
+    Ok(format!("https://{}", authority.to_ascii_lowercase()))
 }
 
 /// RFC 8291: `payload` as one `aes128gcm` record, with its header in front.
