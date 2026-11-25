@@ -191,7 +191,7 @@ pub async fn request_changes<P: Platform>(
 
 /// A `commented` record, as a branch's review lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Commented {
+pub(crate) struct Commented {
     id: String,
     writer: String,
     at: String,
@@ -205,7 +205,7 @@ pub struct Commented {
 
 /// A `changes_requested` record, as a branch's review lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Requested {
+pub(crate) struct Requested {
     id: String,
     writer: String,
     at: String,

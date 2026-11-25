@@ -1,5 +1,5 @@
 //! `GET /api/repos/{o}/{r}/branches`: the spec branches the app's spec-branch views start
-//! from (`web.worker/spec-branches`). Each `spec/*` ref whose review can open, by name, with
+//! from (`spec-branches`). Each `spec/*` ref whose review can open, by name, with
 //! its head and its page: the open pull request on the default branch whose head is the
 //! branch in this repository, not a fork's. Kept with the live state for 60 seconds.
 

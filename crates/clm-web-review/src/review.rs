@@ -2,7 +2,7 @@
 //! the model and compared node by node, element by element, by content hash, with the
 //! branch's fingerprint and its head's code key. The comparison is kept in the Cache API
 //! under the default branch's tip and the branch's head, so while they stand a request
-//! fetches no spec files (`web.worker/review-cached`); the ledger's approvals and checks
+//! fetches no spec files (`review-cached`); the ledger's approvals and checks
 //! and the page are live.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,13 +19,13 @@ use clm_web_platform::{files, gh, keys, ledger, live};
 
 /// An element's text before and after; `None` on the side where it doesn't exist.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Texts {
+pub(crate) struct Texts {
     pub before: Option<String>,
     pub after: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Element {
+pub(crate) struct Element {
     /// A requirement's ID, or an asset's path under the node's `assets/`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -36,7 +36,7 @@ pub struct Element {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Changes {
+pub(crate) struct Changes {
     pub added: Vec<Element>,
     pub modified: Vec<Element>,
     pub removed: Vec<Element>,
@@ -57,7 +57,7 @@ impl Changes {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeChanges {
+pub(crate) struct NodeChanges {
     pub id: String,
     /// `added`, `removed` or `modified`.
     pub status: String,
@@ -69,7 +69,7 @@ pub struct NodeChanges {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ChangeInfo {
+pub(crate) struct ChangeInfo {
     pub id: String,
     pub status: String,
     pub from: Option<String>,
@@ -82,7 +82,7 @@ pub struct ChangeInfo {
 
 /// A decision or backlog item added, modified or removed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Record {
+pub(crate) struct Record {
     /// A decision's name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -95,7 +95,7 @@ pub struct Record {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Document {
+pub(crate) struct Document {
     pub path: String,
     #[serde(flatten)]
     pub texts: Texts,
@@ -283,7 +283,7 @@ fn records(
 /// The comparison of a base and a head commit: everything in a review that only its commits
 /// decide.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Comparison {
+pub(crate) struct Comparison {
     pub change: Option<ChangeInfo>,
     pub nodes: Vec<NodeChanges>,
     pub decisions: Vec<Record>,
@@ -303,7 +303,7 @@ pub struct Comparison {
 /// A commit never changes, so a comparison stays good for as long as it is kept.
 const COMPARISON_TTL: u64 = 86_400;
 
-pub async fn compare<P: Platform>(
+pub(crate) async fn compare<P: Platform>(
     p: &P,
     access: &Access,
     base_sha: &str,
@@ -482,7 +482,7 @@ fn status(base: Option<&clm_gate::Entry>, head: Option<&clm_gate::Entry>) -> cha
 }
 
 /// The listings of a branch's merge base with the default branch and of its head.
-pub struct Trees {
+pub(crate) struct Trees {
     /// The compare API's `merge_base_commit`.
     pub merge_base: String,
     pub head_sha: String,
@@ -506,13 +506,13 @@ impl Trees {
 }
 
 /// The file whose top-level `approval` key is a spec setting (`approval-setting-is-spec`).
-pub const POLICY: &str = "clm.toml";
+pub(crate) const POLICY: &str = "clm.toml";
 
 /// Whether the branch changes the approval setting, given `clm.toml` on each side: `None`
 /// where the listing has no such file, `Some(None)` where GitHub withholds its text, which
 /// counts as changed, as the gate fails closed on a file it can't read. The rule is the
 /// gate's own (`gate/approval-changed`).
-pub fn setting_changed(before: Option<Option<&[u8]>>, after: Option<Option<&[u8]>>) -> bool {
+pub(crate) fn setting_changed(before: Option<Option<&[u8]>>, after: Option<Option<&[u8]>>) -> bool {
     match (before, after) {
         (Some(None), _) | (_, Some(None)) => true,
         (before, after) => clm_gate::approval_changed(before.flatten(), after.flatten()),
@@ -520,7 +520,7 @@ pub fn setting_changed(before: Option<Option<&[u8]>>, after: Option<Option<&[u8]
 }
 
 /// The merge base of `base_sha` and `head_sha`, and both listings: three requests.
-pub async fn trees<P: Platform>(
+pub(crate) async fn trees<P: Platform>(
     p: &P,
     access: &Access,
     base_sha: &str,
@@ -555,7 +555,7 @@ async fn put_comparison<P: Platform>(p: &P, key: &str, comparison: &Comparison) 
 
 /// An `approved` record for the branch's fingerprint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Approval {
+pub(crate) struct Approval {
     pub writer: String,
     pub at: String,
     /// Its line has a non-empty string `sig`: one `clm land` will check, not one known to
@@ -580,7 +580,7 @@ pub(crate) fn signed_refusal(command: String) -> Response {
 
 /// Whether the commit `tip` holds an entry at `docs/allowed_signers`, from one GraphQL
 /// query, kept in the Cache API by tip for a day; `None` when GitHub doesn't say.
-pub async fn signed<P: Platform>(p: &P, access: &Access, tip: &str) -> Option<bool> {
+pub(crate) async fn signed<P: Platform>(p: &P, access: &Access, tip: &str) -> Option<bool> {
     let key = format!("signed:{}@{tip}", access.full_name());
     if let Some(v) = p.cache_get(&key).await {
         return Some(v == "true");
@@ -600,7 +600,7 @@ pub async fn signed<P: Platform>(p: &P, access: &Access, tip: &str) -> Option<bo
 
 /// The branch's page on the host, when it has one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Page {
+pub(crate) struct Page {
     pub number: u64,
     pub url: String,
 }
