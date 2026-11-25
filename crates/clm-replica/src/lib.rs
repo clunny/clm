@@ -49,7 +49,7 @@ pub struct Entry {
 }
 
 /// A file a source fetched: its tree entry and, for a spec file or a non-Markdown one, its
-/// text.
+/// text, or for a binary asset its bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct File {
     pub entry: Entry,
@@ -57,6 +57,9 @@ pub struct File {
     pub binary: bool,
     /// `None` for a binary blob.
     pub text: Option<String>,
+    /// A binary asset's bytes, of which the replica keeps only the hash (`asset-hashes`).
+    #[serde(default)]
+    pub bytes: Option<Vec<u8>>,
 }
 
 impl File {
@@ -67,6 +70,7 @@ impl File {
             entry,
             binary: false,
             text: Some(text.into()),
+            bytes: None,
         }
     }
 
@@ -76,6 +80,19 @@ impl File {
             entry,
             binary: true,
             text: None,
+            bytes: None,
+        }
+    }
+
+    /// A binary blob given with its bytes: held binary, with the hash the model gives them
+    /// as an asset when `keeps_hash` accepts its path, and none of the bytes
+    /// (`replica/asset-hashes`).
+    pub fn asset(entry: Entry, bytes: Vec<u8>) -> File {
+        File {
+            entry,
+            binary: true,
+            text: None,
+            bytes: Some(bytes),
         }
     }
 
@@ -86,6 +103,7 @@ impl File {
             entry,
             binary: false,
             text: None,
+            bytes: None,
         }
     }
 }
@@ -195,6 +213,10 @@ pub(crate) struct Held {
     /// Kept for the files the model and the sizes read.
     pub text: Option<String>,
     pub markers: Vec<Found>,
+    /// A binary asset's hash, for the snapshot's `assets`; absent in a store saved before
+    /// hashes were held.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -244,6 +266,27 @@ pub fn wanted(path: &str) -> bool {
     keeps_text(path) || scannable(path)
 }
 
+/// The prefixes of the refs the views read (`replica/refs-the-views-read`).
+pub const REF_PREFIXES: [&str; 4] = ["impl/", "spec/", "autosync/spec/", "propose/"];
+
+/// Whether the views read a ref: one of `REF_PREFIXES` followed by a non-empty name with no
+/// `/` (`replica/refs-the-views-read`).
+pub fn reads_ref(name: &str) -> bool {
+    REF_PREFIXES.iter().any(|prefix| {
+        name.strip_prefix(prefix)
+            .is_some_and(|rest| !rest.is_empty() && !rest.contains('/'))
+    })
+}
+
+/// Whether the replica keeps a binary file's hash for the snapshot's `assets`: a path under
+/// `specs/` with an `assets` directory in it, as the model reads a component's assets
+/// (`replica/asset-hashes`).
+pub fn keeps_hash(path: &str) -> bool {
+    path.strip_prefix("specs/")
+        .and_then(|rest| rest.rsplit_once('/'))
+        .is_some_and(|(dir, _)| dir.split('/').any(|c| c == "assets"))
+}
+
 /// Whether a file can hold markers that count: Markdown can't.
 fn scannable(path: &str) -> bool {
     !path.ends_with(".md")
@@ -259,6 +302,7 @@ impl State {
             entry,
             binary,
             text,
+            bytes,
         } = file;
         let Entry {
             path,
@@ -298,6 +342,9 @@ impl State {
             _ => Vec::new(),
         };
         let text = if keeps_text(&path) { text } else { None };
+        let hash = bytes
+            .filter(|_| keeps_hash(&path))
+            .map(|b| clm_model::asset_hash(&b));
         self.held.insert(
             path,
             Held {
@@ -305,6 +352,7 @@ impl State {
                 binary,
                 text,
                 markers,
+                hash,
             },
         );
     }
@@ -382,7 +430,9 @@ impl State {
             .collect()
     }
 
-    /// The model's files, or `None` while a spec file's text is still to fetch.
+    /// The model's files, or `None` while a spec file's text is still to fetch. A binary
+    /// file `keeps_hash` accepts is given with no bytes, so the model sees its path;
+    /// `held_assets` then sets its hash.
     pub(crate) fn spec_files(&self) -> Option<clm_model::Files> {
         if !self.listed || self.spec_done() < 1.0 {
             return None;
@@ -391,9 +441,40 @@ impl State {
             self.tree
                 .keys()
                 .filter(|p| keeps_text(p))
-                .filter_map(|p| Some((p.into(), self.held.get(p)?.text.clone()?.into_bytes())))
+                .filter_map(|p| {
+                    let held = self.held.get(p)?;
+                    let bytes = match &held.text {
+                        Some(text) => text.clone().into_bytes(),
+                        None if held.binary && keeps_hash(p) => Vec::new(),
+                        None => return None,
+                    };
+                    Some((p.into(), bytes))
+                })
                 .collect(),
         )
+    }
+
+    /// Gives each binary asset the model loaded the hash the replica holds for it, and
+    /// leaves out one held with none (`replica/asset-hashes`).
+    pub(crate) fn held_assets(&self, graph: &mut clm_model::Graph) {
+        for node in graph.nodes.values_mut() {
+            let Some(dir) = node.path.parent().and_then(|d| d.to_str()) else {
+                continue;
+            };
+            node.assets.retain(|name, hash| {
+                let path = format!("{dir}/assets/{name}");
+                match self.held.get(&path) {
+                    Some(held) if held.binary && held.text.is_none() => match &held.hash {
+                        Some(h) => {
+                            hash.clone_from(h);
+                            true
+                        }
+                        None => false,
+                    },
+                    _ => true,
+                }
+            });
+        }
     }
 }
 
@@ -514,7 +595,7 @@ impl Replica {
                 sha,
                 time,
                 change,
-            } => match sha {
+            } if reads_ref(&name) => match sha {
                 Some(sha) => {
                     s.refs.insert(name, RefState { sha, time, change });
                 }
@@ -522,6 +603,11 @@ impl Replica {
                     s.refs.remove(&name);
                 }
             },
+            // A ref the views don't read is held by none (`replica/refs-the-views-read`),
+            // and one a store saved before the rule held goes.
+            Change::Ref { name, .. } => {
+                s.refs.remove(&name);
+            }
             Change::Pull(pull) => {
                 if pull.open {
                     s.pulls.insert(pull.number, pull);

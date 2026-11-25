@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 
-use clm_replica::{Answer, Change, Entry, File, Pull, Replica, Store};
+use clm_replica::{Answer, Change, Entry, File, Pull, Replica, Store, keeps_hash};
 use serde_json::Value;
 
 pub type FileMap = BTreeMap<String, Vec<u8>>;
@@ -87,10 +87,12 @@ pub fn entry(path: &str, bytes: &[u8]) -> Entry {
     }
 }
 
-/// `path` as a source reports it: its text, or binary when the bytes aren't UTF-8.
+/// `path` as a source reports it: its text, or, when the bytes aren't UTF-8, an asset with
+/// its bytes where `keeps_hash` accepts the path and binary elsewhere.
 pub fn file(path: &str, bytes: &[u8]) -> File {
     match String::from_utf8(bytes.to_vec()) {
         Ok(text) => File::text(entry(path, bytes), text),
+        Err(_) if keeps_hash(path) => File::asset(entry(path, bytes), bytes.to_vec()),
         Err(_) => File::binary(entry(path, bytes)),
     }
 }

@@ -110,6 +110,7 @@ fn constructors_give_the_fields_a_source_gave() {
             entry: e.clone(),
             binary: false,
             text: Some("fn x".into()),
+            bytes: None,
         }
     );
     assert_eq!(
@@ -118,6 +119,7 @@ fn constructors_give_the_fields_a_source_gave() {
             entry: e.clone(),
             binary: true,
             text: None,
+            bytes: None,
         }
     );
     assert_eq!(
@@ -126,6 +128,7 @@ fn constructors_give_the_fields_a_source_gave() {
             entry: e,
             binary: false,
             text: None,
+            bytes: None,
         }
     );
 }

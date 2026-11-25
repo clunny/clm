@@ -15,10 +15,11 @@ use crate::{Event, RefChange, State, Views};
 /// The feed's length at most.
 const ACTIVITY: usize = crate::EVENTS;
 
-/// The name of a branch under `prefix`, `None` for another prefix or a nested name such as
-/// `impl/archive/<id>`, which names no component (`orchestrator/nested-branches-not-claims`).
+/// The name of a branch under `prefix`, `None` for another prefix or a ref the views don't
+/// read, such as the nested `impl/archive/<id>` or the empty `impl/`
+/// (`replica/refs-the-views-read`).
 pub(crate) fn branch<'a>(name: &'a str, prefix: &str) -> Option<&'a str> {
-    name.strip_prefix(prefix).filter(|n| !n.contains('/'))
+    name.strip_prefix(prefix).filter(|_| crate::reads_ref(name))
 }
 
 /// The fold of every ledger branch the state holds.
@@ -63,7 +64,8 @@ pub(crate) fn next_lapse(state: &State, now: u64) -> Option<u64> {
 
 /// Every view, at `now`.
 pub(crate) fn views(state: &State, files: &Files, now: u64) -> Views {
-    let (graph, violations) = clm_model::load_files(files);
+    let (mut graph, violations) = clm_model::load_files(files);
+    state.held_assets(&mut graph);
     let violations: Vec<String> = violations.iter().map(clm_check::format).collect();
     let fold = fold(state);
     let flag_text = clm_effort::flag_text(&graph, &|path| {

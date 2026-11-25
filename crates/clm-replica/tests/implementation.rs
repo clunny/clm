@@ -571,3 +571,75 @@ fn open_answers_leave_out_items_the_tip_lost() {
         ])
     );
 }
+
+// ---- the refs the views read ----
+
+#[test]
+fn nested_and_empty_names() {
+    // req:replica/refs-the-views-read@270dcb11
+    let names = [
+        ("impl/a", true),
+        ("spec/x", true),
+        ("autosync/spec/x", true),
+        ("propose/p", true),
+        ("impl/archive/a", false),
+        ("impl/", false),
+        ("autosync/x", false),
+        ("main", false),
+    ];
+    for (name, read) in names {
+        assert_eq!(clm_replica::reads_ref(name), read, "{name}");
+    }
+    assert_eq!(
+        clm_replica::REF_PREFIXES,
+        ["impl/", "spec/", "autosync/spec/", "propose/"]
+    );
+
+    // Components `a`, `archive` and `x`, each with a pending requirement, and item `p`.
+    let mut f = clm_repo();
+    f.extend(files(&[
+        ("specs/archive/SPEC.md", &node("", &["s"], "active")),
+        ("specs/x/SPEC.md", &node("", &["t"], "active")),
+        (
+            "backlog/p.md",
+            "---\ntitle: P\nkind: human\ncomponents: [a]\n---\nBody.\n",
+        ),
+    ]));
+    let now = at(12, 0);
+    let mut r = scratch(&f, "111");
+    for (name, _) in names {
+        branch_ref(&mut r, name, "s1", now - 3600, None);
+    }
+    r.recompute(now);
+    let imp = view(&r, "implementation");
+    let nodes = imp["flight"]["nodes"].as_array().unwrap();
+    let state = |id: &str| nodes.iter().find(|n| n["node"] == id).unwrap()["state"].clone();
+    assert_eq!(state("a"), "claimed");
+    assert_ne!(state("archive"), "claimed");
+    assert_ne!(state("x"), "claimed");
+    assert!(nodes.iter().all(|n| n["node"] != ""), "{}", imp["flight"]);
+    assert_eq!(
+        imp["taken"]["claims"],
+        json!([{"item": "p", "nodes": ["a"]}])
+    );
+    assert_eq!(imp["taken"]["changes"], json!([]));
+
+    // The refused names are held by no view: given only them, the replica recomputes to
+    // what it gives with no ref, and no claim lapses.
+    // An open pull request from `impl/archive/a` gets a page either way, and a held ref
+    // would give it a `checked`.
+    let mut refused = scratch(&f, "111");
+    let code = Some(RefChange::Code { key: "k".into() });
+    for (name, _) in names.iter().filter(|(_, read)| !read) {
+        branch_ref(&mut refused, name, "s1", now - 3600, code.clone());
+    }
+    let mut none = scratch(&f, "111");
+    for r in [&mut refused, &mut none] {
+        r.apply(Change::Pull(pull(3, "impl/archive/a", "s1")));
+    }
+    assert_eq!(refused.recompute(now), none.recompute(now));
+    assert_eq!(none.recompute(now).next, None);
+    for name in ["snapshot", "implementation", "capabilities", "architecture"] {
+        assert_eq!(view(&refused, name), view(&none, name), "{name}");
+    }
+}
