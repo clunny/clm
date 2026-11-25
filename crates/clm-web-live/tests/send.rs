@@ -38,8 +38,8 @@ fn send(host: &Fake, body: &str) -> Answer<usize> {
         Request {
             method: "POST".into(),
             path: "/send".into(),
-            websocket: false,
-            body: body.into(),
+            upgrade: None,
+            body: body.as_bytes().to_vec(),
         },
     ))
 }

@@ -11,6 +11,6 @@ mod send;
 
 #[cfg(all(feature = "durable", target_arch = "wasm32"))]
 pub use durable::Live;
-pub use hub::{Answer, Host, Request, fetch, on_close, on_message};
+pub use hub::{Answer, Host, Request, fetch, on_close, on_message, start};
 pub use notices::{Item, Notice, review_notice, waiting_notice};
 pub use push::{PushError, PushRequest, Subscription, Vapid, web_push};

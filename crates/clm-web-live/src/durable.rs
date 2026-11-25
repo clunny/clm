@@ -22,34 +22,17 @@ pub struct Live {
 
 impl DurableObject for Live {
     fn new(state: State, env: Env) -> Self {
-        // Answered by the runtime without waking the object, so a page can tell a dead
-        // socket from a quiet one.
-        match WebSocketRequestResponsePair::new("ping", "pong") {
-            Ok(pair) => state.set_websocket_auto_response(&pair),
-            Err(_) => worker::console_warn!("no ping/pong auto-response: pages will reconnect"),
-        }
-        Live { state, env }
+        let live = Live { state, env };
+        hub::start(&live);
+        live
     }
 
     async fn fetch(&self, mut req: Request) -> Result<Response> {
-        let method = req.method();
-        let websocket = req
-            .headers()
-            .get("upgrade")?
-            .is_some_and(|u| u.eq_ignore_ascii_case("websocket"));
-        let body = match method {
-            // A body that isn't UTF-8 doesn't parse: 422, as `/send` answers one that isn't JSON.
-            Method::Post => match req.text().await {
-                Ok(body) => body,
-                Err(_) => return Ok(Response::empty()?.with_status(422)),
-            },
-            _ => String::new(),
-        };
         let request = hub::Request {
-            method: method.to_string(),
+            method: req.method().to_string(),
             path: req.path(),
-            websocket,
-            body,
+            upgrade: req.headers().get("upgrade")?,
+            body: req.bytes().await?,
         };
         match hub::fetch(self, request).await {
             Answer::Upgrade(client) => Response::from_websocket(client),
@@ -111,6 +94,14 @@ impl Host for Live {
     fn close(&self, socket: &WebSocket) {
         // Throws when the socket is already closed, which is the outcome wanted.
         let _ = socket.close(Some(1000), None::<&str>);
+    }
+
+    /// Answered by the runtime without waking the object.
+    fn auto_response(&self, request: &str, response: &str) {
+        match WebSocketRequestResponsePair::new(request, response) {
+            Ok(pair) => self.state.set_websocket_auto_response(&pair),
+            Err(_) => worker::console_warn!("no ping/pong auto-response: pages will reconnect"),
+        }
     }
 
     fn vapid(&self) -> Option<Vapid> {
