@@ -108,12 +108,15 @@ pub(crate) async fn spec_branch<P: Platform>(
     if !review::is_spec_branch(branch) {
         return Err(Refusal::Branch);
     }
-    let tip = ledger::tip(p, access, branch)
-        .await
-        .ok_or(Refusal::Branch)?;
-    let base = ledger::tip(p, access, access.default_branch())
-        .await
-        .ok_or(Refusal::Failed)?;
+    // A ref GitHub fails to read is no missing branch (`web.worker.platform/branch-tip`).
+    let tip = match ledger::branch_tip(p, access, branch).await {
+        Ok(Some(tip)) => tip,
+        Ok(None) => return Err(Refusal::Branch),
+        Err(_) => return Err(Refusal::Failed),
+    };
+    let Ok(Some(base)) = ledger::branch_tip(p, access, access.default_branch()).await else {
+        return Err(Refusal::Failed);
+    };
     let trees = review::trees(p, access, &base, &tip)
         .await
         .ok_or(Refusal::Failed)?;
@@ -165,12 +168,10 @@ fn bytes(side: &Option<Option<String>>) -> Option<Option<&[u8]>> {
     side.as_ref().map(|t| t.as_deref().map(str::as_bytes))
 }
 
-/// The change a branch adds or edits, as `clm approve` names it: the first
-/// `changes/<id>/change.md` the head has and the merge base lacks or differs on.
+/// The change a branch adds or edits, as `clm approve` names it: the first of the IDs
+/// `clm_ledger::change_ids` gives for the paths the head holds that the merge base lacks or
+/// differs on (`ledger/change-ids`).
 fn change_of(changed: &[String], head: &keys::Listing) -> Option<String> {
-    let kept = |path: &String| head.entries.iter().any(|e| e.path == path.as_bytes());
-    changed.iter().filter(|path| kept(path)).find_map(|path| {
-        let id = path.strip_prefix("changes/")?.strip_suffix("/change.md")?;
-        (id != "archive" && !id.contains('/')).then(|| id.to_string())
-    })
+    let held = changed.iter().filter(|path| head.has(path));
+    clm_ledger::change_ids(held).into_iter().next()
 }

@@ -685,11 +685,14 @@ pub async fn branch<P: Platform>(p: &P, access: &Access, branch: &str) -> Respon
     if !is_spec_branch(branch) {
         return Response::empty(404);
     }
-    let Some(head_sha) = ledger::tip(p, access, branch).await else {
-        return Response::empty(404);
+    // A ref GitHub fails to read is no missing branch (`web.worker.platform/branch-tip`).
+    let head_sha = match ledger::branch_tip(p, access, branch).await {
+        Ok(Some(sha)) => sha,
+        Ok(None) => return Response::empty(404),
+        Err(_) => return Response::empty(502),
     };
     let base = access.default_branch();
-    let Some(base_sha) = ledger::tip(p, access, base).await else {
+    let Ok(Some(base_sha)) = ledger::branch_tip(p, access, base).await else {
         return Response::empty(502);
     };
     let (Some(signed), Some(comparison), Some(fold)) = futures::join!(

@@ -138,7 +138,7 @@ fn modified_requirement() {
 #[test]
 fn approval_state() {
     // req:web.worker.review/pr-review@751149f9
-    // req:web.worker.review/fingerprint-from-trees@c44557f5
+    // req:web.worker.review/fingerprint-from-trees@e49d6717
     let mut repo = spec_pr();
     let fingerprint = fingerprint(&repo);
     ledger(
@@ -1159,7 +1159,7 @@ fn comparison_cached_with_a_patch_id() {
 #[test]
 fn truncated_listing() {
     // req:web.worker.review/pr-review@751149f9
-    // req:web.worker.review/fingerprint-from-trees@c44557f5
+    // req:web.worker.review/fingerprint-from-trees@e49d6717
     // GitHub truncating the merge base's listing leaves the review without a fingerprint,
     // so no approval shows, though one exists for the branch's real fingerprint.
     let mut repo = spec_pr();
