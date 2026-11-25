@@ -409,7 +409,7 @@ fn cuts(v: &Value) -> Vec<&str> {
 
 #[test]
 fn a_removed_requirement() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let v = review_of(branch_from(
         &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
         &[],
@@ -424,7 +424,7 @@ fn a_removed_requirement() {
 
 #[test]
 fn a_shortened_requirement() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // Every cut the gate lists, in its order: a requirement stating fewer sentences too.
     let two = node("", &["r", "s"], "active").replace("It SHALL r.", "It SHALL r. It SHALL q.");
     let v = review_of(branch_from(
@@ -441,7 +441,7 @@ fn a_shortened_requirement() {
 
 #[test]
 fn cuts_in_the_gates_order() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // Several cuts come as `clm gate` prints them: gone requirements, then shortened ones,
     // then the tests the lists add.
     let two =
@@ -471,7 +471,7 @@ fn cuts_in_the_gates_order() {
 
 #[test]
 fn a_widened_exemption() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let exempt = node("", &["r"], "active").replace(
         "depends_on: []\n",
         "depends_on: []\nexemptions:\n  - rule: skipped-tests\n    files: [\"src/n/**\"]\n    until: backlog/x\n",
@@ -488,7 +488,7 @@ fn a_widened_exemption() {
 
 #[test]
 fn specs_that_dont_load() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // The head's specs don't load, so the requirements can't be compared: the gate's one
     // line, naming the head, and review.
     let unscenarioed = node("", &["r"], "active").replace("\n#### Scenario: s\n- ok\n", "");
@@ -506,7 +506,7 @@ fn specs_that_dont_load() {
 
 #[test]
 fn base_specs_that_dont_load() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // The merge base's specs don't load: the one line names the merge base.
     let unscenarioed = node("", &["r"], "active").replace("\n#### Scenario: s\n- ok\n", "");
     let v = review_of(branch_from(
@@ -522,7 +522,7 @@ fn base_specs_that_dont_load() {
 
 #[test]
 fn a_broken_live_change() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // The gate loads the live `change.md` files, so one the model rejects at the head keeps
     // the specs there from loading.
     let v = review_of(branch_with(&[
@@ -537,7 +537,7 @@ fn a_broken_live_change() {
 
 #[test]
 fn a_rule_serving_a_capability() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // The gate loads the human layers, so a rule serving a capability resolves: a removed
     // requirement is listed as gone, not hidden behind specs that seem not to load.
     let caps = "## Capabilities\n\n### Capability: k\nOne can k.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
@@ -564,7 +564,7 @@ fn a_rule_serving_a_capability() {
 
 #[test]
 fn a_spec_github_withholds() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // A SPEC.md whose text GitHub gives as null is one the gate can't load either: its one
     // line, not a cut for each requirement the file seems to lose.
     let mut repo = branch_from(
@@ -588,7 +588,7 @@ fn a_spec_github_withholds() {
 
 #[test]
 fn a_broken_backlog_item() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // The cuts are read from the files the gate loads, so a backlog item the model rejects,
     // which the gate never sees, doesn't make the specs fail to load.
     let bad = "---\ntitle: Bad\nkind: nonsense\ncomponents: [n]\n---\n";
@@ -615,7 +615,7 @@ fn a_broken_backlog_item() {
 
 #[test]
 fn a_broken_archived_change() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // The gate loads only the live `change.md` files, so an archived one the model rejects
     // doesn't make the specs fail to load either.
     let repo = branch_from(
@@ -643,7 +643,7 @@ fn a_broken_archived_change() {
 
 #[test]
 fn untouched_specs_list_no_cuts() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // The cuts are read only when a changed path is under `specs/` or a list: a branch that
     // edits a decision lists none, though the specs on both sides don't load.
     let unscenarioed = node("", &["r"], "active").replace("\n#### Scenario: s\n- ok\n", "");
@@ -660,7 +660,7 @@ fn untouched_specs_list_no_cuts() {
 
 #[test]
 fn a_list_github_withholds() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // A list whose text GitHub gives as null can't be read, so the branch needs review, and
     // its cuts say so rather than list nothing for it.
     let mut repo = branch_with(&[(
@@ -683,7 +683,7 @@ fn a_list_github_withholds() {
 
 #[test]
 fn a_list_github_withholds_at_the_merge_base() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // A list whose text is withheld at the merge base can't tell which of its head's lines
     // are new: none is listed, and one line names the list and the merge base.
     let change = "---\nstatus: applied\n---\n\n## Intent\nc\n";
@@ -727,7 +727,7 @@ fn a_list_github_withholds_at_the_merge_base() {
 
 #[test]
 fn an_archived_list_github_withholds_at_the_merge_base() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // An archived list the merge base doesn't hold reads its base text from the live list
     // there, as the gate does: when that text is withheld, the list's lines aren't listed.
     let change = "---\nstatus: applied\n---\n\n## Intent\nx\n";
@@ -758,7 +758,7 @@ fn an_archived_list_github_withholds_at_the_merge_base() {
 
 #[test]
 fn withheld_lists_follow_the_gates_lines() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // One line per withheld list, after the gate's own lines.
     let change = "---\nstatus: applied\n---\n\n## Intent\nc\n";
     let mut repo = branch_from(
@@ -790,7 +790,7 @@ fn withheld_lists_follow_the_gates_lines() {
 
 #[test]
 fn a_withheld_list_in_a_truncated_listing() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // A truncated listing lists no cuts, a withheld list's line included.
     let mut repo = branch_with(&[(
         "changes/c/change.md",
@@ -808,7 +808,7 @@ fn a_withheld_list_in_a_truncated_listing() {
 
 #[test]
 fn a_truncated_listing_lists_no_cuts() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // Cuts read from part of the files would mislead: none are listed, and review holds.
     let mut repo = branch_from(
         &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
@@ -823,7 +823,7 @@ fn a_truncated_listing_lists_no_cuts() {
 
 #[test]
 fn a_test_list_cut() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // A change listing a test to delete needs review, whether or not the test exists: that
     // is the gate's to check, as the Worker fetches no code.
     let change = "---\nstatus: applied\n---\n\n## Intent\nx\n";
@@ -860,7 +860,7 @@ fn a_test_list_cut() {
 
 #[test]
 fn an_archived_test_list() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // An archive move takes the live list's lines as its base, as the gate does: nothing is
     // cut anew.
     let change = "---\nstatus: applied\n---\n\n## Intent\nx\n";
@@ -882,7 +882,7 @@ fn an_archived_test_list() {
 
 #[test]
 fn no_cuts() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // `spec_pr` drops `n/gone`, but its scenario moves to `n/new`: nothing is cut.
     let v = review();
     assert_eq!(cuts(&v), Vec::<&str>::new(), "{v}");
@@ -890,7 +890,7 @@ fn no_cuts() {
 
 #[test]
 fn human_layer_without_a_change() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let v = review_of(branch_with(&[("ARCHITECTURE.md", "# Arch\n\nMore.\n")]));
     assert_eq!(v["review"], true, "{v}");
     assert_eq!(v["change"], Value::Null);
@@ -898,7 +898,7 @@ fn human_layer_without_a_change() {
 
 #[test]
 fn a_change_with_burdens() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let burdened = review_of(branch_with(&[(
         "changes/x/change.md",
         "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n",
@@ -924,7 +924,7 @@ fn a_change_with_burdens() {
 
 #[test]
 fn a_change_whose_change_md_is_missing() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // A change the branch touches whose `change.md` the head lacks, or can't be parsed,
     // fails closed, as the gate does.
     let delta = "---\nbase: {}\n---\n";
@@ -936,7 +936,7 @@ fn a_change_whose_change_md_is_missing() {
 
 #[test]
 fn an_archived_change_with_burdens() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let v = review_of(branch_with(&[(
         "changes/archive/x/change.md",
         "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n",
@@ -946,7 +946,7 @@ fn an_archived_change_with_burdens() {
 
 #[test]
 fn an_archived_change_without_burdens() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let v = review_of(branch_with(&[(
         "changes/archive/x/change.md",
         "---\nstatus: applied\n---\n\n## Intent\nx\n",
@@ -956,7 +956,7 @@ fn an_archived_change_without_burdens() {
 
 #[test]
 fn the_approval_setting_needs_review() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let changed = review_of(branch_with(&[("clm.toml", "approval = \"other\"\n")]));
     assert_eq!(changed["review"], true, "{changed}");
     let comment = review_of(branch_with(&[("clm.toml", "# a comment\n")]));
@@ -965,7 +965,7 @@ fn the_approval_setting_needs_review() {
 
 #[test]
 fn truncated_base_listing_needs_review() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let mut repo = spec_pr();
     repo.truncated_trees.insert("111".into());
     assert_eq!(review_of(repo)["review"], true);
@@ -973,7 +973,7 @@ fn truncated_base_listing_needs_review() {
 
 #[test]
 fn an_old_archived_change_is_not_read() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // A file added beside an archived change's `change.md` doesn't make it the branch's
     // change, as the gate reads only a newly archived one.
     let mut repo = branch_with(&[("changes/archive/x/notes.md", "Notes.\n")]);
@@ -990,7 +990,7 @@ fn an_old_archived_change_is_not_read() {
 
 #[test]
 fn a_removed_change_is_not_read() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // Only the changes the head holds a touched file of count: a branch that deletes a
     // change with burdens is judged by its other paths.
     let mut repo = branch_with(&[]);
@@ -1005,7 +1005,7 @@ fn a_removed_change_is_not_read() {
 
 #[test]
 fn truncated_listing_needs_review() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     let mut repo = spec_pr();
     repo.truncated_trees.insert("222".into());
     let v = review_of(repo);
@@ -1014,8 +1014,63 @@ fn truncated_listing_needs_review() {
 }
 
 #[test]
+fn the_review_errs_toward_asking() {
+    // req:web.worker.review/gate-answer@d38075fd
+    // Where `clm gate` reads more than two trees show (an archive move, a code file, a
+    // replayed rename), the review asks: `clm gate` prints `spec`, `mixed` and `spec`.
+    let burdened = "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
+    let mut moved = branch_from(&[("changes/x/change.md", burdened)], &[], &[]);
+    let head = moved.commits.get_mut("222").unwrap();
+    head.remove("changes/x/change.md");
+    head.insert(
+        "changes/archive/x/change.md".into(),
+        burdened.as_bytes().to_vec(),
+    );
+    let v = review_of(moved);
+    assert_eq!(v["review"], true, "an archive move: {v}");
+
+    let mixed = review_of(branch_from(
+        &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
+        &[],
+        &[
+            ("specs/n/SPEC.md", &node("", &["s"], "active")),
+            ("crates/a/src/lib.rs", "fn a() {}\n"),
+        ],
+    ));
+    assert_eq!(mixed["review"], true, "a code file too: {mixed}");
+
+    // What `clm rename` commits for `n/r` -> `n/s`: the spec, and the architecture entry
+    // its rule enforces, which `rename/replay` accepts and the two trees can't tell apart
+    // from an edit of the human layer.
+    let before = node("", &["q", "r"], "active");
+    let after = before.replace("### Requirement: r\n", "### Requirement: s\n");
+    let arch = |id: &str| {
+        format!(
+            "# Arch\n\n## Requirements\n\n### Requirement: law\nA law SHALL hold.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- {id}\n"
+        )
+    };
+    let renamed = review_of(branch_from(
+        &[
+            ("specs/n/SPEC.md", &before),
+            ("ARCHITECTURE.md", &arch("n/r")),
+        ],
+        &[],
+        &[
+            ("specs/n/SPEC.md", &after),
+            ("ARCHITECTURE.md", &arch("n/s")),
+            (
+                "changes/r/change.md",
+                "---\nstatus: applied\nrenames:\n  - requirement: n/r\n    to: s\n---\n\n## Intent\nRename.\n",
+            ),
+        ],
+    ));
+    assert_eq!(renamed["review"], true, "a replayed rename: {renamed}");
+    assert_eq!(cuts(&renamed), Vec::<&str>::new(), "both sides load");
+}
+
+#[test]
 fn comparison_cached_before_review_moved() {
-    // req:web.worker.review/pr-review@751149f9
+    // req:web.worker.review/gate-answer@d38075fd
     // A comparison kept under an earlier key isn't served, even one of today's shape: the
     // branch's `review`, which now counts what it cuts, is computed anew.
     let fake = Fake::default();
