@@ -62,8 +62,13 @@ pub(crate) trait Reading {
     type Error;
     /// The side's revision, as the cuts print it.
     fn revision(&self) -> &str;
-    /// Whether the side holds a file at `path`.
+    /// Whether the side's tree lists `path`.
     fn holds(&self, path: &str) -> Result<bool, Self::Error>;
+    /// Whether the object at `path` can be read: for the gate's side, `git cat-file -e`,
+    /// which a gitlink to a commit the repository lacks fails, as a path it doesn't list does.
+    fn readable(&self, path: &str) -> Result<bool, Self::Error> {
+        self.holds(path)
+    }
     /// The bytes of the file the side holds at `path`; none when they can't be had.
     fn bytes(&self, path: &str) -> Result<Option<Vec<u8>>, Self::Error>;
     /// The side's spec graph and the violations its loading gave, loaded from its files
@@ -159,7 +164,7 @@ impl GitSide<'_> {
             &["specs"]
         };
         for top in tops {
-            if self.holds(top)? {
+            if self.readable(top)? {
                 paths.push(top.to_string());
             }
         }
@@ -195,8 +200,19 @@ impl Reading for GitSide<'_> {
         self.rev
     }
 
-    /// Only git's own refusal means no such file; a git that can't run fails the gate.
+    /// Whether `git ls-tree` lists `path`, a gitlink included, so a `change.md` git can't
+    /// read fails the gate rather than reading as missing.
     fn holds(&self, path: &str) -> Result<bool, String> {
+        let listed = clm_git::git(
+            self.at.repo,
+            &["ls-tree", "--name-only", self.rev, "--", path],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(!listed.is_empty())
+    }
+
+    /// Only git's own refusal means no such object; a git that can't run fails the gate.
+    fn readable(&self, path: &str) -> Result<bool, String> {
         match clm_git::git(
             self.at.repo,
             &["cat-file", "-e", &self.at.object(self.rev, path)],
@@ -289,7 +305,7 @@ pub(crate) fn read_branch<S: Reading>(
     let mut texts = Vec::new();
     let mut withheld = Vec::new();
     for path in lists {
-        let head_bytes = if head.holds(path)? {
+        let head_bytes = if head.readable(path)? {
             head.bytes(path)?
         } else {
             Some(Vec::new())
@@ -298,11 +314,11 @@ pub(crate) fn read_branch<S: Reading>(
         let live = test_list(path)
             .filter(|_| path.starts_with(ARCHIVE))
             .map(|id| format!("{CHANGES}{id}/deleted-tests.txt"));
-        let base_path = if base.holds(path)? {
+        let base_path = if base.readable(path)? {
             Some(path.to_string())
         } else {
             match live {
-                Some(live) if base.holds(&live)? => Some(live),
+                Some(live) if base.readable(&live)? => Some(live),
                 _ => None,
             }
         };
@@ -382,7 +398,7 @@ fn deleted_tests<S: Reading>(head: &S, lists: &[TestList]) -> Result<Vec<Violati
                     let text = match files.get(&file) {
                         Some(text) => text,
                         None => {
-                            let text = if head.holds(&file)? {
+                            let text = if head.readable(&file)? {
                                 head.bytes(&file)?
                                     .map(|b| String::from_utf8_lossy(&b).into_owned())
                                     .unwrap_or_default()
