@@ -63,7 +63,7 @@ fn ok(bytes: &[u8]) -> BindingAnswer {
 
 #[test]
 fn passed_through() {
-    // req:web.worker/asset-adapter@8c4f0569
+    // req:web.worker/asset-adapter@62e762df
     let mut fake = Fake::default();
     fake.answers.insert(
         "/fonts/inter.woff2".into(),
@@ -103,7 +103,7 @@ fn passed_through() {
 
 #[test]
 fn no_binding_or_failed_answer() {
-    // req:web.worker/asset-adapter@8c4f0569
+    // req:web.worker/asset-adapter@62e762df
     let req = request("GET", "/app/index.html", "", &[]);
     let none = block_on(fetch_asset(None::<&Fake>, &AssetCache::default(), &req));
     assert_eq!(none.status, 503);
@@ -130,7 +130,7 @@ fn no_binding_or_failed_answer() {
 
 #[test]
 fn kept_per_isolate() {
-    // req:web.worker/asset-adapter@8c4f0569
+    // req:web.worker/asset-adapter@62e762df
     let mut fake = Fake::default();
     fake.answers
         .insert("/_clm/invited.json".into(), ok(b"[\"a\"]"));

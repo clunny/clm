@@ -1,10 +1,10 @@
 //! What the Worker's tests share: the fakes of Cloudflare and GitHub live in
-//! `clm_web_platform::fake` (`web.worker.platform/shared-layer`); what calls `clm_web`
-//! stays here, as the extension trait [`FakeExt`] and the request helpers.
+//! `clm_web_platform::fake`; what calls `clm_web` stays here, as the wrapper [`Fake`] with
+//! the knobs only these tests need, the extension trait [`FakeExt`] and the request helpers.
 #![allow(dead_code)]
 
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
@@ -94,7 +94,22 @@ impl FakeReplicas {
 pub struct Fake {
     inner: clm_web_platform::fake::Fake,
     pub replicas: FakeReplicas,
+    /// GitHub calls whose URL contains one of these, with the method given, answer 502
+    /// (`"*"` matches any method).
+    pub failing: RefCell<Vec<(String, String)>>,
+    /// Refresh tokens GitHub's token endpoint refuses.
+    pub refused_refresh: RefCell<BTreeSet<String>>,
+    /// Changes what the fake GitHub answers, where the fake can't be told to.
+    pub rewrite: RefCell<Option<Rewrite>>,
+    /// Every request forwarded to a `Live` object, as the Worker built it.
+    pub forwarded: RefCell<Vec<Request>>,
+    /// What a `Live` object answers a forwarded request, in place of the platform fake's
+    /// 101 with a socket.
+    pub live_answer: RefCell<Option<Response>>,
 }
+
+/// A change to a fake GitHub answer, given the request.
+pub type Rewrite = Box<dyn Fn(&GhRequest, GhResponse) -> GhResponse>;
 
 impl Default for Fake {
     fn default() -> Fake {
@@ -107,6 +122,11 @@ impl Default for Fake {
                 write: RefCell::default(),
                 real: RefCell::default(),
             },
+            failing: RefCell::default(),
+            refused_refresh: RefCell::default(),
+            rewrite: RefCell::default(),
+            forwarded: RefCell::default(),
+            live_answer: RefCell::default(),
         }
     }
 }
@@ -266,15 +286,66 @@ impl Cache for Fake {
     }
 }
 
+impl Fake {
+    /// Makes GitHub answer 502 to every `method` call whose URL contains `url`.
+    pub fn fail(&self, method: &str, url: &str) {
+        self.failing.borrow_mut().push((method.into(), url.into()));
+    }
+
+    /// The answer GitHub gives in place of the fake's, by the knobs above.
+    fn knob(&self, req: &GhRequest) -> Option<GhResponse> {
+        let failing = self.failing.borrow();
+        if failing
+            .iter()
+            .any(|(m, u)| (m == "*" || m == req.method) && req.url.contains(u.as_str()))
+        {
+            return Some(GhResponse {
+                status: 502,
+                body: String::new(),
+            });
+        }
+        let body: Value = serde_json::from_str(req.body.as_deref()?).ok()?;
+        let refresh = body["refresh_token"].as_str()?;
+        // GitHub refuses a refresh token with a 200 that names the error.
+        self.refused_refresh
+            .borrow()
+            .contains(refresh)
+            .then(|| GhResponse {
+                status: 200,
+                body: json!({"error": "bad_refresh_token"}).to_string(),
+            })
+    }
+}
+
 impl GitHub for Fake {
     async fn send(&self, req: GhRequest) -> GhResponse {
-        self.inner.send(req).await
+        match self.knob(&req) {
+            Some(res) => {
+                self.gh.calls.borrow_mut().push(req);
+                res
+            }
+            None => {
+                let asked = req.clone();
+                let res = self.inner.send(req).await;
+                match self.rewrite.borrow().as_ref() {
+                    Some(f) => f(&asked, res),
+                    None => res,
+                }
+            }
+        }
     }
 }
 
 impl Live for Fake {
     async fn live_forward(&self, name: &str, req: &Request) -> Option<Response> {
-        self.inner.live_forward(name, req).await
+        if self.inner.live.bound.get() {
+            self.forwarded.borrow_mut().push(req.clone());
+        }
+        let scripted = self.live_answer.borrow().clone();
+        match scripted {
+            Some(res) if self.inner.live.bound.get() => Some(res),
+            _ => self.inner.live_forward(name, req).await,
+        }
     }
     async fn live_post(&self, name: &str, path: &str, body: &str) -> Option<(u16, String)> {
         self.inner.live_post(name, path, body).await
@@ -336,10 +407,8 @@ impl FakeExt for Fake {
             expires: self.now.get() + 8 * 3600,
             login: login.into(),
         };
-        format!(
-            "__Host-clm={}",
-            block_on(clm_web::session::seal(self, &session))
-        )
+        let sealed = block_on(clm_web::session::seal(self, &session)).expect("a cookie key");
+        format!("__Host-clm={sealed}")
     }
 
     fn user(&self, token: &str, repos: &[&str]) -> String {

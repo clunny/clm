@@ -71,7 +71,11 @@ async fn complete_sign_in<P: Platform>(p: &P, mut session: Session) -> Response 
             .with_header("set-cookie", clear_state);
     }
     session.login = login.into();
-    let sealed = session::seal(p, &session).await;
+    let Some(sealed) = session::seal(p, &session).await else {
+        // Without a usable cookie key no session can be kept; an empty cookie would only
+        // send the person round the flow again.
+        return Response::html(500, invited::NO_COOKIE_KEY).with_header("set-cookie", clear_state);
+    };
     Response::redirect("/app/")
         .with_header("set-cookie", session::set_cookie(&sealed))
         .with_header("set-cookie", clear_state)
@@ -140,7 +144,8 @@ pub(crate) async fn session<P: Platform>(p: &P, req: &Request) -> Result<Authed,
     });
     let mut fresh = exchange(p, &body).await.ok_or_else(unauthorized)?;
     fresh.login = current.login;
-    let sealed = session::seal(p, &fresh).await;
+    // A key that opened the cookie seals it again.
+    let sealed = session::seal(p, &fresh).await.ok_or_else(unauthorized)?;
     Ok(Authed {
         session: fresh,
         renewed: Some(session::set_cookie(&sealed)),

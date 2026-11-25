@@ -4,6 +4,7 @@
 
 mod common;
 
+use clm_web_platform::http::Response;
 use common::*;
 
 /// A request from the app's own page, as a browser sends it.
@@ -30,7 +31,7 @@ fn setup() -> (Fake, String) {
 
 #[test]
 fn forwarded() {
-    // req:web.worker/live-socket@80387388
+    // req:web.worker/live-socket@19c05264
     let (fake, cookie) = setup();
     let res = fake.handle(upgrade("/api/repos/o/a/live", &cookie));
     assert_eq!(res.status, 101);
@@ -44,7 +45,7 @@ fn forwarded() {
 
 #[test]
 fn another_origin() {
-    // req:web.worker/live-socket@80387388
+    // req:web.worker/live-socket@19c05264
     let (fake, cookie) = setup();
     let mut req = upgrade("/api/repos/o/a/live", &cookie);
     req.headers
@@ -58,7 +59,7 @@ fn another_origin() {
 
 #[test]
 fn origin_before_any_other_check() {
-    // req:web.worker/live-socket@80387388
+    // req:web.worker/live-socket@19c05264
     // No session, no access, no upgrade: each still gets 403, not 401, 404 or 426.
     let (fake, cookie) = setup();
     let mut req = upgrade("/api/repos/o/a/live", "");
@@ -74,7 +75,7 @@ fn origin_before_any_other_check() {
 
 #[test]
 fn no_access() {
-    // req:web.worker/live-socket@80387388
+    // req:web.worker/live-socket@19c05264
     let (fake, cookie) = setup();
     let res = fake.handle(upgrade("/api/repos/o/private/live", &cookie));
     assert_eq!(res.status, 404);
@@ -83,7 +84,7 @@ fn no_access() {
 
 #[test]
 fn no_session() {
-    // req:web.worker/live-socket@80387388
+    // req:web.worker/live-socket@19c05264
     let (fake, _) = setup();
     let res = fake.handle(upgrade("/api/repos/o/a/live", ""));
     assert_eq!(res.status, 401);
@@ -94,7 +95,7 @@ fn no_session() {
 
 #[test]
 fn without_the_upgrade() {
-    // req:web.worker/live-socket@80387388
+    // req:web.worker/live-socket@19c05264
     let (fake, cookie) = setup();
     let res = fake.handle(same_origin("/api/repos/o/a/live", &cookie));
     assert_eq!(res.status, 426);
@@ -103,7 +104,7 @@ fn without_the_upgrade() {
 
 #[test]
 fn without_the_binding() {
-    // req:web.worker/live-socket@80387388
+    // req:web.worker/live-socket@19c05264
     let (fake, cookie) = setup();
     fake.live.bound.set(false);
     let res = fake.handle(upgrade("/api/repos/o/a/live", &cookie));
@@ -112,7 +113,7 @@ fn without_the_binding() {
 
 #[test]
 fn renewed_session_keeps_its_cookie() {
-    // req:web.worker/live-socket@80387388
+    // req:web.worker/live-socket@19c05264
     // A session near its expiry is renewed on the 101, as on every API route.
     let (fake, cookie) = setup();
     fake.gh.grant("u-refresh-renewed", "o/a");
@@ -120,4 +121,43 @@ fn renewed_session_keeps_its_cookie() {
     let res = fake.handle(upgrade("/api/repos/o/a/live", &cookie));
     assert_eq!(res.status, 101);
     assert!(res.header("set-cookie").is_some(), "{res:?}");
+}
+
+#[test]
+fn what_reaches_the_object() {
+    // req:web.worker/live-socket@19c05264
+    let (fake, cookie) = setup();
+    let request = || {
+        let mut req = upgrade("/api/repos/o/a/live", &cookie);
+        req.headers
+            .insert("authorization".into(), "Bearer secret".into());
+        req.headers.insert("user-agent".into(), "test".into());
+        req
+    };
+    let res = fake.handle(request());
+    assert_eq!(res.status, 101);
+    let forwarded = fake.forwarded.borrow()[0].clone();
+    assert_eq!(forwarded.method, "GET");
+    let headers: Vec<(&str, &str)> = forwarded
+        .headers
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    assert_eq!(headers, vec![("upgrade", "websocket")], "only the upgrade");
+    // A 101 without a socket can't be sent on.
+    *fake.live_answer.borrow_mut() = Some(Response::empty(101));
+    assert_eq!(fake.handle(request()).status, 502);
+    // Any other answer is the object's, whole.
+    let answer = Response {
+        status: 404,
+        headers: vec![("x-live".into(), "gone".into())],
+        body: b"no such object".to_vec(),
+        upgrade: None,
+    };
+    *fake.live_answer.borrow_mut() = Some(answer);
+    let res = fake.handle(request());
+    assert_eq!(res.status, 404);
+    assert_eq!(res.header("x-live"), Some("gone"));
+    assert_eq!(res.body, b"no such object");
+    assert_eq!(fake.forwarded.borrow().len(), 3);
 }

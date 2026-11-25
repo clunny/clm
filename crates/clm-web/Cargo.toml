@@ -34,9 +34,6 @@ clm-model.workspace = true
 clm-web-replica.workspace = true
 clm-replica.workspace = true
 clm-web-platform = { workspace = true, features = ["fake"] }
-clm-check.workspace = true
-clm-context.workspace = true
 clm-ledger.workspace = true
 futures = { version = "0.3", default-features = false, features = ["async-await", "executor"] }
 tempfile.workspace = true
-toml.workspace = true

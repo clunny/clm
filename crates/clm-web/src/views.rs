@@ -71,7 +71,7 @@ pub(crate) async fn fetch<P: Platform + Replicas>(
     }
 }
 
-/// `GET .../snapshot`, `.../capabilities` and `.../architecture`: the object's view.
+/// `GET .../capabilities` and `.../architecture`: the object's view.
 pub(crate) async fn get<P: Platform + Replicas>(
     p: &P,
     access: &Access,
@@ -80,6 +80,27 @@ pub(crate) async fn get<P: Platform + Replicas>(
 ) -> Response {
     match fetch(p, access, name, fresh).await {
         Ok(view) => Response::json(&view),
+        Err(res) => res,
+    }
+}
+
+/// `GET .../snapshot`: the object's snapshot view with `repo` added, the repository as the
+/// access check names it, whether the view came from the cache or the object
+/// (`snapshot-names-its-repo`).
+pub(crate) async fn snapshot<P: Platform + Replicas>(
+    p: &P,
+    access: &Access,
+    fresh: bool,
+) -> Response {
+    match fetch(p, access, "snapshot", fresh).await {
+        Ok(mut view) => match view.as_object_mut() {
+            Some(fields) => {
+                fields.insert("repo".into(), Value::String(access.full_name()));
+                Response::json(&view)
+            }
+            // A snapshot that isn't an object can't carry `repo`, so none is answered.
+            None => unavailable(),
+        },
         Err(res) => res,
     }
 }

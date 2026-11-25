@@ -189,10 +189,10 @@ impl Live for Cloudflare {
         let Ok(stub) = self.live(name)? else {
             return failed;
         };
-        // The object needs the upgrade and nothing else: never the session cookie.
+        // The core built the request it forwards (`live-socket`): it is sent as given.
         let headers = Headers::new();
-        if let Some(upgrade) = req.header("upgrade") {
-            let _ = headers.set("upgrade", upgrade);
+        for (name, value) in &req.headers {
+            let _ = headers.set(name, value);
         }
         let mut init = RequestInit::new();
         init.with_method(method_of(&req.method));
@@ -200,20 +200,21 @@ impl Live for Cloudflare {
         let Ok(request) = Request::new_with_init("https://live/", &init) else {
             return failed;
         };
-        let Ok(res) = stub.fetch_with_request(request).await else {
+        let Ok(mut res) = stub.fetch_with_request(request).await else {
             return failed;
         };
-        let status = res.status_code();
-        let Some(socket) = res.websocket() else {
-            // A 101 without a socket can't be sent on; anything else is the object's answer.
-            return Some(http::Response::empty(if status == 101 {
-                502
-            } else {
-                status
-            }));
-        };
-        let mut out = http::Response::empty(status);
-        out.upgrade = Some(http::Upgrade::new(socket));
+        let mut out = http::Response::empty(res.status_code());
+        out.headers = res.headers().entries().collect();
+        if out.status == 101 {
+            // A 101 without a socket is the core's to refuse.
+            out.upgrade = res.websocket().map(http::Upgrade::new);
+        } else {
+            // Any other answer is the object's, whole.
+            let Ok(body) = res.bytes().await else {
+                return failed;
+            };
+            out.body = body;
+        }
         Some(out)
     }
 

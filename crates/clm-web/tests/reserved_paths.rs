@@ -23,7 +23,7 @@ fn assets(fake: &Fake) {
 
 #[test]
 fn bare_app_path() {
-    // req:web.worker/reserved-paths@04959fbe
+    // req:web.worker/reserved-paths@3171b825
     let fake = Fake::default();
     let cookie = fake.cookie("tok");
     for cookie in [cookie.as_str(), ""] {
@@ -35,7 +35,7 @@ fn bare_app_path() {
 
 #[test]
 fn the_invited_list() {
-    // req:web.worker/reserved-paths@04959fbe
+    // req:web.worker/reserved-paths@3171b825
     let fake = Fake::default();
     assets(&fake);
     let cookie = fake.cookie("tok");
@@ -47,7 +47,7 @@ fn the_invited_list() {
 
 #[test]
 fn a_path_the_assets_should_have_answered() {
-    // req:web.worker/reserved-paths@04959fbe
+    // req:web.worker/reserved-paths@3171b825
     let fake = Fake::default();
     assets(&fake);
     let cookie = fake.cookie("tok");

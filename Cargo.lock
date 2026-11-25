@@ -774,8 +774,6 @@ version = "0.26.0"
 dependencies = [
  "aes-gcm",
  "base64",
- "clm-check",
- "clm-context",
  "clm-ledger",
  "clm-model",
  "clm-replica",
@@ -789,7 +787,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
- "toml",
  "worker",
 ]
 

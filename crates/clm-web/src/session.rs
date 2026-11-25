@@ -28,18 +28,17 @@ fn cipher<P: Secrets>(p: &P) -> Option<Aes256Gcm> {
     Aes256Gcm::new_from_slice(&key).ok()
 }
 
-/// The cookie value: base64url of a random 96-bit nonce followed by the ciphertext.
-pub async fn seal<P: Secrets>(p: &P, session: &Session) -> String {
-    let Some(cipher) = cipher(p) else {
-        return String::new();
-    };
+/// The cookie value: base64url of a random 96-bit nonce followed by the ciphertext, or
+/// `None` when `COOKIE_KEY` is missing or isn't 32 bytes in base64.
+pub async fn seal<P: Secrets>(p: &P, session: &Session) -> Option<String> {
+    let cipher = cipher(p)?;
     let mut nonce = [0u8; 12];
     p.random(&mut nonce);
-    let plain = serde_json::to_vec(session).unwrap_or_default();
-    let Ok(sealed) = cipher.encrypt(Nonce::from_slice(&nonce), plain.as_slice()) else {
-        return String::new();
-    };
-    URL_SAFE_NO_PAD.encode([nonce.as_slice(), &sealed].concat())
+    let plain = serde_json::to_vec(session).ok()?;
+    let sealed = cipher
+        .encrypt(Nonce::from_slice(&nonce), plain.as_slice())
+        .ok()?;
+    Some(URL_SAFE_NO_PAD.encode([nonce.as_slice(), &sealed].concat()))
 }
 
 /// The session in a cookie value, or `None` if it was altered or isn't one of ours.

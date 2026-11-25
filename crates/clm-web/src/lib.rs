@@ -6,7 +6,7 @@
 
 mod answers;
 pub mod assets;
-pub mod auth;
+mod auth;
 mod capabilities;
 mod invited;
 mod proposals;
@@ -134,7 +134,7 @@ async fn repo_route<P: Platform + Replicas>(
 ) -> Response {
     let fresh = views::is_fresh(req);
     match (req.method.as_str(), parts, body) {
-        ("GET", ["snapshot"], _) => views::get(p, access, "snapshot", fresh).await,
+        ("GET", ["snapshot"], _) => views::snapshot(p, access, fresh).await,
         ("GET", ["live"], _) => live_socket(p, req, access).await,
         ("GET", ["push"], _) => push::state(p, req, access, login).await,
         ("POST", ["push"], _) => push::subscribe(p, req, access, login).await,
@@ -196,16 +196,26 @@ async fn repo_route<P: Platform + Replicas>(
 
 /// `GET .../live`: the request forwarded to the repo's `Live` object, whose 101 carries
 /// the socket (`live-socket`): 426 without `Upgrade: websocket`, 503 without the binding.
+/// The object is given the method and the `Upgrade` header alone, never the session
+/// cookie; its answer is returned whole, but for a 101 without a socket, which can't be
+/// sent on and answers 502.
 async fn live_socket<P: Platform>(p: &P, req: &Request, access: &Access) -> Response {
-    let websocket = req
+    let Some(upgrade) = req
         .header("upgrade")
-        .is_some_and(|u| u.eq_ignore_ascii_case("websocket"));
-    if !websocket {
+        .filter(|u| u.eq_ignore_ascii_case("websocket"))
+    else {
         return Response::empty(426);
+    };
+    let forwarded = Request {
+        method: req.method.clone(),
+        headers: [("upgrade".to_string(), upgrade.to_string())].into(),
+        ..Request::default()
+    };
+    match p.live_forward(&access.full_name(), &forwarded).await {
+        None => Response::empty(503),
+        Some(res) if res.status == 101 && res.upgrade.is_none() => Response::empty(502),
+        Some(res) => res,
     }
-    p.live_forward(&access.full_name(), req)
-        .await
-        .unwrap_or_else(|| Response::empty(503))
 }
 
 fn json_or_502<T: serde::Serialize>(value: Option<T>) -> Response {

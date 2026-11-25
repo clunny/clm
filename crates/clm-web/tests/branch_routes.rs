@@ -45,6 +45,7 @@ fn setup() -> (Fake, String) {
 
 #[test]
 fn approve_needs_same_origin() {
+    // req:web.worker/api-guard@b1c7f110
     let (fake, cookie) = setup();
     let url = "/api/repos/o/a/branches/spec/x/approve";
     let mut req = post(url, &cookie, b"");
@@ -59,7 +60,7 @@ fn approve_needs_same_origin() {
 
 #[test]
 fn old_pr_routes() {
-    // req:web.worker/pr-routes-removed@678e848e
+    // req:web.worker/pr-routes-removed@da6b0097
     let (fake, cookie) = setup();
     let refs = || fake.gh.repos.borrow()["o/a"].branches.clone();
     let before = refs();
