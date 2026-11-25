@@ -12,7 +12,7 @@ import { Proposing, renderBacklog, renderBacklogItem, waiting } from './views/ba
 import { renderArchitecture, renderConstraint } from './views/architecture';
 import { Layer, ListOptions, Note, PageOptions, decide, renderCapabilities, renderCapability } from './views/capabilities';
 import { chip, div, el } from './views/dom';
-import { PREPARING_MS, STALE_MS, classify, failureText, retryDelay } from './errors';
+import { PREPARING_MS, STALE_MS, Undrawable, classify, failureText, retryDelay } from './errors';
 import { fitGraphs } from './fit';
 import { FullDocument, FullState, renderFullDocument } from './views/full-document';
 import { Viewport, layoutGraph, queueStates, renderGraph, ringGraph, traceEdges } from './views/graph';
@@ -62,9 +62,13 @@ interface Held {
   from: Map<string, number | null>;
   /** The paths Home asked for, so a redraw never asks again for one that failed. */
   tried: Set<string>;
+  /** The spec-branch list failed: never drawn as no spec branches (web/honest-errors). */
+  branchesFailed: boolean;
+  /** The review paths answered 404: their branch is no longer open (web/honest-errors). */
+  gone: Set<string>;
 }
 
-const empty = (base: string): Held => ({ base, snap: null, branches: null, impl: null, caps: null, arch: null, reviews: new Map(), from: new Map(), tried: new Set() });
+const empty = (base: string): Held => ({ base, snap: null, branches: null, impl: null, caps: null, arch: null, reviews: new Map(), from: new Map(), tried: new Set(), branchesFailed: false, gone: new Set() });
 let repos: Repo[] | null = null;
 let held: Held = empty('');
 
@@ -835,12 +839,24 @@ function buildPage(impl: Implementation, snap: Snapshot): HTMLElement {
   return wrap;
 }
 
+/** Null for a failed request, but for being signed out, which shows the sign-in page. */
+function unlessSignedOut(e: unknown): null {
+  if (e instanceof SignedOut) throw e;
+  return null;
+}
+
+/** What the PR list and Home say when the spec-branch list failed (web/honest-errors). */
+const NO_BRANCHES = "The spec branches couldn't be loaded.";
+
 /** The repo's page for `route`, from what `held` has: the snapshot and spec branches, and
  * for Build the implementation state and for a review page its review, which `show` loads
  * first. */
 async function page(route: AppRoute, snap: Snapshot, branches: SpecBranch[], ctx: PageContext): Promise<HTMLElement> {
   const base = held.base;
-  if (route.home) return homePage(base, snap, branches, route);
+  if (route.home) {
+    const home = homePage(base, snap, branches, route);
+    return held.branchesFailed ? div('', div('empty branches-failed', NO_BRANCHES), home) : home;
+  }
   switch (route.view) {
     case 'graph': {
       const g = await graphPage(base, snap, new Set(), `${base}|graph`, () => specReviews(base, branches));
@@ -854,10 +870,22 @@ async function page(route: AppRoute, snap: Snapshot, branches: SpecBranch[], ctx
     case 'prs': {
       if (route.review === undefined) {
         const link = (t: Target) => reviewHref(route.owner!, route.repo!, t);
-        return renderPrList(branches, link);
+        return held.branchesFailed
+          ? div('prs', div('crumb', 'Spec PRs'), div('head', div('', el('h1', {}, 'Spec PRs'))), div('empty branches-failed', NO_BRANCHES))
+          : renderPrList(branches, link);
       }
-      const review = held.reviews.get(reviewUrl(base, route.review));
-      return review ? prPage(route, base, snap, review, ctx) : errorView(new Error('no review'));
+      const url = reviewUrl(base, route.review);
+      const review = held.reviews.get(url);
+      if (review) return prPage(route, base, snap, review, ctx);
+      // A branch deleted, or landed, since it was listed: say so, and lead back to the list.
+      return held.gone.has(url)
+        ? div(
+            'card signin gone',
+            el('h1', {}, 'Branch closed'),
+            el('p', {}, `${route.review.branch} is no longer open.`),
+            el('a', { href: href(route.owner!, route.repo!, 'prs') }, 'Spec PRs'),
+          )
+        : errorView(new Error('no review'));
     }
     case 'build':
       return held.impl ? buildPage(held.impl, snap) : errorView(new Error('no implementation state'));
@@ -891,8 +919,15 @@ async function fill(route: AppRoute) {
   const need = needs(route, base);
   const [snap, branches, review, caps, arch] = await Promise.all([
     h.snap ?? load<Snapshot>(`${base}/snapshot`),
-    h.branches ?? load<SpecBranch[]>(`${base}/branches`).catch(() => [] as SpecBranch[]),
-    need.review !== null && !h.reviews.has(need.review) ? load<Review>(need.review) : null,
+    // A list that fails is held as failed, never as none, and the views draw without it.
+    h.branches ?? load<SpecBranch[]>(`${base}/branches`).catch(unlessSignedOut),
+    need.review !== null && !h.reviews.has(need.review)
+      ? load<Review>(need.review).catch((e) => {
+          if (!(e instanceof HttpError && e.status === 404)) throw e;
+          h.gone.add(need.review!);
+          return null;
+        })
+      : null,
     need.caps && !h.caps && !route.home ? load<Capabilities>(`${base}/capabilities`) : null,
     need.arch && !h.arch && !route.home ? load<Architecture>(`${base}/architecture`) : null,
   ]);
@@ -900,7 +935,11 @@ async function fill(route: AppRoute) {
   if (arch) h.arch = arch;
   h.snap = snap;
   h.branches = branches;
-  if (review && need.review !== null) h.reviews.set(need.review, review);
+  h.branchesFailed = branches === null;
+  if (review && need.review !== null) {
+    h.reviews.set(need.review, review);
+    h.gone.delete(need.review);
+  }
   // Build can't draw without the implementation state; the graph draws before it arrives.
   if (!route.home && route.view === 'build' && !h.impl) h.impl = await load<Implementation>(`${base}/implementation`);
 }
@@ -928,7 +967,7 @@ const fitGraph = fitGraphs(app);
 async function draw(route: AppRoute, ticket: number) {
   const ctx: PageContext = { full: null };
   leaveFull();
-  const main = await page(route, held.snap!, held.branches ?? [], ctx).catch((e) => errorView(e));
+  const main = await page(route, held.snap!, held.branches ?? [], ctx).catch((e) => errorView(new Undrawable(e)));
   if (ticket !== showing) {
     // Left before it was drawn: whatever it opened is never shown.
     ctx.full?.close();
@@ -939,7 +978,13 @@ async function draw(route: AppRoute, ticket: number) {
   // A form being typed in keeps its focus and caret across the redraw.
   const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
   const typing = active?.dataset?.draft ? { key: active.dataset.draft, at: active.selectionStart, to: active.selectionEnd } : null;
-  app.replaceChildren(shell(repos ?? [], route, held.snap, held.branches, main));
+  let frame: HTMLElement;
+  try {
+    frame = shell(repos ?? [], route, held.snap, held.branches, main);
+  } catch (e) {
+    throw new Undrawable(e);
+  }
+  app.replaceChildren(frame);
   // Fitted before the scroll is restored, so a graph never shows at its fallback height.
   fitGraph();
   if (typing) {
@@ -1076,31 +1121,52 @@ async function refresh(fresh?: string) {
     const reviewUrls = [...held.reviews.keys()].filter((u) => u === need.review || branchReviews.includes(u));
     const [snap, branches, impl, caps, arch, ...reviews] = await Promise.all([
       live<Snapshot>(`${base}/snapshot`),
-      live<SpecBranch[]>(`${base}/branches`),
+      // A list that fails leaves the one held, or the failure, as it is.
+      live<SpecBranch[]>(`${base}/branches`).catch(unlessSignedOut),
       need.impl ? live<Implementation>(`${base}/implementation`) : null,
       need.caps ? live<Capabilities>(`${base}/capabilities`) : null,
       need.arch ? live<Architecture>(`${base}/architecture`) : null,
-      ...reviewUrls.map((u) => live<Review>(u).then((r) => [u, r] as const)),
+      // A review answered 404 is of a branch no longer open: the refresh goes on without it.
+      ...reviewUrls.map((u) =>
+        live<Review>(u).then(
+          (r) => [u, r] as const,
+          (e) => {
+            if (e instanceof HttpError && e.status === 404) return [u, null] as const;
+            throw e;
+          },
+        ),
+      ),
     ]);
     if (ticket !== showing || base !== held.base || writes > 0 || wrote !== since || signedOutShown) return;
-    let changed = JSON.stringify(snap) !== JSON.stringify(held.snap) || JSON.stringify(branches) !== JSON.stringify(held.branches);
+    let changed = JSON.stringify(snap) !== JSON.stringify(held.snap) || (branches !== null && JSON.stringify(branches) !== JSON.stringify(held.branches));
     if (impl && sans(impl, 'now') !== sans(held.impl, 'now')) changed = true;
     if (caps && JSON.stringify(caps) !== JSON.stringify(held.caps)) changed = true;
     if (arch && JSON.stringify(arch) !== JSON.stringify(held.arch)) changed = true;
-    for (const [u, r] of reviews) if (JSON.stringify(r) !== JSON.stringify(held.reviews.get(u))) changed = true;
+    for (const [u, r] of reviews) if (r === null || JSON.stringify(r) !== JSON.stringify(held.reviews.get(u))) changed = true;
     // Everything on screen is now live: an offline banner drawn from kept copies goes.
     const wasOffline = offline() || refreshFailing;
     held.from.clear();
     held.tried.clear();
-    refreshFailing = false;
-    lastGood = Date.now();
-    if (!changed && !wasOffline) return;
+    // The branch list failed: what is shown of it ages, as a failed refresh's view does.
+    refreshFailing = branches === null;
+    if (!refreshFailing) lastGood = Date.now();
+    const stale = refreshFailing && Date.now() - lastGood >= STALE_MS;
+    if (!changed && !wasOffline && !stale) return;
     held.snap = snap;
-    held.branches = branches;
+    if (branches !== null) {
+      held.branches = branches;
+      held.branchesFailed = false;
+    }
     if (impl) held.impl = impl;
     if (caps) held.caps = caps;
     if (arch) held.arch = arch;
-    for (const [u, r] of reviews) held.reviews.set(u, r);
+    for (const [u, r] of reviews) {
+      if (r !== null) held.reviews.set(u, r);
+      else {
+        held.reviews.delete(u);
+        held.gone.add(u);
+      }
+    }
     if (selectedNode && !snap.spec.nodes.some((n) => n.node === selectedNode)) selectedNode = null;
     await draw(route, ticket);
   } catch (e) {

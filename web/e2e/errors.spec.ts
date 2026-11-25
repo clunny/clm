@@ -6,8 +6,8 @@ import { mockApi } from './mock';
 
 const SNAPSHOT = 'GET /api/repos/o/a/snapshot';
 
-// req:web/honest-errors@444ce2bc
 test.describe('honest errors', () => {
+  // req:web/honest-errors@165e071b
   test('busy, nothing kept: says CLM is retrying, nothing about access, then draws without a reload', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -48,16 +48,26 @@ test.describe('honest errors', () => {
     await expect(page.locator('.signin')).toHaveCount(0);
   });
 
-  test('busy, kept copy: draws the kept copy with its age', async ({ page, context }) => {
+  // req:web/honest-errors@165e071b
+  test('busy, kept copy: draws the copy kept an hour ago under CLM couldn\'t be reached', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.goto('/app/#/o/a/graph');
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    // The copy kept for offline use, as it would be had it been kept an hour ago.
+    await page.evaluate(async () => {
+      const cache = await caches.open('clm-api');
+      const path = '/api/repos/o/a/snapshot';
+      const copy = (await cache.match(path))!;
+      const hourAgo = String(Date.now() - 3_600_000);
+      await cache.put(path, new Response(await copy.text(), { headers: { 'content-type': 'application/json', 'x-clm-at': hourAgo } }));
+    });
     mock.fail(SNAPSHOT, 502);
     await page.reload();
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
-    await expect(page.locator('.offline')).toHaveText(/^CLM couldn't be reached · showing data from (just now|\d+ min ago)$/);
+    await expect(page.locator('.offline')).toHaveText("CLM couldn't be reached · showing data from 1 h ago");
   });
 
+  // req:web/honest-errors@165e071b
   test('busy, kept copy: asks again with backoff and draws live once a request succeeds', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.goto('/app/#/o/a/graph');
@@ -73,6 +83,7 @@ test.describe('honest errors', () => {
     }).toPass({ timeout: 15_000 });
   });
 
+  // req:web/honest-errors@165e071b
   test('preparing: shows the share done, asks again every 5 seconds, then draws', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -88,6 +99,15 @@ test.describe('honest errors', () => {
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
   });
 
+  // req:web/honest-errors@165e071b
+  test('preparing: a share past the whole shows 100% done', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.fail(SNAPSHOT, 503, { preparing: 1.7 });
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.signin')).toContainText('CLM is preparing this repo: 100% done.');
+  });
+
+  // req:web/honest-errors@165e071b
   test('no access: says the repo is not readable with the account or not covered by the App', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(SNAPSHOT, 404);
@@ -95,6 +115,75 @@ test.describe('honest errors', () => {
     await expect(page.locator('.signin')).toContainText("isn't readable with your GitHub account, or isn't covered by the App");
   });
 
+  // req:web/honest-errors@165e071b
+  test('other refusals: a 403 is about access, a 429 says the request failed and nothing about access', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.fail(SNAPSHOT, 403);
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.signin')).toContainText("isn't readable with your GitHub account, or isn't covered by the App");
+    mock.fail(SNAPSHOT, 429);
+    await page.reload();
+    const card = page.locator('.signin');
+    await expect(card).toContainText('The request failed (429).');
+    await expect(card).not.toContainText(/account|App|access|retrying/);
+  });
+
+  // req:web/honest-errors@165e071b
+  test("a branch that's gone: its review's 404 says the branch is no longer open, leading back to the list", async ({ page, context }) => {
+    await mockApi(context);
+    // The mocked Worker answers 404 for a path it doesn't hold, as `spec/gone`'s review.
+    await page.goto('/app/#/o/a/prs/spec%2Fgone');
+    const card = page.locator('.gone');
+    await expect(card).toContainText('spec/gone is no longer open.');
+    await expect(card).not.toContainText(/account|App|access/);
+    await expect(card.locator('a')).toHaveAttribute('href', '#/o/a/prs');
+    await card.locator('a').click();
+    await expect(page.locator('.prl[data-branch="spec/c"]')).toBeVisible();
+  });
+
+  // req:web/honest-errors@165e071b
+  test("a branch that goes while its review is on screen: the next refresh says it is no longer open", async ({ page, context }) => {
+    await page.clock.install();
+    const mock = await mockApi(context);
+    await page.goto('/app/#/o/a/prs/spec%2Fc');
+    await expect(page.locator('button.approve')).toBeVisible();
+    mock.fail('GET /api/repos/o/a/branches/spec/c/review', 404);
+    await expect(async () => {
+      await page.clock.runFor(10_000);
+      await expect(page.locator('.gone')).toContainText('spec/c is no longer open.', { timeout: 1_000 });
+    }).toPass({ timeout: 30_000 });
+  });
+
+  // req:web/honest-errors@165e071b
+  test('no branch list: the PR list and Home say the spec branches couldn\'t be loaded, and the graph is drawn', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.fail('GET /api/repos/o/a/branches', 502);
+    await page.goto('/app/#/o/a/prs');
+    await expect(page.locator('.prs .branches-failed')).toHaveText("The spec branches couldn't be loaded.");
+    await expect(page.locator('.prs')).not.toContainText('No spec branches.');
+    await page.goto('/app/#/o/a');
+    await expect(page.locator('.home h1')).toBeVisible();
+    await expect(page.locator('.branches-failed')).toHaveText("The spec branches couldn't be loaded.");
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    await expect(page.locator('.branches-failed')).toHaveCount(0);
+    // A list that loads again clears the message.
+    mock.fail('GET /api/repos/o/a/branches', null);
+    await page.goto('/app/#/o/a/prs');
+    await expect(page.locator('.prl[data-branch="spec/c"]')).toBeVisible();
+    await expect(page.locator('.branches-failed')).toHaveCount(0);
+  });
+
+  // req:web/honest-errors@165e071b
+  test("a view that can't be drawn: a snapshot the graph can't be drawn from says so, not that CLM is retrying", async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes[SNAPSHOT] = { nothing: 'a graph is drawn from' };
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.signin')).toContainText("This view couldn't be drawn from what CLM answered.");
+    await expect(page.locator('body')).not.toContainText('retrying');
+  });
+
+  // req:web/honest-errors@165e071b
   test('refreshes keep failing: the graph stays and shows how old it is', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);

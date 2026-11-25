@@ -11,10 +11,10 @@ const withQuestion = () => {
   return snap;
 };
 
-// req:web/mobile-layout@cc420aa7
 test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
+  // req:web/mobile-layout@f24791e8
   test('a PR at 390 px: tab bar, no horizontal scroll, Approve in view', async ({ page, context }) => {
     // A PR long enough to scroll, with an ID too long for one line.
     const pr = review();
@@ -37,6 +37,7 @@ test.describe('phone', () => {
     expect(fits).toBe(true);
   });
 
+  // req:web/mobile-layout@f24791e8
   test('Home on a phone: no sideways scroll, and a question\'s answer buttons can be tapped', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
@@ -55,6 +56,7 @@ test.describe('phone', () => {
     await expect.poll(() => mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
   });
 
+  // req:web/mobile-layout@f24791e8
   test('every view fits the width', async ({ page, context }) => {
     await mockApi(context);
     for (const view of ['graph', 'prs', 'build', 'backlog', 'capabilities', 'capabilities/a', 'architecture', 'architecture/e', 'prs/spec%2Fc/full/specs/n/SPEC.md']) {
@@ -66,10 +68,21 @@ test.describe('phone', () => {
     }
   });
 
-  test('the tab bar badges the items waiting, and a tapped node opens a bottom sheet', async ({ page, context }) => {
+  // req:web/mobile-layout@f24791e8
+  test('badges: the tab bar\'s Backlog reads 1 and More\'s PRs 2', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
     await expect(page.locator('.tabbar a[data-view=backlog] .bdg')).toHaveText('1');
+    await page.locator('.tabbar .tab-more').tap();
+    await expect(page.locator('.more-menu a[data-view=prs] .bdg')).toHaveText('2');
+    await expect(page.locator('.more-menu a[data-view=capabilities] .bdg')).toHaveCount(0);
+  });
+
+  // req:web/mobile-layout@f24791e8
+  test('bottom sheet: a tapped component opens the inspector as a sheet ending above the tab bar', async ({ page, context }) => {
+    await mockApi(context);
+    await page.goto('/app/#/o/a/graph');
     await expect(page.locator('.insp')).toBeHidden();
     await page.locator('.n[data-node=b]').tap();
     const sheet = page.locator('.insp');
@@ -86,6 +99,7 @@ test.describe('phone', () => {
       .toBeLessThanOrEqual(Math.round(tabbar.y) + 1);
   });
 
+  // req:web/mobile-layout@f24791e8
   test('capabilities on a phone: cards, nothing scrolls sideways, and the decision buttons can be reached and tapped', async ({ page, context }) => {
     const mock = await mockApi(context);
     const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -123,6 +137,7 @@ test.describe('phone', () => {
     await expect.poll(() => mock.posts).toEqual([{ key: DECIDE, body: '{"version":"61000000","value":"low","decision":"cut"}' }]);
   });
 
+  // req:web/mobile-layout@f24791e8
   test('architecture on a phone: five tabs, More listing PRs, Capabilities and Arch., cards, nothing scrolls sideways, and the decision buttons can be reached and tapped', async ({ page, context }) => {
     const mock = await mockApi(context);
     const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -415,13 +430,50 @@ test.describe('deciding a capability', () => {
   });
 });
 
-test('wide screens get the sidebar and no tab bar', async ({ page, context }) => {
-  await mockApi(context);
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/app/#/o/a/backlog');
-  await expect(page.locator('.sidebar')).toBeVisible();
-  await expect(page.locator('.tabbar')).toBeHidden();
-  await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
+test.describe('wide screen', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  // req:web/mobile-layout@f24791e8
+  test('the sidebar lists the seven views in order with the repo\'s components and coverage, and the tab bar is hidden', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.sidebar')).toBeVisible();
+    await expect(page.locator('.tabbar')).toBeHidden();
+    const views = page.locator('.sidebar .nv[data-view]');
+    expect(await views.evaluateAll((all) => all.map((a) => a.getAttribute('data-view')))).toEqual(['home', 'graph', 'prs', 'build', 'backlog', 'capabilities', 'architecture']);
+    expect((await views.allInnerTexts()).map((t) => t.replace(/\s*\d+$/, '').trim())).toEqual(['Home', 'Spec graph', 'Spec PRs', 'Implementation', 'Backlog', 'Capabilities', 'Architecture']);
+    // The fixture's three components hold one current requirement of three.
+    await expect(page.locator('.sidebar .repo-meta')).toHaveText('3 components · 1/3 current');
+    mock.routes['GET /api/repos/o/a/snapshot'] = snapshot({ coverage: { state: 'indexing', done: 1 } });
+    await page.reload();
+    await expect(page.locator('.sidebar .repo-meta')).toHaveText('3 components · coverage indexing');
+  });
+
+  // req:web/mobile-layout@f24791e8
+  test('badges: the sidebar\'s Backlog reads 1 and Spec PRs 2', async ({ page, context }) => {
+    await mockApi(context);
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
+    await expect(page.locator('.sidebar .nv[data-view=prs] .c')).toHaveText('2');
+    await expect(page.locator('.sidebar .nv[data-view=graph] .c')).toHaveCount(0);
+  });
+
+  // req:web/mobile-layout@f24791e8
+  test('nothing is badged at 0', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/branches'] = [];
+    mock.routes['GET /api/repos/o/a/snapshot'] = snapshot({ backlog: [] });
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveCount(0);
+    await expect(page.locator('.sidebar .nv[data-view=prs] .c')).toHaveCount(0);
+    // And on a phone: the tab bar's Backlog and More's PRs.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('.tabbar .tab-more').click();
+    await expect(page.locator('.more-menu a[data-view=prs]')).toBeVisible();
+    await expect(page.locator('.tabbar a[data-view=backlog] .bdg')).toHaveCount(0);
+    await expect(page.locator('.more-menu a[data-view=prs] .bdg')).toHaveCount(0);
+  });
 });
 
 // req:web/review-in-the-browser@9b9f5325
@@ -578,8 +630,8 @@ test.describe('spec branches', () => {
   });
 });
 
-// req:web/approve-by-branch@9a6b3322
 test.describe('Approve by branch', () => {
+  // req:web/approve-by-branch@110f0e02
   test('approve: one post of the fingerprint to the branch, the review asked again, clunny/web named and Approve disabled', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => (mock.routes[REVIEW] = review({ approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }] }));
@@ -591,6 +643,7 @@ test.describe('Approve by branch', () => {
     expect(mock.requests.filter((r) => r === REVIEW)).toHaveLength(2);
   });
 
+  // req:web/approve-by-branch@110f0e02
   test('branch moved: a 409 says the branch changed, shows no approval, and draws the review with fingerprint f2', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 409);
@@ -606,35 +659,56 @@ test.describe('Approve by branch', () => {
     await expect.poll(() => mock.posts.map((p) => p.body)).toEqual(['{"fingerprint":"f1"}', '{"fingerprint":"f2"}']);
   });
 
+  // req:web/approve-by-branch@110f0e02
   test("a 409 whose new review can't be loaded says to reload before approving", async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 409);
     mock.onPost = () => mock.fail(REVIEW, 502);
     await page.goto('/app/#/o/a/prs/spec%2Fc');
     await page.locator('button.approve').click();
-    await expect(page.locator('.review')).toContainText('could not be loaded. Reload before approving.');
+    await expect(page.locator('.review')).toContainText('The branch changed since this review was shown, and its new review could not be loaded. Reload before approving.');
+    // The kept copy would show under CLM couldn't be reached.
+    await expect(page.locator('.offline')).toHaveCount(0);
   });
 
+  // req:web/approve-by-branch@110f0e02
   test('a 409 whose reload fails at the network never draws the copy kept for offline use', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 409);
     mock.onPost = () => mock.fail(REVIEW, 'abort');
     await page.goto('/app/#/o/a/prs/spec%2Fc');
     await page.locator('button.approve').click();
-    await expect(page.locator('.review')).toContainText('could not be loaded. Reload before approving.');
+    await expect(page.locator('.review')).toContainText('The branch changed since this review was shown, and its new review could not be loaded. Reload before approving.');
+    await expect(page.locator('.offline')).toHaveCount(0);
   });
 
-  test('any other failure says Not approved with the status', async ({ page, context }) => {
+  // req:web/approve-by-branch@110f0e02
+  test("approved, but the review can't be loaded again: says Approved. and to reload", async ({ page, context }) => {
     const mock = await mockApi(context);
-    mock.fail(APPROVE, 422);
+    mock.onPost = () => mock.fail(REVIEW, 502);
     await page.goto('/app/#/o/a/prs/spec%2Fc');
     await page.locator('button.approve').click();
-    await expect(page.locator('.review')).toContainText('Not approved (422).');
-    await expect(page.locator('button.approve')).toBeEnabled();
+    await expect(page.locator('.review')).toContainText('Approved. Reload to see the review as it is now.');
+    await expect(page.locator('.offline')).toHaveCount(0);
+    expect(mock.posts).toEqual([{ key: APPROVE, body: '{"fingerprint":"f1"}' }]);
+  });
+
+  // req:web/approve-by-branch@110f0e02
+  test('any other status says Not approved with the status, and leaves Approve enabled', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    for (const status of [500, 422]) {
+      mock.fail(APPROVE, status);
+      await page.goto('/app/#/o/a/prs/spec%2Fc');
+      await page.reload();
+      await page.locator('button.approve').click();
+      await expect(page.locator('.review')).toContainText(`Not approved (${status}).`);
+      await expect(page.locator('button.approve')).toBeEnabled();
+    }
   });
 });
 
 test.describe('signed repositories', () => {
+  // req:web/approve-by-branch@110f0e02
   test('became signed: a 422 signed loads the review again, and the note shows clm approve', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 422, { error: 'signed', command: 'clm approve spec/c' });
@@ -643,6 +717,7 @@ test.describe('signed repositories', () => {
     await expect(page.locator('.signed-note')).toHaveCount(0);
     const before = mock.requests.filter((r) => r === REVIEW).length;
     await page.locator('button.approve').click();
+    await expect(page.locator('.review')).toContainText('Not approved: this repository counts only approvals signed with your SSH key.');
     await expect(page.locator('.signed-note code')).toHaveText('clm approve spec/c');
     expect(mock.requests.filter((r) => r === REVIEW).length).toBeGreaterThan(before);
     await expect(page.locator('button.approve')).toBeDisabled();
@@ -1055,7 +1130,7 @@ test.describe('PWA', () => {
     await expect(page.locator('.offline')).toHaveText('Offline');
   });
 
-  // req:web/answer-from-app@074f7d4c
+  // req:web/answer-from-app@ba9bce6f
   test('offline: an item page drawn from the kept copy has its answer buttons disabled', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
@@ -1413,11 +1488,10 @@ test.describe('a backlog item opens its page', () => {
   });
 });
 
-// req:web/home-first@3681eee1
-// req:web/answer-from-app@074f7d4c
 test.describe('Home first', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  // req:web/home-first@fb20db87
   test('a repo opens on Home, the sidebar\'s first view, badged with what waits', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos'] = [
@@ -1440,6 +1514,7 @@ test.describe('Home first', () => {
     await expect(page.locator('[data-section=answer] a.hent')).toHaveAttribute('href', '#/o/a/backlog/setup');
   });
 
+  // req:web/home-first@fb20db87
   test('Home is drawn from the snapshot at once and adds each section as its response arrives', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.hold('GET /api/repos/o/a/implementation');
@@ -1455,19 +1530,36 @@ test.describe('Home first', () => {
     mock.release('GET /api/repos/o/a/implementation');
   });
 
-  test('a backlog item\'s page opens at its route, with its answer buttons, and a tap posts one answer', async ({ page, context }) => {
+  // req:web/home-first@fb20db87
+  test('a backlog item\'s page opens at its route', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
     await page.goto('/app/#/o/a/backlog/q');
     await expect(page.locator('h1')).toContainText('Ship it?');
     await expect(page.locator('strong')).toHaveText('ship');
-    await page.locator('button.answer[data-answer=yes]').dblclick();
-    await expect.poll(() => mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
-    // The implementation state is asked for again, so the answer shows from its `answers`.
-    await expect.poll(() => mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length).toBeGreaterThan(1);
-    expect(mock.urls.filter((k) => k.startsWith('GET /api/repos/o/a/implementation?fresh=')).length).toBeGreaterThan(0);
+    await expect(page.locator('button.answer[data-answer=yes]')).toBeVisible();
   });
 
+  // req:web/answer-from-app@ba9bce6f
+  test('answered on the item\'s page: one post, the implementation state asked again with fresh, and yes drawn chosen', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    mock.onPost = () => {
+      const impl = implementation();
+      impl.answers = [{ id: 'x1', writer: 'alice/web', at: '2026-11-13T00:00:00Z', item: 'q', answer: 'yes', mine: true }];
+      mock.routes['GET /api/repos/o/a/implementation'] = impl;
+    };
+    await page.goto('/app/#/o/a/backlog/q');
+    await page.locator('button.answer[data-answer=yes]').dblclick();
+    await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
+    expect(mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
+    // The implementation state is asked for again, from the Worker anew, so the answer shows from its `answers`.
+    const asked = mock.urls.filter((k) => k.startsWith('GET /api/repos/o/a/implementation'));
+    expect(asked.length).toBeGreaterThan(1);
+    expect(asked.at(-1)).toMatch(/\?fresh=/);
+  });
+
+  // req:web/answer-from-app@ba9bce6f
   test('an answer the Worker refuses says why and keeps the buttons enabled', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
@@ -1482,7 +1574,8 @@ test.describe('Home first', () => {
     expect(mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length).toBe(before);
   });
 
-  test('an answer shows on Home, drawn chosen, from the next implementation state', async ({ page, context }) => {
+  // req:web/answer-from-app@ba9bce6f
+  test('answered on Home: one post to q\'s route, and Home draws yes chosen', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
     mock.onPost = () => {
@@ -1492,32 +1585,41 @@ test.describe('Home first', () => {
     };
     await page.goto('/app/#/o/a');
     await page.locator('button.answer[data-answer=yes]').click();
-    await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
+    await expect(page.locator('.home button.answer[data-answer=yes]')).toHaveClass(/chosen/);
+    expect(mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
   });
 
-  test('on an item page: the answer is drawn chosen, a 404 says the item is gone, and any other status is named', async ({ page, context }) => {
+  // req:web/answer-from-app@ba9bce6f
+  test('refused on the item\'s page: a 422, a 404 and a 500 each say why under the buttons, which stay enabled, and nothing is asked again', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
-    mock.onPost = () => {
-      const impl = implementation();
-      impl.answers = [{ id: 'x1', writer: 'alice/web', at: '2026-11-13T00:00:00Z', item: 'q', answer: 'yes', mine: true }];
-      mock.routes['GET /api/repos/o/a/implementation'] = impl;
-    };
     await page.goto('/app/#/o/a/backlog/q');
-    await page.locator('button.answer[data-answer=yes]').click();
-    await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
-    mock.fail(ANSWER, 404);
-    await page.locator('button.answer[data-answer=no]').click();
-    await expect(page.locator('.answers .err')).toHaveText('That item is no longer in the backlog.');
-    mock.fail(ANSWER, 500);
-    await page.locator('button.answer[data-answer=no]').click();
-    await expect(page.locator('.answers .err')).toHaveText("The answer wasn't recorded (500).");
+    const yes = page.locator('button.answer[data-answer=yes]');
+    await expect(yes).toBeEnabled();
+    const asked = () => mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length;
+    await expect.poll(asked).toBeGreaterThan(0);
+    const before = asked();
+    const cases: [number, unknown, string][] = [
+      [422, { error: 'answer' }, 'The answer was refused.'],
+      [404, undefined, 'That item is no longer in the backlog.'],
+      [500, undefined, "The answer wasn't recorded (500)."],
+    ];
+    for (const [status, body, says] of cases) {
+      mock.fail(ANSWER, status, body);
+      await yes.click();
+      await expect(page.locator('.answers .err')).toHaveText(says);
+      await expect(yes).toBeEnabled();
+    }
+    expect(mock.posts).toHaveLength(3);
+    expect(asked()).toBe(before);
   });
 
+  // req:web/home-first@fb20db87
   test('the phone tab bar badges Home with what waits', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/#/o/a');
+    await expect(page.locator('.tabbar a').first()).toHaveAttribute('data-view', 'home');
     await expect(page.locator('.tabbar a[data-view=home] .bdg')).toHaveText('2');
   });
 });
