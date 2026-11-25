@@ -161,7 +161,7 @@ test("wrangler.toml declares the site's own Worker, assets only", () => {
 test('the nav reads How it works, Guide, Blog, Get started, Web app, and every link to the app reads Web app', async ({
   page,
 }) => {
-  // req:web.site/nav-web-app@c1d913a8
+  // req:web.site/nav-web-app@d9d68241
   for (const path of ['/', '/guide/quickstart']) {
     await page.goto(path)
     const nav = await page.locator('.VPNavBarMenu a').allTextContents()
@@ -178,5 +178,23 @@ test('the nav reads How it works, Guide, Blog, Get started, Web app, and every l
     expect(toApp.length, path).toBeGreaterThan(0)
     for (const text of toApp) expect(text.trim(), path).toBe('Web app')
     expect(await page.getByRole('link', { name: 'Sign in' }).count(), path).toBe(0)
+  }
+})
+
+test("every link to the app loads /app/ from the server, not a page of the site's own", async ({ page }) => {
+  // req:web.site/nav-web-app@d9d68241
+  for (const [path, link] of [
+    ['/guide/quickstart', '.VPNavBarMenu a:has-text("Web app")'],
+    ['/', '.clm-home .foot a:has-text("Web app")'],
+  ]) {
+    await page.goto(path)
+    // Once the app is up: VitePress's router takes a click only after hydration.
+    await page.waitForLoadState('networkidle')
+    const asked = page.waitForRequest(
+      (r) => r.resourceType() === 'document' && new URL(r.url()).pathname === '/app/',
+      { timeout: 10_000 },
+    )
+    await page.locator(link).click()
+    await asked
   }
 })
