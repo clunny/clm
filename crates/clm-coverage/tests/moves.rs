@@ -480,7 +480,7 @@ fn scenario_a_merge_into_a_requirement_of_the_same_component() {
     };
     let old = marker("a/old", None, "t.rs", 3);
     assert_eq!(
-        on_a(&[old.clone()]),
+        on_a(std::slice::from_ref(&old)),
         [
             format!("a/new {version} unbuilt blocked b/z"),
             "a/old obsolete t.rs:3 blocked a/new".into(),
