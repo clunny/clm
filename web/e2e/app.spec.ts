@@ -578,8 +578,8 @@ test.describe('spec branches', () => {
   });
 });
 
-// req:web/approve-by-branch@9a6b3322
 test.describe('Approve by branch', () => {
+  // req:web/approve-by-branch@110f0e02
   test('approve: one post of the fingerprint to the branch, the review asked again, clunny/web named and Approve disabled', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => (mock.routes[REVIEW] = review({ approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }] }));
@@ -591,6 +591,7 @@ test.describe('Approve by branch', () => {
     expect(mock.requests.filter((r) => r === REVIEW)).toHaveLength(2);
   });
 
+  // req:web/approve-by-branch@110f0e02
   test('branch moved: a 409 says the branch changed, shows no approval, and draws the review with fingerprint f2', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 409);
@@ -606,35 +607,56 @@ test.describe('Approve by branch', () => {
     await expect.poll(() => mock.posts.map((p) => p.body)).toEqual(['{"fingerprint":"f1"}', '{"fingerprint":"f2"}']);
   });
 
+  // req:web/approve-by-branch@110f0e02
   test("a 409 whose new review can't be loaded says to reload before approving", async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 409);
     mock.onPost = () => mock.fail(REVIEW, 502);
     await page.goto('/app/#/o/a/prs/spec%2Fc');
     await page.locator('button.approve').click();
-    await expect(page.locator('.review')).toContainText('could not be loaded. Reload before approving.');
+    await expect(page.locator('.review')).toContainText('The branch changed since this review was shown, and its new review could not be loaded. Reload before approving.');
+    // The kept copy would show under CLM couldn't be reached.
+    await expect(page.locator('.offline')).toHaveCount(0);
   });
 
+  // req:web/approve-by-branch@110f0e02
   test('a 409 whose reload fails at the network never draws the copy kept for offline use', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 409);
     mock.onPost = () => mock.fail(REVIEW, 'abort');
     await page.goto('/app/#/o/a/prs/spec%2Fc');
     await page.locator('button.approve').click();
-    await expect(page.locator('.review')).toContainText('could not be loaded. Reload before approving.');
+    await expect(page.locator('.review')).toContainText('The branch changed since this review was shown, and its new review could not be loaded. Reload before approving.');
+    await expect(page.locator('.offline')).toHaveCount(0);
   });
 
-  test('any other failure says Not approved with the status', async ({ page, context }) => {
+  // req:web/approve-by-branch@110f0e02
+  test("approved, but the review can't be loaded again: says Approved. and to reload", async ({ page, context }) => {
     const mock = await mockApi(context);
-    mock.fail(APPROVE, 422);
+    mock.onPost = () => mock.fail(REVIEW, 502);
     await page.goto('/app/#/o/a/prs/spec%2Fc');
     await page.locator('button.approve').click();
-    await expect(page.locator('.review')).toContainText('Not approved (422).');
-    await expect(page.locator('button.approve')).toBeEnabled();
+    await expect(page.locator('.review')).toContainText('Approved. Reload to see the review as it is now.');
+    await expect(page.locator('.offline')).toHaveCount(0);
+    expect(mock.posts).toEqual([{ key: APPROVE, body: '{"fingerprint":"f1"}' }]);
+  });
+
+  // req:web/approve-by-branch@110f0e02
+  test('any other status says Not approved with the status, and leaves Approve enabled', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    for (const status of [500, 422]) {
+      mock.fail(APPROVE, status);
+      await page.goto('/app/#/o/a/prs/spec%2Fc');
+      await page.reload();
+      await page.locator('button.approve').click();
+      await expect(page.locator('.review')).toContainText(`Not approved (${status}).`);
+      await expect(page.locator('button.approve')).toBeEnabled();
+    }
   });
 });
 
 test.describe('signed repositories', () => {
+  // req:web/approve-by-branch@110f0e02
   test('became signed: a 422 signed loads the review again, and the note shows clm approve', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 422, { error: 'signed', command: 'clm approve spec/c' });
