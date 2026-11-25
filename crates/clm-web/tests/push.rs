@@ -77,7 +77,7 @@ fn subscribed(fake: &Fake, cookie: &str, endpoint: &str) -> bool {
 
 #[test]
 fn key() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     let res = fake.handle(get("/api/push/key", &cookie));
     assert_eq!(res.status, 200);
@@ -87,7 +87,7 @@ fn key() {
 
 #[test]
 fn no_key() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let fake = Fake::default();
     let cookie = fake.cookie("u");
     assert_eq!(fake.handle(get("/api/push/key", &cookie)).status, 404);
@@ -95,7 +95,7 @@ fn no_key() {
 
 #[test]
 fn subscribe_once() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     assert!(!subscribed(&fake, &cookie, ENDPOINT));
     for _ in 0..2 {
@@ -128,7 +128,7 @@ fn subscribe_once() {
 
 #[test]
 fn off_right_after_on() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     let res = fake.handle(post(
         "/api/repos/o/a/push",
@@ -153,7 +153,7 @@ fn off_right_after_on() {
 
 #[test]
 fn off_when_the_ledger_cant_be_read() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     let res = fake.handle(post(
         "/api/repos/o/a/push",
@@ -179,8 +179,60 @@ fn off_when_the_ledger_cant_be_read() {
 }
 
 #[test]
+fn failures() {
+    // req:web.worker/push-subscriptions@37558c41
+    let (fake, cookie) = setup();
+    let res = fake.handle(post(
+        "/api/repos/o/a/push",
+        &cookie,
+        &subscription(ENDPOINT, 16),
+    ));
+    assert_eq!(res.status, 200);
+    let tip = || fake.gh.repos.borrow()["o/a"].branches["clm/ledger/alice/web"].clone();
+    let before = tip();
+    // A body that isn't JSON, and a delete with no body: 422.
+    let res = fake.handle(post("/api/repos/o/a/push", &cookie, b"not json"));
+    assert_eq!(res.status, 422);
+    let res = fake.handle(delete("/api/repos/o/a/push", &cookie, b""));
+    assert_eq!(res.status, 422);
+    // The delete while GitHub fails the read of her web ledger's ref: 502.
+    let body = json!({"endpoint": ENDPOINT}).to_string();
+    let set_ref_fails = |on: bool| {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let fails = &mut repos.get_mut("o/a").unwrap().ref_fails;
+        if on {
+            fails.insert("clm/ledger/alice/web".into());
+        } else {
+            fails.clear();
+        }
+    };
+    set_ref_fails(true);
+    let res = fake.handle(delete("/api/repos/o/a/push", &cookie, body.as_bytes()));
+    assert_eq!(res.status, 502);
+    set_ref_fails(false);
+    // Then while GitHub refuses the ref's move: 502.
+    fake.fail("PATCH", "/git/refs/heads/clm/ledger/alice/web");
+    let res = fake.handle(delete("/api/repos/o/a/push", &cookie, body.as_bytes()));
+    assert_eq!(res.status, 502);
+    // And the switch's state while GitHub fails the ledgers' read: 502.
+    fake.fail("GET", "/git/matching-refs/heads/clm/ledger/");
+    let path = format!(
+        "/api/repos/o/a/push?endpoint={}",
+        clm_web_platform::http::percent_encode(ENDPOINT)
+    );
+    assert_eq!(fake.handle(get(&path, &cookie)).status, 502);
+    // Nothing was written: her ledger still holds the one subscription.
+    assert_eq!(tip(), before);
+    let kinds: Vec<Value> = records(&fake, "alice/web")
+        .iter()
+        .map(|r| r["kind"].clone())
+        .collect();
+    assert_eq!(kinds, vec![json!("subscribed")]);
+}
+
+#[test]
 fn not_a_subscription() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     for body in [
         subscription("https://example.com/s/1", 16),
@@ -204,7 +256,7 @@ fn not_a_subscription() {
 
 #[test]
 fn known_services() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     for endpoint in [
         "https://updates.push.services.mozilla.com/wpush/v2/x",
@@ -223,7 +275,7 @@ fn known_services() {
 
 #[test]
 fn no_access() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     let path = "/api/repos/o/private/push";
     let res = fake.handle(post(path, &cookie, &subscription(ENDPOINT, 16)));
@@ -235,7 +287,7 @@ fn no_access() {
 
 #[test]
 fn another_persons_subscription() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     fake.gh.grant("v", "o/a");
     let bob = fake.cookie_as("v", "bob");
@@ -256,7 +308,7 @@ fn another_persons_subscription() {
 
 #[test]
 fn ended_from_another_branch() {
-    // req:web.worker/push-subscriptions@c5f1fe54
+    // req:web.worker/push-subscriptions@37558c41
     let (fake, cookie) = setup();
     {
         let mut repos = fake.gh.repos.borrow_mut();
