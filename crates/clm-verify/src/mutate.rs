@@ -505,7 +505,7 @@ fn signal_name(n: i32) -> Option<&'static str> {
 fn read_verdicts(text: &str) -> BTreeMap<String, Verdict> {
     let mut out = BTreeMap::new();
     for line in text.split_inclusive('\n').filter(|l| l.ends_with('\n')) {
-        if let Some((id, why)) = failed_line(&line[..line.len() - 1]) {
+        if let Some((id, why)) = failed_line(line.trim_end_matches('\n').trim_end_matches('\r')) {
             out.insert(id.to_string(), Verdict::Failed(why.to_string()));
             continue;
         }

@@ -366,12 +366,12 @@ fn failed_lines_and_their_whys() {
     // req:verify/mutation-pass@6c7a3c85
     let p = pass(true, false);
     land_due(&p.f, true, &["other", "third", "fourth"]);
-    // A `failed` line alone gives an empty why; the last line for a requirement holds,
+    // A `failed` line alone, even ended by CRLF, gives an empty why; the last line for a requirement holds,
     // whichever kind it is; one for a requirement that isn't due, and one whose word only
     // starts with `failed`, are ignored.
     p.f.write(
         "mutate-result",
-        "a/thing failed\n\
+        "a/thing failed\r\n\
          a/other failed early\na/other killed\n\
          a/third killed\na/third failed late, then  more\n\
          a/q failed not due\n\
