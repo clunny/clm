@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [one-block-s-strykerjs-failure-leaves-every-other-component-s]
 ---
 
