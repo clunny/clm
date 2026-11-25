@@ -226,12 +226,12 @@ impl<S: Store, A: Alarm> Object<S, A> {
             if self.alarm.get().is_none() {
                 self.alarm.set(now);
             }
-        } else {
+        } else if matches!(event, "push" | "pull_request") {
             self.meta.delivery = req["delivery"].as_str().map(String::from);
-            match event {
-                "push" => self.push(p, &b, body).await,
-                "pull_request" => self.pull_request(p, &b, body).await,
-                _ => {}
+            if event == "push" {
+                self.push(p, &b, body).await;
+            } else {
+                self.pull_request(p, &b, body).await;
             }
             self.batch(now);
         }

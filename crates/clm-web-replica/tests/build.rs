@@ -16,7 +16,7 @@ fn github_not_ready() {
     // GitHub fails the tree listing.
     *over.github.borrow_mut() =
         Box::new(|req| req.url.contains("/git/trees/").then(|| status(502)));
-    let (mut object, mem, slot) = object();
+    let (mut object, _mem, slot) = object();
 
     // A push reaches the object that holds nothing: 202, the alarm set to now, nothing of
     // it applied.
@@ -62,7 +62,6 @@ fn github_not_ready() {
         .collect();
     assert!(!notices.is_empty());
     assert!(notices.iter().all(|n| !n.contains("\"d1\"")), "{notices:?}");
-    drop(mem);
 }
 
 #[test]

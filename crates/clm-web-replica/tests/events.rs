@@ -461,7 +461,7 @@ fn a_ref_the_views_read_moves() {
 
 #[test]
 fn a_pull_request_and_an_uninstall() {
-    // req:web.worker.replica/push-review@0b5b98e1
+    // req:web.worker.replica/push-review@692d328c
     let mut fake = fake_with("111", repo_files(&[]));
     fake.secrets
         .insert("VAPID_PUBLIC_KEY".into(), "BPublicKey".into());
@@ -480,20 +480,38 @@ fn a_pull_request_and_an_uninstall() {
         "head": {"ref": "spec/x", "sha": "s1", "repo": {"full_name": "o/a"}},
         "base": {"ref": "main", "repo": {"full_name": "o/a"}}}});
     block_on(object.event(&fake, &event("pull_request", "d1", pr)));
-    let sends = fake
+    let sends: Vec<serde_json::Value> = fake
         .live
         .calls
         .borrow()
         .iter()
         .filter(|c| c.path == "/send")
-        .count();
-    assert_eq!(sends, 1);
-    // An uninstall deletes what the object holds.
+        .map(|c| serde_json::from_str(&c.body).unwrap())
+        .collect();
+    assert_eq!(sends.len(), 1);
+    let messages = sends[0]["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert_eq!(
+        messages[0]["subscription"]["endpoint"],
+        "https://fcm.googleapis.com/fcm/send/alice"
+    );
+    assert_eq!(messages[0]["payload"]["body"], "spec/x: Add x");
+
+    // An uninstall that removes `o/a` deletes what its object holds, and not `o/b`'s.
+    // req:web.worker.replica/uninstall-deletes@5353d3fd
+    let other = fake_with("111", repo_files(&[]));
+    let (_built, b_mem, _b_slot) = built(&other);
+    let b_held = b_mem.0.borrow().clone();
+    let mut b = clm_web_replica::Object::load("o/b", b_mem.clone(), Slot::default());
     assert!(!mem.0.borrow().is_empty());
     let removed = json!({"action": "removed", "repositories_removed": [{"full_name": "o/a"}]});
-    let answer = block_on(object.event(&fake, &event("installation_repositories", "d2", removed)));
+    let uninstall = event("installation_repositories", "d2", removed);
+    let answer = block_on(object.event(&fake, &uninstall));
     assert_eq!(answer.status, 202);
     assert!(mem.0.borrow().is_empty());
     assert_eq!(block_on(object.view(&fake, "snapshot", false)).status, 503);
+    assert_eq!(block_on(b.event(&other, &uninstall)).status, 202);
+    assert!(!b.removed());
+    assert_eq!(*b_mem.0.borrow(), b_held, "o/b's object is unchanged");
     fake.secrets.remove("VAPID_PUBLIC_KEY");
 }
