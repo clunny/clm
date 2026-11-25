@@ -491,14 +491,14 @@ fn land_returned(
         .unwrap_or(&run.name)
         .to_string();
     let landed = line.starts_with("landed ");
-    let (drafts, rebased) = state::read(&options.root)
-        .and_then(|f| f.batches.iter().find(|b| b.id == batch).cloned())
-        .map(|b| (b.drafts, b.rebase))
-        .unwrap_or_default();
+    let held =
+        state::read(&options.root).and_then(|f| f.batches.iter().find(|b| b.id == batch).cloned());
+    let rebased = held.as_ref().map(|b| b.rebase);
+    let drafts = held.map(|b| b.drafts).unwrap_or_default();
     let refused = line.contains("gate/approval");
     // The first failed land after an approval, unless refused on `gate/approval`, keeps the batch
     // approved for a rebase run (`failed-batch-land-rebased`).
-    let rebase_due = !landed && !refused && rebased == Rebase::None;
+    let rebase_due = !landed && !refused && rebased == Some(Rebase::None);
     let mut lines = Vec::new();
     if landed {
         for id in &drafts {
@@ -518,7 +518,7 @@ fn land_returned(
             }
             lines.extend(kept(options, &ran.stdout)?);
         }
-    } else if refused && rebased == Rebase::Launched {
+    } else if refused && rebased == Some(Rebase::Launched) {
         lines.push(say(
             options,
             &format!(

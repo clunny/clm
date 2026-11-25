@@ -314,7 +314,9 @@ fn rebase_prompt(batch: &str) -> String {
     format!(
         "Bring the approved fold batch `{batch}` up to date with `main`, in your own checkout. \
 Its land failed, which a merge of what landed on `main` since its fold may mend.\n\n\
-1. Continue its branch: `git switch -c spec/{batch} origin/spec/{batch}`.\n\
+1. Continue its branch: `git switch -c spec/{batch} origin/spec/{batch}`. When a local \
+`spec/{batch}` already exists, run `git switch spec/{batch}` and `git reset --hard \
+origin/spec/{batch}` instead.\n\
 2. Run `clm rebase` until its last line is `rebase ok`, resolving what it reports (conflicted \
 files, stale deltas, check failures) and committing each fix. `rebase incomplete` leaves \
 something for you; `rebase failed` means git itself failed: run it once more, and stop when it \
