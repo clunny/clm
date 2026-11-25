@@ -718,7 +718,8 @@ ts_tools() {
 
 # Judges a fixture with StrykerJS in the npm directory $1, with that directory's own vitest and
 # TypeScript: a source file whose first function a test notices a change to and whose second
-# function no test does. It goes on only when the first function's mutants are caught and the
+# function no test does, and which fails when a directory the fixture's `.gitignore` names reaches
+# StrykerJS's sandbox. It goes on only when the first function's mutants are caught and the
 # second's missed. The files sit inside the directory, which a vitest configuration reaches, and
 # are removed afterwards.
 ts_fixture() {
@@ -732,17 +733,26 @@ ts_fixture() {
 export const double = (x: number): number => x * 2;
 export const triple = (x: number): number => x * 3;
 EOF
+  # A directory one level below the files, which a `.gitignore` beside them names by a rule with
+  # no slash but a trailing one, the shape StrykerJS matches only at the top unless it is carried
+  # anchored. It holds a file, since a copy may make no empty directory.
+  mkdir -p "$root/$dir/$fix/nested/clm-ignored"
+  : >"$root/$dir/$fix/nested/clm-ignored/x"
+  printf 'clm-ignored/\n' >"$root/$dir/$fix/.gitignore"
   # The test that notices also reads this script, a file of the repository outside the npm
   # directory, by a path relative to its own file, so a sandbox from which the repository's
-  # files can't be reached fails the fixture. It reads it with `fs`, in node's environment.
+  # files can't be reached fails the fixture. It reads it with `fs`, in node's environment. It
+  # also fails when it finds the ignored directory, so a StrykerJS that copies what git ignores
+  # fails the fixture.
   cat >"$root/$dir/$fix/fixture.test.ts" <<EOF
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { double, triple } from './fixture';
 
 test('fixture_notices', () => {
   expect(readFileSync(new URL('$up/.github/scripts/mutate.sh', import.meta.url), 'utf8')).toContain('mutate');
+  expect(existsSync(new URL('./nested/clm-ignored', import.meta.url))).toBe(false);
   expect(double(3)).toBe(6);
 });
 
