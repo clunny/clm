@@ -205,6 +205,12 @@ fn scenario_same_as_the_files() {
             "tests/t.rs",
             format!("fn h() {{\n    // {c}\n}}\n#[test]\nfn t() {{\n    // {c}\n}}\n"),
         ),
+        (
+            "a.test.ts",
+            format!(
+                "describe('g', () => {{\n  // {c}\n  beforeEach(() => {{}});\n  it('t', () => {{\n    // {c}\n  }});\n}});\n"
+            ),
+        ),
         ("lib.go", format!("// {c}\n")),
         ("src/lib.rs", format!("fn h() {{\n    // {c}\n}}\n")),
         ("notes.md", format!("{c}\n")),
@@ -226,7 +232,8 @@ fn scenario_same_as_the_files() {
     a.sort();
     b.sort();
     assert_eq!(a, b);
-    assert_eq!(a.len(), 3);
+    assert_eq!(a.len(), 4);
+    assert!(a.contains(&(&PathBuf::from("a.test.ts"), 5, &"a/x".to_string())));
     let g = graph(dir.path());
     let one = |ms: &[Marker]| {
         let mut ms = ms.to_vec();
@@ -238,7 +245,12 @@ fn scenario_same_as_the_files() {
             .to_string()
     };
     assert_eq!(one(&scan.req), one(&from_files));
-    assert_eq!(scan.outside.len(), 2);
+    assert_eq!(scan.outside.len(), 3);
+    assert!(
+        scan.outside
+            .iter()
+            .any(|m| m.path == Path::new("a.test.ts") && m.line == 2)
+    );
 }
 
 #[test]
