@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves:
   - land-approval-design-names-no-relative-which-empties-a-subdirectory-roots-change-ids
 ---
