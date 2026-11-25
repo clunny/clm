@@ -3,7 +3,7 @@
 // the build's file list. It precaches the app shell and serves it offline. It never
 // handles `/api/*` or `/auth/*`, which lie outside its scope: the app keeps its own API
 // copies, with their age, and sign-in must always reach the Worker. It shows Web Push messages with the
-// handlers in `src/live/push-sw.ts` (web/push-shown), whose built code the build puts in place of
+// handlers in `src/live/push-sw.ts` (web.client-live/push-shown), whose built code the build puts in place of
 // the import below, so the emitted worker is a classic script every browser installs.
 
 import { onNotificationClick, onPush } from './sw-push.js';

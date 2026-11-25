@@ -1,7 +1,7 @@
 // The loading bar and the graph's height, in the built app against a mocked Worker.
 
 import { Page, expect, test } from '@playwright/test';
-import { ARCHITECTURE, CAPABILITIES, mockApi } from './mock';
+import { ARCHITECTURE, CAPABILITIES, REVIEW, mockApi } from './mock';
 import { capabilities, cost } from '../src/views/fixtures';
 
 const SNAPSHOT = 'GET /api/repos/o/a/snapshot';
@@ -9,8 +9,8 @@ const SNAPSHOT = 'GET /api/repos/o/a/snapshot';
 /** The requests made for `key` so far. */
 const count = (requests: string[], key: string) => requests.filter((r) => r === key).length;
 
-// req:web/loading-indicator@bc3e841a
 test.describe('loading bar', () => {
+  // req:web/loading-indicator@bbcae7bd
   test('slow view: the bar shows from the first load while the answer is pending, and goes once the view is drawn', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.hold(SNAPSHOT);
@@ -23,6 +23,7 @@ test.describe('loading bar', () => {
     await expect(page.locator('#loadbar')).toBeHidden();
   });
 
+  // req:web/loading-indicator@bbcae7bd
   test('a navigation to Capabilities shows the bar until its report is drawn', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.goto('/app/#/o/a/graph');
@@ -37,6 +38,7 @@ test.describe('loading bar', () => {
     await expect(page.locator('#loadbar')).toBeHidden();
   });
 
+  // req:web/loading-indicator@bbcae7bd
   test('a navigation to Architecture shows the bar until its report is drawn', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -52,6 +54,24 @@ test.describe('loading bar', () => {
     await expect(page.locator('#loadbar')).toBeHidden();
   });
 
+  // req:web/loading-indicator@bbcae7bd
+  test("a navigation to a PR shows the bar until its review is drawn", async ({ page, context }) => {
+    const mock = await mockApi(context);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/app/#/o/a/prs');
+    await expect(page.locator('.prl[data-branch]').first()).toBeVisible();
+    await expect(page.locator('#loadbar')).toBeHidden();
+    mock.hold(REVIEW);
+    await page.evaluate(() => (location.hash = '#/o/a/prs/spec%2Fc'));
+    await expect.poll(() => count(mock.requests, REVIEW)).toBe(1);
+    await expect(page.locator('#loadbar')).toBeVisible();
+    await expect(page.locator('button.approve')).toHaveCount(0);
+    mock.release(REVIEW);
+    await expect(page.locator('button.approve')).toBeVisible();
+    await expect(page.locator('#loadbar')).toBeHidden();
+  });
+
+  // req:web/loading-indicator@bbcae7bd
   test('a redirect to the first repo keeps the bar until its view is drawn', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.hold(SNAPSHOT);
@@ -64,21 +84,28 @@ test.describe('loading bar', () => {
     await expect(page.locator('#loadbar')).toBeHidden();
   });
 
+  // req:web/loading-indicator@bbcae7bd
   test('going online or offline is no navigation: it shows no bar', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/graph');
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
     await expect(page.locator('#loadbar')).toBeHidden();
     // Read at once, before the redraw it starts could hide the bar again.
-    const shown = await page.evaluate(() =>
-      ['offline', 'online'].map((e) => {
+    for (const event of ['offline', 'online']) {
+      await page.locator('.canvas').evaluate((e) => ((e as HTMLElement).dataset.keep = '1'));
+      const shown = await page.evaluate((e) => {
         dispatchEvent(new Event(e));
         return !document.getElementById('loadbar')!.hidden;
-      }),
-    );
-    expect(shown).toEqual([false, false]);
+      }, event);
+      expect(shown).toBe(false);
+      // The view is drawn again each time.
+      await expect(page.locator('.canvas[data-keep]')).toHaveCount(0);
+      await expect(page.locator('.n[data-node=b]')).toBeVisible();
+      await expect(page.locator('#loadbar')).toBeHidden();
+    }
   });
 
+  // req:web/loading-indicator@bbcae7bd
   test('a background refresh shows no bar', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -103,8 +130,8 @@ const edge = (page: Page, selector: string, top = false) =>
       return t ? r.top : r.bottom;
     }, top);
 
-// req:web/graph-fills-height@7acb0b89
 test.describe('the graph fills the height', () => {
+  // req:web/graph-fills-height@f8bc8a07
   test('desktop: at 1440 × 1000 the canvas ends within 32 px of the bottom, and the page does not scroll', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -115,9 +142,10 @@ test.describe('the graph fills the height', () => {
     expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
   });
 
+  // req:web/graph-fills-height@f8bc8a07
   test('a short window: the canvas stays at least 320 px tall', async ({ page, context }) => {
     await mockApi(context);
-    await page.setViewportSize({ width: 1440, height: 300 });
+    await page.setViewportSize({ width: 1440, height: 400 });
     await page.goto('/app/#/o/a/graph');
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
     await expect.poll(() => page.locator('.canvas').evaluate((e) => e.getBoundingClientRect().height)).toBe(320);
@@ -126,6 +154,7 @@ test.describe('the graph fills the height', () => {
   test.describe('phone', () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
+    // req:web/graph-fills-height@f8bc8a07
     test('the spec graph ends within 16 px of the tab bar', async ({ page, context }) => {
       await mockApi(context);
       await page.goto('/app/#/o/a/graph');
@@ -135,6 +164,7 @@ test.describe('the graph fills the height', () => {
       expect(await edge(page, '.canvas')).toBeLessThanOrEqual(tabbar);
     });
 
+    // req:web/graph-fills-height@f8bc8a07
     test("a PR's Graph tab ends within 16 px of the Approve bar, as drawn with what it holds", async ({ page, context }) => {
       await mockApi(context);
       await page.goto('/app/#/o/a/prs/spec%2Fc/graph');
@@ -151,6 +181,7 @@ test.describe('the graph fills the height', () => {
       await expect.poll(fits).toBe(true);
     });
 
+    // req:web/graph-fills-height@f8bc8a07
     test("a PR's Graph tab drawn again after Approve is fitted again", async ({ page, context }) => {
       await mockApi(context);
       await page.goto('/app/#/o/a/prs/spec%2Fc/graph');

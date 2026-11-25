@@ -166,7 +166,7 @@ test.describe('phone', () => {
   });
 });
 
-// req:web/cost-views-in-the-browser@34e19461
+// req:web/cost-views-in-the-browser@3d307cc3
 test('capabilities from 900 px: a table in the report order, ⚑ only filters, and a row opens its page', async ({ page, context }) => {
   await mockApi(context);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -182,10 +182,10 @@ test('capabilities from 900 px: a table in the report order, ⚑ only filters, a
   await expect(page.locator('.sidebar .nv[data-view=capabilities]')).toHaveClass(/on/);
 });
 
-// req:web/cost-views-in-the-browser@34e19461
 test.describe('architecture list', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('its own view: listed after Capabilities in the sidebar, opening #/o/a/architecture', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/graph');
@@ -200,6 +200,7 @@ test.describe('architecture list', () => {
     await expect(page.locator('.sidebar .nv[data-view=architecture]')).toHaveClass(/on/);
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('ranked, held and flagged: a table in the report order, held 1/2 in amber, ⚑ only filters, and a row opens its page', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/architecture');
@@ -226,6 +227,7 @@ test.describe('architecture list', () => {
     await expect(page.locator('section[data-sec=entry]')).toContainText('Partly judgement.');
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('indexing: the proof reads ? / 2 and the note says coverage is still indexing', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes[ARCHITECTURE] = architecture({ indexing: true });
@@ -235,10 +237,10 @@ test.describe('architecture list', () => {
   });
 });
 
-// req:web/cost-views-in-the-browser@34e19461
 test.describe('deciding an architectural constraint', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('one request per tap: two quick taps post once, the report is asked again and the decision shows', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => {
@@ -260,6 +262,7 @@ test.describe('deciding an architectural constraint', () => {
     expect(mock.urls.filter((u) => u.startsWith(`${ARCHITECTURE}?fresh=`))).toHaveLength(1);
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('moved: a 409 says the entry changed and draws it as it is now', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(ARCH_DECIDE, 409);
@@ -275,6 +278,7 @@ test.describe('deciding an architectural constraint', () => {
     await expect(page.locator('.capage')).toContainText('CLM SHALL e, reworded.');
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('signed: the buttons are disabled and the note gives clm architecture decide', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes[ARCHITECTURE] = architecture({ signed: true });
@@ -285,10 +289,10 @@ test.describe('deciding an architectural constraint', () => {
   });
 });
 
-// req:web/cost-views-in-the-browser@34e19461
 test.describe('deciding a capability', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('decided: two quick taps post once, the report is asked again and the decision shows', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => {
@@ -315,6 +319,8 @@ test.describe('deciding a capability', () => {
     expect(mock.urls.filter((u) => u.startsWith(`${CAPABILITIES}?fresh=`))).toHaveLength(1);
   });
 
+  // req:web/app-writes@d1c16934
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('a refresh begun before a decision never draws its older report over the decision', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => {
@@ -348,6 +354,7 @@ test.describe('deciding a capability', () => {
     await expect(page.locator('section[data-sec=decisions]')).toContainText('cut (value low) by clunny/web');
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('moved: a 409 says the capability changed and draws it as it is now', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(DECIDE, 409);
@@ -369,6 +376,7 @@ test.describe('deciding a capability', () => {
     ]);
   });
 
+  // req:web/cost-views-in-the-browser@3d307cc3
   test('became signed: a 422 signed shows the Worker’s command and disables the buttons', async ({ page, context }) => {
     const mock = await mockApi(context);
     const command = 'clm capabilities decide a --value high --decision keep';
@@ -379,6 +387,31 @@ test.describe('deciding a capability', () => {
     await page.locator('button.decide', { hasText: 'Keep' }).click();
     await expect(page.locator('.decide-note code')).toHaveText(command);
     await expect(page.locator('button.decide').first()).toBeDisabled();
+  });
+
+  // req:web/cost-views-in-the-browser@3d307cc3
+  test("a report that can't be loaded again after a decision: no kept copy drawn, and the page says so", async ({ page, context }) => {
+    for (const [layer, route, key, slug] of [
+      ['capabilities', CAPABILITIES, DECIDE, 'a'],
+      ['architecture', ARCHITECTURE, ARCH_DECIDE, 'e'],
+    ] as const) {
+      const mock = await mockApi(context);
+      // The report is kept for offline use when it is first drawn; once the decision is
+      // taken, the Worker answers the report with 502.
+      mock.onPost = (k) => k === key && mock.fail(route, 502);
+      await page.goto(`/app/#/o/a/${layer}/${slug}`);
+      // A copy of the report is kept for offline use.
+      await expect
+        .poll(() => page.evaluate(async (p) => !!(await (await caches.open('clm-api')).match(p)), `/api/repos/o/a/${layer}`))
+        .toBe(true);
+      await page.locator('button.value', { hasText: 'low' }).click();
+      await page.locator('button.decide', { hasText: 'Cut' }).click();
+      await expect(page.locator('.decide-note')).toContainText('Its report could not be loaded again');
+      expect(mock.posts.map((p) => p.key)).toEqual([key]);
+      // The kept copy would show under CLM couldn't be reached.
+      await expect(page.locator('.offline')).toHaveCount(0);
+      await context.unroute('**/api/**');
+    }
   });
 });
 
@@ -391,7 +424,7 @@ test('wide screens get the sidebar and no tab bar', async ({ page, context }) =>
   await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
 });
 
-// req:web/review-in-the-browser@7df79f16
+// req:web/review-in-the-browser@9b9f5325
 test('opening a file in full scrolls to its first change, and j steps to the next', async ({ page, context }) => {
   const requirements = Array.from({ length: 40 }, (_, i) => `### Requirement: r${i}\nIt SHALL do ${i}.`).join('\n\n');
   const before = `# N\n\n### Design\n\nThe design.\n\n### Requirements\n\n${requirements}\n`;
@@ -407,6 +440,13 @@ test('opening a file in full scrolls to its first change, and j steps to the nex
   await expect(page.locator('.pos')).toHaveText('Change 2 of 2');
   await expect(page.locator('.chg.focus')).toContainText('It SHALL do 39 twice.');
   await expect(page.locator('.chg.focus')).toBeInViewport();
+});
+
+// req:web/review-in-the-browser@9b9f5325
+test("a file not in the review: the page says it isn't changed in the branch", async ({ page, context }) => {
+  await mockApi(context);
+  await page.goto('/app/#/o/a/prs/spec%2Fc/full/README.md');
+  await expect(page.locator('.main')).toContainText("README.md isn't changed in spec/c.");
 });
 
 // req:web/graph-in-the-browser@1d6b4828
@@ -487,8 +527,8 @@ test.describe('graph', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
 test.describe('spec branches', () => {
+  // req:web/review-in-the-browser@9b9f5325
   test("branch without a page: both listed, and spec/d's review loads from its branch route with no page link", async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/branches/spec/d/review'] = review({ branch: 'spec/d', page: null });
@@ -506,6 +546,7 @@ test.describe('spec branches', () => {
     expect(mock.requests).toContain('GET /api/repos/o/a/branches/spec/d/review');
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test('approved by: the header names clunny/web with its time and says not checked, and no request went to /pulls', async ({ page, context }) => {
     const mock = await mockApi(context, review({ approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }], checked: false }));
     await page.goto('/app/#/o/a/prs/spec%2Fc');
@@ -578,7 +619,6 @@ test.describe('Approve by branch', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
 test.describe('signed repositories', () => {
   test('became signed: a 422 signed loads the review again, and the note shows clm approve', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -594,6 +634,7 @@ test.describe('signed repositories', () => {
     await expect(page.locator('button.approve')).not.toHaveText(/Approved/);
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test('on a phone the note sits in the Approve bar, above the tab bar', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes[REVIEW] = review({ signed: true, approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z', signed: false }] });
@@ -608,7 +649,7 @@ test.describe('signed repositories', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
+// req:web/review-in-the-browser@9b9f5325
 test('one request, then approved: two quick taps send one approve, and the button reads Approved, disabled', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.hold(APPROVE);
@@ -767,8 +808,8 @@ test('the service worker imports the push handlers and shows a push', async ({ p
   expect(opened).toEqual([`${baseURL}/app/#/o/a/backlog`]);
 });
 
-// req:web/installable@e711892d
 test.describe('PWA', () => {
+  // req:web/installable@9f13442c
   test('it has a manifest with icons, which installs it', async ({ page, request }) => {
     await page.goto('/app/');
     const link = await page.locator('link[rel=manifest]').getAttribute('href');
@@ -786,8 +827,12 @@ test.describe('PWA', () => {
     }
   });
 
-  test('offline launch: shows the last data with its age, and Approve is disabled', async ({ page, context }) => {
-    await mockApi(context);
+  // req:web/installable@9f13442c
+  test('offline launch: each view viewed once online shows its last data with its age, every write disabled', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    const mine = { id: 'p1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', slug: 'export-csv', title: 'Export CSV', body: 'Let me export.', nodes: ['a'], mine: true };
+    mock.routes['GET /api/repos/o/a/implementation'] = implementation({ proposals: [mine] });
     await page.goto('/app/#/o/a/prs/spec%2Fc');
     await expect(page.locator('button.approve')).toBeEnabled();
     // The service worker has installed and controls the page.
@@ -797,14 +842,68 @@ test.describe('PWA', () => {
         await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
       }
     });
-    // Visited once online; then the network goes.
+    // Each view visited once online.
+    const views = ['backlog/q', 'backlog', 'capabilities/a', 'architecture/e'];
+    for (const v of views) {
+      await page.goto(`/app/#/o/a/${v}`);
+      await expect(page.locator('.main')).toBeVisible();
+      await expect(page.locator('#loadbar')).toBeHidden();
+    }
+    await expect(page.locator('.capage')).toBeVisible();
+    // Then the network goes.
     await context.unroute('**/api/**');
     await context.setOffline(true);
-    await page.reload();
-    await expect(page.locator('.offline')).toHaveText(/^Offline · showing data from (just now|\d+ min ago)$/);
+    const banner = /^Offline · showing data from (just now|\d+ min ago)$/;
+    const offlineAt = async (route: string) => {
+      await page.goto(`/app/#/o/a/${route}`);
+      await page.reload();
+      await expect(page.locator('.offline')).toHaveText(banner);
+    };
+    await offlineAt('prs/spec%2Fc');
     await expect(page.locator('.review > .head h1')).toHaveText('spec/c');
     await expect(page.locator('.repo-meta')).toContainText('3 components');
     await expect(page.locator('button.approve')).toBeDisabled();
+    await expect(page.locator('.approve-bar button.request')).toBeDisabled();
+    await expect(page.locator('.review .intent button.comment')).toBeDisabled();
+    await offlineAt('backlog/q');
+    await expect(page.locator('h1')).toContainText('Ship it?');
+    await expect(page.locator('button.answer[data-answer=yes]')).toBeDisabled();
+    await offlineAt('backlog');
+    await expect(page.locator('.prop[data-id=p1]')).toContainText('Export CSV');
+    await expect(page.locator('button.propose')).toBeDisabled();
+    await expect(page.locator('.prop[data-id=p1] button.withdraw')).toBeDisabled();
+    for (const route of ['capabilities/a', 'architecture/e']) {
+      await offlineAt(route);
+      // With a value chosen, only being offline keeps the decision buttons off.
+      await expect(page.locator('section[data-sec=entry]')).toContainText(route.startsWith('capabilities') ? 'Without a, nothing works.' : 'Partly judgement.');
+      await page.locator('button.value', { hasText: 'low' }).click();
+      for (const b of await page.locator('button.decide').all()) {
+        await expect(b).toBeDisabled();
+        await expect(b).toHaveAttribute('title', 'Offline');
+      }
+    }
+  });
+
+  // req:web/installable@9f13442c
+  test('nothing kept: a repo never opened on this device, opened offline, reads Offline', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos'] = [
+      { owner: 'o', name: 'a', default_branch: 'main' },
+      { owner: 'o', name: 'b', default_branch: 'main' },
+    ];
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      if (!navigator.serviceWorker.controller) {
+        await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
+      }
+    });
+    await context.unroute('**/api/**');
+    await context.setOffline(true);
+    await page.goto('/app/#/o/b/graph');
+    await page.reload();
+    await expect(page.locator('.offline')).toHaveText('Offline');
   });
 
   // req:web/answer-from-app@074f7d4c
@@ -827,8 +926,8 @@ test.describe('PWA', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
 test.describe('comments', () => {
+  // req:web/review-in-the-browser@9b9f5325
   test('comment on a requirement: one post of the fingerprint, target and text, the review asked again, and the card shows the comment by alice', async ({ page, context }) => {
     const mock = await mockApi(context);
     const said = { id: 'c1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', fingerprint: 'f1', target: 'n/r', text: 'Name the rule', current: true };
@@ -844,6 +943,7 @@ test.describe('comments', () => {
     expect(mock.requests.filter((r) => r === REVIEW)).toHaveLength(2);
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test("a 422 shows the Worker's reason under the form and keeps it", async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(COMMENTS, 422, { error: 'text' });
@@ -854,13 +954,14 @@ test.describe('comments', () => {
     await intent.locator('button.send').click();
     await expect(intent.locator('.fbform .err')).toHaveText('Not sent: the Worker refused the text.');
     await expect(intent.locator('textarea')).toHaveValue('Why now?');
+    await expect(intent.locator('button.send')).toBeEnabled();
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
 test.describe('Request changes', () => {
   const requested = { id: 'q1', writer: 'alice/web', at: '2026-10-27T12:00:00Z', fingerprint: 'f1', text: 'Split it', current: true, held: true };
 
+  // req:web/review-in-the-browser@9b9f5325
   test('requested: two quick submits post once, the review is asked again, and the header says changes requested by alice', async ({ page, context }) => {
     const mock = await mockApi(context, review({ signed: true }));
     mock.onPost = () => (mock.routes[REVIEW] = review({ signed: true, change_requests: [requested] }));
@@ -880,6 +981,7 @@ test.describe('Request changes', () => {
     expect(mock.requests.filter((r) => r === REVIEW)).toHaveLength(2);
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test('branch moved: a 409 says the branch changed, draws the review with fingerprint f2 and keeps the text', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(REQUEST, 409, { error: 'moved' });
@@ -901,6 +1003,7 @@ test.describe('Request changes', () => {
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
+    // req:web/review-in-the-browser@9b9f5325
     test('Request changes is in the Approve bar beside Approve, and its form stays in view', async ({ page, context }) => {
       await mockApi(context);
       await page.goto('/app/#/o/a/prs/spec%2Fc');
@@ -913,6 +1016,7 @@ test.describe('Request changes', () => {
     });
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test('a 403 says write access is needed and leaves Request changes usable', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(REQUEST, 403, { error: 'permission' });
@@ -922,6 +1026,39 @@ test.describe('Request changes', () => {
     await page.locator('.approve-bar .fbform button.send').click();
     await expect(page.locator('.approve-bar .fbform .err')).toContainText('needs write access');
     await expect(page.locator('.approve-bar .fbform button.send')).toBeEnabled();
+  });
+
+  // req:web/review-in-the-browser@9b9f5325
+  test("a comment's 403 says read access is needed, and the form stays usable with its text", async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.fail(COMMENTS, 403, { error: 'permission' });
+    await page.goto('/app/#/o/a/prs/spec%2Fc');
+    const intent = page.locator('.review .intent');
+    await intent.locator('button.comment').click();
+    await intent.locator('textarea').fill('Why now?');
+    await intent.locator('button.send').click();
+    await expect(intent.locator('.fbform .err')).toContainText('needs read access');
+    await expect(intent.locator('textarea')).toHaveValue('Why now?');
+    await expect(intent.locator('button.send')).toBeEnabled();
+  });
+
+  // req:web/review-in-the-browser@9b9f5325
+  test('a 422 naming no field says the Worker refused the request, and a 500 says Not sent (500)', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    await page.goto('/app/#/o/a/prs/spec%2Fc');
+    await page.locator('.approve-bar button.request').click();
+    const form = page.locator('.approve-bar .fbform');
+    await form.locator('textarea').fill('Split it');
+    for (const [status, says] of [
+      [422, 'Not sent: the Worker refused the request.'],
+      [500, 'Not sent (500).'],
+    ] as const) {
+      mock.fail(REQUEST, status, status === 422 ? {} : undefined);
+      await form.locator('button.send').click();
+      await expect(form.locator('.err')).toHaveText(says);
+      await expect(form.locator('textarea')).toHaveValue('Split it');
+      await expect(form.locator('button.send')).toBeEnabled();
+    }
   });
 });
 
@@ -989,8 +1126,8 @@ test.describe('proposals', () => {
   });
 });
 
-// req:web/latest-navigation-wins@d93cb8bd
 test.describe('latest navigation wins', () => {
+  // req:web/latest-navigation-wins@ed849c57
   test('opened at the app root: the route becomes the first repo graph', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos'] = [
@@ -1002,6 +1139,7 @@ test.describe('latest navigation wins', () => {
     expect(new URL(page.url()).hash).toBe('#/o/a/graph');
   });
 
+  // req:web/latest-navigation-wins@ed849c57
   test('a navigation made while the repo list is pending is not undone by its answer', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.hold('GET /api/repos');
@@ -1013,10 +1151,20 @@ test.describe('latest navigation wins', () => {
     expect(new URL(page.url()).hash).toBe('#/o/a/prs/spec%2Fc');
     await expect(page.locator('button.approve')).toBeVisible();
   });
+
+  // req:web/latest-navigation-wins@ed849c57
+  test('no repos: the page says No CLM repos yet and links to installing the App, the route unchanged', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos'] = [];
+    await page.goto('/app/');
+    await expect(page.locator('h1')).toHaveText('No CLM repos yet');
+    await expect(page.locator('a', { hasText: 'Install the GitHub App' })).toHaveAttribute('href', 'https://github.com/apps/clm-spec-review/installations/new');
+    expect(new URL(page.url()).hash).toBe('');
+  });
 });
 
-// req:web/links-to-site@110ad07e
 test.describe('links to the site', () => {
+  // req:web/links-to-site@110ad07e
   test('desktop sidebar: the logo links to / and Guide sits beside Add repos', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -1034,6 +1182,7 @@ test.describe('links to the site', () => {
     expect(sameFoot).toBe(true);
   });
 
+  // req:web/links-to-site@110ad07e
   test('phone top bar: begins with a homepage link before the repo switcher', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 390, height: 844 });
@@ -1047,7 +1196,7 @@ test.describe('links to the site', () => {
   });
 });
 
-// req:web/sign-in-early-access@50c354b1
+// req:web/sign-in-early-access@c4497420
 test('the sign-in page says CLM works without the web app and links to early access', async ({ page, context }) => {
   await context.route('**/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
   await page.goto('/app/');

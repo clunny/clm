@@ -1,8 +1,8 @@
 // The app shell: a sidebar at 900 px and wider, a bottom tab bar below, a hash router over
 // the views, the offline banner (web/mobile-layout, web/installable), the data the app holds
 // for the repo on screen, the approval of a spec branch (web/approve-by-branch), a decision
-// on a capability or an architectural constraint (web/decide-buttons,
-// web/architecture-decide-buttons), and the refresh that keeps the view current while
+// on a capability or an architectural constraint (web.views/decide-buttons,
+// web.views/architecture-decide-buttons), and the refresh that keeps the view current while
 // the page is visible (web/live-refresh).
 
 import './styles.css';
@@ -107,7 +107,7 @@ const accepted = new Set<string>();
 let note: { key: string; text: string } | null = null;
 
 /** The service worker: it precaches the shell (web/installable) and shows pushes
- * (web/push-shown). */
+ * (web.client-live/push-shown). */
 const worker = 'serviceWorker' in navigator ? navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }) : Promise.reject(new Error('no service worker'));
 worker.catch(() => undefined);
 // The app's old worker was registered at the site's root: no browser that installed the app
@@ -119,7 +119,7 @@ if ('serviceWorker' in navigator) {
     .catch(() => undefined);
 }
 
-/** The Notify me switches (web/notify-switch). */
+/** The Notify me switches (web.client-live/notify-switch). */
 const notify = new Notify({
   // `ready`, once the registration succeeded: subscribing needs an active worker.
   pushManager: async () => ('Notification' in window && 'PushManager' in window && (await worker.then(() => true, () => false)) ? (await navigator.serviceWorker.ready).pushManager : null),
@@ -134,7 +134,12 @@ const notify = new Notify({
   permission: () => Notification.permission,
   requestPermission: () => Notification.requestPermission(),
   subscribed: async (base, endpoint, fresh) => (await get<{ subscribed?: boolean }>(`${base}/push?endpoint=${encodeURIComponent(endpoint)}`, { live: true, fresh, keep: false })).data.subscribed === true,
-  send,
+  // A switch's write that is answered 401 shows the sign-in page (web/app-writes).
+  send: (method, path, body) =>
+    send(method, path, body).catch((e: unknown) => {
+      if (e instanceof SignedOut) showSignIn();
+      throw e;
+    }),
   apiBase,
   online: () => !offline(),
   storage: {
@@ -405,7 +410,7 @@ interface PageContext {
   full: FullDocument | null;
 }
 
-/** A spec branch's review, with Approve (web/spec-branch-review, web/approve-by-branch). */
+/** A spec branch's review, with Approve (web.views/spec-branch-review, web/approve-by-branch). */
 async function prPage(route: Route, base: string, snap: Snapshot, first: Review, ctx: PageContext): Promise<HTMLElement> {
   const { owner = '', repo = '' } = route;
   const t = route.review!;
@@ -449,7 +454,7 @@ async function prPage(route: Route, base: string, snap: Snapshot, first: Review,
     }
   };
   const MOVED = 'The branch changed since this review was shown: here it is as it is now. Review it again before approving.';
-  /** Posts a comment or a request for changes (web/comment-on-review, web/request-changes):
+  /** Posts a comment or a request for changes (web.views/comment-on-review, web.views/request-changes):
    * null once the Worker took it, else why not, for the form to show. On success, and when
    * the branch moved (409), the review is loaded again and drawn once the form has settled,
    * so a sent form closes and a refused one keeps its text for the review now on screen. */
@@ -471,7 +476,7 @@ async function prPage(route: Route, base: string, snap: Snapshot, first: Review,
         return `Not sent (${res.status}).`;
       } catch (e) {
         if (e instanceof SignedOut) showSignIn();
-        return notSent(e);
+        return notSent();
       }
     });
   const act = async () => {
@@ -479,7 +484,7 @@ async function prPage(route: Route, base: string, snap: Snapshot, first: Review,
     await whileWriting(async () => {
       try {
         const res = await post(`${base}/${reviewPath(t)}/approve`, { fingerprint: review.fingerprint });
-        // The repository became signed after the review was drawn (web/signed-approvals).
+        // The repository became signed after the review was drawn (web.views/signed-approvals).
         const signed = res.status === 422 && (await res.json().catch(() => null))?.error === 'signed';
         if (res.ok) {
           accepted.add(shownKey());
@@ -506,7 +511,9 @@ async function prPage(route: Route, base: string, snap: Snapshot, first: Review,
           }
         }
       } catch (e) {
-        say(e instanceof SignedOut ? `Signed out. Sign in again to approve.` : `Offline: approve when back online.`);
+        // Signed out: the sign-in page, which nothing then draws over (web/app-writes).
+        if (e instanceof SignedOut) return showSignIn();
+        say('Offline: approve when back online.');
       }
       // Drawn again, so the button reflects the outcome: disabled once accepted, else enabled.
       await render();
@@ -562,10 +569,8 @@ async function refusedField(res: Response): Promise<string> {
   return typeof field === 'string' ? field : 'request';
 }
 
-/** Why a write that threw wasn't sent. */
-function notSent(e: unknown): string {
-  return e instanceof SignedOut ? 'Signed out. Sign in again to send it.' : 'Not sent: offline.';
-}
+/** Why a write that threw wasn't sent: signed out shows the sign-in page in its place. */
+const notSent = () => 'Not sent: offline.';
 
 /** Asks the Worker for the implementation state again, never the copy kept for offline use,
  * and draws the view on screen anew; a failure leaves the state for the next refresh. */
@@ -581,7 +586,7 @@ async function reloadImpl(base: string) {
   if (held.base === base) await draw(appRoute(location.hash), showing);
 }
 
-/** Proposes an item for the backlog (web/propose-from-backlog): null once the Worker took it
+/** Proposes an item for the backlog (web.views/propose-from-backlog): null once the Worker took it
  * and the implementation state was asked for again, else why not, for the form to show. */
 function propose(base: string, title: string, body: string): Promise<string | null> {
   return whileWriting(async () => {
@@ -596,7 +601,7 @@ function propose(base: string, title: string, body: string): Promise<string | nu
       return `Not proposed (${res.status}).`;
     } catch (e) {
       if (e instanceof SignedOut) showSignIn();
-      return notSent(e);
+      return notSent();
     }
   });
 }
@@ -610,7 +615,7 @@ function withdraw(base: string, id: string): Promise<string | null> {
       if (!res.ok) return `Not withdrawn (${res.status}).`;
     } catch (e) {
       if (e instanceof SignedOut) showSignIn();
-      return e instanceof SignedOut ? 'Signed out.' : 'Not withdrawn: offline.';
+      return 'Not withdrawn: offline.';
     }
     await reloadImpl(base);
     return null;
@@ -632,7 +637,7 @@ function answerItem(base: string, slug: string, answer: string): Promise<string 
       return `The answer wasn't recorded (${res.status}).`;
     } catch (e) {
       if (e instanceof SignedOut) showSignIn();
-      return notSent(e);
+      return notSent();
     }
   });
 }
@@ -695,8 +700,8 @@ function homePage(base: string, snap: Snapshot, branches: SpecBranch[], route: A
 }
 
 /** The backlog, drawn from the snapshot first and marked with what holds each item once
- * the implementation state arrives (web/backlog-taken), with New proposal and Proposed
- * (web/propose-from-backlog). */
+ * the implementation state arrives (web.views/backlog-taken), with New proposal and Proposed
+ * (web.views/propose-from-backlog). */
 function backlogPage(base: string, snap: Snapshot, route: Route): HTMLElement {
   const { owner = '', repo = '' } = route;
   const back = href(owner, repo, 'backlog');
@@ -750,9 +755,9 @@ async function reloadReport(base: string, layer: Layer): Promise<boolean> {
   }
 }
 
-/** The Capabilities or Architecture list (web/capabilities-list, web/architecture-list), or
- * an entry's page with its decision (web/capability-page, web/decide-buttons,
- * web/architecture-page, web/architecture-decide-buttons), drawn from the report `held` has,
+/** The Capabilities or Architecture list (web.views/capabilities-list, web.views/architecture-list), or
+ * an entry's page with its decision (web.views/capability-page, web.views/decide-buttons,
+ * web.views/architecture-page, web.views/architecture-decide-buttons), drawn from the report `held` has,
  * which `page` checked: what is held for this repo, kept so that a redraw after another repo
  * was opened still draws this one's. */
 function reviewPage(layer: Layer, route: Route, base: string): HTMLElement {
@@ -1021,7 +1026,8 @@ async function show(nav = true) {
       showSignIn();
     } else {
       const f = classify(e);
-      app.replaceChildren(div('main', errorView(e)));
+      // Offline with nothing kept for the view: the banner says so (web/installable).
+      app.replaceChildren(div('main', navigator.onLine ? '' : div('offline', 'Offline'), errorView(e)));
       if (f.kind === 'preparing') retryTimer = setTimeout(() => void show(false), PREPARING_MS);
       else if (f.kind === 'retry') retryTimer = setTimeout(() => void show(false), retryDelay(attempts++));
     }
@@ -1054,7 +1060,8 @@ function sans(v: unknown, key: string): unknown {
  * when an answer differs; otherwise leaves it as it is. A failure leaves it too, except that
  * being signed out shows the sign-in page. */
 async function refresh(fresh?: string) {
-  if (writes > 0 || document.visibilityState !== 'visible' || !held.snap) return;
+  // The sign-in page a write's 401 showed stays: no refresh draws over it (web/app-writes).
+  if (signedOutShown || writes > 0 || document.visibilityState !== 'visible' || !held.snap) return;
   const route = appRoute(location.hash);
   if (!route.owner || !route.repo || apiBase(route.owner, route.repo) !== held.base) return;
   const base = held.base;
@@ -1075,7 +1082,7 @@ async function refresh(fresh?: string) {
       need.arch ? live<Architecture>(`${base}/architecture`) : null,
       ...reviewUrls.map((u) => live<Review>(u).then((r) => [u, r] as const)),
     ]);
-    if (ticket !== showing || base !== held.base || writes > 0 || wrote !== since) return;
+    if (ticket !== showing || base !== held.base || writes > 0 || wrote !== since || signedOutShown) return;
     let changed = JSON.stringify(snap) !== JSON.stringify(held.snap) || JSON.stringify(branches) !== JSON.stringify(held.branches);
     if (impl && sans(impl, 'now') !== sans(held.impl, 'now')) changed = true;
     if (caps && JSON.stringify(caps) !== JSON.stringify(held.caps)) changed = true;
@@ -1135,7 +1142,7 @@ function pumpNotice() {
   startRefresh(d ?? undefined);
 }
 
-/** The repo's live socket (web/live-updates): each notice refreshes the view at once. */
+/** The repo's live socket (web.client-live/live-updates): each notice refreshes the view at once. */
 const live = new LiveSocket(
   (url) => new WebSocket(url),
   (delivery) => {

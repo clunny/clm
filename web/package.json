@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc --noEmit && vite build",
     "deploy:check": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
-    "build:worker":"cd ../crates/clm-web && cargo install -q worker-build --version 0.8.7 --locked && worker-build --release",
+    "build:worker": "cd ../crates/clm-web && cargo install -q worker-build --version 0.8.7 --locked && worker-build --release",
     "preview": "vite preview",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
@@ -20,7 +20,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",
-    "wrangler": "^4.158.0"
+    "wrangler": "^4.158.0",
+    "yaml": "^2.9.1"
   },
   "dependencies": {
     "diff": "^9.0.0",
