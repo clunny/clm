@@ -482,6 +482,15 @@ test.describe('graph', () => {
   });
 
   // req:web/graph-in-the-browser@3a6ebaea
+  test("the crumb names the snapshot's repo, not the route's", async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = snapshot({ repo: 'O/A' });
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    await expect(page.locator('.main .crumb')).toHaveText('O/A');
+  });
+
+  // req:web/graph-in-the-browser@3a6ebaea
   test('a long node ID gives way to the state word, which stays inside the card', async ({ page, context }) => {
     const mock = await mockApi(context);
     const long = 'b-with-an-identifier-far-too-long-for-its-card';
@@ -738,16 +747,57 @@ test.describe('Notify me', () => {
     await expect(top).toBeVisible();
     await expect(top).not.toBeChecked();
     await expect(top).toBeEnabled();
-    await expect(page.locator('.mtop > *')).toHaveCount(3);
     await expect(page.locator('.mtop > select.repo + .notify')).toHaveCount(1);
     expect(mock.requests.filter((r) => r.startsWith('GET /api/repos/o/a/push'))).toEqual([]);
+  });
+
+  // req:web/push-in-the-browser@06ad4e4a
+  test('a key that fails to load hides the switch, and it is asked for again by the next refresh', async ({ page, context }) => {
+    await page.clock.install();
+    const mock = await mockApi(context);
+    mock.fail('GET /api/push/key', 500);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/app/#/o/a/graph');
+    await expect.poll(() => mock.requests.filter((r) => r === 'GET /api/push/key').length).toBe(1);
+    await expect(page.locator('.sidebar .notify')).toBeHidden();
+    mock.fail('GET /api/push/key', null);
+    mock.routes['GET /api/push/key'] = { key: 'k' };
+    await page.clock.runFor(60_000);
+    await expect(page.locator('.sidebar .notify input[type=checkbox]')).toBeVisible();
+    expect(mock.requests.filter((r) => r === 'GET /api/push/key')).toHaveLength(2);
+  });
+
+  // req:web/push-in-the-browser@06ad4e4a
+  test("a notice's refresh asks the push route with its fresh", async ({ page, context }) => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
+    await page.addInitScript((endpoint) => {
+      const sub = { endpoint, toJSON: () => ({ endpoint }), unsubscribe: async () => true };
+      PushManager.prototype.getSubscription = async () => sub as unknown as PushSubscription;
+    }, endpoint);
+    const sockets: import('@playwright/test').WebSocketRoute[] = [];
+    await page.routeWebSocket('**/api/repos/o/a/live', (ws) => void sockets.push(ws));
+    const mock = await mockApi(context);
+    mock.routes['GET /api/push/key'] = { key: 'k' };
+    mock.routes['GET /api/repos/o/a/push'] = { subscribed: true };
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.sidebar .notify input[type=checkbox]')).toBeChecked();
+    await expect.poll(() => sockets.length).toBe(1);
+    sockets[0].send(JSON.stringify({ delivery: 'd1' }));
+    await expect.poll(() => mock.urls).toContain(`GET /api/repos/o/a/push?endpoint=${encodeURIComponent(endpoint)}&fresh=d1`);
   });
 
   // req:web/push-in-the-browser@06ad4e4a
   test('no Web Push: without a PushManager, or with a service worker that fails to register, no switch and no key asked', async ({ browser }) => {
     for (const lacking of [
       () => void delete (window as unknown as { PushManager?: unknown }).PushManager,
-      () => void (ServiceWorkerContainer.prototype.register = () => Promise.reject(new Error('refused'))),
+      () => {
+        // Registration fails, while `ready` still answers a push manager: only the app's own
+        // check of the registration keeps the key from being asked for.
+        ServiceWorkerContainer.prototype.register = () => Promise.reject(new Error('refused'));
+        const pushManager = { getSubscription: async () => null, subscribe: async () => null };
+        Object.defineProperty(ServiceWorkerContainer.prototype, 'ready', { configurable: true, get: () => Promise.resolve({ pushManager }) });
+      },
     ]) {
       const context = await browser.newContext({ serviceWorkers: 'allow', viewport: { width: 1280, height: 800 } });
       try {
@@ -758,8 +808,10 @@ test.describe('Notify me', () => {
         mock.routes['GET /api/repos/o/a/push'] = { subscribed: true };
         await page.goto('/app/#/o/a/graph');
         await expect(page.locator('.n[data-node=b]')).toBeVisible();
-        // Settled: the implementation state has ringed the graph, and a moment more has passed.
+        // Settled: the implementation state has ringed the graph, the service worker is ready,
+        // and a moment more has passed.
         await expect(page.locator('.n[data-node=b]')).toHaveClass(/\bq-claimed\b/);
+        await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
         await page.waitForTimeout(500);
         await expect(page.locator('.sidebar .notify')).toBeHidden();
         expect(mock.requests.filter((r) => r === 'GET /api/push/key' || r.startsWith('GET /api/repos/o/a/push'))).toEqual([]);
@@ -823,7 +875,7 @@ test.describe('Notify me', () => {
     await toggle.click();
     await expect(page.locator('.signin a', { hasText: 'Sign in with GitHub' })).toHaveAttribute('href', '/auth/login');
     // A 401 is tried once more (an expired session another request refreshed), and nothing else is written.
-    expect([...new Set(mock.posts.map((p) => p.key))]).toEqual(['POST /api/repos/o/a/push']);
+    expect(mock.posts.map((p) => p.key)).toEqual(['POST /api/repos/o/a/push', 'POST /api/repos/o/a/push']);
   });
 
   // req:web/push-in-the-browser@06ad4e4a

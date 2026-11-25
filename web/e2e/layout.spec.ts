@@ -213,7 +213,7 @@ test.describe('the inspector is an overlay', () => {
     const after = (await page.locator('.canvas').boundingBox())!;
     expect(after.width).toBe(before.width);
     const box = (await drawer.boundingBox())!;
-    expect(box.width).toBeLessThanOrEqual(Math.min(640, 0.9 * 1280));
+    expect(box.width).toBeLessThanOrEqual(640);
     expect(Math.round(box.x + box.width)).toBe(1280);
     expect(box.x).toBeLessThan(after.x + after.width);
     expect(box.height).toBeLessThanOrEqual(900);

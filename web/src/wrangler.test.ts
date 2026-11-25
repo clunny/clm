@@ -8,12 +8,22 @@ import { describe, expect, it } from 'vitest';
 
 /** `web/`, where the deploy runs `wrangler`. */
 const WEB = fileURLToPath(new URL('..', import.meta.url));
-process.chdir(WEB);
+
+/** `read` run in `web/`, as a deploy runs `wrangler` there, and then back where it was. */
+function inWeb<T>(read: () => T): T {
+  const was = process.cwd();
+  process.chdir(WEB);
+  try {
+    return read();
+  } finally {
+    process.chdir(was);
+  }
+}
 
 describe('wrangler.toml', () => {
   // The file wrangler finds from `web/`, as it is written and as wrangler reads it for a deploy.
-  const { rawConfig } = experimental_readRawConfig({});
-  const config = unstable_readConfig({}, {});
+  const { rawConfig } = inWeb(() => experimental_readRawConfig({}));
+  const config = inWeb(() => unstable_readConfig({}, {}));
 
   it('binds the Live class as LIVE in a SQLite migration (req:web/live-binding@a60502c6)', () => {
     expect(rawConfig.durable_objects?.bindings).toContainEqual(

@@ -25,7 +25,7 @@ async function visibility(page: Page, state: 'hidden' | 'visible') {
 async function liveSocket(page: Page) {
   const sockets: WebSocketRoute[] = [];
   const closed: number[] = [];
-  await page.routeWebSocket('**/api/repos/o/a/live', (ws) => {
+  await page.routeWebSocket(/\/api\/repos\/[^/]+\/[^/]+\/live$/, (ws) => {
     const n = sockets.push(ws) - 1;
     ws.onMessage((m) => {
       if (m === 'ping') ws.send('pong');
@@ -69,20 +69,27 @@ test.describe('live updates', () => {
   });
 
   // req:web/notice-refresh@91921a88
-  test('another repo shown: the socket for o/a is closed', async ({ page, context }) => {
+  test("another repo shown: the socket for o/a is closed, and only o/b's is open", async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
     mock.routes['GET /api/repos'] = [
       { owner: 'o', name: 'a', default_branch: 'main' },
-      { owner: 'p', name: 'q', default_branch: 'main' },
+      { owner: 'o', name: 'b', default_branch: 'main' },
     ];
+    mock.routes['GET /api/repos/o/b/snapshot'] = snapshot({ repo: 'o/b' });
+    mock.routes['GET /api/repos/o/b/branches'] = [];
+    mock.routes['GET /api/repos/o/b/implementation'] = implementation();
     const live = await liveSocket(page);
     await page.goto('/app/#/o/a/graph');
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
     await expect.poll(() => live.sockets.length).toBe(1);
-    await page.goto('/app/#/p/q/graph');
+    await page.evaluate(() => (location.hash = '#/o/b/graph'));
     await expect.poll(() => live.closed).toEqual([0]);
-    expect(live.sockets).toHaveLength(1);
+    await expect.poll(() => live.sockets.length).toBe(2);
+    expect(new URL(live.sockets[1].url()).pathname).toBe('/api/repos/o/b/live');
+    await page.waitForTimeout(300);
+    expect(live.closed).toEqual([0]);
+    expect(live.sockets).toHaveLength(2);
   });
 
   // req:web/notice-refresh@91921a88
@@ -111,6 +118,10 @@ test.describe('live updates', () => {
     await expect.poll(() => live.sockets.length).toBe(1);
     await context.setOffline(true);
     await expect.poll(() => live.closed).toEqual([0]);
+    // None is opened while offline, through a refresh's tick too.
+    await page.clock.runFor(60_000);
+    await page.waitForTimeout(300);
+    expect(live.sockets).toHaveLength(1);
     await context.setOffline(false);
     await expect.poll(() => live.sockets.length).toBe(2);
   });

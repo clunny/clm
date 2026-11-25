@@ -79,11 +79,13 @@ async function signedOut(context: BrowserContext): Promise<void> {
   await context.route('**/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
 }
 
-/** The invited logins of the spec's Contract, read apart from the build's own reader. */
+/** The invited logins of the spec's Contract, the bullets of its Invited users paragraph,
+ * read apart from the build's own reader. */
 function contractLogins(): string[] {
-  const spec = readFileSync(fileURLToPath(new URL('../../specs/web/SPEC.md', import.meta.url)), 'utf8');
+  const spec = readFileSync(fileURLToPath(new URL('../../specs/web/SPEC.md', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
   const contract = spec.split('\n## Contract\n')[1].split('\n## ')[0];
-  return [...contract.matchAll(/^- `([^`]+)`$/gm)].map((m) => m[1]);
+  const invited = contract.split('**Invited users**')[1].split('\n**')[0];
+  return [...invited.matchAll(/^- `([^`]+)`$/gm)].map((m) => m[1]);
 }
 
 test.describe('app at /app/', () => {
