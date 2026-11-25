@@ -28,6 +28,8 @@ resolves: [mutate-script-s-strykerjs-fixture-runs-its-tests-whether-or-not-vites
 - The fixture stays written by the script and tracked nowhere, inside the npm directory being judged, with that directory's own vitest and TypeScript (`mutate-script`'s fixture rule).
 - Nothing in the land check runs the real tools (`land-checks-stay-fast`); the fake-`npx` tests prove the plumbing, the fixture proves the tool.
 - Edge cases known now: the import-free test runs in node's environment, as the noticing test does, and reads a file outside the npm directory by a path relative to its own file, so it also needs the sandbox's links; no workaround is expected.
+- Settled by the builder check: the run of the import-free test reports at least one mutant, every one `NoCoverage` (a `CompileError` or an empty report fails it); it uses the noticing test's ranges (`fixture.ts:1-1`) and comes after the fixture's other two runs, so the existing fake cases fail on the run they describe. The fake `npx` of `ci_check.rs` must tell this run apart by the test files its vitest configuration includes, since it shares the noticing run's ranges, and two tests' StrykerJS run counts rise by one. No test is deleted.
+- Assumed, not yet shown by a real run: StrykerJS 10.1.1 exits 0 with every mutant `NoCoverage` for a lone test that imports nothing, with `related` false. `dcee2c44`'s passes showed both halves on `web`'s file-reading blocks; the fixture's first pass confirms it.
 
 ## What the requirements no longer state
 
