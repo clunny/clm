@@ -32,7 +32,7 @@ fn two_drafts_for_review(fx: &Fixture) {
 
 #[test]
 fn fold_while_builds_run() {
-    // req:orchestrator.loop/plan-fold@fbfc873a
+    // req:orchestrator.loop/plan-fold@8ba8099e
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     let actions = step(&fx.options()).unwrap();
@@ -55,7 +55,7 @@ fn fold_while_builds_run() {
 
 #[test]
 fn no_fold_while_a_draft_runs_but_one_while_draining() {
-    // req:orchestrator.loop/plan-fold@fbfc873a
+    // req:orchestrator.loop/plan-fold@8ba8099e
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     fx.add_run(run(
@@ -75,7 +75,7 @@ fn no_fold_while_a_draft_runs_but_one_while_draining() {
 
 #[test]
 fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
-    // req:orchestrator.loop/plan-fold@fbfc873a
+    // req:orchestrator.loop/plan-fold@8ba8099e
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     step(&fx.options()).unwrap();
@@ -135,7 +135,7 @@ fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
 
 #[test]
 fn a_fold_that_proposes_nothing_is_told_to_the_session() {
-    // req:orchestrator.loop/plan-fold@fbfc873a
+    // req:orchestrator.loop/plan-fold@8ba8099e
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     step(&fx.options()).unwrap();
@@ -159,18 +159,39 @@ fn a_fold_that_proposes_nothing_is_told_to_the_session() {
         "{review:?}"
     );
 
-    // An approved batch whose land fails is said and goes back to the human.
+    // An approved batch whose land fails, once its rebase run since the approval has returned
+    // `proposed b review`, is said and goes back to the human.
     clm_loop::update(&fx.work, |f| {
         f.batches.push(Batch {
             id: "b".to_string(),
             approved: false,
             drafts: vec!["x".to_string(), "y".to_string()],
             since: clm_git::now(),
+            rebase: Default::default(),
         });
         Ok(())
     })
     .unwrap();
     approved(&fx.options(), "b").unwrap();
+    let first = returned(
+        &fx.options(),
+        "land:b",
+        None,
+        "stopped: conflicts",
+        None,
+        None,
+    )
+    .unwrap();
+    line(&first, "launch rebase:b fold ");
+    returned(
+        &fx.options(),
+        "rebase:b",
+        None,
+        "proposed b review",
+        None,
+        None,
+    )
+    .unwrap();
     let actions = returned(
         &fx.options(),
         "land:b",
@@ -190,7 +211,7 @@ fn a_fold_that_proposes_nothing_is_told_to_the_session() {
 
 #[test]
 fn approval_of_an_unknown_batch() {
-    // req:orchestrator.loop/plan-fold@fbfc873a
+    // req:orchestrator.loop/plan-fold@8ba8099e
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     let file = fx.loop_dir().join("loop");

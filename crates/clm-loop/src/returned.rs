@@ -6,7 +6,7 @@ use clm_git::{Failure, now};
 use crate::Options;
 use crate::cmd::{clm, say};
 use crate::escalate;
-use crate::state::{self, Batch, Escalation, Kind, LoopFile, Run, RunState};
+use crate::state::{self, Batch, Escalation, Kind, LoopFile, Rebase, Run, RunState};
 use crate::stops::{self, CAUSES, Verdict};
 
 /// What finishing a run came to.
@@ -388,7 +388,18 @@ pub fn returned(
     let filed = escalation
         .as_ref()
         .map(|(slug, text)| (slug.clone(), escalate::land(options, slug, text).is_ok()));
-    let say_fold = (run.kind == Some(Kind::Fold) && proposed.is_none() && !landed)
+    // A `rebase:<batch>` run brings an approved batch up to date: its `proposed <batch>` line
+    // lets the plan land the batch again, and any other line puts the batch back in the human's
+    // queue (`failed-batch-land-rebased`).
+    let rebase = name
+        .strip_prefix("rebase:")
+        .filter(|_| run.kind == Some(Kind::Fold));
+    if let Some(batch) = rebase
+        && proposed.as_deref() != Some(batch)
+    {
+        lines.push(rebase_failed(options, name, line)?);
+    }
+    let say_fold = (run.kind == Some(Kind::Fold) && rebase.is_none() && proposed.is_none() && !landed)
         .then(|| {
             let id = name.strip_prefix("fold:").unwrap_or(name);
             format!(
@@ -402,11 +413,13 @@ pub fn returned(
         let session_model = f.session_model.clone();
         if let Some(id) = &proposed {
             match run.kind {
+                Some(Kind::Fold) if rebase.is_some() => {}
                 Some(Kind::Fold) => f.batches.push(Batch {
                     id: id.clone(),
                     approved: false,
                     drafts: run.items.clone(),
                     since: now(),
+                    rebase: Rebase::None,
                 }),
                 _ if !f.review.contains(id) => f.review.push(id.clone()),
                 _ => {}
@@ -437,7 +450,8 @@ pub fn returned(
             if let (Some(c), Some(verdict)) = (&stopped_for, &verdict) {
                 *r.stops.entry(c.clone()).or_insert(0) += 1;
                 r.log.push(format!("{c}: {line}"));
-                if *verdict == Verdict::Rebuild {
+                // A rebase run is launched once per approval: its batch went back to the human.
+                if *verdict == Verdict::Rebuild && rebase.is_none() {
                     // A new subagent, on the session's model, in the next round.
                     r.state = RunState::Stopped;
                     r.orphan = true;
@@ -477,10 +491,14 @@ fn land_returned(
         .unwrap_or(&run.name)
         .to_string();
     let landed = line.starts_with("landed ");
-    let drafts = state::read(&options.root)
+    let (drafts, rebased) = state::read(&options.root)
         .and_then(|f| f.batches.iter().find(|b| b.id == batch).cloned())
-        .map(|b| b.drafts)
+        .map(|b| (b.drafts, b.rebase))
         .unwrap_or_default();
+    let refused = line.contains("gate/approval");
+    // The first failed land after an approval, unless refused on `gate/approval`, keeps the batch
+    // approved for a rebase run (`failed-batch-land-rebased`).
+    let rebase_due = !landed && !refused && rebased == Rebase::None;
     let mut lines = Vec::new();
     if landed {
         for id in &drafts {
@@ -500,7 +518,14 @@ fn land_returned(
             }
             lines.extend(kept(options, &ran.stdout)?);
         }
-    } else if !line.contains("gate/approval") {
+    } else if refused && rebased == Rebase::Launched {
+        lines.push(say(
+            options,
+            &format!(
+                "fold batch {batch} was brought up to date with main, which changed its diff; approve it again"
+            ),
+        )?);
+    } else if !refused && !rebase_due {
         lines.push(say(
             options,
             &format!("the land of fold batch {batch} failed ({line}); it is back in your queue"),
@@ -510,6 +535,10 @@ fn land_returned(
         if landed {
             f.batches.retain(|b| b.id != batch);
             f.landed_since_verify = true;
+        } else if rebase_due {
+            if let Some(b) = f.batches.iter_mut().find(|b| b.id == batch) {
+                b.rebase = Rebase::Due;
+            }
         } else if let Some(b) = f.batches.iter_mut().find(|b| b.id == batch) {
             // Back in the human's queue.
             b.approved = false;
@@ -523,6 +552,27 @@ fn land_returned(
     })?;
     lines.extend(crate::step::next_actions(options, notes)?);
     Ok(lines)
+}
+
+/// Puts the batch of the rebase run `name` (`rebase:<batch>`) back in the human's queue,
+/// unapproved, after the run finished with `line` and no `proposed <batch>`; the `say` action
+/// telling it (`failed-batch-land-rebased`).
+pub(crate) fn rebase_failed(options: &Options, name: &str, line: &str) -> Result<String, Failure> {
+    let batch = name.strip_prefix("rebase:").unwrap_or(name);
+    let said = say(
+        options,
+        &format!(
+            "fold batch {batch} couldn't be brought up to date with main ({line}); it is back in your queue"
+        ),
+    )?;
+    state::update(&options.root, |f| {
+        if let Some(b) = f.batches.iter_mut().find(|b| b.id == batch) {
+            b.approved = false;
+            b.since = now();
+        }
+        Ok(())
+    })?;
+    Ok(said)
 }
 
 /// The return of `verify`, a `clm verify --due` the session ran (`plan-verify`).
