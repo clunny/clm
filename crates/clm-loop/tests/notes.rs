@@ -77,9 +77,9 @@ fn notes_reach_every_launch() {
     names_the_copy(&prompt(&first, "build:a"), &copy, "Keep the old tests.\n");
 
     // After the lease lapses, a start without notes relaunches `build:a` with them, writing the
-    // copy again with the prompt.
+    // copy again with the prompt, replacing what the file held.
     fx.set_lease(20);
-    fs::remove_file(&copy).unwrap();
+    fs::write(&copy, "Stale.").unwrap();
     let adopted = start(&fx.options(), "opus", false).unwrap();
     names_the_copy(&prompt(&adopted, "build:a"), &copy, "Keep the old tests.\n");
     let runs_of_a = fx
@@ -202,4 +202,5 @@ fn notes_of_white_space_add_no_section() {
         prompt(&actions, "build:a"),
         "loop run build:a\nlauncher for a\n"
     );
+    assert!(!copy_of(&fx, "build:a").exists());
 }
