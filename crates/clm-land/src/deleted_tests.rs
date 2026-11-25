@@ -3,7 +3,9 @@
 //! that, against its merge base with `base`, loses a citing test as
 //! `clm_coverage::deleted_tests` counts one gone (a test moved to another file, kept under its
 //! name whatever it now cites, or renamed in its own file to a name no test carried at the
-//! merge base, still citing all it cited, is not), unless a change's `deleted-tests.txt` in
+//! merge base, still citing all it cited, is not; but a gone uncited test of that file takes
+//! one of its new tests first, so the advice asks a renaming branch to remove none beside it),
+//! unless a change's `deleted-tests.txt` in
 //! `base`'s tree names each. Whatever the branch's name: only a replayed rename, which
 //! `rename/replay` vouches for, isn't judged. It reads the files of both trees under the CLM root that can hold
 //! a test (`check.coverage/test-holding-paths`), the rest holding none on either side, so it
@@ -85,10 +87,11 @@ pub(crate) fn check(repo: &Repo, base: &str, head: &str) -> Result<(), Error> {
             (!named).then(|| {
                 format!(
                     "{file}: {RULE}: test {name}, which cited {}, is gone and no approved list \
-                     names it. Keep the test under its name, citing any requirement, even \
-                     another than it cited; or rename it in its file to a name no test carried \
-                     at the merge base, citing every requirement it cited; or leave the \
-                     requirement unbuilt and add a question item",
+                     names it. Keep the test under its name, citing any requirement, even one \
+                     it didn't cite; or rename it in its file to a name no test carried at the \
+                     merge base, citing every requirement it cited, and remove no uncited test \
+                     from that file on the same branch; or leave the requirement unbuilt and \
+                     add a question item",
                     t.ids.join(", ")
                 )
             })
@@ -118,7 +121,7 @@ mod tests {
 
     #[test]
     fn lists_live_and_archived() {
-        // req:land/deleted-tests-approved@00650f33
+        // req:land/deleted-tests-approved@8b7c3461
         assert!(is_list("changes/c/deleted-tests.txt"));
         assert!(is_list("changes/archive/c/deleted-tests.txt"));
         assert!(!is_list("changes/c/deltas/deleted-tests.txt"));
