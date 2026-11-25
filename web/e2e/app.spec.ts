@@ -11,10 +11,10 @@ const withQuestion = () => {
   return snap;
 };
 
-// req:web/mobile-layout@cc420aa7
 test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
+  // req:web/mobile-layout@f24791e8
   test('a PR at 390 px: tab bar, no horizontal scroll, Approve in view', async ({ page, context }) => {
     // A PR long enough to scroll, with an ID too long for one line.
     const pr = review();
@@ -37,6 +37,7 @@ test.describe('phone', () => {
     expect(fits).toBe(true);
   });
 
+  // req:web/mobile-layout@f24791e8
   test('Home on a phone: no sideways scroll, and a question\'s answer buttons can be tapped', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
@@ -55,6 +56,7 @@ test.describe('phone', () => {
     await expect.poll(() => mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
   });
 
+  // req:web/mobile-layout@f24791e8
   test('every view fits the width', async ({ page, context }) => {
     await mockApi(context);
     for (const view of ['graph', 'prs', 'build', 'backlog', 'capabilities', 'capabilities/a', 'architecture', 'architecture/e', 'prs/spec%2Fc/full/specs/n/SPEC.md']) {
@@ -66,10 +68,21 @@ test.describe('phone', () => {
     }
   });
 
-  test('the tab bar badges the items waiting, and a tapped node opens a bottom sheet', async ({ page, context }) => {
+  // req:web/mobile-layout@f24791e8
+  test('badges: the tab bar\'s Backlog reads 1 and More\'s PRs 2', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
     await expect(page.locator('.tabbar a[data-view=backlog] .bdg')).toHaveText('1');
+    await page.locator('.tabbar .tab-more').tap();
+    await expect(page.locator('.more-menu a[data-view=prs] .bdg')).toHaveText('2');
+    await expect(page.locator('.more-menu a[data-view=capabilities] .bdg')).toHaveCount(0);
+  });
+
+  // req:web/mobile-layout@f24791e8
+  test('bottom sheet: a tapped component opens the inspector as a sheet ending above the tab bar', async ({ page, context }) => {
+    await mockApi(context);
+    await page.goto('/app/#/o/a/graph');
     await expect(page.locator('.insp')).toBeHidden();
     await page.locator('.n[data-node=b]').tap();
     const sheet = page.locator('.insp');
@@ -86,6 +99,7 @@ test.describe('phone', () => {
       .toBeLessThanOrEqual(Math.round(tabbar.y) + 1);
   });
 
+  // req:web/mobile-layout@f24791e8
   test('capabilities on a phone: cards, nothing scrolls sideways, and the decision buttons can be reached and tapped', async ({ page, context }) => {
     const mock = await mockApi(context);
     const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -123,6 +137,7 @@ test.describe('phone', () => {
     await expect.poll(() => mock.posts).toEqual([{ key: DECIDE, body: '{"version":"61000000","value":"low","decision":"cut"}' }]);
   });
 
+  // req:web/mobile-layout@f24791e8
   test('architecture on a phone: five tabs, More listing PRs, Capabilities and Arch., cards, nothing scrolls sideways, and the decision buttons can be reached and tapped', async ({ page, context }) => {
     const mock = await mockApi(context);
     const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -415,13 +430,44 @@ test.describe('deciding a capability', () => {
   });
 });
 
-test('wide screens get the sidebar and no tab bar', async ({ page, context }) => {
-  await mockApi(context);
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/app/#/o/a/backlog');
-  await expect(page.locator('.sidebar')).toBeVisible();
-  await expect(page.locator('.tabbar')).toBeHidden();
-  await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
+test.describe('wide screen', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  // req:web/mobile-layout@f24791e8
+  test('the sidebar lists the seven views in order with the repo\'s components and coverage, and the tab bar is hidden', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.sidebar')).toBeVisible();
+    await expect(page.locator('.tabbar')).toBeHidden();
+    const views = page.locator('.sidebar .nv[data-view]');
+    expect(await views.evaluateAll((all) => all.map((a) => a.getAttribute('data-view')))).toEqual(['home', 'graph', 'prs', 'build', 'backlog', 'capabilities', 'architecture']);
+    expect((await views.allInnerTexts()).map((t) => t.replace(/\s*\d+$/, '').trim())).toEqual(['Home', 'Spec graph', 'Spec PRs', 'Implementation', 'Backlog', 'Capabilities', 'Architecture']);
+    // The fixture's three components hold one current requirement of three.
+    await expect(page.locator('.sidebar .repo-meta')).toHaveText('3 components · 1/3 current');
+    mock.routes['GET /api/repos/o/a/snapshot'] = snapshot({ coverage: { state: 'indexing', done: 1 } });
+    await page.reload();
+    await expect(page.locator('.sidebar .repo-meta')).toHaveText('3 components · coverage indexing');
+  });
+
+  // req:web/mobile-layout@f24791e8
+  test('badges: the sidebar\'s Backlog reads 1 and Spec PRs 2', async ({ page, context }) => {
+    await mockApi(context);
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
+    await expect(page.locator('.sidebar .nv[data-view=prs] .c')).toHaveText('2');
+    await expect(page.locator('.sidebar .nv[data-view=graph] .c')).toHaveCount(0);
+  });
+
+  // req:web/mobile-layout@f24791e8
+  test('nothing is badged at 0', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/branches'] = [];
+    mock.routes['GET /api/repos/o/a/snapshot'] = snapshot({ backlog: [] });
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveCount(0);
+    await expect(page.locator('.sidebar .nv[data-view=prs] .c')).toHaveCount(0);
+  });
 });
 
 // req:web/review-in-the-browser@9b9f5325
