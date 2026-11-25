@@ -231,25 +231,29 @@ impl<S: Store, A: Alarm> Object<S, A> {
             if self.alarm.get().is_none() {
                 self.alarm.set(now);
             }
-        } else if matches!(event, "push" | "pull_request") {
-            self.meta.delivery = req["delivery"].as_str().map(String::from);
-            if event == "push" {
-                self.push(p, &b, body).await;
-            } else {
-                self.pull_request(p, &b, body).await;
+        } else {
+            let applied = match event {
+                "push" => self.push(p, &b, body).await,
+                "pull_request" => self.pull_request(p, &b, body).await,
+                _ => false,
+            };
+            // Only an event applied names the next notice's delivery and sets the alarm.
+            if applied {
+                self.meta.delivery = req["delivery"].as_str().map(String::from);
+                self.batch(now);
             }
-            self.batch(now);
         }
         self.save();
         Answer::empty(202)
     }
 
-    async fn push<P: Host>(&mut self, p: &P, b: &Budget, body: &Value) {
+    /// Applies a push; answers whether it applied anything, which a tag's push doesn't.
+    async fn push<P: Host>(&mut self, p: &P, b: &Budget, body: &Value) -> bool {
         let Some(branch) = body["ref"]
             .as_str()
             .and_then(|r| r.strip_prefix("refs/heads/"))
         else {
-            return;
+            return false;
         };
         let now = p.now();
         let after = body["after"].as_str().unwrap_or_default();
@@ -294,6 +298,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
             self.move_ref(p, b, branch, (!deleted).then_some(after), at)
                 .await;
         }
+        true
     }
 
     /// The default branch is at `after`: fetches what the compare lists when it is a
@@ -506,8 +511,11 @@ impl<S: Store, A: Alarm> Object<S, A> {
         }
     }
 
-    async fn pull_request<P: Host>(&mut self, p: &P, b: &Budget, body: &Value) {
+    /// Applies a `pull_request` event and sends the review notice it calls for; answers
+    /// whether it applied anything, which an event naming no pull request doesn't.
+    async fn pull_request<P: Host>(&mut self, p: &P, b: &Budget, body: &Value) -> bool {
         let pr = &body["pull_request"];
+        let mut applied = false;
         if let (Some(number), Some(head), Some(base)) = (
             pr["number"].as_u64(),
             pr["head"]["ref"].as_str(),
@@ -530,6 +538,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 self.meta.pulls.remove(&number);
             }
             self.replica.apply(Change::Pull(pull));
+            applied = true;
         }
         if clm_web_live::review_notice(&self.name, body).is_some()
             && p.secret("VAPID_PUBLIC_KEY").is_some()
@@ -545,6 +554,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
             )
             .await;
         }
+        applied
     }
 
     // ---- GET /view/<name>

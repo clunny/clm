@@ -279,6 +279,13 @@ fn signed() {
                 "command": "clm architecture decide e --value high --decision keep"})
         )
     );
+    // An entry the tip doesn't hold is refused before the signing is.
+    let nope = sent(
+        &fake,
+        &mut object,
+        &decision("capability/nope", "v1", "high"),
+    );
+    assert_eq!(nope, (422, Value::Null));
     assert!(fake.gh.writes().is_empty(), "nothing was appended");
 }
 

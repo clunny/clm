@@ -363,6 +363,12 @@ fn a_claim_lapses_while_a_page_is_open() {
     let before = view(&fake, &mut object, "implementation");
     assert!(claimed(&before), "{before}");
     let earlier = notices(&fake);
+    // A tag's push applies nothing: its delivery is no event the next notice may name.
+    let alarm = slot.0.get();
+    let mut tag = push("main", "0", "c1");
+    tag["ref"] = json!("refs/tags/v1");
+    block_on(object.event(&fake, &event("push", "dt", tag)));
+    assert_eq!(slot.0.get(), alarm, "nothing applied sets no alarm");
     let mut fired = Vec::new();
     // `replica`'s `recompute` names the lapse as the time the view next changes, but the
     // claim reads live at that instant and lapsed a second on, so the alarms run to that
@@ -392,7 +398,7 @@ fn a_claim_lapses_while_a_page_is_open() {
             "{delivery}"
         );
         // It names no event: neither the push's delivery nor an earlier notice's.
-        assert_ne!(delivery, "d1");
+        assert!(delivery != "d1" && delivery != "dt", "{delivery}");
         assert!(
             !earlier.iter().any(|e| e.contains(delivery)),
             "{delivery} named before"
