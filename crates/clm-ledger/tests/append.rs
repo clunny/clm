@@ -44,7 +44,8 @@ fn first_record() {
     assert_eq!(r["change"], "x");
     assert_eq!(r["writer"], out.record.writer.as_str());
     assert!(r["writer"].as_str().unwrap().starts_with("ann/"));
-    // `YYYY-MM-DDTHH:MM:SS.mmmZ`, in UTC.
+    // `YYYY-MM-DDTHH:MM:SS.mmmZ`, in UTC, as `rfc3339` writes it.
+    // req:ledger/record-times@62673566
     let at = r["at"].as_str().unwrap();
     let mut form = at.bytes().zip("dddd-dd-ddTdd:dd:dd.dddZ".bytes());
     assert!(
@@ -56,6 +57,15 @@ fn first_record() {
             }),
         "{at}"
     );
+    // The instant now, in UTC, written back exactly as `rfc3339` writes it.
+    let secs = clm_ledger::unix_time(at).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    assert!(now.abs_diff(secs) < 120, "{at}");
+    let millis: u32 = at[20..23].parse().unwrap();
+    assert_eq!(clm_ledger::rfc3339(secs, millis), at);
     let id = r["id"].as_str().unwrap();
     assert!(
         id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit()),

@@ -5,6 +5,7 @@ mod change_ids;
 mod doc_only;
 mod fold;
 mod record;
+mod times;
 
 pub use change_ids::change_ids;
 pub use doc_only::{doc_only, legacy_doc_only};
@@ -13,6 +14,7 @@ pub use record::{
     Basis, Body, Decision, LandKind, Rating, Recheck, Record, TimedStep, Usage, VerifyMode,
     signed_message,
 };
+pub use times::{rfc3339, unix_time};
 
 #[cfg(feature = "git")]
 mod append;
