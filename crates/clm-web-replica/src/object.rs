@@ -16,7 +16,7 @@ use clm_web_platform::install;
 use clm_web_platform::platform::Auth;
 
 use crate::Host;
-use clm_web_platform::{files, ledger};
+use clm_web_platform::ledger;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -581,6 +581,14 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 self.batch(now);
             }
         }
+        // Files still to fetch, as a replica a newer release loaded lists, bring the alarm
+        // forward; the read answers the views held until it recomputes
+        // (`refetches-what-a-release-forgot`).
+        if self.alarm.get().is_none_or(|at| at > now + BATCH)
+            && !self.replica.pending_fetch().is_empty()
+        {
+            self.alarm.set(now);
+        }
         let answer = match self.replica.view(name) {
             None => Answer::empty(404),
             Some(Viewed::Preparing { done }) => {
@@ -659,22 +667,32 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let (Some(login), Some(token)) = (req["login"].as_str(), req["token"].as_str()) else {
             return Answer::empty(422);
         };
+        // A kind that is no write's is refused (422).
+        let Some(kind) = req["kind"]
+            .as_str()
+            .filter(|k| ["decide", "propose", "withdraw", "answer"].contains(k))
+        else {
+            return Answer::empty(422);
+        };
         let Some((owner, repo)) = self.name.split_once('/') else {
             return Answer::empty(404);
         };
-        let Some(access) = access::check_direct(p, token, owner, repo).await else {
-            return Answer::empty(404);
+        // GitHub's 403 or 404 is a token that can't read the repo; any other failure,
+        // a 401 included, is GitHub failing the check.
+        let access = match access::checked_direct(p, token, owner, repo).await {
+            Ok(Some(access)) => access,
+            Ok(None) => return Answer::empty(404),
+            Err(_) => return Answer::empty(502),
         };
         if !self.catch_up(p, &Budget::default()).await {
             self.save();
             return Answer::empty(502);
         }
-        let answer = match req["kind"].as_str() {
-            Some("decide") => self.decide(p, &access, login, req).await,
-            Some("propose") => self.propose(p, &access, login, req).await,
-            Some("withdraw") => self.withdraw(p, &access, login, req).await,
-            Some("answer") => self.answer(p, &access, login, req).await,
-            _ => Answer::empty(422),
+        let answer = match kind {
+            "decide" => self.decide(p, &access, login, req).await,
+            "propose" => self.propose(p, &access, login, req).await,
+            "withdraw" => self.withdraw(p, &access, login, req).await,
+            _ => self.answer(p, &access, login, req).await,
         };
         self.batch(now);
         self.save();
@@ -732,8 +750,8 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
-        let appended = ledger::append(p, access, &record).await.is_some();
-        if !self.applied(p, access, &record.writer, appended).await {
+        let appended = ledger::appended(p, access, &record).await;
+        if !self.applied(&record.writer, appended) {
             return Answer::empty(502);
         }
         self.recompute(p.now());
@@ -776,8 +794,8 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
-        let appended = ledger::append(p, access, &record).await.is_some();
-        if !self.applied(p, access, &record.writer, appended).await {
+        let appended = ledger::appended(p, access, &record).await;
+        if !self.applied(&record.writer, appended) {
             return Answer::empty(502);
         }
         self.recompute(p.now());
@@ -811,8 +829,8 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
-        let appended = ledger::append(p, access, &record).await.is_some();
-        if !self.applied(p, access, &record.writer, appended).await {
+        let appended = ledger::appended(p, access, &record).await;
+        if !self.applied(&record.writer, appended) {
             return Answer::empty(502);
         }
         self.recompute(p.now());
@@ -840,39 +858,26 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
-        let appended = ledger::append(p, access, &record).await.is_some();
-        if self.applied(p, access, &record.writer, appended).await {
+        let appended = ledger::appended(p, access, &record).await;
+        if self.applied(&record.writer, appended) {
             Answer::empty(200)
         } else {
             Answer::empty(502)
         }
     }
 
-    /// After an append (`appended`) of a record by `writer`: reads the ledger it made and
-    /// applies it to the replica. Answers whether the append went through.
-    async fn applied<P: Host>(
-        &mut self,
-        p: &P,
-        access: &Access,
-        writer: &str,
-        appended: bool,
-    ) -> bool {
-        if !appended {
+    /// After an append of a record by `writer`: applies the ledger text the append committed,
+    /// without reading the branch back. Answers whether the append went through.
+    fn applied(&mut self, writer: &str, appended: Option<ledger::Appended>) -> bool {
+        let Some(ledger::Appended { tip, text }) = appended else {
             return false;
-        }
+        };
         let branch = format!("clm/ledger/{writer}");
-        if let Some(tip) = ledger::tip(p, access, &branch).await {
-            let expression = format!("{tip}:records.jsonl");
-            let read =
-                files::objects_direct(p, access.auth(), &self.name, "Ledgers", &[expression]).await;
-            if let Some(text) = read.and_then(|mut t| t.pop().flatten()) {
-                self.meta.ledgers.insert(branch.clone(), tip);
-                self.replica.apply(Change::Ledger {
-                    branch,
-                    text: Some(text),
-                });
-            }
-        }
+        self.meta.ledgers.insert(branch.clone(), tip);
+        self.replica.apply(Change::Ledger {
+            branch,
+            text: Some(text),
+        });
         true
     }
 
@@ -892,7 +897,8 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let mut taken = 0;
         let mut auth: Option<Auth> = None;
         let building = self.meta.tip.is_none();
-        if building || !self.replica.pending_fetch().is_empty() {
+        let pending = !self.replica.pending_fetch().is_empty();
+        if building || pending {
             auth = self.auth(p, &b).await;
             match &auth {
                 None => {
@@ -900,16 +906,15 @@ impl<S: Store, A: Alarm> Object<S, A> {
                     self.alarm.set(now + BATCH);
                     return;
                 }
-                Some(a) if building => {
-                    if !self.start(p, &b, a).await {
-                        self.alarm.set(now + BATCH);
-                        return;
-                    }
-                    taken = self.fetch_pending(p, &b, a, true).await;
+                Some(a) if building && !self.start(p, &b, a).await => {
+                    self.alarm.set(now + BATCH);
+                    return;
                 }
-                Some(a) => taken = self.fetch_pending(p, &b, a, false).await,
+                _ => {}
             }
         }
+        // A resync due goes before the files still to fetch: only the fetch stops at the
+        // budget, so it takes what the resync leaves.
         if self.open(now) && now >= self.meta.last_resync + RESYNC {
             if auth.is_none() {
                 auth = self.auth(p, &b).await;
@@ -918,6 +923,11 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 self.resync(p, &b, a, true).await;
             }
             self.meta.last_resync = now;
+        }
+        if (building || pending)
+            && let Some(a) = &auth
+        {
+            taken = self.fetch_pending(p, &b, a, building).await;
         }
         let lapsed = self.meta.next.is_some_and(|t| t <= now);
         let mut recomputed = false;
@@ -934,7 +944,10 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let pending = !self.replica.pending_fetch().is_empty();
         let mut at: Option<u64> = None;
         if pending {
-            at = Some(now + if taken > 0 || building { 1 } else { BATCH });
+            // The next slice at once while this one took files or the budget ran out before
+            // the fetch could, as a resync can spend it; a minute on when GitHub gave nothing.
+            let next = taken > 0 || building || b.left() < 2;
+            at = Some(now + if next { 1 } else { BATCH });
         }
         if self.open(now) {
             let resync = self.meta.last_resync + RESYNC;

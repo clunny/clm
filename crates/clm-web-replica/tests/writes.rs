@@ -38,7 +38,7 @@ fn decide(version: &str) -> Value {
 
 #[test]
 fn a_decision_shows_at_once() {
-    // req:web.worker.replica/writes-through-object@43885d86
+    // req:web.worker.replica/writes-through-object@d21193c8
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -50,6 +50,13 @@ fn a_decision_shows_at_once() {
     let version = before["version"].as_str().unwrap().to_string();
     let answer = block_on(object.write(&fake, &decide(&version)));
     assert_eq!(answer.status, 200, "{}", answer.body);
+    let record: Value = serde_json::from_str(&answer.body).unwrap();
+    assert_eq!(record["kind"], "decided", "{record}");
+    assert_eq!(record["capability"], "capability/x");
+    assert_eq!(record["value"], "high");
+    assert_eq!(record["decision"], "keep");
+    assert_eq!(record["settles"], json!([]));
+    assert_eq!(record["writer"], "carol/web");
     let after = entry(&fake, &mut object);
     assert_eq!(after["decisions"].as_array().unwrap().len(), 1, "{after}");
     let writes = fake.gh.writes();
@@ -64,7 +71,7 @@ fn a_decision_shows_at_once() {
 
 #[test]
 fn reworded_since_the_page_was_drawn() {
-    // req:web.worker.replica/writes-through-object@43885d86
+    // req:web.worker.replica/writes-through-object@d21193c8
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -86,7 +93,7 @@ fn reworded_since_the_page_was_drawn() {
 
 #[test]
 fn a_proposal_shows_at_once() {
-    // req:web.worker.replica/writes-through-object@43885d86
+    // req:web.worker.replica/writes-through-object@d21193c8
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -99,19 +106,131 @@ fn a_proposal_shows_at_once() {
     // The recompute ran before the answer.
     let seen = view(&fake, &mut object, "implementation");
     assert!(seen["computed_at"].as_u64().unwrap() >= fake.now.get());
+    assert!(listed(&seen, &id), "{seen}");
     // The same title is now taken.
     let again = block_on(object.write(&fake, &propose));
     assert_eq!(again.status, 409);
     // A withdrawal decides from the requester's own ledger.
     let withdraw = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": id});
-    assert_eq!(block_on(object.write(&fake, &withdraw)).status, 200);
+    assert_eq!(
+        block_on(object.write(&fake, &withdraw)),
+        clm_web_replica::Answer::empty(200),
+        "200 with no body"
+    );
     let other = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": "nope"});
     assert_eq!(block_on(object.write(&fake, &other)).status, 404);
 }
 
+/// Whether the implementation view `seen` lists the proposal `id`.
+fn listed(seen: &Value, id: &Value) -> bool {
+    seen["view"]["proposals"]
+        .as_array()
+        .is_some_and(|ps| ps.iter().any(|p| p["id"] == *id))
+}
+
+/// Whether `o/a` holds `carol`'s web ledger branch.
+fn carols_ledger(fake: &Fake) -> Option<String> {
+    fake.gh.repos.borrow()["o/a"]
+        .branches
+        .get("clm/ledger/carol/web")
+        .cloned()
+}
+
+#[test]
+fn github_fails_the_write() {
+    // req:web.worker.replica/writes-through-object@d21193c8
+    let item = "---\ntitle: Q\nkind: question\nchoices: [yes, no]\n---\nQ?\n";
+    let fake = fake_with("111", repo_files(&[("backlog/q.md", item)]));
+    fake.gh.grant("tok", "o/a");
+    let (mut object, _mem, _slot) = built(&fake);
+    let propose = |token: &str, title: &str| {
+        json!({"login": "carol", "token": token, "kind": "propose",
+            "title": title, "body": "Please.", "nodes": []})
+    };
+    let answer = json!({"login": "carol", "token": "tok", "kind": "answer",
+        "item": "q", "answer": "yes"});
+    let withdraw = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": "p1"});
+    let repo = |f: &dyn Fn(&mut FakeRepo)| f(fake.gh.repos.borrow_mut().get_mut("o/a").unwrap());
+
+    // GitHub refuses the append's ref.
+    repo(&|r| {
+        r.refused_refs.insert("clm/ledger/carol/web".into());
+    });
+    for write in [propose("tok", "Export CSV"), answer.clone()] {
+        let got = block_on(object.write(&fake, &write));
+        assert_eq!(got.status, 502, "{write}: {}", got.body);
+    }
+    repo(&|r| {
+        r.refused_refs.clear();
+        r.ref_fails.insert("clm/ledger/carol/web".into());
+    });
+    // A withdrawal whose read of the requester's own ledger fails.
+    assert_eq!(block_on(object.write(&fake, &withdraw)).status, 502);
+    repo(&|r| r.ref_fails.clear());
+
+    // The access check: a 500 and a 401 are GitHub failing, not a refusal.
+    for code in [500, 401] {
+        let over = Over::new(&fake);
+        *over.github.borrow_mut() = Box::new(move |req| {
+            (req.method == "GET"
+                && req.url.ends_with("/repos/o/a")
+                && matches!(req.auth, clm_web_platform::platform::Auth::User(_)))
+            .then(|| status(code))
+        });
+        let got = block_on(object.write(&over, &propose("tok", "Export CSV")));
+        assert_eq!(got.status, 502, "access check answered {code}");
+    }
+    // A token GitHub answers 404 for.
+    let got = block_on(object.write(&fake, &propose("other", "Export CSV")));
+    assert_eq!(got.status, 404);
+    assert_eq!(carols_ledger(&fake), None, "nothing was appended");
+
+    // An append that succeeds is applied without reading the ledger back.
+    let from = fake.gh.calls.borrow().len();
+    let got = block_on(object.write(&fake, &propose("tok", "Dark mode")));
+    assert_eq!(got.status, 200, "{}", got.body);
+    let id = serde_json::from_str::<Value>(&got.body).unwrap()["id"].clone();
+    assert!(carols_ledger(&fake).is_some(), "appended");
+    let seen = view(&fake, &mut object, "implementation");
+    assert!(listed(&seen, &id), "{seen}");
+    let calls = fake.gh.calls.borrow();
+    let made = &calls[from..];
+    let moved = made
+        .iter()
+        .rposition(|c| c.method != "GET" && c.url.contains("/git/refs"))
+        .expect("the ref was moved");
+    for c in &made[moved + 1..] {
+        let body = c.body.clone().unwrap_or_default();
+        assert!(
+            !c.url.contains("clm/ledger/carol/web") && !body.contains("records.jsonl"),
+            "read after the ref's move: {} {body}",
+            c.url
+        );
+    }
+}
+
+#[test]
+fn bodies_without_a_requester_or_a_kind() {
+    // req:web.worker.replica/writes-through-object@d21193c8
+    let fake = fake_with("111", repo(CAPABILITIES));
+    fake.gh.grant("tok", "o/a");
+    let (mut object, _mem, _slot) = built(&fake);
+    for body in [
+        json!({"token": "tok", "kind": "propose", "title": "T", "body": "", "nodes": []}),
+        json!({"login": "carol", "kind": "propose", "title": "T", "body": "", "nodes": []}),
+        json!({"login": 3, "token": "tok", "kind": "propose", "title": "T", "body": ""}),
+        json!({"login": "carol", "token": "tok", "kind": "approve"}),
+        json!({"login": "carol", "token": "tok"}),
+    ] {
+        let got = block_on(object.write(&fake, &body));
+        assert_eq!(got, clm_web_replica::Answer::empty(422), "{body}");
+    }
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
 #[test]
 fn the_tip_cant_be_read() {
-    // req:web.worker.replica/writes-through-object@43885d86
+    // req:web.worker.replica/writes-through-object@d21193c8
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -129,16 +248,28 @@ fn the_tip_cant_be_read() {
     let propose = json!({"login": "carol", "token": "tok", "kind": "propose",
         "title": "Export CSV", "body": "Please.", "nodes": []});
     let withdraw = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": "x"});
-    for write in [decide(&version), propose, withdraw] {
+    for write in [decide(&version), propose.clone(), withdraw] {
         let answer = block_on(object.write(&fake, &write));
         assert_eq!(answer.status, 502, "{}", answer.body);
     }
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+
+    // The ref reads, but at a commit the object can't bring itself up to.
+    commit(&fake, "222", repo(CAPABILITIES));
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let r = repos.get_mut("o/a").unwrap();
+        r.ref_fails.clear();
+        r.fail_paths = vec!["compare".into(), "git/trees".into()];
+    }
+    let answer = block_on(object.write(&fake, &propose));
+    assert_eq!(answer.status, 502, "{}", answer.body);
     assert!(fake.gh.writes().is_empty(), "nothing was appended");
 }
 
 #[test]
 fn still_preparing() {
-    // req:web.worker.replica/writes-through-object@43885d86
+    // req:web.worker.replica/writes-through-object@d21193c8
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, slot) = object();
@@ -158,7 +289,7 @@ fn still_preparing() {
 
 #[test]
 fn an_answer_read_back() {
-    // req:web.worker.replica/writes-through-object@43885d86
+    // req:web.worker.replica/writes-through-object@d21193c8
     let item = "---\ntitle: Q\nkind: question\nchoices: [yes, no]\n---\nQ?\n";
     let fake = fake_with("111", repo_files(&[("backlog/q.md", item)]));
     fake.gh.grant("tok", "o/a");
