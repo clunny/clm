@@ -280,6 +280,7 @@ For any checkout, `report` over the union of `markers_in` applied to each tracke
 - model/parse-backlog
 - model/human-layers
 - model/reserved-ids
+- model/parse-changes
 - model/move-records
 
 ### Requirement: status-report
