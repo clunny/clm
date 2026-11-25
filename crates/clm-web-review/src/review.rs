@@ -720,7 +720,7 @@ pub async fn branch<P: Platform>(p: &P, access: &Access, branch: &str) -> Respon
         .is_some_and(|k| fold.checks.contains_key(k));
     let fingerprint = comparison.fingerprint.as_deref();
     let comments = feedback::comments(&fold, branch, fingerprint);
-    let change_requests = feedback::change_requests(&fold, branch, fingerprint);
+    let change_requests = feedback::change_requests(&fold, branch, fingerprint, signed);
     Response::json(&BranchReview {
         branch: branch.into(),
         base: base.into(),
