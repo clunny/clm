@@ -167,7 +167,11 @@ fn approval_state() {
 #[test]
 fn no_ledger() {
     // req:web.worker.review/pr-review@751149f9
-    let v = review();
+    // `spec_pr` opens #5 from `spec/c2`, which is that branch's page: take it away, so
+    // the branch has no pull request and so no page.
+    let mut repo = spec_pr();
+    repo.pulls.clear();
+    let v = review_of(repo);
     assert_eq!(v["approvals"], json!([]));
     assert_eq!(v["checked"], false);
     assert_eq!(v["page"], Value::Null, "no page without a PR");
