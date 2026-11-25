@@ -180,6 +180,12 @@ fn decide_appends_decided() {
     let res = decide(&fake, &cookie, "x", &body(&version(), "high", "keep"));
     assert_eq!(res.status, 200);
     assert_eq!(body_json(&res)["settles"], json!([]));
+    // Every value and decision the body may name is taken.
+    for (value, decision) in [("medium", "redesign"), ("low", "accept")] {
+        let res = decide(&fake, &cookie, "x", &body(&version(), value, decision));
+        assert_eq!(res.status, 200, "{value} {decision}: {res:?}");
+        assert_eq!(body_json(&res)["decision"], decision);
+    }
 }
 
 /// The files with `x` reworded.

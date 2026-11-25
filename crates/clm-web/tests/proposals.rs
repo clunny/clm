@@ -211,6 +211,8 @@ fn refused_before_asking_github() {
             "title",
         ),
         (json!({"body": "", "nodes": []}), "title"),
+        (json!({"title": 5, "body": "", "nodes": []}), "title"),
+        (json!({"title": "Ok", "body": 5, "nodes": []}), "body"),
         (
             json!({"title": "Ok", "body": long_body, "nodes": []}),
             "body",

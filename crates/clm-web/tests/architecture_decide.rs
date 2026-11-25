@@ -158,6 +158,20 @@ fn not_an_entry_or_moved_version() {
         &decide(&fake, &cookie, "e", &body("0123abcd", "high", "keep")),
         409,
     );
+    // A version `e` had until it was reworded on main.
+    let seen = version();
+    let mut reworded = files_now();
+    reworded.insert(
+        "ARCHITECTURE.md".into(),
+        ARCHITECTURE
+            .replace("Git SHALL hold it.", "Git SHALL hold all of it.")
+            .into_bytes(),
+    );
+    push(&fake, "333", reworded);
+    the_objects_refusal(
+        &decide(&fake, &cookie, "e", &body(&seen, "high", "keep")),
+        409,
+    );
     assert!(fake.gh.writes().is_empty());
 }
 
