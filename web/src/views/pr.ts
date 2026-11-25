@@ -298,7 +298,7 @@ export function renderReview(r: Review, o: ReviewOptions): HTMLElement {
           chip(r.checked ? 'ok' : 'mute', r.checked ? 'checked' : 'not checked'),
           r.page ? el('a', { class: 'page', href: r.page.url, target: '_blank', rel: 'noopener' }, `#${r.page.number}`) : '',
           ...r.nodes.map((n) => chip('node', n.id)),
-          ...(c?.resolves.length ? ['resolves ', ...c.resolves.map(code)] : []),
+          ...(c?.resolves.length ? ['resolves ', ...c.resolves.flatMap((x, i) => (i ? [', ', code(x)] : [code(x)]))] : []),
           code(`${r.branch} → ${r.base}`),
         ),
         ...holding,

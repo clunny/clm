@@ -168,6 +168,8 @@ describe('Needs review', () => {
     expect(plain).not.toContain('review');
     const chip = (r: BranchReview) => renderReview(r, opts()).querySelector('.meta .chip.hard');
     expect(chip(review({ review: true, change: null }))?.textContent).toBe('needs review');
+    expect(review({ review: true }).change).not.toBeNull();
+    expect(chip(review({ review: true }))?.textContent).toBe('needs review');
     expect(chip(review({ review: false }))).toBeNull();
     expect(arch).not.toContain('gate');
   });
@@ -183,13 +185,15 @@ describe('spec branches', () => {
     const list = renderPrList(given, (t) => reviewHref('o', 'a', t));
     const rows = [...list.querySelectorAll<HTMLElement>('.prl')];
     expect(rows.map((r) => r.dataset.branch)).toEqual(['spec/a', 'spec/b']);
+    expect(rows.map((r) => r.querySelector('a.open')?.textContent)).toEqual(['spec/a', 'spec/b']);
+    expect(rows[0].querySelector<HTMLAnchorElement>('a.open')?.getAttribute('href')).toBe('#/o/a/prs/spec%2Fa');
     expect(rows[0].textContent).toContain('#7');
     expect(rows[0].textContent).toContain('Add a');
     expect(rows[0].querySelector<HTMLAnchorElement>('a.page')?.href).toBe('https://github.com/o/a/pull/7');
     expect(rows[1].textContent).not.toContain('#');
     expect(rows[1].querySelector('a.page')).toBeNull();
     // Each row links by the link its caller gives for the branch.
-    expect(renderPrList(given, link).querySelectorAll<HTMLAnchorElement>('.prl a.open')[1].getAttribute('href')).toBe('#b/spec/b');
+    expect([...renderPrList(given, link).querySelectorAll<HTMLAnchorElement>('.prl a.open')].map((a) => a.getAttribute('href'))).toEqual(['#b/spec/a', '#b/spec/b']);
     const open = rows[1].querySelector<HTMLAnchorElement>('a.open')!.getAttribute('href')!;
     expect(open).toBe('#/o/a/prs/spec%2Fb');
     const route = parseRoute(open);
@@ -207,8 +211,13 @@ describe('spec branches', () => {
 
   // req:web.views/spec-branch-review@bf6312ca
   it('approved by: the header names the approval with its time and says not checked; no labels', () => {
-    const view = renderReview(review({ approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }], checked: false }), opts());
+    const view = renderReview(review({ branch: 'spec/x', approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }], checked: false }), opts());
     const head = view.querySelector<HTMLElement>('.head')!;
+    expect(head.querySelector('h1')?.textContent).toBe('spec/x');
+    const two = renderReview(review({ approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }, { writer: 'dana/web', at: '2026-10-28T09:30:00Z' }] }), opts());
+    const shown = two.querySelector<HTMLElement>('.head .meta')!.textContent!;
+    expect(shown).toContain('Approved by clunny/web · 2026-10-27 10:00 UTC');
+    expect(shown).toContain('Approved by dana/web · 2026-10-28 09:30 UTC');
     expect(head.textContent).toContain('Approved by clunny/web');
     expect(head.textContent).toContain('2026-10-27 10:00 UTC');
     expect(head.textContent).toContain('not checked');
@@ -258,6 +267,8 @@ describe('spec branches', () => {
     expect(xHead.querySelector('.meta')!.textContent).toContain('resolves crash');
     expect([...xHead.querySelectorAll('.meta code')].map((c) => c.textContent)).toEqual(['crash', 'spec/x → main']);
     expect(xHead.querySelectorAll('.chip.node')).toHaveLength(0);
+    const both = renderReview(review({ change: { ...base.change!, resolves: ['crash', 'leak'] } }), opts());
+    expect(both.querySelector(':scope > .head .meta')!.textContent).toContain('resolves crash, leak');
     expect(x.querySelector('.doc .note')?.textContent).toBe('No component changes.');
     expect(x.querySelector('.node-changes')).toBeNull();
     const node = base.nodes[0];
