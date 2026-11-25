@@ -37,6 +37,10 @@ const RESYNC: u64 = 600;
 const META: &str = "meta";
 /// A read rewrites its time in the store only when it has moved this far.
 const READ_WRITE: u64 = 60;
+/// The version of the object that writes its record: 1 hashes binary assets. Storage whose
+/// record names another, or none, is dropped on waking and built again
+/// (`fetches-binary-assets`).
+const VERSION: u32 = 1;
 
 /// The object's alarm, in Unix seconds.
 pub trait Alarm {
@@ -74,6 +78,8 @@ impl Answer {
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct Meta {
+    /// The version of the object that wrote the record; none, read as 0, before versions.
+    version: u32,
     installation: Option<u64>,
     default_branch: Option<String>,
     /// The default branch's commit the replica holds; none until the first build lists it.
@@ -127,11 +133,19 @@ pub struct Object<S, A> {
 
 impl<S: Store, A: Alarm> Object<S, A> {
     /// The object named `name`, `<owner>/<repo>`, with what `store` holds.
-    pub fn load(name: &str, store: S, alarm: A) -> Self {
-        let meta: Meta = store
+    pub fn load(name: &str, mut store: S, alarm: A) -> Self {
+        let stored: Option<Meta> = store
             .get(META)
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default();
+            .and_then(|b| serde_json::from_slice(&b).ok());
+        let meta = match stored {
+            Some(meta) if meta.version == VERSION => meta,
+            // Written by an object that didn't hash binary assets: built again from nothing.
+            Some(_) => {
+                Wipe(&mut store).delete_all();
+                Meta::default()
+            }
+            None => Meta::default(),
+        };
         Object {
             name: name.into(),
             replica: Replica::load(&store),
@@ -161,6 +175,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
     }
 
     fn save_meta(&mut self) {
+        self.meta.version = VERSION;
         self.stored_read = self.meta.last_read;
         if let Ok(bytes) = serde_json::to_vec(&self.meta) {
             self.store.put(META, bytes);

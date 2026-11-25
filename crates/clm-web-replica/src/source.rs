@@ -23,6 +23,8 @@ const REF_PAGES: usize = 3;
 const PER_SPEC_QUERY: usize = 50;
 /// A compare lists at most this many files, so a list this long may be cut short.
 const COMPARE_FILES: usize = 300;
+/// The largest binary asset read whole: a blob over 10 MiB is held without its bytes.
+const MAX_ASSET: u64 = 10 << 20;
 /// The pull requests a page of `live::pulls_direct` holds, and the pages it reads at most
 /// (`web.worker.platform/open-pulls`).
 const PULLS_PER_PAGE: usize = 100;
@@ -180,7 +182,7 @@ pub(crate) async fn fetch<P: Host>(
             vars.insert(format!("e{i}"), json!(format!("{sha}:{}", entry.path)));
             params.push(format!("$e{i}: String!"));
             fields.push_str(&format!(
-                "f{i}: object(expression: $e{i}) {{ ... on Blob {{ text isBinary isTruncated oid }} }}\n"
+                "f{i}: object(expression: $e{i}) {{ ... on Blob {{ text isBinary isTruncated oid byteSize }} }}\n"
             ));
         }
         // Each distinct parent directory of an entry with no mode: `t<j>`.
@@ -212,30 +214,51 @@ pub(crate) async fn fetch<P: Host>(
         }
         for (i, entry) in chunk.iter().enumerate() {
             let object = &repository[format!("f{i}")];
-            let text = match (object["text"].as_str(), object["isTruncated"] == true) {
-                (Some(_), true) => {
-                    let blob = if entry.sha.is_empty() {
-                        object["oid"].as_str().unwrap_or_default()
-                    } else {
-                        entry.sha.as_str()
-                    };
-                    if blob.is_empty() || b.left() == 0 {
-                        continue;
-                    }
-                    b.spend(1);
-                    let Some(bytes) = blob_bytes(p, auth, repo, blob).await else {
-                        continue;
-                    };
-                    String::from_utf8(bytes).ok()
-                }
-                (text, _) => text.map(String::from),
-            };
             let mut entry = entry.clone();
             if entry.mode.is_empty() {
                 let (dir, file) = parent(&entry.path);
                 let j = dirs.binary_search(&dir).unwrap_or_default();
                 entry.mode = mode_in(&repository[format!("t{j}")], file);
             }
+            if entry.size == 0 {
+                entry.size = object["byteSize"].as_u64().unwrap_or_default();
+            }
+            let blob = if entry.sha.is_empty() {
+                object["oid"].as_str().unwrap_or_default().to_string()
+            } else {
+                entry.sha.clone()
+            };
+            if object["isBinary"] == true && clm_replica::keeps_hash(&entry.path) {
+                // A binary asset is read whole, one call each, and given with its bytes;
+                // one too big, or one the blob API fails, is held without them
+                // (`fetches-binary-assets`).
+                if entry.size > MAX_ASSET || blob.is_empty() {
+                    out.push(File::binary(entry));
+                    continue;
+                }
+                if b.left() == 0 {
+                    continue;
+                }
+                b.spend(1);
+                out.push(match blob_bytes(p, auth, repo, &blob).await {
+                    Some(bytes) => File::asset(entry, bytes),
+                    None => File::binary(entry),
+                });
+                continue;
+            }
+            let text = match (object["text"].as_str(), object["isTruncated"] == true) {
+                (Some(_), true) => {
+                    if blob.is_empty() || b.left() == 0 {
+                        continue;
+                    }
+                    b.spend(1);
+                    let Some(bytes) = blob_bytes(p, auth, repo, &blob).await else {
+                        continue;
+                    };
+                    String::from_utf8(bytes).ok()
+                }
+                (text, _) => text.map(String::from),
+            };
             if entry.size == 0 {
                 entry.size = text.as_ref().map_or(0, |t| t.len() as u64);
             }
