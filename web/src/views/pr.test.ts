@@ -3,8 +3,9 @@ import { drafts } from './forms';
 import { cannotAct, renderPrList, renderReview, specPath } from './pr';
 import type { ReviewOptions } from './pr';
 import { branches, review } from './fixtures';
+import { parseRoute, reviewHref, reviewPath } from './route';
 import type { Target } from './route';
-import type { BranchReview } from './types';
+import type { BranchReview, SpecBranch } from './types';
 
 const opts = (over: Partial<ReviewOptions> = {}): ReviewOptions => ({
   offline: false,
@@ -156,8 +157,8 @@ describe('Intent first', () => {
   });
 });
 
-// req:web.views/spec-branch-review@26ee0085
 describe('Needs review', () => {
+  // req:web.views/spec-branch-review@bf6312ca
   it("needs review without a change: the review's top-level review decides, not the change", () => {
     const meta = (r: BranchReview) => renderReview(r, opts()).querySelector('.meta')!.textContent;
     const arch = meta(review({ branch: 'spec/arch', review: true, change: null }));
@@ -167,32 +168,56 @@ describe('Needs review', () => {
     expect(plain).not.toContain('review');
     const chip = (r: BranchReview) => renderReview(r, opts()).querySelector('.meta .chip.hard');
     expect(chip(review({ review: true, change: null }))?.textContent).toBe('needs review');
+    expect(review({ review: true }).change).not.toBeNull();
+    expect(chip(review({ review: true }))?.textContent).toBe('needs review');
     expect(chip(review({ review: false }))).toBeNull();
     expect(arch).not.toContain('gate');
   });
 });
 
-// req:web.views/spec-branch-review@26ee0085
 describe('spec branches', () => {
-  it('branch without a page: both listed, spec/c with #7 and its title, spec/d with no page', () => {
-    const list = renderPrList(branches, link);
+  // req:web.views/spec-branch-review@bf6312ca
+  it('branch without a page: both listed, spec/a with #7 and "Add a", spec/b routed by its name as one segment, and its review shows no page link', () => {
+    const given: SpecBranch[] = [
+      { branch: 'spec/a', head_sha: 'h1', page: { number: 7, url: 'https://github.com/o/a/pull/7', title: 'Add a' } },
+      { branch: 'spec/b', head_sha: 'h2', page: null },
+    ];
+    const list = renderPrList(given, (t) => reviewHref('o', 'a', t));
     const rows = [...list.querySelectorAll<HTMLElement>('.prl')];
-    expect(rows.map((r) => r.dataset.branch)).toEqual(['spec/c', 'spec/d']);
-    expect(rows[0].querySelector<HTMLAnchorElement>('a.open')?.getAttribute('href')).toBe('#b/spec/c');
+    expect(rows.map((r) => r.dataset.branch)).toEqual(['spec/a', 'spec/b']);
+    expect(rows.map((r) => r.querySelector('a.open')?.textContent)).toEqual(['spec/a', 'spec/b']);
+    expect(rows[0].querySelector<HTMLAnchorElement>('a.open')?.getAttribute('href')).toBe('#/o/a/prs/spec%2Fa');
     expect(rows[0].textContent).toContain('#7');
-    expect(rows[0].textContent).toContain('Change b');
+    expect(rows[0].textContent).toContain('Add a');
     expect(rows[0].querySelector<HTMLAnchorElement>('a.page')?.href).toBe('https://github.com/o/a/pull/7');
     expect(rows[1].textContent).not.toContain('#');
     expect(rows[1].querySelector('a.page')).toBeNull();
+    // Each row links by the link its caller gives for the branch.
+    expect([...renderPrList(given, link).querySelectorAll<HTMLAnchorElement>('.prl a.open')].map((a) => a.getAttribute('href'))).toEqual(['#b/spec/a', '#b/spec/b']);
+    const open = rows[1].querySelector<HTMLAnchorElement>('a.open')!.getAttribute('href')!;
+    expect(open).toBe('#/o/a/prs/spec%2Fb');
+    const route = parseRoute(open);
+    expect(route.review).toEqual({ branch: 'spec/b' });
+    expect(reviewPath(route.review!)).toBe('branches/spec/b');
+    const head = renderReview(review({ branch: 'spec/b', page: null }), opts()).querySelector<HTMLElement>('.head')!;
+    expect(head.querySelector('h1')?.textContent).toBe('spec/b');
+    expect(head.querySelector('a.page')).toBeNull();
   });
 
+  // req:web.views/spec-branch-review@bf6312ca
   it('says when no spec branch is open', () => {
     expect(renderPrList([], link).textContent).toContain('No spec branches');
   });
 
+  // req:web.views/spec-branch-review@bf6312ca
   it('approved by: the header names the approval with its time and says not checked; no labels', () => {
-    const view = renderReview(review({ approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }], checked: false }), opts());
+    const view = renderReview(review({ branch: 'spec/x', approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }], checked: false }), opts());
     const head = view.querySelector<HTMLElement>('.head')!;
+    expect(head.querySelector('h1')?.textContent).toBe('spec/x');
+    const two = renderReview(review({ approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }, { writer: 'dana/web', at: '2026-10-28T09:30:00Z' }] }), opts());
+    const shown = two.querySelector<HTMLElement>('.head .meta')!.textContent!;
+    expect(shown).toContain('Approved by clunny/web · 2026-10-27 10:00 UTC');
+    expect(shown).toContain('Approved by dana/web · 2026-10-28 09:30 UTC');
     expect(head.textContent).toContain('Approved by clunny/web');
     expect(head.textContent).toContain('2026-10-27 10:00 UTC');
     expect(head.textContent).toContain('not checked');
@@ -201,6 +226,7 @@ describe('spec branches', () => {
     expect(head.textContent).not.toMatch(/spec-approved|label/i);
   });
 
+  // req:web.views/spec-branch-review@bf6312ca
   it("a branch that cuts: Cuts lists the review's lines under the header, above its components; none without cuts", () => {
     const lines = ['specs/n/SPEC.md: gate/cut: requirement n/r is gone', 'specs/n/SPEC.md: gate/cut: scenario n/s: one is gone'];
     const view = renderReview(review({ branch: 'spec/x', cuts: lines }), opts());
@@ -223,11 +249,32 @@ describe('spec branches', () => {
     }
   });
 
+  // req:web.views/spec-branch-review@bf6312ca
   it('says not approved and checked, and shows no page link without a page', () => {
     const head = renderReview(review({ page: null }), opts()).querySelector<HTMLElement>('.head')!;
     expect(head.textContent).toContain('not approved');
     expect([...head.querySelectorAll('.chip')].map((c) => c.textContent)).toContain('checked');
     expect(head.querySelector('a.page')).toBeNull();
+  });
+  // req:web.views/spec-branch-review@bf6312ca
+  it('empty: no branch says No spec branches.; a review changing no component names its branch, base and what it resolves, and says No component changes.; one changing a and b names both', () => {
+    expect(renderPrList([], link).querySelector('.empty')?.textContent).toBe('No spec branches.');
+    expect(renderPrList([], link).querySelector('.prl')).toBeNull();
+    const base = review();
+    const x = renderReview(review({ branch: 'spec/x', base: 'main', nodes: [], change: { ...base.change!, resolves: ['crash'] } }), opts());
+    const xHead = x.querySelector<HTMLElement>(':scope > .head')!;
+    expect(xHead.querySelector('h1')?.textContent).toBe('spec/x');
+    expect(xHead.querySelector('.meta')!.textContent).toContain('resolves crash');
+    expect([...xHead.querySelectorAll('.meta code')].map((c) => c.textContent)).toEqual(['crash', 'spec/x → main']);
+    expect(xHead.querySelectorAll('.chip.node')).toHaveLength(0);
+    const both = renderReview(review({ change: { ...base.change!, resolves: ['crash', 'leak'] } }), opts());
+    expect(both.querySelector(':scope > .head .meta')!.textContent).toContain('resolves crash, leak');
+    expect(x.querySelector('.doc .note')?.textContent).toBe('No component changes.');
+    expect(x.querySelector('.node-changes')).toBeNull();
+    const node = base.nodes[0];
+    const y = renderReview(review({ branch: 'spec/y', nodes: [{ ...node, id: 'a' }, { ...node, id: 'b' }] }), opts());
+    expect([...y.querySelectorAll(':scope > .head .meta .chip.node')].map((c) => c.textContent)).toEqual(['a', 'b']);
+    expect(y.querySelector('.doc')!.textContent).not.toContain('No component changes.');
   });
 });
 
@@ -273,8 +320,8 @@ describe('what Approve may send', () => {
   });
 });
 
-// req:web.views/spec-branch-review@26ee0085
 describe('no review list', () => {
+  // req:web.views/spec-branch-review@bf6312ca
   it('the PR list shows the spec branches only: no To review list and no Mark reviewed', () => {
     const list = renderPrList(branches, link);
     expect(list.querySelector('.to-review')).toBeNull();
