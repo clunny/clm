@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { decide, renderCapabilities, renderCapability, tokens } from './capabilities';
-import type { ListOptions, PageOptions } from './capabilities';
+import type { Deciding, ListOptions, Note, PageOptions } from './capabilities';
+import type { Capabilities, DecisionKind } from './types';
 import { capabilities, cost } from './fixtures';
 import { SignedOut } from './api';
 
@@ -129,8 +130,8 @@ describe('capability page', () => {
   });
 });
 
-// req:web.views/decide-buttons@c1039d9e
 describe('decide', () => {
+  // req:web.views/decide-buttons@4075a6f6
   it('decide one request per tap: a second tap while the first is in flight sends nothing', () => {
     const o = page();
     const view = renderCapability(capabilities(), 'a', o);
@@ -145,10 +146,12 @@ describe('decide', () => {
     expect(decideButtons(view).every((b) => b.disabled)).toBe(true);
   });
 
+  // req:web.views/decide-buttons@4075a6f6
   it('busy: while a decision is in flight, a page drawn again keeps the buttons disabled', () => {
     expect(decideButtons(renderCapability(capabilities(), 'a', page({ busy: true }))).every((b) => b.disabled)).toBe(true);
   });
 
+  // req:web.views/decide-buttons@4075a6f6
   it('choosing a value calls onValue, and the chosen one is pressed', () => {
     const o = page({ value: 'medium' });
     const view = renderCapability(capabilities(), 'a', o);
@@ -162,6 +165,7 @@ describe('decide', () => {
     expect(o.onValue).toHaveBeenCalledWith('high');
   });
 
+  // req:web.views/decide-buttons@4075a6f6
   it('decide disabled offline, signed or without a value; the signed note gives the command', () => {
     for (const [c, o] of [
       [capabilities(), page({ offline: true })],
@@ -176,12 +180,14 @@ describe('decide', () => {
     expect(renderCapability(capabilities(), 'a', page()).querySelector('.signed-note')).toBeNull();
   });
 
+  // req:web.views/decide-buttons@4075a6f6
   it('a note shows, with the command a 422 signed gave', () => {
     const view = renderCapability(capabilities(), 'a', page({ note: { text: 'Signed only.', command: 'clm capabilities decide a --value low --decision cut' } }));
     expect(view.querySelector('.decide-note')!.textContent).toContain('Signed only.');
     expect(view.querySelector('.decide-note code')!.textContent).toBe('clm capabilities decide a --value low --decision cut');
   });
 
+  // req:web.views/decide-buttons@4075a6f6
   it('a 422 signed note in a signed report shows one command, the Worker’s; without one, no dangling sentence', () => {
     const command = 'clm capabilities decide a --value low --decision cut';
     const view = renderCapability(capabilities({ signed: true }), 'a', page({ note: { text: 'Not decided: signed only.', command } }));
@@ -193,6 +199,7 @@ describe('decide', () => {
 
   const answer = (status: number, body?: unknown) => new Response(body === undefined ? '' : JSON.stringify(body), { status });
 
+  // req:web.views/decide-buttons@4075a6f6
   it('posts the version shown, the value and the decision, then loads the report again', async () => {
     const post = vi.fn(async () => answer(200, {}));
     const reload = vi.fn(async () => true);
@@ -203,6 +210,7 @@ describe('decide', () => {
     expect(note.text).toContain('Decided');
   });
 
+  // req:web.views/decide-buttons@4075a6f6
   it('decide_409_reloads: a 409 loads the report again and says the capability changed', async () => {
     const reload = vi.fn(async () => true);
     const note = await decide('/b', 'capabilities', 'a', 'a1000000', 'low', 'cut', { post: async () => answer(409), reload });
@@ -210,6 +218,7 @@ describe('decide', () => {
     expect(note.text).toContain('changed since it was shown');
   });
 
+  // req:web.views/decide-buttons@4075a6f6
   it('a 422 signed loads the report again and gives the Worker’s command; another failure says the status', async () => {
     const reload = vi.fn(async () => true);
     const command = 'clm capabilities decide a --value low --decision cut';
@@ -235,6 +244,100 @@ describe('decide', () => {
     expect(out.text).toContain('Signed out');
     const lost = await decide('/b', 'capabilities', 'a', 'v', 'low', 'cut', { post: async () => answer(409), reload: async () => false });
     expect(lost.text).toContain('Reload');
+  });
+  // A caller as web's shell is: the page's tap posts through `decide`, which loads the report
+  // again through `reload`, and the page is drawn again with the note it gives.
+  const wired = (post: Deciding['post'], fresh: () => Capabilities | null, extra: Partial<Deciding> = {}) => {
+    let data = capabilities();
+    let note: Note | null = null;
+    const reload = vi.fn(async () => {
+      const next = fresh();
+      if (next) data = next;
+      return next !== null;
+    });
+    let pending: Promise<void> = Promise.resolve();
+    const onDecide = vi.fn((d: DecisionKind) => {
+      const shown = data.report.capabilities.find((c) => c.slug === 'a')!;
+      pending = decide('/api/repos/o/a', 'capabilities', 'a', shown.version, 'low', d, { post, reload, ...extra }).then((n) => {
+        note = n;
+      });
+    });
+    const view = renderCapability(data, 'a', page({ onDecide }));
+    return { view, reload, onDecide, done: () => pending, redraw: () => renderCapability(data, 'a', page({ note })) };
+  };
+  const decidedCut = () => {
+    const c = capabilities();
+    c.report.capabilities[1].decisions = [{ at: '2026-11-24T10:00:00Z', writer: 'alice/web', value: 'low', decision: 'cut' }];
+    return c;
+  };
+
+  // req:web.views/decide-buttons@4075a6f6
+  it('one request per tap: two quick taps on Cut post the version shown once, the report is loaded again and the page shows the decision', async () => {
+    const post = vi.fn(async () => answer(200, {}));
+    const w = wired(post, decidedCut);
+    const cut = w.view.querySelector<HTMLButtonElement>('button.decide[data-decision=cut]')!;
+    cut.click();
+    cut.click();
+    await w.done();
+    expect(post.mock.calls).toEqual([['/api/repos/o/a/capabilities/a/decide', { version: capabilities().report.capabilities[1].version, value: 'low', decision: 'cut' }]]);
+    expect(w.reload).toHaveBeenCalledTimes(1);
+    const after = w.redraw();
+    expect(after.querySelector('section[data-sec=decisions]')!.textContent).toContain('cut (value low) by alice/web');
+    expect(after.querySelector('.decide-note')!.textContent).toBe('Decided: cut, value low.');
+  });
+
+  // req:web.views/decide-buttons@4075a6f6
+  it('moved: a 409 says the capability changed since it was shown and loads the report again', async () => {
+    const w = wired(async () => answer(409), () => capabilities());
+    w.view.querySelector<HTMLButtonElement>('button.decide[data-decision=keep]')!.click();
+    await w.done();
+    expect(w.reload).toHaveBeenCalledTimes(1);
+    expect(w.redraw().querySelector('.decide-note')!.textContent).toContain('The capability changed since it was shown');
+  });
+
+  // req:web.views/decide-buttons@4075a6f6
+  it('refused: a 422, a 502, a post not sent, a session ended and a report that fails to load again each say so', async () => {
+    const tap = async (post: Deciding['post'], fresh: () => Capabilities | null, extra: Partial<Deciding> = {}) => {
+      const w = wired(post, fresh, extra);
+      w.view.querySelector<HTMLButtonElement>('button.decide[data-decision=cut]')!.click();
+      await w.done();
+      return { text: w.redraw().querySelector('.decide-note')!.textContent, reload: w.reload };
+    };
+    const refused = await tap(async () => answer(422, { error: 'capability' }), () => capabilities());
+    expect(refused.text).toBe('Not decided (422): the Worker refused the capability.');
+    expect(refused.reload).toHaveBeenCalledTimes(1);
+    const failed = await tap(async () => answer(502), () => capabilities());
+    expect(failed.text).toBe('Not decided (502).');
+    expect(failed.reload).not.toHaveBeenCalled();
+    const offline = await tap(() => Promise.reject(new TypeError('Failed to fetch')), () => capabilities());
+    expect(offline.text).toBe('Offline: decide when back online.');
+    expect(offline.reload).not.toHaveBeenCalled();
+    const signedOut = vi.fn();
+    const out = await tap(() => Promise.reject(new SignedOut()), () => capabilities(), { signedOut });
+    expect(signedOut).toHaveBeenCalledTimes(1);
+    expect(out.text).toBe('Signed out. Sign in again to decide.');
+    const lost = await tap(async () => answer(409), () => null);
+    expect(lost.text!.endsWith('Its report could not be loaded again: Reload.')).toBe(true);
+  });
+
+  // req:web.views/decide-buttons@4075a6f6
+  it('in flight: a page drawn while a decision is in flight keeps its buttons disabled and low pressed, and reports a value tapped', () => {
+    const o = page({ busy: true, value: 'low' });
+    const view = renderCapability(capabilities(), 'a', o);
+    expect(decideButtons(view).every((b) => b.disabled)).toBe(true);
+    expect([...view.querySelectorAll<HTMLButtonElement>('button.value')].map((v) => [v.textContent, v.getAttribute('aria-pressed')])).toEqual([
+      ['high', 'false'],
+      ['medium', 'false'],
+      ['low', 'true'],
+    ]);
+    [...view.querySelectorAll<HTMLButtonElement>('button.value')].find((v) => v.textContent === 'medium')!.click();
+    expect(vi.mocked(o.onValue).mock.calls).toEqual([['medium']]);
+    decideButtons(view)[0].click();
+    expect(o.onDecide).not.toHaveBeenCalled();
+    // A signed report's page after a 422 signed shows the Worker's command once, and no other.
+    const command = 'clm capabilities decide a --value low --decision cut';
+    const signed = renderCapability(capabilities({ signed: true }), 'a', page({ note: { text: 'Not decided: this repository counts only records signed with your SSH key.', command } }));
+    expect([...signed.querySelectorAll('code')].filter((c) => c.textContent!.startsWith('clm capabilities decide')).map((c) => c.textContent)).toEqual([command]);
   });
 });
 
