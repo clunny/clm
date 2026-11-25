@@ -284,10 +284,10 @@ describe('no review list', () => {
   });
 });
 
-// req:web.views/signed-approvals@9bdf6473
 describe('signed repositories', () => {
   const approvalMarks = (view: HTMLElement) => [...view.querySelectorAll('.head .sig')].map((c) => c.textContent);
 
+  // req:web.views/signed-approvals@bdf1ce5c
   it('signed repository: Approve is disabled, never reads Approved, and the note names clm approve', () => {
     const o = opts();
     const r = review({ branch: 'spec/x', signed: true, approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z', signed: false }] });
@@ -309,6 +309,7 @@ describe('signed repositories', () => {
     expect(o.onAct).not.toHaveBeenCalled();
   });
 
+  // req:web.views/signed-approvals@bdf1ce5c
   it('signed approval: marked signed, and no "no signed approval"', () => {
     const view = renderReview(review({ branch: 'spec/x', signed: true, approvals: [{ writer: 'dana/9f9f9f9f', at: '2026-10-27T10:00:00Z', signed: true }] }), opts());
     expect(approvalMarks(view)).toEqual(['signed']);
@@ -316,6 +317,7 @@ describe('signed repositories', () => {
     expect(view.querySelector('button.approve')?.textContent).toBe('Approve intent');
   });
 
+  // req:web.views/signed-approvals@bdf1ce5c
   it('signed with no approvals says not approved, and the note shows offline too', () => {
     const view = renderReview(review({ branch: 'spec/x', signed: true }), opts({ offline: true }));
     expect(view.querySelector('.head')?.textContent).toContain('not approved');
@@ -331,6 +333,7 @@ describe('signed repositories', () => {
     expect(writeText).toHaveBeenCalledWith('clm approve spec/x');
   });
 
+  // req:web.views/signed-approvals@bdf1ce5c
   it('unsigned repository: Approve enabled, no note and no marks, with signed false or absent', () => {
     const absent = review({ branch: 'spec/x' });
     delete (absent as { signed?: boolean }).signed;
@@ -355,12 +358,12 @@ const typeIn = (form: HTMLElement, text: string) => {
   t.dispatchEvent(new Event('input'));
 };
 
-// req:web.views/request-changes@8ce19ec8
 describe('Request changes', () => {
   const held = (over = {}) => ({ id: 'q1', writer: 'alice/web', at: '2026-10-27T12:00:00Z', fingerprint: 'f1', text: 'Split it', current: true, held: true, ...over });
   const button = (view: HTMLElement) => view.querySelector<HTMLButtonElement>('.approve-bar button.request')!;
   beforeEach(() => drafts.clear());
 
+  // req:web.views/request-changes@db57a569
   it('requested: beside Approve, two quick submits send once, and the header says changes requested by alice', async () => {
     let done: (v: string | null) => void = () => undefined;
     const onRequest = vi.fn(() => new Promise<string | null>((go) => (done = go)));
@@ -387,11 +390,13 @@ describe('Request changes', () => {
     expect(after.querySelector('.intent .fb')).toBeNull();
   });
 
+  // req:web.views/request-changes@db57a569
   it('disabled: without a fingerprint and offline', () => {
     expect(button(renderReview(review({ fingerprint: null }), opts())).disabled).toBe(true);
     expect(button(renderReview(review(), opts({ offline: true }))).disabled).toBe(true);
   });
 
+  // req:web.views/request-changes@db57a569
   it('enabled in a signed repository, after an approval and after an earlier request', () => {
     for (const r of [
       review({ signed: true }),
@@ -401,9 +406,37 @@ describe('Request changes', () => {
       expect(button(renderReview(r, opts())).disabled).toBe(false);
     }
   });
+
+  // req:web.views/request-changes@db57a569
+  it("a refused or failed request shows why under the form, keeping the form and its text; an empty one sends nothing", async () => {
+    for (const [onRequest, why] of [
+      [vi.fn(() => Promise.resolve('Not sent: the Worker refused the text.')), 'Not sent: the Worker refused the text.'],
+      [vi.fn(() => Promise.reject(new Error('down'))), 'Not sent: offline.'],
+    ] as const) {
+      drafts.clear();
+      const view = renderReview(review(), opts({ onRequest }));
+      button(view).click();
+      const form = view.querySelector<HTMLElement>('.approve-bar .fbform')!;
+      typeIn(form, ' Split it ');
+      form.querySelector<HTMLButtonElement>('button.send')!.click();
+      await settle();
+      expect(onRequest).toHaveBeenCalledWith('Split it');
+      expect(view.querySelector('.approve-bar .fbform .err')?.textContent).toBe(why);
+      expect(view.querySelector<HTMLTextAreaElement>('.approve-bar .fbform textarea')?.value).toBe(' Split it ');
+      // Kept for the redraw a refresh makes, too.
+      expect(renderReview(review(), opts()).querySelector<HTMLTextAreaElement>('.approve-bar .fbform textarea')?.value).toBe(' Split it ');
+    }
+    drafts.clear();
+    const onRequest = vi.fn(() => Promise.resolve(null));
+    const view = renderReview(review(), opts({ onRequest }));
+    button(view).click();
+    view.querySelector<HTMLButtonElement>('.approve-bar .fbform button.send')!.click();
+    await settle();
+    expect(onRequest).not.toHaveBeenCalled();
+    expect(view.querySelector('.approve-bar .fbform .err')?.textContent).toBe('Write something first.');
+  });
 });
 
-// req:web.views/comment-on-review@1279617c
 describe('comments', () => {
   const comment = (over = {}) => ({ id: 'c1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', fingerprint: 'f1', target: null, text: 'Looks right', current: true, ...over });
   const open = (root: HTMLElement, at: string) => {
@@ -412,6 +445,7 @@ describe('comments', () => {
   };
   beforeEach(() => drafts.clear());
 
+  // req:web.views/comment-on-review@85d2f160
   it('comment on a requirement: one post of the fingerprint, target and text, and the card shows the comment by alice', async () => {
     let done: (v: string | null) => void = () => undefined;
     const onComment = vi.fn(() => new Promise<string | null>((go) => (done = go)));
@@ -435,6 +469,7 @@ describe('comments', () => {
     expect(after.querySelector('.intent .fb')).toBeNull();
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it('the intent carries Comment too, sending a null target', () => {
     const onComment = vi.fn(() => Promise.resolve(null));
     const view = renderReview(review(), opts({ onComment }));
@@ -444,6 +479,7 @@ describe('comments', () => {
     expect(onComment).toHaveBeenCalledWith(null, 'Why now?');
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it('sends nothing for an empty text, and says so', async () => {
     const onComment = vi.fn(() => Promise.resolve(null));
     const view = renderReview(review(), opts({ onComment }));
@@ -452,9 +488,10 @@ describe('comments', () => {
     form.querySelector<HTMLButtonElement>('button.send')!.click();
     await settle();
     expect(onComment).not.toHaveBeenCalled();
-    expect(form.querySelector('.err')?.textContent).toContain('Write something');
+    expect(form.querySelector('.err')?.textContent).toBe('Write something first.');
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it('earlier version: the comment under the intent marked on an earlier version, the request under it marked since approved', () => {
     const r = review({
       fingerprint: 'f2',
@@ -468,18 +505,32 @@ describe('comments', () => {
     expect(items[1].textContent).toContain('Split it');
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it('a comment on a requirement the review shows no card for is drawn under the intent', () => {
-    const view = renderReview(review({ comments: [comment({ target: 'z/gone' })] }), opts());
+    const view = renderReview(review({ comments: [comment({ target: 'n/gone' })] }), opts());
     expect(view.querySelector('.intent .fb')?.textContent).toContain('Looks right');
-    expect(view.querySelector('.intent .fb')?.textContent).toContain('on z/gone');
+    expect(view.querySelector('.intent .fb')?.textContent).toContain('on n/gone');
+    expect(view.querySelectorAll('.req .fb')).toHaveLength(0);
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it("drafts are kept per review scope, so another repository's branch of the same name has its own", () => {
-    typeIn(open(renderReview(review(), opts({ scope: '/api/repos/o/a/branches/spec/c' })), '.intent'), 'for a');
-    expect(renderReview(review(), opts({ scope: '/api/repos/o/b/branches/spec/c' })).querySelector('.intent .fbform')).toBeNull();
-    expect(renderReview(review(), opts({ scope: '/api/repos/o/a/branches/spec/c' })).querySelector<HTMLTextAreaElement>('.intent .fbform textarea')?.value).toBe('for a');
+    const x = review({ branch: 'spec/x' });
+    const a = opts({ scope: '/api/repos/o/a/branches/spec/x' });
+    const first = renderReview(x, a);
+    typeIn(open(first, '.intent'), 'Name it');
+    first.querySelector<HTMLButtonElement>('.approve-bar button.request')!.click();
+    typeIn(first.querySelector<HTMLElement>('.approve-bar .fbform')!, 'Split');
+
+    const again = renderReview(x, a);
+    expect(again.querySelector<HTMLTextAreaElement>('.intent .fbform textarea')?.value).toBe('Name it');
+    expect(again.querySelector<HTMLTextAreaElement>('.approve-bar .fbform textarea')?.value).toBe('Split');
+
+    const other = renderReview(x, opts({ scope: '/api/repos/o/b/branches/spec/x' }));
+    expect(other.querySelector('.fbform')).toBeNull();
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it('a review without comments or change_requests reads as having none', () => {
     const r = review();
     delete r.comments;
@@ -487,23 +538,37 @@ describe('comments', () => {
     expect(renderReview(r, opts()).querySelectorAll('.fb')).toHaveLength(0);
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it('a refusal shows its reason under the form and keeps it', async () => {
-    const view = renderReview(review(), opts({ onComment: () => Promise.resolve('Not sent: the text was refused.') }));
-    const form = open(view, '.intent');
-    typeIn(form, 'x');
-    form.querySelector<HTMLButtonElement>('button.send')!.click();
-    await settle();
-    expect(view.querySelector('.intent .fbform .err')?.textContent).toBe('Not sent: the text was refused.');
-    expect(view.querySelector<HTMLTextAreaElement>('.intent .fbform textarea')?.value).toBe('x');
+    for (const [onComment, why] of [
+      [vi.fn(() => Promise.resolve('Not sent: the Worker refused the text.')), 'Not sent: the Worker refused the text.'],
+      [vi.fn(() => Promise.reject(new Error('down'))), 'Not sent: offline.'],
+    ] as const) {
+      drafts.clear();
+      const view = renderReview(review(), opts({ onComment }));
+      const form = open(view, '.intent');
+      typeIn(form, 'x');
+      form.querySelector<HTMLButtonElement>('button.send')!.click();
+      await settle();
+      expect(onComment).toHaveBeenCalledTimes(1);
+      expect(view.querySelector('.intent .fbform .err')?.textContent).toBe(why);
+      expect(view.querySelector<HTMLTextAreaElement>('.intent .fbform textarea')?.value).toBe('x');
+      expect(renderReview(review(), opts()).querySelector<HTMLTextAreaElement>('.intent .fbform textarea')?.value).toBe('x');
+    }
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it('what was typed survives a redraw', () => {
     const first = renderReview(review(), opts());
     typeIn(open(first, '.intent'), 'half a thought');
     const again = renderReview(review(), opts());
     expect(again.querySelector<HTMLTextAreaElement>('.intent .fbform textarea')?.value).toBe('half a thought');
+    // Until it is cancelled.
+    again.querySelector<HTMLButtonElement>('.intent .fbform button.cancel')!.click();
+    expect(renderReview(review(), opts()).querySelector('.intent .fbform')).toBeNull();
   });
 
+  // req:web.views/comment-on-review@85d2f160
   it('disabled offline and without a fingerprint, on the intent and every card; none on a land', () => {
     for (const [r, o] of [
       [review({ fingerprint: null }), opts()],
