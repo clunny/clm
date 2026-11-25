@@ -12,7 +12,7 @@ serves: [capability/see-project-state, capability/follow-from-browser, capabilit
 Crate `clm-replica`: a repository's derived state, kept up to date from the changes a source reports, and the views computed from it (`web-repo-replica`). It is host-neutral and runtime-neutral: it knows nothing of GitHub, Cloudflare, a browser or a filesystem, and builds for the host and for `wasm32-unknown-unknown`. A runtime (`web.worker.replica` on Cloudflare; later a local `clm serve`) gives it a `Source` and a `Store` and calls it.
 
 - `Replica::default()`: a new replica, holding nothing, which a runtime makes when it starts again from git.
-- `Replica::load(store)` and `save(store)`: the state, to and from a `Store` (`get(key) -> Option<bytes>`, `put(key, bytes)`, `delete_all()`), in chunks of at most 1 MiB each, so a store with a per-value limit holds it; `load` gives a new replica from a store that holds none that reads (`stores-in-chunks`).
+- `Replica::load(store)` and `save(store)`: the state, to and from a `Store` (`get(key) -> Option<bytes>`, `put(key, bytes)`, `delete_all()`), in chunks of at most 1 MiB each, so a store with a per-value limit holds it; `load` gives a new replica from a store that holds none that reads (`stores-in-chunks`). `save` records the release that saved the state, and `load` of a state another release saved counts its markers again (`markers-of-this-release`).
 - `apply(change)`: takes a change a source has already fetched and marks the views stale. The changes are:
   - `Tip { sha, files, removed }`: the default branch at a new commit, with each file that changed and that `wanted` accepts, and the paths removed. Each file is an `Entry { path, sha, size, mode }`, its blob SHA, size and git mode, made into a `File` by one of `File::text(entry, text)`, a file read as text; `File::binary(entry)`, a blob the source says is binary; `File::asset(entry, bytes)`, a binary blob with its bytes, of which the replica keeps only the hash; and `File::unfetched(entry)`, a file the source read nothing of (`files-a-source-gives`, `asset-hashes`). A source builds a `File` only with these, so a field `File` gains breaks no source.
   - `Tree { sha, entries }`: the whole listing at a commit, to rebuild from, or to recover after a force-push.
@@ -40,7 +40,7 @@ The state is plain data: maps from path to text and blob SHA, the marker index, 
 
 Computation is whole-state: nothing is recomputed per component until a repository shows it needs that (`yagni`).
 
-**Marker index.** A `Tip` change rescans only the files it carries, with `clm_coverage::markers_in`. A file is binary when the source says so, or when its text has a NUL byte in its first 8000 bytes, as `clm size` decides.
+**Marker index.** A `Tip` change rescans only the files it carries, with `clm_coverage::markers_in`. A file is binary when the source says so, or when its text has a NUL byte in its first 8000 bytes, as `clm size` decides. Which markers count is the scanner's rule, and a release may change it (`20261124-a-marker-above-a` did), so the saved state names the release that counted its markers: `clm-replica`'s own crate version, which is the workspace's, and the Worker is deployed only from a release (`ci/web-deploy`). A different release, or none, on `load` means every held marker may be wrong. The replica keeps no text of the files outside the spec files, so it can't rescan them in place: it forgets them, and the runtime fetches them again through `pending_fetch` in the slices it already fetches a first build's files in, while the views stay up with coverage indexing. A per-scanner version, bumped by hand when the rule changes, would rescan less often but rests on someone remembering; a rescan costs one pass over the repository's non-Markdown blobs per release and asks the runtime for nothing new.
 
 **Writes.** `validate` answers what the Worker's routes checked before: a decision's entry, its version against the entry's version now, and whether the tip is signed; a proposal's slug against the backlog, `resolved` and the open proposals. Since the replica holds the ledgers and the tip, the check needs no request. The runtime first brings the replica up to the tip, so "now" means the tip, as `decide` requires.
 
@@ -411,3 +411,20 @@ A `File` made by `File::text(entry, text)` SHALL be held at `entry`'s path, blob
 #### Serves
 - capability/follow-from-browser
 - architecture/reuse-first
+
+### Requirement: markers-of-this-release
+`save` SHALL record, with the state, the version of the `clm-replica` crate that saved it. `load` from a store whose state another version saved, or names none, a store saved before this requirement was built included, SHALL give the replica it held with each held file's markers counted by this release's `clm_coverage::markers_in`: a file whose text it keeps scanned again from that text, and a file `wanted` accepts that is neither held as binary nor kept as text no longer held, so `pending_fetch` lists it again and, once a `recompute` computes, the snapshot reports coverage as indexing until it is given again; its tree, spec files' text, binary files, ledgers, refs, pull requests, events and last views SHALL stay as saved, and `stale()` SHALL be true. `load` from a store this version saved SHALL give the state as saved, as `stores-in-chunks` states.
+
+#### Scenario: another release saved it
+- GIVEN a ready replica, its index complete, holding `specs/b/SPEC.md`, `src/a.rs` with a test citing `b/x` at its current version, `specs/b/assets/check.ts` with a test citing `b/y`, `src/b.bin` held as binary, and `README.md` listed; saved to a store whose recorded version is then changed to `0.0.0`, and saved to a second store whose state is then written with no version
+- WHEN a replica is loaded from each store, `pending_fetch` and `stale()` are read, `recompute` runs and the snapshot is read; then `src/a.rs` is given again with its text, and `recompute` runs
+- THEN each loaded replica's `pending_fetch` lists `src/a.rs` only, `stale()` is true before the first recompute, and `view("snapshot")` before it describes the saved commit; after it the snapshot reports coverage as indexing, and the marker index holds `check.ts`'s marker citing `b/y` and none from `src/a.rs`; after `src/a.rs` is given again, its views equal those of the replica that was saved
+
+#### Scenario: this release saved it
+- GIVEN the same ready replica, saved to a store by this release
+- WHEN a replica is loaded from it
+- THEN it equals the replica that was saved, `pending_fetch` is empty and `stale()` is false
+
+#### Serves
+- capability/follow-from-browser
+- architecture/no-silent-drift
