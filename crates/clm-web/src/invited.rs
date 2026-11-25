@@ -19,6 +19,10 @@ pub(crate) async fn is_invited<P: Assets>(p: &P, login: &str) -> bool {
 /// The page for a sign-in GitHub didn't say whose it was.
 pub(crate) const NO_LOGIN: &str = "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width\"><title>CLM</title><h1>Sign-in failed</h1><p>GitHub didn't say who you are. <a href=\"/auth/login\">Sign in again</a>.</p>";
 
+/// The page for a sign-in that would complete on a Worker whose `COOKIE_KEY` can't seal a
+/// session (web.worker/sign-in).
+pub(crate) const NO_COOKIE_KEY: &str = "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width\"><title>CLM</title><h1>Sign-in isn't available</h1><p>Sign-in isn't available on this server right now. Try again later.</p>";
+
 /// Where someone not invited asks for early access: the one place the Worker names it.
 const EARLY_ACCESS_URL: &str = "https://github.com/clunny/clm/issues/new?template=early-access.yml";
 
