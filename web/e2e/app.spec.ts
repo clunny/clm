@@ -467,6 +467,12 @@ test.describe('wide screen', () => {
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
     await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveCount(0);
     await expect(page.locator('.sidebar .nv[data-view=prs] .c')).toHaveCount(0);
+    // And on a phone: the tab bar's Backlog and More's PRs.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('.tabbar .tab-more').click();
+    await expect(page.locator('.more-menu a[data-view=prs]')).toBeVisible();
+    await expect(page.locator('.tabbar a[data-view=backlog] .bdg')).toHaveCount(0);
+    await expect(page.locator('.more-menu a[data-view=prs] .bdg')).toHaveCount(0);
   });
 });
 
@@ -711,6 +717,7 @@ test.describe('signed repositories', () => {
     await expect(page.locator('.signed-note')).toHaveCount(0);
     const before = mock.requests.filter((r) => r === REVIEW).length;
     await page.locator('button.approve').click();
+    await expect(page.locator('.review')).toContainText('Not approved: this repository counts only approvals signed with your SSH key.');
     await expect(page.locator('.signed-note code')).toHaveText('clm approve spec/c');
     expect(mock.requests.filter((r) => r === REVIEW).length).toBeGreaterThan(before);
     await expect(page.locator('button.approve')).toBeDisabled();
@@ -1612,6 +1619,7 @@ test.describe('Home first', () => {
     await mockApi(context);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/app/#/o/a');
+    await expect(page.locator('.tabbar a').first()).toHaveAttribute('data-view', 'home');
     await expect(page.locator('.tabbar a[data-view=home] .bdg')).toHaveText('2');
   });
 });
