@@ -1,4 +1,4 @@
-//! The `workers-rs` adapter: the fetch event, KV, the Cache API, `Fetch` and
+//! The `workers-rs` adapter: the fetch event, the Cache API, `Fetch` and
 //! WebCrypto behind the core's traits. It decides nothing.
 
 use std::collections::BTreeMap;
@@ -8,19 +8,15 @@ use base64::engine::general_purpose::STANDARD;
 use worker::js_sys::{self, Array, Function, Object, Reflect, Uint8Array};
 use worker::wasm_bindgen::{JsCast, JsValue};
 use worker::wasm_bindgen_futures::JsFuture;
-use worker::{
-    Context, Env, Headers, KvStore, Method, Request, RequestInit, Response, WebSocket, event,
-};
+use worker::{Context, Env, Headers, Method, Request, RequestInit, Response, WebSocket, event};
 
 use crate::Replicas;
 use crate::assets::{AssetBinding, AssetCache, BindingAnswer, fetch_asset};
 use clm_web_platform::http::{self, percent_encode};
 use clm_web_platform::platform::{
-    Assets, Auth, Cache, Clock, GhRequest, GhResponse, GitHub, Kv, Live, Log, Secrets,
+    Assets, Auth, Cache, Clock, GhRequest, GhResponse, GitHub, Live, Log, Secrets,
 };
 
-/// The KV namespace binding in `wrangler.toml`.
-const KV_BINDING: &str = "CLM";
 /// The static assets binding in `wrangler.toml`.
 const ASSETS_BINDING: &str = "ASSETS";
 /// The Durable Object binding of the `Live` objects in `wrangler.toml` (`web.live`).
@@ -33,26 +29,6 @@ const CACHE_PREFIX: &str = "https://clm-app.dev/__cache/";
 
 struct Cloudflare {
     env: Env,
-    kv: Option<KvStore>,
-}
-
-impl Cloudflare {
-    fn new(env: Env) -> Cloudflare {
-        let kv = env.kv(KV_BINDING).ok();
-        Cloudflare { env, kv }
-    }
-}
-
-impl Kv for Cloudflare {
-    async fn kv_get(&self, key: &str) -> Option<String> {
-        self.kv.as_ref()?.get(key).text().await.ok().flatten()
-    }
-
-    async fn kv_put(&self, key: &str, value: &str) {
-        if let Some(Ok(put)) = self.kv.as_ref().map(|kv| kv.put(key, value)) {
-            let _ = put.execute().await;
-        }
-    }
 }
 
 impl Cache for Cloudflare {
@@ -367,5 +343,5 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response
     let Some(req) = to_core(req).await else {
         return Response::error("bad request", 400);
     };
-    from_core(crate::handle(&Cloudflare::new(env), req).await)
+    from_core(crate::handle(&Cloudflare { env }, req).await)
 }

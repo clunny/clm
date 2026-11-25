@@ -78,7 +78,7 @@ fn callback_sets_encrypted_cookie() {
         last.auth,
         clm_web_platform::platform::Auth::User("tok-secret-123".into())
     );
-    // Using it for a repo fills KV and the Cache API, still without the tokens.
+    // Using it for a repo fills the Cache API, still without the tokens.
     fake.gh.add_repo("o/a", FakeRepo::new("111", clm_repo()));
     fake.gh.grant("tok-secret-123", "o/a");
     fake.set_view("o/a", "implementation", serde_json::json!({"sha": "111"}));
