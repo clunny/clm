@@ -149,7 +149,8 @@ async fn recipients<P: Host>(
     let mut messages = Vec::new();
     for (login, fold) in ledger::web_folds(sources) {
         held.extend(fold.subscriptions.keys().cloned());
-        if fold.subscriptions.is_empty()
+        // A login with nothing left to send to takes none of the logins' places.
+        if fold.subscriptions.keys().all(|id| gone.contains(id))
             || !may_read(p, auth, permissions, repo, login, &mut logins).await
         {
             continue;

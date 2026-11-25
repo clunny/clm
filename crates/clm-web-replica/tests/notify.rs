@@ -338,3 +338,45 @@ fn review_without_a_vapid_key() {
     ));
     assert!(sends(&fake).is_empty());
 }
+
+#[test]
+fn a_login_with_only_gone_subscriptions_takes_no_place() {
+    // req:web.worker.replica/push-waiting@e5643acc
+    // Ten logins whose every subscription is gone, and `zed`'s live one: `zed` is among the
+    // ten logins the notification considers.
+    let mut fake = Fake::default();
+    fake.secrets
+        .insert("VAPID_PUBLIC_KEY".into(), "BPublicKey".into());
+    let mut repo = FakeRepo::new("111", clm_repo());
+    let mut gone = Gone::default();
+    for login in (0..10).map(|i| format!("a{i:02}")).chain(["zed".into()]) {
+        let writer = format!("{login}/web");
+        let id = format!("s-{login}");
+        ledger(
+            &mut repo,
+            &writer,
+            &format!("L-{login}"),
+            &[subscribed(&id, &writer, &endpoint(&login))],
+        );
+        repo.permissions.insert(login.clone(), "read".into());
+        if login != "zed" {
+            gone.insert(id);
+        }
+    }
+    fake.gh.add_repo("o/a", repo);
+    block_on(waiting(
+        &fake,
+        &auth(),
+        &mut Permissions::default(),
+        &mut gone,
+        "o/a",
+        Some(&[]),
+        &[item("q", "question", "Which region?")],
+    ));
+    let sends = sends(&fake);
+    assert_eq!(sends.len(), 1, "{sends:?}");
+    let messages = sends[0].1["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert_eq!(messages[0]["subscription"]["endpoint"], endpoint("zed"));
+    assert_eq!(gone.len(), 10, "the gone ids are still held, so remembered");
+}

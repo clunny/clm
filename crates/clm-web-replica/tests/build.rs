@@ -101,27 +101,54 @@ fn a_claim_made_before_the_first_build() {
         let at = fake.now.get() - 600;
         for (name, sha) in [("a", "ca"), ("b", "cb")] {
             repo.claims.push((name.into(), sha.into(), at));
-            repo.commits
-                .insert(sha.into(), repo_files(&[("x.rs", "fn x() {}")]));
         }
+        // `impl/b`'s code key can't be read: GitHub has no tree for its head.
+        repo.commits
+            .insert("ca".into(), repo_files(&[("x.rs", "fn x() {}")]));
         repo.events = json!([{
             "type": "CreateEvent", "created_at": iso(at), "actor": {"login": "alice"},
             "payload": {"ref": "impl/a", "ref_type": "branch"},
         }]);
     }
-    let (mut object, _mem, _slot) = built(&fake);
-    let implementation = view(&fake, &mut object, "implementation");
-    let claims: Vec<&Value> = implementation["view"]["activity"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|a| a["kind"] == "claim")
-        .collect();
-    assert_eq!(claims.len(), 1, "{claims:?}");
+    let (mut object, _mem, slot) = built(&fake);
+    let claims = |object: &mut Obj| -> Vec<Value> {
+        let implementation = view(&fake, object, "implementation");
+        implementation["view"]["activity"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["kind"] == "claim")
+            .cloned()
+            .collect()
+    };
+    let first = claims(&mut object);
+    assert_eq!(first.len(), 1, "{first:?}");
     assert_eq!(
-        (&claims[0]["ref"], &claims[0]["actor"]),
+        (&first[0]["ref"], &first[0]["actor"]),
         (&json!("a"), &json!("alice"))
     );
+    // Nor does a later resync take a ref the first build listed for a new one.
+    let resyncs = |fake: &clm_web_platform::fake::Fake| {
+        fake.gh
+            .calls
+            .borrow()
+            .iter()
+            .filter(|c| c.body.as_deref().is_some_and(|b| b.contains("query Refs")))
+            .count()
+    };
+    let before = resyncs(&fake);
+    for _ in 0..20 {
+        // The pages stay open while the test reads.
+        block_on(object.view(&fake, "implementation", false));
+        let Some(at) = slot.0.get() else { break };
+        fake.now.set(at);
+        block_on(object.on_alarm(&fake));
+        if resyncs(&fake) > before {
+            break;
+        }
+    }
+    assert!(resyncs(&fake) > before, "a resync ran");
+    assert_eq!(claims(&mut object), first);
 }
 
 #[test]
