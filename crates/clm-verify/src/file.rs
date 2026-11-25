@@ -83,8 +83,9 @@ fn try_file(ctx: &Ctx, stop: &AtomicBool) -> Result<Option<Filed>, Error> {
 }
 
 /// The items still to file: the entries each `mutated` record on the chain holds, by commit
-/// and component, and the requirements whose run of records counting them against them holds two or more, by the
-/// commit of the second oldest of the run and component; each left out when a commit after
+/// and component, and the requirements whose run of records counting them against them
+/// holds two or more, by the commit of the second oldest of the run and component; each
+/// left out when a commit after
 /// the one it is named after already added an item of its kind and component named by any
 /// prefix of that commit at least 7 characters long.
 fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
