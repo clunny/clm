@@ -465,3 +465,23 @@ pub fn push_body(repo: &str, before: &str, after: &str) -> Value {
         "installation": {"id": 9},
     })
 }
+
+/// The object's refusal with no body, as it gave it: `status`, an empty body and no
+/// content type (`writes-to-object`).
+pub fn the_objects_refusal(res: &Response, status: u16) {
+    assert_eq!(res.status, status, "{res:?}");
+    assert!(res.body.is_empty(), "{res:?}");
+    assert_eq!(res.header("content-type"), None, "{res:?}");
+}
+
+/// The object's answer with a body, as it gave it: `status`, the JSON `body` and
+/// `content-type: application/json` (`writes-to-object`).
+pub fn the_objects_json(res: &Response, status: u16, body: &Value) {
+    assert_eq!(res.status, status, "{res:?}");
+    assert_eq!(&body_json(res), body, "{res:?}");
+    assert_eq!(
+        res.header("content-type"),
+        Some("application/json"),
+        "{res:?}"
+    );
+}

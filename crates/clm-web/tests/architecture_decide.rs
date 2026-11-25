@@ -93,13 +93,6 @@ fn records(fake: &Fake, branch: &str) -> Vec<Value> {
 
 const GIT: &str = "https://api.github.com/repos/o/a/git";
 
-/// The object's refusal as it gave it: `status` with an empty body and no content type.
-fn the_objects_refusal(res: &clm_web_platform::http::Response, status: u16) {
-    assert_eq!(res.status, status, "{res:?}");
-    assert!(res.body.is_empty(), "{res:?}");
-    assert_eq!(res.header("content-type"), None, "{res:?}");
-}
-
 #[test]
 fn decide_appends_decided() {
     // req:web.worker/architecture-decide@1913f135
@@ -215,10 +208,11 @@ fn signed_422() {
     );
     push(&fake, "222", signed);
     let res = decide(&fake, &cookie, "e", &body("0123abcd", "high", "keep"));
-    assert_eq!(res.status, 422, "422, not 409");
-    assert_eq!(
-        body_json(&res),
-        json!({"error": "signed", "command": "clm architecture decide e --value high --decision keep"})
+    // 422, not 409: the stale version isn't what is refused.
+    the_objects_json(
+        &res,
+        422,
+        &json!({"error": "signed", "command": "clm architecture decide e --value high --decision keep"}),
     );
     assert!(fake.gh.writes().is_empty());
 }

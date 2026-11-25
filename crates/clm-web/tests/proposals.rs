@@ -143,15 +143,14 @@ fn refused() {
         &cookie,
         &json!({"title": "Export CSV", "body": "Let me export.", "nodes": ["a"]}),
     );
-    assert_eq!(res.status, 409, "the backlog has the slug");
-    assert_eq!(body_json(&res), json!({"error": "taken"}));
+    // The backlog has the slug.
+    the_objects_json(&res, 409, &json!({"error": "taken"}));
     let res = propose(
         &fake,
         &cookie,
         &json!({"title": "Dark mode", "body": "", "nodes": ["nope"]}),
     );
-    assert_eq!(res.status, 422);
-    assert_eq!(body_json(&res), json!({"error": "nodes"}));
+    the_objects_json(&res, 422, &json!({"error": "nodes"}));
     assert!(fake.gh.writes().is_empty());
 }
 #[test]
@@ -173,8 +172,7 @@ fn taken_by_a_change() {
         &cookie,
         &json!({"title": "Export CSV", "body": "", "nodes": []}),
     );
-    assert_eq!(res.status, 409, "{res:?}");
-    assert_eq!(body_json(&res), json!({"error": "taken"}));
+    the_objects_json(&res, 409, &json!({"error": "taken"}));
     assert!(fake.gh.writes().is_empty(), "nothing written");
 }
 
@@ -191,8 +189,7 @@ fn an_open_proposal_takes_the_slug() {
         &cookie,
         &json!({"title": "Dark Mode", "body": "", "nodes": []}),
     );
-    assert_eq!(res.status, 409);
-    assert_eq!(body_json(&res), json!({"error": "taken"}));
+    the_objects_json(&res, 409, &json!({"error": "taken"}));
     assert!(fake.gh.writes().is_empty());
 }
 

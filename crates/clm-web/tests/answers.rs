@@ -100,11 +100,9 @@ fn refused() {
     // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup_as(true);
     let res = answer(&fake, &cookie, "q", &json!({"answer": "maybe"}));
-    assert_eq!(res.status, 422);
-    assert_eq!(body_json(&res), json!({"error": "answer"}));
+    the_objects_json(&res, 422, &json!({"error": "answer"}));
     let res = answer(&fake, &cookie, "nope", &json!({"answer": "yes"}));
-    assert_eq!(res.status, 404);
-    assert_eq!(body_json(&res), json!({"error": "unknown"}));
+    the_objects_json(&res, 404, &json!({"error": "unknown"}));
     assert!(fake.gh.writes().is_empty());
 }
 
