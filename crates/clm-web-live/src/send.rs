@@ -10,8 +10,8 @@ use serde_json::{Value, json};
 use crate::hub::{Answer, Host};
 use crate::push::{Signer, Subscription, origin, signed_push};
 
-/// The most messages one send takes.
-const MAX_MESSAGES: usize = 10;
+/// The most messages one send takes, which the `Replica` object cuts its batch to.
+pub const MAX_MESSAGES: usize = 10;
 
 #[derive(Deserialize)]
 struct Body {

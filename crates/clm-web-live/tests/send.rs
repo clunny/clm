@@ -2,7 +2,7 @@ mod common;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use clm_web_live::{Answer, Request, Vapid, fetch};
+use clm_web_live::{Answer, MAX_MESSAGES, Request, Vapid, fetch};
 use common::{Fake, block_on};
 use p256::SecretKey;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
@@ -59,7 +59,7 @@ fn jwt(headers: &[(String, String)]) -> String {
 
 #[test]
 fn one_gone() {
-    // req:web.live/push-send@50c3e1cb
+    // req:web.live/push-send@849824f0
     let host = Fake {
         vapid: Some(vapid()),
         statuses: [(B.to_owned(), 410)].into(),
@@ -78,7 +78,7 @@ fn one_gone() {
 
 #[test]
 fn a_404_is_gone_too() {
-    // req:web.live/push-send@50c3e1cb
+    // req:web.live/push-send@849824f0
     let host = Fake {
         vapid: Some(vapid()),
         statuses: [(A.to_owned(), 404), (B.to_owned(), 500)].into(),
@@ -93,40 +93,58 @@ fn a_404_is_gone_too() {
 
 #[test]
 fn a_bad_subscription_is_skipped() {
-    // req:web.live/push-send@50c3e1cb
-    let host = Fake {
-        vapid: Some(vapid()),
-        ..Fake::default()
-    };
-    let mut bad = message(A);
-    bad["subscription"]["auth"] = "AAAA".into();
-    let body = json!({"messages": [bad, message(B)]}).to_string();
-    assert_eq!(
-        send(&host, &body),
-        Answer::Json(200, json!({"gone": []}).to_string())
-    );
-    assert_eq!(host.sent.borrow().len(), 1);
-    assert_eq!(host.sent.borrow()[0].url, B);
+    // req:web.live/push-send@849824f0
+    let auth = |m: &mut Value| m["subscription"]["auth"] = "AAAA".into();
+    let p256dh = |m: &mut Value| m["subscription"]["p256dh"] = b64(&[4; 65]).into();
+    let http = |m: &mut Value| m["subscription"]["endpoint"] = "http://push.example/a".into();
+    let long = |m: &mut Value| m["payload"] = "a".repeat(4000).into();
+    let cases: [(&str, &dyn Fn(&mut Value)); 4] = [
+        ("auth", &auth),
+        ("p256dh", &p256dh),
+        ("http", &http),
+        ("payload", &long),
+    ];
+    for (case, spoil) in cases {
+        let host = Fake {
+            vapid: Some(vapid()),
+            ..Fake::default()
+        };
+        let mut bad = message(A);
+        spoil(&mut bad);
+        let body = json!({"messages": [message(B), bad]}).to_string();
+        assert_eq!(
+            send(&host, &body),
+            Answer::Json(200, json!({"gone": []}).to_string()),
+            "{case}"
+        );
+        let sent = host.sent.borrow();
+        assert_eq!(
+            sent.iter().map(|r| r.url.as_str()).collect::<Vec<_>>(),
+            [B],
+            "{case}"
+        );
+    }
 }
 
 #[test]
 fn too_many() {
-    // req:web.live/push-send@50c3e1cb
+    // req:web.live/push-send@849824f0
     let host = Fake {
         vapid: Some(vapid()),
         ..Fake::default()
     };
-    let body = json!({"messages": vec![message(A); 11]}).to_string();
+    assert_eq!(MAX_MESSAGES, 10);
+    let body = json!({"messages": vec![message(A); MAX_MESSAGES + 1]}).to_string();
     assert_eq!(send(&host, &body), Answer::Status(422));
     assert!(host.sent.borrow().is_empty());
-    let ten = json!({"messages": vec![message(A); 10]}).to_string();
-    assert!(matches!(send(&host, &ten), Answer::Json(200, _)));
-    assert_eq!(host.sent.borrow().len(), 10);
+    let most = json!({"messages": vec![message(A); MAX_MESSAGES]}).to_string();
+    assert!(matches!(send(&host, &most), Answer::Json(200, _)));
+    assert_eq!(host.sent.borrow().len(), MAX_MESSAGES);
 }
 
 #[test]
 fn a_body_that_does_not_parse() {
-    // req:web.live/push-send@50c3e1cb
+    // req:web.live/push-send@849824f0
     let host = Fake {
         vapid: Some(vapid()),
         ..Fake::default()
@@ -144,23 +162,31 @@ fn a_body_that_does_not_parse() {
 
 #[test]
 fn without_vapid_secrets() {
-    // req:web.live/push-send@50c3e1cb
-    let body = json!({"messages": [message(A)]}).to_string();
+    // req:web.live/push-send@849824f0
+    let two = json!({"messages": [message(A), message(B)]}).to_string();
     let host = Fake::default();
-    assert_eq!(send(&host, &body), Answer::Status(503));
+    assert_eq!(send(&host, &two), Answer::Status(503));
     let mut broken = vapid();
     broken.private_key = String::new();
-    let host = Fake {
-        vapid: Some(broken),
-        ..Fake::default()
-    };
-    assert_eq!(send(&host, &body), Answer::Status(503));
+    let mut zero = vapid();
+    zero.private_key = b64(&[0; 32]);
+    for vapid in [broken, zero] {
+        let host = Fake {
+            vapid: Some(vapid.clone()),
+            ..Fake::default()
+        };
+        assert_eq!(send(&host, &two), Answer::Status(503), "{vapid:?}");
+        assert!(host.sent.borrow().is_empty());
+    }
+    // Too many is refused whatever the secrets.
+    let eleven = json!({"messages": vec![message(A); 11]}).to_string();
+    assert_eq!(send(&host, &eleven), Answer::Status(422));
     assert!(host.sent.borrow().is_empty());
 }
 
 #[test]
 fn without_randomness() {
-    // req:web.live/push-send@50c3e1cb
+    // req:web.live/push-send@849824f0
     let host = Fake {
         vapid: Some(vapid()),
         no_random: true,
@@ -169,4 +195,27 @@ fn without_randomness() {
     let body = json!({"messages": [message(A), message(B)]}).to_string();
     assert_eq!(send(&host, &body), Answer::Status(503));
     assert!(host.sent.borrow().is_empty());
+}
+
+#[test]
+fn not_gone() {
+    // req:web.live/push-send@849824f0
+    const C: &str = "https://fcm.googleapis.com/fcm/send/c";
+    const D: &str = "https://fcm.googleapis.com/fcm/send/d";
+    let host = Fake {
+        vapid: Some(vapid()),
+        statuses: [(B.to_owned(), 429), (C.to_owned(), 500)].into(),
+        failing: [D.to_owned()].into(),
+        ..Fake::default()
+    };
+    let body = json!({"messages": [message(A), message(B), message(C), message(D)]}).to_string();
+    assert_eq!(
+        send(&host, &body),
+        Answer::Json(200, json!({"gone": []}).to_string())
+    );
+    let sent = host.sent.borrow();
+    assert_eq!(
+        sent.iter().map(|r| r.url.as_str()).collect::<Vec<_>>(),
+        [A, B, C, D]
+    );
 }
