@@ -20,7 +20,7 @@ use clm_web_platform::{files, ledger};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::notify::Permissions;
+use crate::notify::{Gone, Permissions};
 use crate::removal::{Storage, on_removal};
 use crate::source::{self, Budget};
 
@@ -92,6 +92,8 @@ struct Meta {
     /// The backlog items, and the commit, of the last recompute a notice looked at.
     items: Option<Vec<(String, String, String)>>,
     items_sha: Option<String>,
+    /// The subscriptions whose endpoint a send answered as gone (`push-waiting`).
+    gone: Gone,
 }
 
 /// Deletes everything an object stores.
@@ -522,7 +524,15 @@ impl<S: Store, A: Alarm> Object<S, A> {
             && p.secret("VAPID_PUBLIC_KEY").is_some()
             && let Some(auth) = self.auth(p, b).await
         {
-            crate::notify::review(p, &auth, &mut self.permissions, &self.name, body).await;
+            crate::notify::review(
+                p,
+                &auth,
+                &mut self.permissions,
+                &mut self.meta.gone,
+                &self.name,
+                body,
+            )
+            .await;
         }
     }
 
@@ -1128,6 +1138,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
                         p,
                         a,
                         &mut self.permissions,
+                        &mut self.meta.gone,
                         &self.name,
                         Some(&previous),
                         &new,

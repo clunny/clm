@@ -11,7 +11,7 @@ use clm_replica::Store;
 use clm_web_platform::fake::{Fake, FakeRepo, FileMap, clm_repo, files};
 use clm_web_platform::http::{Request, Response};
 use clm_web_platform::platform::{Clock, GhRequest, GhResponse, GitHub, Live, Log, Secrets};
-use clm_web_replica::{Alarm, Object};
+use clm_web_replica::{Alarm, Host, Object};
 use futures::executor::block_on;
 use serde_json::{Value, json};
 
@@ -94,6 +94,17 @@ pub fn event(name: &str, delivery: &str, body: Value) -> Value {
 /// Runs the alarm, as Cloudflare does at the time it was set, until it re-arms no more.
 /// Answers the subrequests each invocation made.
 pub fn run_alarms(fake: &Fake, object: &mut Obj, slot: &Slot) -> Vec<usize> {
+    run_alarms_on(fake, fake, object, slot)
+}
+
+/// [`run_alarms`], the object running on `platform`, which answers as `fake` does but where
+/// it scripts otherwise.
+pub fn run_alarms_on<P: Host>(
+    platform: &P,
+    fake: &Fake,
+    object: &mut Obj,
+    slot: &Slot,
+) -> Vec<usize> {
     let mut invocations = Vec::new();
     for _ in 0..200 {
         let Some(at) = slot.0.get() else {
@@ -102,7 +113,7 @@ pub fn run_alarms(fake: &Fake, object: &mut Obj, slot: &Slot) -> Vec<usize> {
         // The pages stay open: a read keeps them so until the test says otherwise.
         fake.now.set(fake.now.get().max(at));
         let before = fake.gh.calls.borrow().len();
-        block_on(object.on_alarm(fake));
+        block_on(object.on_alarm(platform));
         invocations.push(fake.gh.calls.borrow().len() - before);
     }
     panic!("the alarm never stopped");

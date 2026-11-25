@@ -402,7 +402,7 @@ fn a_claim_lapses_while_a_page_is_open() {
 
 #[test]
 fn a_question_lands_through_the_alarm() {
-    // req:web.worker.replica/push-waiting@8e710ff8
+    // req:web.worker.replica/push-waiting@e5643acc
     let mut fake = fake_with("111", repo_files(&[]));
     fake.secrets
         .insert("VAPID_PUBLIC_KEY".into(), "BPublicKey".into());
@@ -417,20 +417,148 @@ fn a_question_lands_through_the_alarm() {
     }
     let (mut object, _mem, slot) = built(&fake);
     slot.0.set(None);
-    let sends = |fake: &clm_web_platform::fake::Fake| {
-        fake.live
-            .calls
-            .borrow()
-            .iter()
-            .filter(|c| c.path == "/send")
-            .count()
-    };
-    assert_eq!(sends(&fake), 0);
-    let item = "---\ntitle: Which region?\nkind: question\ncomponents: [a]\n---\nBody.\n";
-    commit(&fake, "222", repo_files(&[("backlog/region.md", item)]));
+    assert!(sent(&fake).is_empty());
+    commit(&fake, "222", questions(&["Which region?"]));
     block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
     run_alarms(&fake, &mut object, &slot);
-    assert_eq!(sends(&fake), 1);
+    let sent = sent(&fake);
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    let messages = sent[0]["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert_eq!(
+        messages[0]["subscription"]["endpoint"],
+        "https://fcm.googleapis.com/fcm/send/alice"
+    );
+    assert_eq!(messages[0]["payload"]["body"], "Which region?");
+}
+
+/// The bodies posted to the `Live` object's `/send`.
+fn sent(fake: &clm_web_platform::fake::Fake) -> Vec<serde_json::Value> {
+    fake.live
+        .calls
+        .borrow()
+        .iter()
+        .filter(|c| c.path == "/send")
+        .map(|c| serde_json::from_str(&c.body).unwrap())
+        .collect()
+}
+
+/// The repo with a `question` item titled each of `titles`.
+fn questions(titles: &[&str]) -> clm_web_platform::fake::FileMap {
+    let items: Vec<(String, String)> = titles
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            (
+                format!("backlog/q{i}.md"),
+                format!("---\ntitle: {t}\nkind: question\ncomponents: [a]\n---\nBody.\n"),
+            )
+        })
+        .collect();
+    let pairs: Vec<(&str, &str)> = items
+        .iter()
+        .map(|(p, t)| (p.as_str(), t.as_str()))
+        .collect();
+    repo_files(&pairs)
+}
+
+/// A `subscribed` record `id` of `alice/web`'s, for `endpoint` with key `p256dh`.
+fn alices(id: &str, endpoint: &str, p256dh: &str) -> serde_json::Value {
+    json!({"id": id, "writer": "alice/web", "at": "2027-01-15T07:00:00.000Z",
+        "kind": "subscribed", "endpoint": endpoint, "p256dh": p256dh, "auth": "AuthSecret"})
+}
+
+/// `o/a` at `111`, with alice's subscriptions and her `read` permission.
+fn subscribed_repo(records: &[serde_json::Value]) -> clm_web_platform::fake::Fake {
+    let mut fake = fake_with("111", repo_files(&[]));
+    fake.secrets
+        .insert("VAPID_PUBLIC_KEY".into(), "BPublicKey".into());
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        ledger(repo, "alice/web", "LA", records);
+        repo.permissions.insert("alice".into(), "read".into());
+    }
+    fake
+}
+
+#[test]
+fn nothing_to_send() {
+    // req:web.worker.replica/push-waiting@e5643acc
+    let sub = alices("s1", "https://fcm.googleapis.com/fcm/send/alice", "BKey");
+    // No VAPID key set.
+    let mut fake = subscribed_repo(std::slice::from_ref(&sub));
+    fake.secrets.remove("VAPID_PUBLIC_KEY");
+    let (mut object, _mem, slot) = built(&fake);
+    commit(&fake, "222", questions(&["Which region?"]));
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    run_alarms(&fake, &mut object, &slot);
+    assert_eq!(view(&fake, &mut object, "snapshot")["sha"], "222");
+    assert!(sent(&fake).is_empty(), "no send without a VAPID key");
+
+    // A VAPID key, and no recompute before `222`'s: the push reaches an object that holds
+    // nothing, and its first build is the first recompute.
+    let fake = subscribed_repo(&[sub]);
+    commit(&fake, "222", questions(&["Which region?"]));
+    let (mut object, _mem, slot) = common::object();
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    run_alarms(&fake, &mut object, &slot);
+    assert_eq!(view(&fake, &mut object, "snapshot")["sha"], "222");
+    assert!(
+        sent(&fake).is_empty(),
+        "no send without a previous recompute"
+    );
+}
+
+#[test]
+fn a_gone_endpoint() {
+    // req:web.worker.replica/push-waiting@e5643acc
+    let (e1, e2) = (
+        "https://fcm.googleapis.com/fcm/send/one",
+        "https://fcm.googleapis.com/fcm/send/two",
+    );
+    let fake = subscribed_repo(&[alices("s1", e1, "K1"), alices("s2", e2, "K2")]);
+    let (mut object, _mem, slot) = built(&fake);
+    let over = Over::new(&fake);
+    *over.send.borrow_mut() = Some(json!({"gone": [e1]}).to_string());
+    let keys = |body: &serde_json::Value| -> Vec<String> {
+        let mut keys: Vec<String> = body["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["subscription"]["p256dh"].as_str().unwrap().to_string())
+            .collect();
+        keys.sort();
+        keys
+    };
+    let titles = ["One?", "Two?", "Three?"];
+    let mut tip = "111".to_string();
+    for (n, round) in ["222", "333", "444"].iter().enumerate() {
+        if n == 2 {
+            // Alice subscribes again as `s3`, with `s1`'s endpoint.
+            let records = [
+                alices("s1", e1, "K1"),
+                alices("s2", e2, "K2"),
+                alices("s3", e1, "K3"),
+            ];
+            ledger(
+                fake.gh.repos.borrow_mut().get_mut("o/a").unwrap(),
+                "alice/web",
+                "LA3",
+                &records,
+            );
+        }
+        commit(&fake, round, questions(&titles[..=n]));
+        let body = push("main", &tip, round);
+        block_on(object.event(&over, &event("push", &format!("d{n}"), body)));
+        run_alarms_on(&over, &fake, &mut object, &slot);
+        tip = round.to_string();
+    }
+    let sent = sent(&fake);
+    assert_eq!(sent.len(), 3, "{sent:?}");
+    assert_eq!(keys(&sent[0]), ["K1", "K2"]);
+    assert_eq!(keys(&sent[1]), ["K2"]);
+    assert_eq!(keys(&sent[2]), ["K2", "K3"]);
 }
 
 #[test]

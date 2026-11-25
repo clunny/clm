@@ -12,7 +12,7 @@ mod source;
 
 #[cfg(target_arch = "wasm32")]
 pub use durable::Replica;
-pub use notify::{Permissions, review, waiting};
+pub use notify::{Gone, Permissions, review, waiting};
 pub use object::{Alarm, Answer, Object};
 pub use removal::{Storage, on_removal};
 
