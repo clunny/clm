@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-replica-keeps-marker-counts-a-scanner-change-has-made-stale]
 ---
 
