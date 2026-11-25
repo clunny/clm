@@ -1,5 +1,6 @@
 //! `status-report`'s moves (`progress-follows-moves`): an applied change's requirement that
-//! a later change moved to another node counts as the requirement it moved to.
+//! a later change moved to another node, or merged into another requirement, counts as the
+//! requirement it moved to.
 
 mod common;
 
@@ -497,6 +498,9 @@ fn a_recorded_merge_moves_across_components_only_once_applied_and_from_the_archi
             &["20260101-c", "0/0 requirements", "complete"]
         };
         assert_eq!(row(&g, &[], "20260101-c"), expected, "{status}");
+        if counted && !archived {
+            assert_eq!(moved_to(&g, "a/x"), ["b/y"], "{status}");
+        }
     }
 }
 
