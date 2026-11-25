@@ -1,5 +1,6 @@
 //! What the router itself decides about a spec branch's routes, before and around
-//! `clm-web-review`: the app's own origin on a write, and the PR-numbered routes' removal.
+//! `clm-web-review`: the app's own origin on a write, the PR-numbered routes' removal, the
+//! branch's name from the path, the bodies checked first, and a comment's targets.
 
 mod common;
 
@@ -91,57 +92,182 @@ fn old_pr_routes() {
 
 #[test]
 fn encoded_branch_name() {
+    // req:web.worker/branch-routes@d492ab12
+    // Each name on a fake of its own, so neither review is served from the other's cache.
+    let review = |path: &str| {
+        let (fake, cookie) = setup();
+        let res = fake.handle(get(
+            &format!("/api/repos/o/a/branches/{path}/review"),
+            &cookie,
+        ));
+        assert_eq!(res.status, 200, "{path}: {res:?}");
+        body_json(&res)
+    };
+    let encoded = review("spec%2Fx");
+    assert_eq!(encoded["branch"], "spec/x");
+    // The name split over segments is the same branch, with the same review.
+    assert_eq!(review("spec/x"), encoded);
+
+    // A change request names its branch the same way.
     let (fake, cookie) = setup();
-    let res = fake.handle(get("/api/repos/o/a/branches/spec%2Fx/review", &cookie));
+    let f = {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        repo.permissions.insert("clunny".into(), "write".into());
+        fingerprint_of(&repo.commits["111"], &repo.commits["spec"])
+    };
+    let body = json!({"fingerprint": f, "text": "Why?"}).to_string();
+    let url = "/api/repos/o/a/branches/spec%2Fx/request-changes";
+    let res = fake.handle(post(url, &cookie, body.as_bytes()));
     assert_eq!(res.status, 200, "{res:?}");
-    assert_eq!(body_json(&res)["branch"], "spec/x");
+    assert_eq!(fake.gh.writes().len(), 4, "the request is appended");
 }
 
 #[test]
 fn bodies_are_checked_before_any_request_to_github() {
+    // req:web.worker/branch-routes@d492ab12
     let (fake, cookie) = setup();
     let calls = || fake.gh.calls.borrow().len();
-    for (route, body) in [
-        ("approve", ""),
-        ("approve", "{}"),
-        ("comments", "{}"),
+    let fingerprint = Some(json!({"error": "fingerprint"}));
+    let text = Some(json!({"error": "text"}));
+    for (route, body, answer) in [
+        ("approve", "", None),
+        ("approve", "not json", None),
+        ("approve", "{}", None),
+        ("approve", r#"{"fingerprint": 3}"#, None),
+        ("comments", "", fingerprint.clone()),
         (
             "comments",
             r#"{"fingerprint": "f", "target": null, "text": " "}"#,
+            text.clone(),
         ),
-        ("request-changes", r#"{"fingerprint": "f"}"#),
+        ("request-changes", r#"{"fingerprint": "f"}"#, text.clone()),
     ] {
         let before = calls();
         let url = format!("/api/repos/o/a/branches/spec/x/{route}");
         let res = fake.handle(post(&url, &cookie, body.as_bytes()));
         assert_eq!(res.status, 422, "{route} {body}");
-        assert_eq!(calls(), before, "{route} {body}");
+        match &answer {
+            None => assert!(res.body.is_empty(), "{route} {body}: {res:?}"),
+            Some(answer) => assert_eq!(&body_json(&res), answer, "{route} {body}"),
+        }
+        assert_eq!(calls(), before, "{route} {body}: GitHub was asked");
     }
+    assert!(fake.gh.writes().is_empty(), "nothing is written");
+    assert!(
+        fake.replicas.asked("o/a").is_empty(),
+        "the object was asked"
+    );
 }
 
 #[test]
 fn approve_through_the_router() {
+    // req:web.worker/branch-routes@d492ab12
     let (fake, cookie) = setup();
     let f = {
         let repos = fake.gh.repos.borrow();
         let repo = &repos["o/a"];
         fingerprint_of(&repo.commits["111"], &repo.commits["spec"])
     };
-    let url = "/api/repos/o/a/branches/spec/x/approve";
+    // The name encoded, as the app sends it.
+    let url = "/api/repos/o/a/branches/spec%2Fx/approve";
     let body = json!({"fingerprint": f}).to_string();
     let res = fake.handle(post(url, &cookie, body.as_bytes()));
     assert_eq!(res.status, 200, "{res:?}");
-    assert_eq!(fake.gh.writes().len(), 4, "blob, tree, commit, ref");
+    // An append to the user's web ledger: a blob, a tree, a commit, and its ref.
+    let writes: Vec<String> = fake
+        .gh
+        .writes()
+        .iter()
+        .map(|w| {
+            let path = w.url.split("/repos/o/a/").nth(1).unwrap_or(&w.url);
+            let body = w.body.as_deref().unwrap_or_default();
+            format!("{} {path} {body}", w.method)
+        })
+        .collect();
+    assert_eq!(writes.len(), 4, "{writes:?}");
+    for (write, kind) in writes
+        .iter()
+        .zip(["git/blobs", "git/trees", "git/commits", "git/refs"])
+    {
+        assert!(write.contains(kind), "{writes:?}");
+    }
+    // The blob is the `approved` record for `spec/x`, and the ref the user's web ledger.
+    let blob: serde_json::Value =
+        serde_json::from_str(fake.gh.writes()[0].body.as_deref().unwrap()).unwrap();
+    let record: serde_json::Value =
+        serde_json::from_str(blob["content"].as_str().unwrap().trim()).unwrap();
+    assert_eq!(record["kind"], "approved", "{record}");
+    assert_eq!(record["branch"], "spec/x", "{record}");
+    assert!(
+        writes[3].contains("refs/heads/clm/ledger/clunny/web"),
+        "{writes:?}"
+    );
 }
 
 #[test]
 fn comments_take_their_targets_from_the_snapshot() {
+    // req:web.worker/branch-routes@d492ab12
     let (fake, cookie) = setup();
     let url = "/api/repos/o/a/branches/spec/x/comments";
+    let body = |target: &str| json!({"fingerprint": "f", "target": target, "text": "Hm"});
     // `m/old` is in the default branch's graph, not in the branch's review.
-    for (target, status) in [("m/old", 200), ("m/missing", 422)] {
-        let body = json!({"fingerprint": "f", "target": target, "text": "Hm"}).to_string();
-        let res = fake.handle(post(url, &cookie, body.as_bytes()));
-        assert_eq!(res.status, status, "{target}: {res:?}");
-    }
+    let res = fake.handle(post(url, &cookie, body("m/old").to_string().as_bytes()));
+    assert_eq!(res.status, 200, "{res:?}");
+    // The name encoded is the same branch.
+    let encoded = "/api/repos/o/a/branches/spec%2Fx/comments";
+    let res = fake.handle(post(
+        encoded,
+        &cookie,
+        body("m/missing").to_string().as_bytes(),
+    ));
+    assert_eq!(res.status, 422, "{res:?}");
+    assert_eq!(body_json(&res), json!({"error": "target"}));
+    assert_eq!(
+        fake.gh.writes().len(),
+        4,
+        "only the first comment is written"
+    );
+
+    // Nothing cached and the object down: no target can be looked for, so the review
+    // answers 502 and nothing is written.
+    let (down, cookie) = setup();
+    down.replicas.fails.borrow_mut().insert("o/a".into());
+    let res = down.handle(post(url, &cookie, body("m/old").to_string().as_bytes()));
+    assert_eq!(res.status, 502, "{res:?}");
+    assert!(down.gh.writes().is_empty());
+    assert!(
+        down.replicas
+            .asked("o/a")
+            .iter()
+            .any(|c| c.path.starts_with("/view/snapshot")),
+        "the snapshot view was asked for"
+    );
+}
+
+#[test]
+fn the_list_is_the_reviews_or_502() {
+    // req:web.worker/branch-routes@d492ab12
+    let (fake, cookie) = setup();
+    let res = fake.handle(get("/api/repos/o/a/branches", &cookie));
+    assert_eq!(res.status, 200, "{res:?}");
+    let list = body_json(&res);
+    assert_eq!(list.as_array().map(Vec::len), Some(1), "{list}");
+    assert_eq!(list[0]["branch"], "spec/x");
+    assert_eq!(list[0]["head_sha"], "spec");
+    assert_eq!(list[0]["page"]["number"], 7);
+
+    // GitHub fails the spec branches' listing: the review gives none, and the route 502.
+    let (failing, cookie) = setup();
+    failing
+        .gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .fail_paths
+        .push("git/matching-refs/heads/spec/".into());
+    let res = failing.handle(get("/api/repos/o/a/branches", &cookie));
+    assert_eq!(res.status, 502, "{res:?}");
+    assert!(res.body.is_empty());
 }
