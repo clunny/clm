@@ -330,3 +330,39 @@ fn a_running_rebase_holds_back_no_fold() {
     let actions = step(&fx.options()).unwrap();
     line(&actions, "launch fold:x fold ");
 }
+
+#[test]
+fn launched_while_draining_and_counted_when_printed() {
+    // req:orchestrator.loop/failed-batch-land-rebased@a017d9ce: also while a drain is
+    // requested, and the one launch is counted when it is printed.
+    let fx = Fixture::new();
+    approved_batch(&fx);
+    clm_loop::stop(&fx.options(), clm_loop::StopMode::Drain).unwrap();
+    let actions = returned(&fx.options(), "land:b", None, MERGE_FAILED, None, None).unwrap();
+    line(&actions, &common::launch_on_build_model("rebase:b", "fold"));
+    assert_eq!(fx.file().batches[0].rebase, clm_loop::Rebase::Launched);
+}
+
+#[test]
+fn a_proposal_for_another_batch_brings_nothing_up_to_date() {
+    // req:orchestrator.loop/failed-batch-land-rebased@a017d9ce: only `proposed b review` lands
+    // `b` again; any other line puts it back in the human's queue.
+    let fx = Fixture::new();
+    rebase_running(&fx);
+    let actions = returned(
+        &fx.options(),
+        "rebase:b",
+        None,
+        "proposed c review",
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(
+        !actions.iter().any(|l| l.starts_with("run land:b")),
+        "{actions:?}"
+    );
+    assert_eq!(says(&actions).len(), 1, "{actions:?}");
+    assert!(queued(&fx));
+    assert_eq!(fx.file().batches.len(), 1, "no batch added");
+}
