@@ -1,59 +1,10 @@
-//! `clm-web-platform` holds the Worker's shared layer once (`shared-layer`).
-
-use std::path::{Path, PathBuf};
+//! A record appended to its writer's web ledger (`web-ledger-append`).
 
 use clm_ledger::{Body, Record};
 use clm_web_platform::access::{self, Access};
 use clm_web_platform::fake::*;
 use clm_web_platform::ledger;
 use serde_json::json;
-
-const MODULES: [&str; 9] = [
-    "platform.rs",
-    "http.rs",
-    "access.rs",
-    "gh.rs",
-    "files.rs",
-    "keys.rs",
-    "install.rs",
-    "live.rs",
-    "ledger.rs",
-];
-
-/// The file names in `crates/<name>/src`, none for a directory that doesn't exist.
-fn listing(name: &str) -> Vec<String> {
-    let dir: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join(name)
-        .join("src");
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut names: Vec<String> = entries
-        .filter_map(|e| e.ok()?.file_name().into_string().ok())
-        .collect();
-    names.sort();
-    names
-}
-
-#[test]
-fn one_copy() {
-    // req:web.worker.platform/shared-layer@33f47bc2
-    let platform = listing("clm-web-platform");
-    for module in MODULES {
-        assert!(
-            platform.iter().any(|f| f == module),
-            "platform lacks {module}"
-        );
-    }
-    for other in ["clm-web", "clm-web-review"] {
-        let held: Vec<String> = listing(other)
-            .into_iter()
-            .filter(|f| MODULES.contains(&f.as_str()))
-            .collect();
-        assert!(held.is_empty(), "{other} holds {held:?}");
-    }
-}
 
 fn setup() -> (Fake, Access) {
     let fake = Fake::default();
@@ -69,7 +20,7 @@ fn setup() -> (Fake, Access) {
 
 #[test]
 fn the_append() {
-    // req:web.worker.platform/shared-layer@33f47bc2
+    // req:web.worker.platform/web-ledger-append@debff849
     let (fake, access) = setup();
     let body = Body::approved("f1".into(), "spec/y".into(), None);
     let record: Record = ledger::record(&fake, "alice", body);

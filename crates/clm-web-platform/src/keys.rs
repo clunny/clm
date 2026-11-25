@@ -120,7 +120,7 @@ impl Listing {
 
 /// The fingerprint of the changes from `base` to `head` over the whole repository's tree
 /// (`clm_gate::fingerprint_of`), which is what `clm fingerprint` prints when the CLM root is
-/// the repository's top (`web.worker.review/fingerprint-from-trees`), `None` when either
+/// the repository's top (`fingerprint-from-listings`), `None` when either
 /// listing is truncated, since an entry left out would change it.
 pub fn fingerprint(base: &Listing, head: &Listing) -> Option<String> {
     (!base.truncated && !head.truncated)

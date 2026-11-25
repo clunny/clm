@@ -1,10 +1,9 @@
-//! Fakes of Cloudflare and GitHub for the Worker's core: KV with a write counter, the Cache
-//! API, a clock, secrets, and a GitHub that serves repos held in memory and counts every
-//! call, so each test can assert the subrequest budget.
+//! Fakes of Cloudflare and GitHub for the Worker's core: the Cache API, a clock, secrets,
+//! and a GitHub that serves repos held in memory and counts every call, so each test can
+//! assert the subrequest budget.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 
 use crate::http::{Request, Response, Upgrade};
 use crate::platform::{
@@ -57,8 +56,6 @@ pub struct FakeRepo {
     pub compare_base: BTreeMap<String, String>,
     /// Open PRs' web pages: (head branch, number, URL).
     pub pages: Vec<(String, u64, String)>,
-    /// Branches' tip commit times, for the refs query; `NOW` when absent.
-    pub ref_times: BTreeMap<String, u64>,
     /// Commits whose Trees API listing GitHub reports as truncated.
     pub truncated_trees: BTreeSet<String>,
     /// Each path's mode in tree listings, when it isn't `100644`: `120000` for a symlink,
@@ -78,6 +75,17 @@ pub struct FakeRepo {
     pub permissions: BTreeMap<String, String>,
     /// Branches whose ref lookup GitHub fails with a 502.
     pub ref_fails: BTreeSet<String>,
+    /// Branches whose ref GitHub refuses to create or move, with a 422.
+    pub refused_refs: BTreeSet<String>,
+    /// GitHub fails `GET /repos/{o}/{r}` with a 502.
+    pub lookup_fails: bool,
+    /// Logins whose permission lookup GitHub fails with a 502.
+    pub permission_fails: BTreeSet<String>,
+    /// Blob SHAs the blob API fails with a 502.
+    pub blob_fails: BTreeSet<String>,
+    /// REST paths, after `/repos/{o}/{r}/`, whose requests GitHub fails with a 502: each
+    /// request whose path starts with one.
+    pub fail_paths: Vec<String>,
 }
 
 impl FakeRepo {
@@ -112,6 +120,11 @@ pub struct FakeGitHub {
     pub calls: RefCell<Vec<GhRequest>>,
     /// GraphQL query names (`Signers`, ...) answered with a null `repository`.
     pub graphql_null: RefCell<BTreeSet<String>>,
+    /// The `expires_at` of the tokens the App mints: an hour after `NOW` when unset, and
+    /// left out when `Null`.
+    pub expires_at: RefCell<Option<Value>>,
+    /// The status the App's token mint answers with, and no token, when set.
+    pub mint_status: Cell<Option<u16>>,
 }
 
 pub fn blob_sha(bytes: &[u8]) -> String {
@@ -220,7 +233,19 @@ impl FakeGitHub {
             }
             ("POST", ["app", "installations", id, "access_tokens"]) => {
                 assert!(matches!(req.auth, Auth::App(_)), "{req:?}");
-                ok(json!({"token": format!("inst-{id}"), "expires_at": "2027-01-15T09:00:00Z"}))
+                if let Some(code) = self.mint_status.get() {
+                    return status(code);
+                }
+                let mut minted = json!({"token": format!("inst-{id}")});
+                match self.expires_at.borrow().clone() {
+                    None => minted["expires_at"] = json!("2027-01-15T09:00:00Z"),
+                    Some(Value::Null) => {}
+                    Some(at) => minted["expires_at"] = at,
+                }
+                GhResponse {
+                    status: 201,
+                    body: minted.to_string(),
+                }
             }
             (_, ["repos", o, r, rest @ ..]) => {
                 // GitHub matches owner and repo names case-insensitively.
@@ -232,6 +257,14 @@ impl FakeGitHub {
                     .find(|k| k.eq_ignore_ascii_case(&asked))
                     .cloned()
                     .unwrap_or(asked);
+                if let Some(repo) = self.repos.borrow().get(&name) {
+                    let rest = rest.join("/");
+                    let failed = repo.fail_paths.iter().any(|f| rest.starts_with(f.as_str()))
+                        || (rest.is_empty() && repo.lookup_fails);
+                    if failed {
+                        return status(502);
+                    }
+                }
                 if let (["installation"], Auth::App(_)) = (rest, &req.auth) {
                     return match self.repos.borrow().get(&name) {
                         Some(repo) => ok(json!({"id": repo.installation})),
@@ -364,16 +397,7 @@ impl FakeGitHub {
                     .split('&')
                     .find_map(|p| p.strip_prefix("head="))
                     .map(|h| h.replace("%2F", "/").replace("%3A", ":"));
-                let pages: Vec<Value> = repo
-                    .pages
-                    .iter()
-                    .filter(|(branch, _, _)| {
-                        head.as_deref()
-                            == Some(&format!("{}:{branch}", name.split('/').next().unwrap()))
-                    })
-                    .map(|(_, n, url)| json!({"number": n, "html_url": url}))
-                    .collect();
-                ok(Value::Array(pages))
+                ok(Value::Array(rest_pulls(name, repo, head.as_deref())))
             }
             ("GET", ["git", "trees", sha]) => match commit(sha) {
                 Some(files) => {
@@ -390,6 +414,9 @@ impl FakeGitHub {
                 None => status(404),
             },
             ("GET", ["git", "blobs", sha]) => {
+                if repo.blob_fails.contains(*sha) {
+                    return status(502);
+                }
                 let found = repo
                     .commits
                     .values()
@@ -432,6 +459,9 @@ impl FakeGitHub {
                     matches!(req.auth, Auth::Installation(_)),
                     "asked with the installation's token"
                 );
+                if repo.permission_fails.contains(*login) {
+                    return status(502);
+                }
                 match repo.permissions.get(*login) {
                     Some(p) => ok(json!({"permission": p})),
                     None => status(404),
@@ -498,26 +528,23 @@ impl FakeGitHub {
             };
             json!({"object": object})
         } else if query.contains("query Blobs") || query.contains("query Ledgers") {
+            // Each `f<i>` the blob `$e<i>` names, each `t<j>` the entries of the directory
+            // `$t<j>` names.
             let mut fields = serde_json::Map::new();
             for (k, e) in &vars {
-                let Some(i) = k.strip_prefix('e') else {
+                let (sha, path) = e
+                    .as_str()
+                    .unwrap_or_default()
+                    .split_once(':')
+                    .unwrap_or_default();
+                let value = if let Some(i) = index(k, 'e') {
+                    (format!("f{i}"), blob_object(repo, sha, path))
+                } else if let Some(j) = index(k, 't') {
+                    (format!("t{j}"), tree_object(repo, sha, path))
+                } else {
                     continue;
                 };
-                let (sha, path) = e.as_str().unwrap().split_once(':').unwrap();
-                let value = match repo.commits.get(sha).and_then(|f| f.get(path)) {
-                    Some(b) => match std::str::from_utf8(b) {
-                        Ok(t) if t.len() > TRUNCATE => json!({
-                            "text": &t[..TRUNCATE],
-                            "isBinary": false,
-                            "isTruncated": true,
-                            "oid": blob_sha(b),
-                        }),
-                        Ok(t) => json!({"text": t, "isBinary": false, "isTruncated": false}),
-                        Err(_) => json!({"text": null, "isBinary": true, "isTruncated": false}),
-                    },
-                    None => Value::Null,
-                };
-                fields.insert(format!("f{i}"), value);
+                fields.insert(value.0, value.1);
             }
             Value::Object(fields)
         } else if query.contains("query Taken") {
@@ -552,7 +579,7 @@ impl FakeGitHub {
         } else if query.contains("query Refs") {
             // GitHub lists refs in name order, at most `first` (100) a page, from the
             // `after` cursor. `impl/*` claims come from `claims`; other prefixes from
-            // `branches`, at their `ref_times` or `NOW`.
+            // `branches`, at `NOW`.
             let prefix = var("prefix");
             let rest = prefix.strip_prefix("refs/heads/").unwrap();
             let mut claims = if rest == "impl/" {
@@ -562,8 +589,7 @@ impl FakeGitHub {
                     .iter()
                     .filter_map(|(b, sha)| {
                         let name = b.strip_prefix(rest)?;
-                        let time = repo.ref_times.get(b).copied().unwrap_or(NOW);
-                        Some((name.to_string(), sha.clone(), time))
+                        Some((name.to_string(), sha.clone(), NOW))
                     })
                     .collect()
             };
@@ -591,15 +617,23 @@ impl FakeGitHub {
                 "pageInfo": {"hasNextPage": end < claims.len(), "endCursor": end.to_string()},
             }})
         } else if query.contains("query Pulls") {
-            let nodes: Vec<Value> = repo
-                .pulls
+            assert!(
+                !query.contains("statusCheckRollup"),
+                "the App can't read checks"
+            );
+            // GitHub lists open pull requests in pages of at most `first`, from the `after`
+            // cursor.
+            let open: Vec<&FakePull> = repo.pulls.iter().filter(|p| p.state == "open").collect();
+            let first = first_of(query, &vars);
+            let start = vars
+                .get("after")
+                .and_then(Value::as_str)
+                .map_or(0, |c| c.parse::<usize>().unwrap())
+                .min(open.len());
+            let end = (start + first).min(open.len());
+            let nodes: Vec<Value> = open[start..end]
                 .iter()
-                .filter(|p| p.state == "open")
                 .map(|p| {
-                    assert!(
-                        !query.contains("statusCheckRollup"),
-                        "the App can't read checks"
-                    );
                     json!({
                         "number": p.number,
                         "url": format!("https://github.com/{name}/pull/{}", p.number),
@@ -611,7 +645,10 @@ impl FakeGitHub {
                     })
                 })
                 .collect();
-            json!({"pullRequests": {"nodes": nodes}})
+            json!({"pullRequests": {
+                "nodes": nodes,
+                "pageInfo": {"hasNextPage": end < open.len(), "endCursor": end.to_string()},
+            }})
         } else {
             panic!("fake GitHub doesn't know the query {query}");
         };
@@ -674,7 +711,7 @@ fn git_write(req: &GhRequest, repo: &mut FakeRepo, rest: &[&str]) -> GhResponse 
                 .unwrap()
                 .strip_prefix("refs/heads/")
                 .unwrap();
-            if repo.branches.contains_key(name) {
+            if repo.branches.contains_key(name) || repo.refused_refs.contains(name) {
                 return status(422);
             }
             repo.branches
@@ -683,6 +720,9 @@ fn git_write(req: &GhRequest, repo: &mut FakeRepo, rest: &[&str]) -> GhResponse 
         }
         ("PATCH", ["refs", "heads", branch @ ..]) => {
             let name = branch.join("/");
+            if repo.refused_refs.contains(&name) {
+                return status(422);
+            }
             let sha = body["sha"].as_str().unwrap().to_string();
             let Some(old) = repo.branches.get(&name) else {
                 return status(422);
@@ -726,9 +766,112 @@ pub fn fingerprint_of(base: &FileMap, head: &FileMap) -> String {
     clm_gate::fingerprint_of(&entries(base), &entries(head))
 }
 
-/// RFC 3339 for Unix seconds, as the Worker writes it.
+/// RFC 3339 for Unix seconds, as the Worker writes it (`ledger/record-times`).
 pub fn iso(t: u64) -> String {
-    crate::install::rfc3339(t)
+    clm_ledger::rfc3339(t, 0)
+}
+
+/// The number in `k` after `prefix`, as in `e3` or `t0`.
+fn index(k: &str, prefix: char) -> Option<usize> {
+    k.strip_prefix(prefix)?.parse().ok()
+}
+
+/// The `Blobs` query's answer for the file `path` at commit `sha`.
+fn blob_object(repo: &FakeRepo, sha: &str, path: &str) -> Value {
+    match repo.commits.get(sha).and_then(|f| f.get(path)) {
+        Some(b) => match std::str::from_utf8(b) {
+            Ok(t) if t.len() > TRUNCATE => json!({
+                "text": &t[..TRUNCATE],
+                "isBinary": false,
+                "isTruncated": true,
+                "oid": blob_sha(b),
+            }),
+            Ok(t) => {
+                json!({"text": t, "isBinary": false, "isTruncated": false, "oid": blob_sha(b)})
+            }
+            Err(_) => {
+                json!({"text": null, "isBinary": true, "isTruncated": false, "oid": blob_sha(b)})
+            }
+        },
+        None => Value::Null,
+    }
+}
+
+/// The `Blobs` query's answer for the directory `dir` at commit `sha`, the top of the tree
+/// for an empty `dir`: its entries, each with its name and its mode as GraphQL's integer.
+fn tree_object(repo: &FakeRepo, sha: &str, dir: &str) -> Value {
+    let Some(files) = repo.commits.get(sha) else {
+        return Value::Null;
+    };
+    let prefix = if dir.is_empty() {
+        String::new()
+    } else {
+        format!("{dir}/")
+    };
+    let mut entries: BTreeMap<&str, u32> = BTreeMap::new();
+    for path in files.keys() {
+        let Some(rest) = path.strip_prefix(&prefix) else {
+            continue;
+        };
+        let mode = match rest.split_once('/') {
+            Some((name, _)) => (name, 0o040000),
+            None => {
+                let octal = repo.modes.get(path).map_or("100644", String::as_str);
+                (rest, u32::from_str_radix(octal, 8).unwrap())
+            }
+        };
+        entries.insert(mode.0, mode.1);
+    }
+    if entries.is_empty() {
+        // A file is a Blob, which `... on Tree` reads as `{}`; nothing there is null.
+        return if files.contains_key(dir) {
+            json!({})
+        } else {
+            Value::Null
+        };
+    }
+    let entries: Vec<Value> = entries
+        .iter()
+        .map(|(name, mode)| json!({"name": name, "mode": mode}))
+        .collect();
+    json!({"entries": entries})
+}
+
+/// The page size a GraphQL query asks for, written into it or given as `$first`.
+fn first_of(query: &str, vars: &serde_json::Map<String, Value>) -> usize {
+    let first = vars
+        .get("first")
+        .and_then(Value::as_u64)
+        .map(|n| n as usize);
+    let first = first.or_else(|| {
+        query
+            .split("first: ")
+            .nth(1)
+            .and_then(|s| s.split(|c: char| !c.is_ascii_digit()).next())
+            .and_then(|n| n.parse::<usize>().ok())
+    });
+    let first = first.expect("the query names `first`");
+    assert!(first <= 100, "GitHub serves at most 100 a page");
+    first
+}
+
+/// The REST pulls listing of `repo` for `head=<owner>:<branch>`: each of `pages` whose head
+/// is that branch of `repo`'s owner, its head and base repository `repo`.
+fn rest_pulls(name: &str, repo: &FakeRepo, head: Option<&str>) -> Vec<Value> {
+    let owner = name.split_once('/').unwrap().0;
+    repo.pages
+        .iter()
+        .filter(|(branch, _, _)| head == Some(format!("{owner}:{branch}").as_str()))
+        .map(|(branch, number, url)| {
+            json!({
+                "number": number,
+                "html_url": url,
+                "title": "",
+                "head": {"ref": branch, "sha": "", "repo": {"full_name": name}},
+                "base": {"ref": repo.default_branch, "repo": {"full_name": name}},
+            })
+        })
+        .collect()
 }
 
 /// A request that reached a `Live` object.
@@ -741,8 +884,6 @@ pub struct LiveCall {
     /// It carried `Upgrade: websocket`.
     pub websocket: bool,
     pub body: String,
-    /// How many KV writes had been made when it arrived.
-    pub kv_writes_before: usize,
 }
 
 /// The `LIVE` binding: every request its objects received.
@@ -765,10 +906,13 @@ pub struct Fake {
     pub live: FakeLive,
     /// Every line the Worker logged.
     pub logs: RefCell<Vec<String>>,
+    /// Workers KV, which no `Platform` needs any more (`platform-parts`).
+    // clm:remove-by 20261124-wave-6-worker-by-the-rule
     pub kv: RefCell<BTreeMap<String, String>>,
+    // clm:remove-by 20261124-wave-6-worker-by-the-rule
     pub kv_writes: RefCell<Vec<String>>,
     pub cache: RefCell<BTreeMap<String, (String, u64)>>,
-    /// Every value ever written to KV or the Cache API.
+    /// Every value ever written to the Cache API (or KV).
     pub stored: RefCell<Vec<String>>,
     pub now: Cell<u64>,
     pub secrets: BTreeMap<String, String>,
@@ -828,6 +972,7 @@ impl Assets for Fake {
     }
 }
 
+// clm:remove-by 20261124-wave-6-worker-by-the-rule
 impl Kv for Fake {
     async fn kv_get(&self, key: &str) -> Option<String> {
         self.kv.borrow().get(key).cloned()
@@ -872,7 +1017,6 @@ impl Live for Fake {
             path: req.path.clone(),
             websocket: req.header("upgrade") == Some("websocket"),
             body: String::from_utf8_lossy(&req.body).into_owned(),
-            kv_writes_before: self.kv_writes.borrow().len(),
         });
         let mut res = Response::empty(101);
         res.upgrade = Some(Upgrade::new("socket"));
@@ -889,7 +1033,6 @@ impl Live for Fake {
             path: path.into(),
             websocket: false,
             body: body.into(),
-            kv_writes_before: self.kv_writes.borrow().len(),
         });
         Some((204, String::new()))
     }
@@ -934,15 +1077,6 @@ pub fn files(entries: &[(&str, &str)]) -> FileMap {
         .collect()
 }
 
-/// Writes `files` under `dir`.
-pub fn write_checkout(dir: &Path, files: &FileMap) {
-    for (p, b) in files {
-        let path = dir.join(p);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, b).unwrap();
-    }
-}
-
 pub fn node(deps: &str, reqs: &[&str], status: &str) -> String {
     let mut s = format!(
         "---\ntitle: T\nstatus: {status}\nowners: []\ndepends_on: [{deps}]\n---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n"
@@ -976,34 +1110,4 @@ pub fn signature(secret: &str, body: &[u8]) -> String {
         "sha256={}",
         tag.iter().map(|b| format!("{b:02x}")).collect::<String>()
     )
-}
-
-/// The first 8 hex digits of requirement `id`'s hash in `files`: its version
-/// (`versioned-markers`).
-pub fn version_of(files: &FileMap, id: &str) -> String {
-    let dir = tempfile::tempdir().unwrap();
-    write_checkout(dir.path(), files);
-    let (graph, _) = clm_model::load(dir.path());
-    let (node, _) = id.split_once('/').unwrap();
-    graph.nodes[node]
-        .requirements
-        .iter()
-        .find(|r| r.id == id)
-        .unwrap()
-        .hash[..8]
-        .to_string()
-}
-
-/// A test file citing each of `ids` at its version in `files`.
-pub fn citing(files: &FileMap, ids: &[&str]) -> String {
-    let mut s = String::from("#[test]\nfn t() {\n");
-    for id in ids {
-        s.push_str(&format!(
-            "    // {}:{id}@{}\n",
-            "req",
-            version_of(files, id)
-        ));
-    }
-    s.push_str("}\n");
-    s
 }

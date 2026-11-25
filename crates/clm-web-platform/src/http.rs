@@ -4,6 +4,7 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Default)]
@@ -34,13 +35,14 @@ impl Request {
             .map(|(_, v)| v)
     }
 
-    /// The first value of query parameter `name`, percent-decoded.
+    /// The first value of query parameter `name`, each `+` read as a space and then
+    /// percent-decoded; none when the query holds no `name=` (`percent-coding`).
     pub fn param(&self, name: &str) -> Option<String> {
         self.query
             .split('&')
             .filter_map(|p| p.split_once('='))
             .find(|(k, _)| *k == name)
-            .map(|(_, v)| percent_decode(v))
+            .map(|(_, v)| percent_decode(&v.replace('+', " ")))
     }
 }
 
@@ -133,36 +135,22 @@ impl Response {
     }
 }
 
+/// The bytes `percent_encode` writes as `%XX`: all but ASCII letters, digits, `-`, `_`, `.`
+/// and `~`.
+const ENCODED: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b'~');
+
+/// `s` with every byte of its UTF-8 but ASCII letters, digits, `-`, `_`, `.` and `~`
+/// written as `%` and two upper-case hex digits (`percent-coding`).
 pub fn percent_encode(s: &str) -> String {
-    s.bytes()
-        .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                (b as char).to_string()
-            }
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
+    utf8_percent_encode(s, ENCODED).to_string()
 }
 
+/// `s` with each `%` and two hex digits turned into that byte, any other `%` and every `+`
+/// kept, and U+FFFD for bytes that aren't UTF-8 (`percent-coding`).
 pub fn percent_decode(s: &str) -> String {
-    let hex = |b: u8| (b as char).to_digit(16).map(|d| d as u8);
-    let bytes = s.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let pair = (bytes[i] == b'%')
-            .then(|| Some((hex(*bytes.get(i + 1)?)?, hex(*bytes.get(i + 2)?)?)))
-            .flatten();
-        match (pair, bytes[i]) {
-            (Some((hi, lo)), _) => {
-                out.push(hi << 4 | lo);
-                i += 3;
-                continue;
-            }
-            (None, b'+') => out.push(b' '),
-            (None, b) => out.push(b),
-        }
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
+    percent_decode_str(s).decode_utf8_lossy().into_owned()
 }

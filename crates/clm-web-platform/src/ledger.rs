@@ -97,29 +97,48 @@ pub async fn read<P: GitHub>(p: &P, auth: &Auth, repo: &str) -> Option<Sources> 
 /// `None` when it can't be read.
 pub async fn own<P: GitHub>(p: &P, access: &Access, login: &str) -> Option<Fold> {
     let name = format!("clm/ledger/{}", web_writer(login));
-    let path = format!("/repos/{}/git/ref/heads/{name}", access.full_name());
-    let tip = match gh::get(p, access.auth(), &path).await {
-        (404, _) => return Some(Fold::default()),
-        (200, v) => v["object"]["sha"].as_str()?.to_string(),
-        _ => return None,
+    let Some(tip) = branch_tip(p, access, &name).await.ok()? else {
+        return Some(Fold::default());
     };
-    let expression = format!("{tip}:records.jsonl");
-    let repo = access.full_name();
-    let text = files::objects_direct(p, access.auth(), &repo, "Ledgers", &[expression])
-        .await?
-        .pop()
-        .flatten()?;
+    let text = text_at(p, access, &tip).await?;
     Some(clm_ledger::fold_records(&[(&name, &text)]))
 }
 
 /// The ledger's one file, as `clm-ledger` writes it.
 const FILE: &str = "records.jsonl";
 
-/// The commit `branch` points at.
-pub async fn tip<P: GitHub>(p: &P, access: &Access, branch: &str) -> Option<String> {
+/// The commit `branch` points at, asked of GitHub once: `Ok(None)` when it answers 404, the
+/// branch missing, and [`gh::Failed`] for any other answer (`branch-tip`).
+pub async fn branch_tip<P: GitHub>(
+    p: &P,
+    access: &Access,
+    branch: &str,
+) -> Result<Option<String>, gh::Failed> {
     let path = format!("/repos/{}/git/ref/heads/{branch}", access.full_name());
-    let v = gh::get_ok(p, access.auth(), &path).await?;
-    v["object"]["sha"].as_str().map(String::from)
+    match gh::get(p, access.auth(), &path).await {
+        (200, v) => match v["object"]["sha"].as_str() {
+            Some(sha) => Ok(Some(sha.to_string())),
+            None => Err(gh::Failed),
+        },
+        (404, _) => Ok(None),
+        _ => Err(gh::Failed),
+    }
+}
+
+/// The commit `branch` points at, none for a missing branch and a failed read alike
+/// (`branch-tip`): for callers that tell the two apart nowhere.
+pub async fn tip<P: GitHub>(p: &P, access: &Access, branch: &str) -> Option<String> {
+    branch_tip(p, access, branch).await.ok().flatten()
+}
+
+/// The ledger's `records.jsonl` at commit `sha`, `None` when it can't be read.
+async fn text_at<P: GitHub>(p: &P, access: &Access, sha: &str) -> Option<String> {
+    let expression = format!("{sha}:{FILE}");
+    let repo = access.full_name();
+    files::objects_direct(p, access.auth(), &repo, "Ledgers", &[expression])
+        .await?
+        .pop()
+        .flatten()
 }
 
 /// The writer of `login`'s web ledger, `clm/ledger/<login>/web`.
@@ -127,14 +146,15 @@ pub fn web_writer(login: &str) -> String {
     format!("{login}/web")
 }
 
-/// A record of `body` by `<login>/web`, now, with a random ID.
+/// A record of `body` by `<login>/web`, now, as `ledger/record-times` writes a time with no
+/// milliseconds, with a random ID of 32 lowercase hex digits.
 pub fn record<P: Clock + Secrets>(p: &P, login: &str, body: Body) -> Record {
     let mut id = [0u8; 16];
     p.random(&mut id);
     Record {
         id: id.iter().map(|b| format!("{b:02x}")).collect(),
         writer: web_writer(login),
-        at: crate::install::rfc3339(p.now()),
+        at: clm_ledger::rfc3339(p.now(), 0),
         body,
     }
 }
@@ -147,31 +167,40 @@ fn created(res: (u16, Value)) -> Option<String> {
     }
 }
 
-/// Commits `record` as the last line of its writer's `records.jsonl` and moves the ref,
-/// only forward, so an append that raced another fails rather than dropping it.
+/// What [`appended`] wrote: the commit the ref now names and the whole `records.jsonl` it
+/// holds, so a caller applies its write without reading it back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Appended {
+    pub tip: String,
+    pub text: String,
+}
+
+/// [`appended`], giving unit when it succeeds.
 pub async fn append<P: GitHub>(p: &P, access: &Access, record: &Record) -> Option<()> {
+    appended(p, access, record).await.map(|_| ())
+}
+
+/// Commits `record` as the last line of its writer's `records.jsonl` in four Git Data API
+/// writes, and moves the ref only forward, so an append that raced another fails rather
+/// than dropping it (`web-ledger-append`). Writes nothing when the tip or the file can't
+/// be read.
+pub async fn appended<P: GitHub>(p: &P, access: &Access, record: &Record) -> Option<Appended> {
     let repo = access.full_name();
     let auth = access.auth();
     let name = format!("clm/ledger/{}", record.writer);
-    let parent = tip(p, access, &name).await;
-    let mut content = match &parent {
-        Some(sha) => {
-            let expression = format!("{sha}:{FILE}");
-            files::objects_direct(p, auth, &repo, "Ledgers", &[expression])
-                .await?
-                .pop()
-                // A ledger whose file can't be read is never rewritten without it.
-                .flatten()?
-        }
+    let parent = branch_tip(p, access, &name).await.ok()?;
+    let mut text = match &parent {
+        // A ledger whose file can't be read is never rewritten without it.
+        Some(sha) => text_at(p, access, sha).await?,
         None => String::new(),
     };
-    if !content.is_empty() && !content.ends_with('\n') {
-        content.push('\n');
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
     }
-    content.push_str(&serde_json::to_string(record).ok()?);
-    content.push('\n');
+    text.push_str(&serde_json::to_string(record).ok()?);
+    text.push('\n');
     let git = format!("{}/repos/{repo}/git", gh::API);
-    let blob = json!({"content": content, "encoding": "utf-8"});
+    let blob = json!({"content": text, "encoding": "utf-8"});
     let blob = created(gh::post(p, auth, &format!("{git}/blobs"), &blob).await)?;
     let tree = json!({"tree": [{"path": FILE, "mode": "100644", "type": "blob", "sha": blob}]});
     let tree = created(gh::post(p, auth, &format!("{git}/trees"), &tree).await)?;
@@ -191,5 +220,5 @@ pub async fn append<P: GitHub>(p: &P, access: &Access, record: &Record) -> Optio
             gh::post(p, auth, &format!("{git}/refs"), &body).await
         }
     };
-    matches!(moved.0, 200 | 201).then_some(())
+    matches!(moved.0, 200 | 201).then_some(Appended { tip: commit, text })
 }
