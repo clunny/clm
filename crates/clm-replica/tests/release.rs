@@ -3,7 +3,7 @@
 
 mod common;
 
-use clm_replica::{Replica, Store};
+use clm_replica::{Change, Event, Replica, Store};
 use common::*;
 use serde_json::{Value, json};
 
@@ -76,7 +76,25 @@ fn ids(markers: &Value) -> Vec<&str> {
 fn another_release_saved_it() {
     // req:replica/markers-of-this-release@8c1950f6
     let f = repo();
-    let original = ready(&f, "111", 100);
+    // Its ledgers, refs, pull requests and events stay as saved.
+    let mut original = scratch(&f, "111");
+    original.apply(Change::Ledger {
+        branch: "clm/ledger/alice".into(),
+        text: Some("{}\n".into()),
+    });
+    original.apply(Change::Ref {
+        name: "impl/a".into(),
+        sha: Some("c1".into()),
+        time: 50,
+        change: None,
+    });
+    original.apply(Change::Pull(pull(7, "impl/a", "c1")));
+    original.apply(Change::Event(Event::Push {
+        branch: "main".into(),
+        at: 60,
+        actor: "alice".into(),
+    }));
+    original.recompute(100);
     assert!(original.pending_fetch().is_empty());
     assert_eq!(view(&original, "snapshot")["coverage"]["state"], "complete");
     assert_eq!(ids(&held_markers(&original, CHECK).unwrap()), ["b/y"]);
