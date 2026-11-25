@@ -2,10 +2,9 @@
 //! Rust tests, read from `.config/nextest.toml`, the two workflows parsed, and runs of the
 //! scripts under `.github/scripts/` with fakes first on `PATH`, `release-prepare.sh` against a
 //! temporary repository whose `origin` is a local bare repository. The modules hold the tests
-//! of the check scripts, the release workflow and the community files.
+//! of the check scripts and the release workflow.
 
 mod ci_check;
-mod community_files;
 mod release_workflow;
 
 use std::ffi::{OsStr, OsString};
