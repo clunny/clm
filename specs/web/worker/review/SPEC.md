@@ -84,6 +84,11 @@ It SHALL answer 404 for a name `spec-branches` refuses and for a branch GitHub s
 - WHEN the review is requested each time
 - THEN `page` is `{number: 5, url}` and then null, the review answering 200 both times
 
+#### Scenario: a pull request onto another base
+- GIVEN `spec/c3` whose only open pull request, #8, is onto `release`, not the default branch `main`
+- WHEN its review is requested
+- THEN `page` is null
+
 #### Serves
 - capability/approve-intent
 - architecture/humans-review-intent
