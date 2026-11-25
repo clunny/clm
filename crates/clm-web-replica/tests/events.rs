@@ -391,7 +391,10 @@ fn a_claim_lapses_while_a_page_is_open() {
     let before = view(&fake, &mut object, "implementation");
     assert!(claimed(&before), "{before}");
     let earlier = notices(&fake);
-    // `t`: the time the last recompute said the implementation view next changes.
+    // `t`: the time the last recompute said the implementation view next changes. The
+    // object's own `next` isn't visible here, and its alarm may be armed earlier for a
+    // resync; `recompute` reads only the saved state and the time, and nothing changed the
+    // state since the object's last recompute, so recomputing the saved replica names it.
     let t = clm_replica::Replica::load(&mem)
         .recompute(fake.now.get())
         .next
@@ -410,7 +413,6 @@ fn a_claim_lapses_while_a_page_is_open() {
         block_on(object.on_alarm(&fake));
         fired.push(at);
     }
-    fake.now.set(t + 1);
     assert!(fired.contains(&t), "an alarm fired at {t}: {fired:?}");
     let after = view(&fake, &mut object, "implementation");
     assert!(!claimed(&after), "{after}");
