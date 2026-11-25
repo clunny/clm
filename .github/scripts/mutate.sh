@@ -519,6 +519,8 @@ rust_test_filter() {
 caught=0
 missed=0
 untested=0
+# The mutants StrykerJS reported at all, `NoCoverage` among them.
+reported=0
 count_outcomes() {
   local out=$1/mutants.out
   caught=$((caught + $(lines_in "$out/caught.txt") + $(lines_in "$out/timeout.txt")))
@@ -719,8 +721,9 @@ ts_tools() {
 # Judges a fixture with StrykerJS in the npm directory $1, with that directory's own vitest and
 # TypeScript: a source file whose first function a test notices a change to and whose second
 # function no test does, and which fails when a directory the fixture's `.gitignore` names reaches
-# StrykerJS's sandbox. It goes on only when the first function's mutants are caught and the
-# second's missed. The files sit inside the directory, which a vitest configuration reaches, and
+# StrykerJS's sandbox, and beside them a test file that imports neither. It goes on only when the
+# first function's mutants are caught, the second's missed, and the first's, run with that test
+# file alone, all `NoCoverage`. The files sit inside the directory, which a vitest configuration reaches, and
 # are removed afterwards.
 ts_fixture() {
   local dir=$1 fix=clm-mutate-fixture saved=("${ts_tests[@]+"${ts_tests[@]}"}") up
@@ -778,6 +781,28 @@ EOF
   # test run it would count a block's mutants wrongly.
   { [ "$missed" -gt 0 ] && [ "$caught" -eq 0 ] && [ "$untested" -eq 0 ]; } ||
     die "StrykerJS judged its fixture wrongly in $dir: $caught caught and $missed missed for the test that doesn't"
+  # A test file that imports none of the fixture's source files and reads a file of the
+  # repository, judged alone on the lines the first test notices: a StrykerJS that runs only the
+  # tests that import a file it mutates runs no test here and fails, as it would for a block whose
+  # tests read a file instead of importing its code. Its every mutant is one no test runs.
+  cat >"$root/$dir/$fix/imports-nothing.test.ts" <<EOF
+// @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { expect, test } from 'vitest';
+
+test('fixture_reads', () => {
+  expect(readFileSync(new URL('$up/.github/scripts/mutate.sh', import.meta.url), 'utf8')).toContain('mutate');
+});
+EOF
+  ts_tests=("$dir/$fix/imports-nothing.test.ts")
+  caught=0
+  missed=0
+  untested=0
+  reported=0
+  run_stryker "$dir" f3 "$fix/fixture.ts:1-1" ||
+    die "StrykerJS failed on its fixture in $dir, running the test file that imports nothing"
+  { [ "$untested" -gt 0 ] && [ "$untested" -eq "$reported" ]; } ||
+    die "StrykerJS judged its fixture wrongly in $dir: $untested of $reported mutants NoCoverage for the test file that imports nothing"
   rm -rf "${root:?}/$dir/$fix"
   ts_tests=("${saved[@]+"${saved[@]}"}")
 }
@@ -817,7 +842,7 @@ diff_ranges() {
 # Its configuration files and its sandbox are named for `tag`, the block or the fixture, so runs
 # of two blocks at once in one directory share neither.
 run_stryker() {
-  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= ignores f m json k s u all
+  local dir=$1 report=$2 base vcfg scfg seed status=0 includes= ranges= ignores f m json k s u all
   shift 2
   rm -rf "${work:?}/$report"
   mkdir -p "$work/$report"
@@ -832,10 +857,26 @@ run_stryker() {
   mkdir -p "$root/$dir/node_modules/.clm-mutate/$tag"
   vcfg=$root/$dir/node_modules/.clm-mutate/$tag/vitest.config.mts
   scfg=$root/$dir/node_modules/.clm-mutate/$tag/stryker.config.json
+  seed=$root/$dir/node_modules/.clm-mutate/$tag/seed-coverage.mjs
+  # StrykerJS's vitest runner reports no coverage at all from a run in which no test loads a
+  # mutated file, since only the mutated code makes its coverage object, and StrykerJS then runs
+  # every test against every mutant and reports each `Survived`. Made before each test file, in
+  # the initial run only, the object is reported, empty, and a mutant no test runs is
+  # `NoCoverage`.
+  cat >"$seed" <<'EOF'
+import { inject } from 'vitest';
+if (inject('mode') !== 'mutant') {
+  const name = inject('globalNamespace');
+  const ns = globalThis[name] || (globalThis[name] = {});
+  ns.mutantCoverage = ns.mutantCoverage || { static: {}, perTest: {} };
+}
+EOF
   {
     echo "$base"
     [ -n "$base" ] || echo "const base: any = {};"
-    echo "export default { ...base, test: { ...base.test, include: [$includes] } };"
+    echo "const setup = base.test?.setupFiles ?? [];"
+    echo "export default { ...base, test: { ...base.test, include: [$includes]," \
+      "setupFiles: [...(Array.isArray(setup) ? setup : [setup]), '$seed'] } };"
   } >"$vcfg"
   for m in "$@"; do ranges="$ranges\"$m\","; done
   ignores=$(stryker_ignores "$dir") || return 1
@@ -864,7 +905,7 @@ EOF
   # Gone as soon as StrykerJS returns, so no later run, such as `coverage.sh`'s vitest, finds
   # the links.
   rm -rf "${root:?}/$dir/.stryker-tmp-clm-$tag"
-  rm -f "$vcfg" "$scfg"
+  rm -f "$vcfg" "$scfg" "$seed"
   json=$work/$report/mutation.json
   if [ "$status" -ne 0 ] || ! [ -f "$json" ]; then return 1; fi
   # A `<status>	<file>:<span>:<mutator>:<replacement>` line per mutant, which names it the same
@@ -882,6 +923,7 @@ EOF
   caught=$((caught + k))
   missed=$((missed + s))
   untested=$((untested + u))
+  reported=$((reported + all))
 }
 
 # The rules of the `.gitignore` files git reads that reach the npm directory $1, for StrykerJS's
