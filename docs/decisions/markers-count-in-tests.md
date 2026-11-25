@@ -1,7 +1,8 @@
 ---
 title: "A marker counts only inside a test, read from the file's text, and no test runner's output is read"
 date: 2026-11-14
-status: accepted
+status: superseded
+superseded_by: a-marker-counts-for-its-own-test
 ---
 
 A requirement read as built when a `req:` string with the right version sat anywhere outside Markdown: a comment in production code, a constant, a file header. Nothing tied the string to a test.

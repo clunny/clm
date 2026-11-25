@@ -107,7 +107,7 @@ A principle for how every rule is built; each entry's label and its `#### Enforc
 - verify/files-unproven
 
 #### Untested
-A marker counts only inside a test in the languages CLM reads, and anywhere in a file of another language. Whether the test ran is read from no test runner: it rests on the land's check having selected every file the branch changed (`markers-count-in-tests`). Whether a test would fail if the code were wrong is judged only after the land, only where the project sets `[verify] mutate`, only for tests added or changed since, and never for a browser test (`mutation-after-land`). CLM knows no eval proof yet (`backlog/a-passing-check-proves-less-than-the-spec-claims`).
+A marker counts only inside a test in the languages CLM reads, and anywhere in a file of another language. Whether the test ran is read from no test runner: it rests on the land's check having selected every file the branch changed (`a-marker-counts-for-its-own-test`). Whether a test would fail if the code were wrong is judged only after the land, only where the project sets `[verify] mutate`, only for tests added or changed since, and never for a browser test (`mutation-after-land`). CLM knows no eval proof yet (`backlog/a-passing-check-proves-less-than-the-spec-claims`).
 
 ### Constraint: no-silent-drift
 **Checked.** A divergence between spec and code that CLM can detect SHALL fail the check or the land. A requirement not yet built is pending, not drift.
