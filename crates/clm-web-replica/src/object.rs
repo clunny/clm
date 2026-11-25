@@ -69,8 +69,9 @@ impl Answer {
 }
 
 /// What the object keeps beside the replica: what the source tells it and what the replica
-/// doesn't expose.
+/// doesn't expose. A field it lacks, as one an older object wrote does, reads as its default.
 #[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 struct Meta {
     installation: Option<u64>,
     default_branch: Option<String>,
