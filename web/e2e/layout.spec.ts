@@ -240,11 +240,11 @@ test.describe('the inspector is an overlay', () => {
   });
 });
 
-// req:web/markdown-styles@cf566a22
 test.describe('Markdown from the repository', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test('a long code line and a wide table scroll within their boxes, in JetBrains Mono, and the page does not scroll sideways', async ({ page, context }) => {
+    // req:web/markdown-styles@ef139cc3
     const mock = await mockApi(context);
     const row = (cells: string[]) => `| ${cells.join(' | ')} |`;
     const wide = ['alphabetical', 'bravo-column', 'charlie-column', 'delta-column', 'echo-column'];
@@ -267,9 +267,14 @@ test.describe('Markdown from the repository', () => {
     // Headings, lists, quotes and links carry their own styles.
     const style = (sel: string, prop: string) => page.locator(sel).first().evaluate((e, p) => getComputedStyle(e).getPropertyValue(p), prop);
     expect(await style('.md h3', 'font-weight')).toBe('600');
-    expect(parseFloat(await style('.md ul', 'padding-left'))).toBeGreaterThan(0);
+    // The values the app sets, not the browser's defaults (a list's 40 px, an unstyled link).
+    expect(await style('.md ul', 'padding-left')).toBe('22px');
     expect(parseFloat(await style('.md blockquote', 'border-left-width'))).toBeGreaterThan(0);
     expect(await style('.md a', 'text-decoration-line')).toBe('underline');
+    expect(await style('.md a', 'color')).not.toBe(await style('.md p', 'color'));
+    // Table cells are bordered and its header shaded.
+    expect(parseFloat(await style('.md td', 'border-left-width'))).toBeGreaterThan(0);
+    expect(await style('.md th', 'background-color')).not.toBe('rgba(0, 0, 0, 0)');
     // Code is set in JetBrains Mono.
     expect(await page.locator('.md code').first().evaluate((e) => getComputedStyle(e).fontFamily)).toContain('JetBrains Mono');
     expect(await pre.evaluate((e) => getComputedStyle(e).fontFamily)).toContain('JetBrains Mono');
