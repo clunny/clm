@@ -13,7 +13,6 @@ use serde_json::{Value, json};
 /// 2026-10-01T10:00:00Z.
 const TEN_UTC: u64 = 1_790_848_800;
 const ELEVEN_UTC: u64 = TEN_UTC + 3600;
-const FOURTEEN_UTC: u64 = TEN_UTC + 4 * 3600;
 
 /// The fake GitHub, but its refs listing gives each commit time `iso(TEN_UTC)` as its
 /// committer two hours east wrote it.
@@ -82,20 +81,41 @@ fn recomputed_at_eleven(mem: &Mem) -> (Option<u64>, Value) {
     (next, value)
 }
 
+/// The time a replica of the empty repo holding only a claim pushed at 10:00 UTC, its time
+/// given in UTC, says the implementation view next changes when recomputed at 11:00 UTC.
+fn next_of_a_claim_at_ten() -> Option<u64> {
+    let fake = fake_with("111", repo_files(&[]));
+    let (mut object, mem, _slot) = built(&fake);
+    claim_a(&fake);
+    let mut body = push("impl/a", "0", "c1");
+    body["created"] = json!(true);
+    body["head_commit"] = json!({"timestamp": "2026-10-01T10:00:00Z"});
+    block_on(object.event(&fake, &event("push", "d1", body)));
+    recomputed_at_eleven(&mem).0
+}
+
+/// GitHub lists `impl/a` at `c1`.
+fn claim_a(fake: &Fake) {
+    let mut repos = fake.gh.repos.borrow_mut();
+    let repo = repos.get_mut("o/a").unwrap();
+    repo.claims.push(("a".into(), "c1".into(), fake.now.get()));
+    repo.commits
+        .insert("c1".into(), repo_files(&[("x.rs", "fn x() {}")]));
+}
+
 #[test]
 fn a_commit_made_two_hours_east() {
-    // req:web.worker.replica/times-as-instants@5944fea6
+    // req:web.worker.replica/times-as-instants@a75b0e25
+    let expected = next_of_a_claim_at_ten();
+    assert!(
+        expected.is_some_and(|t| t > ELEVEN_UTC),
+        "a claim pushed at 10:00 UTC is live at 11:00 UTC: {expected:?}"
+    );
     // A push creating `impl/a`, whose head commit was made at 12:00:00.5 two hours east.
     let fake = fake_with("111", repo_files(&[]));
     let (mut object, mem, slot) = built(&fake);
     slot.0.set(None);
-    {
-        let mut repos = fake.gh.repos.borrow_mut();
-        let repo = repos.get_mut("o/a").unwrap();
-        repo.claims.push(("a".into(), "c1".into(), fake.now.get()));
-        repo.commits
-            .insert("c1".into(), repo_files(&[("x.rs", "fn x() {}")]));
-    }
+    claim_a(&fake);
     let mut body = push("impl/a", "0", "c1");
     body["created"] = json!(true);
     body["head_commit"] = json!({"timestamp": "2026-10-01T12:00:00.5+02:00"});
@@ -110,7 +130,10 @@ fn a_commit_made_two_hours_east() {
     assert_eq!(claims.len(), 1, "{}", view["activity"]);
     assert_eq!(claims[0]["ref"], "a");
     assert_eq!(claims[0]["at"], TEN_UTC, "the claim is at 10:00 UTC");
-    assert_eq!(next, Some(FOURTEEN_UTC), "the claim lapses at 14:00 UTC");
+    assert_eq!(
+        next, expected,
+        "the push's claim changes the view as one made at 10:00 UTC"
+    );
 
     // A resync listing `impl/b`, which the replica doesn't hold, committed at 12:00 two hours
     // east.
@@ -136,7 +159,10 @@ fn a_commit_made_two_hours_east() {
         let (next, _) = recomputed_at_eleven(&mem);
         if next.is_some() {
             resynced = true;
-            assert_eq!(next, Some(FOURTEEN_UTC), "the claim lapses at 14:00 UTC");
+            assert_eq!(
+                next, expected,
+                "the listed claim changes the view as one made at 10:00 UTC"
+            );
             break;
         }
     }
@@ -155,7 +181,7 @@ fn claimed(view: &Value, node: &str) -> bool {
 
 #[test]
 fn a_time_github_gives_that_cant_be_read() {
-    // req:web.worker.replica/times-as-instants@5944fea6
+    // req:web.worker.replica/times-as-instants@a75b0e25
     // A built replica holding `impl/b`, read a minute ago.
     let fake = fake_with("111", repo_files(&[]));
     {
