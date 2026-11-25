@@ -5,6 +5,7 @@ mod carried;
 mod change;
 mod files;
 mod layers;
+mod moves;
 pub mod outline;
 mod priority;
 mod records;
@@ -18,6 +19,7 @@ pub use change::{
 pub use files::Files;
 use files::read_files;
 pub use layers::Layer;
+pub use moves::Move;
 pub use priority::Priority;
 pub use records::{
     BACKLOG_KIND_TERMS, BacklogFrontmatter, BacklogItem, BacklogKind, Decision,
