@@ -94,23 +94,21 @@ fn a_404_is_gone_too() {
 #[test]
 fn a_bad_subscription_is_skipped() {
     // req:web.live/push-send@849824f0
-    let auth = |m: &mut Value| m["subscription"]["auth"] = "AAAA".into();
-    let p256dh = |m: &mut Value| m["subscription"]["p256dh"] = b64(&[4; 65]).into();
-    let http = |m: &mut Value| m["subscription"]["endpoint"] = "http://push.example/a".into();
-    let long = |m: &mut Value| m["payload"] = "a".repeat(4000).into();
-    let cases: [(&str, &dyn Fn(&mut Value)); 4] = [
-        ("auth", &auth),
-        ("p256dh", &p256dh),
-        ("http", &http),
-        ("payload", &long),
+    // `auth` of 3 bytes, a `p256dh` that isn't a point, an `http://` endpoint, and a payload
+    // whose JSON is over 3993 bytes.
+    let cases = [
+        ("/subscription/auth", json!("AAAA")),
+        ("/subscription/p256dh", json!(b64(&[4; 65]))),
+        ("/subscription/endpoint", json!("http://push.example/a")),
+        ("/payload", json!("a".repeat(4000))),
     ];
-    for (case, spoil) in cases {
+    for (case, value) in cases {
         let host = Fake {
             vapid: Some(vapid()),
             ..Fake::default()
         };
         let mut bad = message(A);
-        spoil(&mut bad);
+        *bad.pointer_mut(case).unwrap() = value;
         let body = json!({"messages": [message(B), bad]}).to_string();
         assert_eq!(
             send(&host, &body),
