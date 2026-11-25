@@ -112,7 +112,7 @@ function work(impl: Implementation | null, id: string): HTMLElement {
   if (impl === null) return div('note', 'Loading work in flight…');
   if (impl.coverage.state === 'indexing') return div('note', 'Coverage is indexing: pending requirements show once it completes.');
   const f = impl.flight.nodes.find((x) => x.node === id);
-  if (!f || f.pending.length === 0) return div('note', 'Nothing pending.');
+  if (!f) return div('note', 'Nothing pending.');
   return div(
     '',
     div('mini', el('b', {}, f.node, chip('mute', f.state)), `${f.pending.length} pending`),

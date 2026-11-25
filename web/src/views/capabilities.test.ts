@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { decide, renderCapabilities, renderCapability } from './capabilities';
+import { decide, renderCapabilities, renderCapability, tokens } from './capabilities';
 import type { ListOptions, PageOptions } from './capabilities';
 import { capabilities, cost } from './fixtures';
 import { SignedOut } from './api';
@@ -66,6 +66,8 @@ describe('capabilities list', () => {
     for (const text of ['≈$9.00', '900k tok', '1 of 2 rules only here; also other (1)', 'never decided']) expect(row('b')).toContain(text);
     for (const text of ['≈$12.3', '1.3M tok', 'all its rules only here']) expect(row('c')).toContain(text);
     expect(row('c')).not.toContain('≈$12.34');
+    expect(tokens(850)).toBe('850');
+    expect(tokens(1_000)).toBe('1k');
     // The card holds the same facts, with a bar for its share of the costliest.
     const card = view.querySelector<HTMLElement>('.ccard[data-slug=b]')!;
     for (const text of ['≈$9.00', '900k tok', '1 of 2 rules only here; also other (1)', 'never decided']) expect(card.textContent).toContain(text);

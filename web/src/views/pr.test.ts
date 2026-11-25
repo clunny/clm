@@ -25,6 +25,11 @@ describe('Document tab', () => {
     expect(r.querySelector('.chip')?.textContent).toBe('Modified');
     expect(r.querySelector('ins')?.textContent).toContain('quickly');
     expect(r.textContent).toContain('It SHALL do r');
+    expect(r.querySelector('ins')?.textContent).not.toContain('It SHALL do r');
+    // Without what was inserted, the marked text reads as the old text.
+    const marked = r.querySelector<HTMLElement>('.rb')!.cloneNode(true) as HTMLElement;
+    marked.querySelectorAll('ins, .ctx').forEach((e) => e.remove());
+    expect(marked.textContent!.replace(/\s+/g, ' ').replace(' .', '.').trim()).toBe('It SHALL do r.');
 
     const asset = view.querySelector<HTMLElement>('.req[data-el="m.html"]')!;
     expect(asset.querySelector('.chip')?.textContent).toBe('Added');

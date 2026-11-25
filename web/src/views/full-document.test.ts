@@ -113,6 +113,12 @@ describe('full document', () => {
     expect(pos()).toBe('Change 2 of 2');
     key('k');
     expect(pos()).toBe('Change 1 of 2');
+    key('k');
+    expect(pos()).toBe('Change 1 of 2');
+    key('ArrowDown');
+    expect(pos()).toBe('Change 2 of 2');
+    key('ArrowUp');
+    expect(pos()).toBe('Change 1 of 2');
     const field = document.createElement('input');
     document.body.append(field);
     key('j', field);
@@ -145,6 +151,16 @@ describe('full document', () => {
     again.restore(kept);
     expect(again.current()).toBe(1);
     again.close();
+    // The changes moved: the change whose text is the same is found again, by its text.
+    const moved = renderFullDocument({ ...twoChanges, before: `Zero old.\n\n${twoChanges.before}`, after: `Zero new.\n\n${twoChanges.after}` });
+    moved.restore(kept);
+    expect(moved.current()).toBe(2);
+    moved.close();
+    // Fewer changes and none the same: the last.
+    const fewer = renderFullDocument({ path: 'specs/n/SPEC.md', before: 'A.', after: 'B.' });
+    fewer.restore({ ...kept, text: 'nothing like it' });
+    expect(fewer.current()).toBe(0);
+    fewer.close();
 
     const added = renderFullDocument({ path: 'docs/new.md', before: null, after: 'One.\n\nTwo.' });
     expect(added.el.querySelector('.pos')!.textContent).toBe('Change 1 of 1');

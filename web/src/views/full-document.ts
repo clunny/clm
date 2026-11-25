@@ -241,7 +241,9 @@ export function renderFullDocument(doc: Document, mode: Mode = 'inline', back?: 
   document.addEventListener('keydown', onKey);
 
   render();
-  const changeText = (i: number) => changeEls()[i]?.textContent ?? '';
+  /** A change's own text, without its `Change <n>` label, which moves when the changes do. */
+  const changeText = (e: HTMLElement | undefined) =>
+    e ? [...e.children].filter((c) => !c.classList.contains('why')).map((c) => c.textContent).join('\n') : '';
   return {
     el: root,
     total,
@@ -249,13 +251,13 @@ export function renderFullDocument(doc: Document, mode: Mode = 'inline', back?: 
     go,
     next,
     prev,
-    state: () => ({ mode: shown, index: at, text: changeText(at) }),
+    state: () => ({ mode: shown, index: at, text: changeText(changeEls()[at]) }),
     restore(s) {
       if (s.mode !== shown) {
         shown = s.mode;
         render();
       }
-      const same = changeEls().findIndex((e) => e.textContent === s.text);
+      const same = changeEls().findIndex((e) => changeText(e) === s.text);
       go(same >= 0 ? same : s.index);
     },
     close: () => document.removeEventListener('keydown', onKey),

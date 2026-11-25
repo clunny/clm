@@ -239,6 +239,8 @@ describe('blockers switch', () => {
     const roots = [...view.querySelectorAll<HTMLElement>('.rt')];
     expect(roots.map((r) => r.dataset.root)).toEqual(['backlog/q', 'a']);
     expect(roots[0].textContent).toContain('waits on you');
+    expect(roots[0].querySelector('.top a')).toBeNull();
+    expect(roots[0].querySelector('.top code')!.textContent).toBe('backlog/q');
     expect(roots[0].textContent).toContain('holds up 1');
     expect(roots[1].textContent).toContain('holds up 2');
     expect([...roots[1].querySelectorAll<HTMLElement>('.held')].map((h) => h.dataset.node)).toEqual(['b', 'c']);

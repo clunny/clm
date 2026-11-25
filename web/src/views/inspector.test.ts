@@ -83,7 +83,10 @@ describe('work in flight', () => {
     const b = renderInspector(snapshot(), impl, [], 'b');
     expect(reqs(b)).toEqual([]);
     expect(b.querySelector('.work')?.textContent).toContain('Nothing pending');
-    expect(reqs(renderInspector(snapshot(), impl, [], 'c'))).toEqual([]);
+    const c = renderInspector(snapshot(), impl, [], 'c');
+    expect(reqs(c)).toEqual([]);
+    expect(c.querySelector('.work .chip')?.textContent).toBe('claimed');
+    expect(c.querySelector('.work')?.textContent).toContain('0 pending');
   });
 
   // req:web.views/inspector-pending@bfc459c7
@@ -194,6 +197,12 @@ describe('what the inspector shows', () => {
     expect(insp.querySelector('.changes [data-change=c2]')!.textContent).toContain('coverage indexing');
     expect(insp.querySelector('.work .note')!.textContent).toBe('Loading work in flight…');
     expect(insp.querySelector('.backlog')!.textContent).toContain('later');
+    expect(insp.querySelector('.backlog .chip')!.textContent).toBe('idea');
+    expect(insp.querySelector('.changes [data-change=c1] .chip')!.textContent).toBe('applied');
+    snap.changes[0] = { ...snap.changes[0], current: 2, complete: true };
+    expect(renderInspector(snap, null, [], 'n').querySelector('.changes [data-change=c1] .chip')!.textContent).toBe('complete');
+    const indexing = renderInspector({ ...snap, coverage: { state: 'indexing', done: 0.4 } }, null, [], 'n');
+    expect(indexing.querySelector('.top')!.textContent).toContain('unbuilt · indexing 40%');
 
     const m = renderInspector(snap, implementation(), [x, y], 'm');
     expect(m.querySelector('.inpr')!.textContent).toContain('No open PR changes it.');

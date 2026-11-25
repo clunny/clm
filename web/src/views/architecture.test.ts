@@ -127,6 +127,14 @@ describe('architecture page', () => {
   });
 
   // req:web.views/architecture-page@59dee3e8
+  it('a rule whose state is not known is drawn unknown outside indexing too', () => {
+    const a = architecture();
+    a.architecture[0].enforced_by = [{ rule: 'a/x', current: true }, { rule: 'a/y', current: null }];
+    const held = renderConstraint(a, 'e', page()).querySelector('section[data-sec=held]')!;
+    expect([...held.querySelectorAll<HTMLElement>('li.rule')].map((r) => r.dataset.state)).toEqual(['current', 'unknown']);
+  });
+
+  // req:web.views/architecture-page@59dee3e8
   it('an entry without rules, and an unknown slug', () => {
     const held = renderConstraint(architecture(), 'g', page()).querySelector('section[data-sec=held]')!;
     expect(held.querySelectorAll('li.rule')).toHaveLength(0);

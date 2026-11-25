@@ -52,10 +52,13 @@ describe('queue states', () => {
 
     const nodes = [node('root', { parent: null }), node('w'), node('x')];
     const snap = snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
-    const states = queueStates(implementation({ flight: flight({ nodes: [pending('w', 'waiting'), pending('x', 'parked')] }) }));
+    const withPaths = { ...pending('x', 'parked'), paths: ['web/.npmrc'] } as FlightNode;
+    const states = queueStates(implementation({ flight: flight({ nodes: [pending('w', 'waiting'), withPaths] }) }));
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {}, undefined, undefined, undefined, states);
     const ring = (id: string) => g.querySelector<HTMLElement>(`.n[data-node=${id}]`)!.style.getPropertyValue('--ring');
     expect(ring('w')).toBe('var(--muted)');
     expect(ring('w')).toBe(ring('x'));
+    // The graph reads no component's paths from the flight model either.
+    expect(g.textContent).not.toContain('web/.npmrc');
   });
 });

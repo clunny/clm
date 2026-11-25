@@ -131,6 +131,18 @@ describe('a refresh a notice asked for', () => {
 
 describe('api.send', () => {
   // req:web.views/worker-requests@1a1729dd
+  it('a post answered 401 is sent once more, and a second 401 reports the person signed out', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 401 })).mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    expect((await post('/api/repos/o/a/branches/spec/x/approve', { fingerprint: 'f1' })).status).toBe(200);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const denied = vi.fn().mockResolvedValue(new Response('', { status: 401 }));
+    vi.stubGlobal('fetch', denied);
+    await expect(send('DELETE', '/api/repos/o/a/push', { endpoint: 'e' })).rejects.toBeInstanceOf(SignedOut);
+    expect(denied).toHaveBeenCalledTimes(2);
+  });
+
+  // req:web.views/worker-requests@1a1729dd
   it('deletes with a JSON body, and a failed get carries its status', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 200 }));
     vi.stubGlobal('fetch', fetch);

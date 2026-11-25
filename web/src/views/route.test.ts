@@ -57,6 +57,7 @@ describe('routes', () => {
       ['#/o/a/prs/spec%2Fx/graph', { owner: 'o', repo: 'a', view: 'prs', review: { branch: 'spec/x' }, prTab: 'graph' }],
       ['#/o/a/nope', { owner: 'o', repo: 'a', view: 'graph' }],
       ['#/o/a/prs/main', { owner: 'o', repo: 'a', view: 'prs' }],
+      ['#/o/a/prs/spec%2Fx', { owner: 'o', repo: 'a', view: 'prs', review: { branch: 'spec/x' }, prTab: 'document' }],
       ['#/o/a/backlog/later', { owner: 'o', repo: 'a', view: 'backlog', item: 'later' }],
       ['#/o/a/capabilities/%E0%A4', { owner: 'o', repo: 'a', view: 'capabilities', capability: '%E0%A4' }],
     ];
