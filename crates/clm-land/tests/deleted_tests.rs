@@ -202,6 +202,16 @@ fn a_rename_beside_a_deleted_uncited_test_refuses_the_land() {
     assert!(f.lines("check.log").is_empty());
     assert_eq!(f.remote("main"), old);
     assert!(f.landed().is_empty());
+    // The deletion is the cause: the same rename, keeping `helper`, lands.
+    f.branch(
+        "keep",
+        &[(
+            "tests/t.rs",
+            &format!("{}\n{}\n{helper}", test("one"), test("second")),
+        )],
+    );
+    clm_land::land(&f.work(), Some("keep"), &f.env(&[])).unwrap();
+    assert_eq!(f.landed().len(), 1);
 }
 
 /// `with_tests`' `main` also holding `tests/u.rs` with a test `kept` citing `a/x`, and a branch
