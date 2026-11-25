@@ -60,13 +60,18 @@ export class Notify {
   /** The last state shown per repo, so a redraw doesn't flicker. */
   private states = new Map<string, boolean>();
   private drawn: Drawn[] = [];
+  /** The switches drawn in the current task: kept by a later draw though not in the document
+   * yet, since they are drawn together and then put in it. */
+  private drawing = new Set<Drawn>();
 
   constructor(private env: NotifyEnv) {}
 
   private remembered(): Record<string, string> {
     try {
-      const v = JSON.parse(this.env.storage.getItem(STORE) ?? '{}');
-      return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+      const v: unknown = JSON.parse(this.env.storage.getItem(STORE) ?? '{}');
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+      // Only `<owner>/<repo>` to an endpoint counts.
+      return Object.fromEntries(Object.entries(v).filter(([k, e]) => /^[^/]+\/[^/]+$/.test(k) && typeof e === 'string' && e !== '')) as Record<string, string>;
     } catch {
       return {};
     }
@@ -149,6 +154,8 @@ export class Notify {
     const msg = el('span', { class: 'note' });
     const wrap = el('div', { class: 'notify', hidden: known === undefined }, el('label', {}, box, ' Notify me'), msg);
     let busy = false;
+    /** Turn-ons and turn-offs started, so an update that asked before one draws nothing after. */
+    let changes = 0;
     const draw = (on: boolean) => {
       this.states.set(id, on);
       box.checked = on;
@@ -156,6 +163,7 @@ export class Notify {
       wrap.hidden = false;
     };
     const update = async (fresh?: string) => {
+      const at = changes;
       const ready = await this.available();
       if (!ready) {
         wrap.hidden = true;
@@ -165,7 +173,7 @@ export class Notify {
       const sub = await ready.pm.getSubscription().catch(() => null);
       if (sub) await this.renew(sub).catch(() => undefined);
       const on = sub ? await this.ask(base, sub.endpoint, fresh).catch(() => this.states.get(id) ?? false) : false;
-      if (!busy) draw(on);
+      if (!busy && at === changes) draw(on);
     };
     const turnOn = async (ready: Ready): Promise<boolean> => {
       if (this.env.permission() !== 'granted' && (await this.env.requestPermission()) !== 'granted') {
@@ -201,21 +209,31 @@ export class Notify {
       if (busy) return;
       const want = box.checked;
       busy = true;
+      changes++;
       msg.textContent = '';
       box.disabled = true;
       let on = !want;
       try {
         const ready = await this.available();
-        if (ready) on = want ? await turnOn(ready) : await turnOff(ready);
+        if (!ready) {
+          // The key or push manager is gone: the switch is hidden, as at an update.
+          busy = false;
+          box.disabled = !this.env.online();
+          wrap.hidden = true;
+          return;
+        }
+        on = want ? await turnOn(ready) : await turnOff(ready);
       } catch {
         msg.textContent = want ? 'Not turned on: try again.' : 'Not turned off: try again.';
       }
       busy = false;
       draw(on);
     });
-    // Only `refresh` drops the switches no longer in the document: one drawn beside this one
-    // may not be in it yet.
-    this.drawn.push({ el: wrap, update });
+    const drawn = { el: wrap, update };
+    this.drawn = this.drawn.filter((d) => d.el.isConnected || this.drawing.has(d));
+    this.drawn.push(drawn);
+    if (this.drawing.size === 0) setTimeout(() => this.drawing.clear(), 0);
+    this.drawing.add(drawn);
     void update();
     return wrap;
   }

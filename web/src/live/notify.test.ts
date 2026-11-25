@@ -168,11 +168,25 @@ describe('Notify me', () => {
   });
 
   // req:web.client-live/notify-switch@7b2d0be3
-  it('disabled offline', async () => {
+  it('disabled offline, as drawn or updated', async () => {
     const t = setup({ online: false });
     const e = new Notify(t.env).switchFor('o', 'a');
     await vi.waitFor(() => expect(shown(e)).toBe(true));
     expect(box(e).disabled).toBe(true);
+
+    // Apart: online as drawn, offline at the next update.
+    let online = true;
+    const u = setup();
+    u.env.online = () => online;
+    const n = new Notify(u.env);
+    const f = n.switchFor('o', 'a');
+    document.body.append(f);
+    await vi.waitFor(() => expect(shown(f)).toBe(true));
+    expect(box(f).disabled).toBe(false);
+    online = false;
+    await n.refresh();
+    expect(box(f).disabled).toBe(true);
+    f.remove();
   });
 
   // req:web.client-live/push-renewal@d1d92077
@@ -365,6 +379,7 @@ describe('Notify me', () => {
     await n.refresh();
     expect(shown(e)).toBe(true);
     expect(t.key).toHaveBeenCalledTimes(2);
+    expect(t.pushManager).toHaveBeenCalledTimes(2);
     e.remove();
   });
 
@@ -412,6 +427,7 @@ describe('Notify me', () => {
 
   // req:web.client-live/notify-toggle@a43dc7fb
   it('busy: disabled while a write is in flight', async () => {
+    // The push route answers off, so an update drawing over the write would show off.
     const t = setup();
     const sent: string[] = [];
     let answer: ((r: Response) => void) | null = null;
@@ -428,9 +444,11 @@ describe('Notify me', () => {
     await vi.waitFor(() => expect(answer).not.toBeNull());
     expect(box(e).disabled).toBe(true);
     toggle(e);
+    expect(box(e).checked).toBe(true);
     await n.refresh();
     await settle();
     expect(box(e).disabled).toBe(true);
+    expect(box(e).checked).toBe(true);
     expect(sent).toEqual(['POST /api/repos/o/a/push']);
     answer!(new Response(null, { status: 200 }));
     await vi.waitFor(() => expect(box(e).disabled).toBe(false));
@@ -530,5 +548,27 @@ describe('Notify me', () => {
       expect(t.sent.map((x) => `${x.method} ${x.path}`), raw).toEqual(['POST /api/repos/o/a/push']);
       expect(JSON.parse(t.store.get('clm-push')!), raw).toEqual({ 'o/a': E1 });
     }
+  });
+
+  // req:web.client-live/notify-toggle@a43dc7fb
+  it('an ask answered after a turn-on draws nothing over it', async () => {
+    const t = setup({ existing: E1 });
+    let answer: ((on: boolean) => void) | null = null;
+    t.env.subscribed = () => new Promise<boolean>((r) => (answer = r));
+    const n = new Notify(t.env);
+    const e = n.switchFor('o', 'a');
+    document.body.append(e);
+    await vi.waitFor(() => expect(answer).not.toBeNull());
+    const held = answer!;
+    // Shown, as a switch whose state was known would be, while its first ask is held.
+    e.hidden = false;
+    toggle(e);
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    await vi.waitFor(() => expect(box(e).disabled).toBe(false));
+    expect(box(e).checked).toBe(true);
+    held(false);
+    await settle();
+    expect(box(e).checked).toBe(true);
+    e.remove();
   });
 });
