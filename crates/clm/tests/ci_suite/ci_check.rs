@@ -2746,8 +2746,8 @@ fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
         log[install]
     );
     // StrykerJS takes its options from a file under `web/node_modules/`, not from the command
-    // line: the vitest runner, a vitest configuration that includes that test alone, and the
-    // diff's ranges.
+    // line: the vitest runner, a vitest configuration that includes that test alone, run whether
+    // or not it imports the mutated file (`related` false), and the diff's ranges.
     let words: Vec<&str> = log[run].split_whitespace().collect();
     assert_eq!(words[2..4], ["stryker", "run"], "{}", log[run]);
     assert!(
@@ -2763,6 +2763,7 @@ fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
     let config = fs::read_to_string(tree.dir.path().join("log.stryker")).unwrap();
     assert!(
         config.contains("\"testRunner\": \"vitest\"")
+            && config.contains("\"related\": false")
             && config.contains("\"mutate\": [\"src/app.ts:4-5\"]")
             && !config.contains("thresholds"),
         "{config}"

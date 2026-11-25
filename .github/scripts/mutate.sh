@@ -804,7 +804,11 @@ diff_ranges() {
 # its mutants to `mutants.tsv` beside its report. StrykerJS takes a runner's options from no
 # command line, so it is given them in a
 # configuration file under the directory's `node_modules/`: the test runner, the vitest
-# configuration that names those tests, the reporter and the ranges. It sets no
+# configuration that names those tests, the reporter and the ranges. It sets `vitest.related`
+# false, so vitest runs those tests whether or not they import a mutated file: left true, vitest
+# keeps only the tests that import one, and a block whose tests read a file instead, as a test of
+# `web/.npmrc` does, runs none, which StrykerJS reports as an error, and its mutants are never
+# counted `NoCoverage`. It sets no
 # `thresholds.break`, so StrykerJS's exit status never depends on a score. Returns 1 when StrykerJS
 # exits non-zero or writes no report: it judged nothing. `tsconfigFile` names a file that doesn't
 # exist: StrykerJS 10.1.1 reads a `tsconfig.json` it finds with `ts.parseConfigFileTextToJson`,
@@ -838,7 +842,7 @@ run_stryker() {
   cat >"$scfg" <<EOF
 {
   "testRunner": "vitest",
-  "vitest": { "configFile": "$vcfg" },
+  "vitest": { "configFile": "$vcfg", "related": false },
   "reporters": ["json"],
   "jsonReporter": { "fileName": "$work/$report/mutation.json" },
   "tsconfigFile": "$root/$dir/node_modules/.clm-mutate/no-tsconfig.json",
