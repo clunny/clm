@@ -187,6 +187,20 @@ fn the_lists_shape_and_limits() {
     assert!(used <= 50, "{used} GitHub requests");
     assert!(!body_json(&res).as_array().unwrap().is_empty());
 
+    // At most 1,000 repos are checked: those beyond are left out.
+    let names: Vec<String> = (0..1100).map(|i| format!("many/r{i:04}")).collect();
+    for name in &names {
+        fake.gh.add_repo(name, FakeRepo::new("111", clm_repo()));
+    }
+    fake.gh
+        .installations
+        .borrow_mut()
+        .insert("x".into(), vec![(500, names.clone())]);
+    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let cookie = fake.user("x", &refs);
+    let listed = list(&fake, &cookie);
+    assert_eq!(listed.as_array().unwrap().len(), 1000);
+
     // GitHub fails the installations' listing: 502.
     fake.fail("GET", "/user/installations");
     let cookie = fake.user("w", &[]);
