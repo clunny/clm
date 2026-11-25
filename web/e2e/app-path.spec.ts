@@ -79,8 +79,15 @@ async function signedOut(context: BrowserContext): Promise<void> {
   await context.route('**/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
 }
 
-// req:web/app-at-app-path@d9141ff8
+/** The invited logins of the spec's Contract, read apart from the build's own reader. */
+function contractLogins(): string[] {
+  const spec = readFileSync(fileURLToPath(new URL('../../specs/web/SPEC.md', import.meta.url)), 'utf8');
+  const contract = spec.split('\n## Contract\n')[1].split('\n## ')[0];
+  return [...contract.matchAll(/^- `([^`]+)`$/gm)].map((m) => m[1]);
+}
+
 test.describe('app at /app/', () => {
+  // req:web/app-at-app-path@69b1f7ad
   test('built tree: the app under app/, the invited list under _clm/, the retiring worker, and no site', () => {
     const app = readFileSync(join(DIST, 'app/index.html'), 'utf8');
     const scripts = [...app.matchAll(/<script[^>]*\ssrc="([^"]+)"/g)].map((m) => m[1]);
@@ -90,15 +97,19 @@ test.describe('app at /app/', () => {
     expect(readFileSync(join(DIST, 'sw.js'), 'utf8')).toContain('unregister');
     expect(existsSync(join(DIST, 'index.html'))).toBe(false);
     expect(existsSync(join(DIST, 'guide'))).toBe(false);
-    expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(['clunny']);
+    expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(contractLogins());
   });
 
+  // req:web/app-at-app-path@69b1f7ad
   test("opened at /app/#/o/a/backlog it shows o/a's backlog", async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/backlog');
     await expect(page.locator('.sidebar .nv[data-view=backlog]')).toHaveClass(/\bon\b/);
+    await expect(page.locator('.sidebar select.repo')).toHaveValue('o/a');
+    await expect(page.locator('.backlog .bi[data-slug=later]')).toBeVisible();
   });
 
+  // req:web/app-at-app-path@69b1f7ad
   test('signed out, its sign-in button leads to /auth/login', async ({ page, context }) => {
     await signedOut(context);
     await page.goto('/app/');
@@ -106,11 +117,9 @@ test.describe('app at /app/', () => {
   });
 });
 
-// req:web/invited-users@0406720d
+// req:web/invited-users@97e590dd
 test('the build holds the invited list under _clm/, beside the app: the logins of the spec\'s Contract', () => {
-  const spec = readFileSync(fileURLToPath(new URL('../../specs/web/SPEC.md', import.meta.url)), 'utf8');
-  const contract = spec.split('\n## Contract\n')[1].split('\n## ')[0];
-  const logins = [...contract.matchAll(/^- `([^`]+)`$/gm)].map((m) => m[1]);
+  const logins = contractLogins();
   expect(logins.length).toBeGreaterThan(0);
   expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(logins);
 });

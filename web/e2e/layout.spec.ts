@@ -199,8 +199,8 @@ test.describe('the graph fills the height', () => {
   });
 });
 
-// req:web/graph-in-the-browser@1d6b4828
 test.describe('the inspector is an overlay', () => {
+  // req:web/graph-in-the-browser@3a6ebaea
   test('desktop: the canvas keeps its width, the drawer overlaps it from the right edge, at most 640 px wide, and Escape closes it', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -213,7 +213,7 @@ test.describe('the inspector is an overlay', () => {
     const after = (await page.locator('.canvas').boundingBox())!;
     expect(after.width).toBe(before.width);
     const box = (await drawer.boundingBox())!;
-    expect(box.width).toBeLessThanOrEqual(640);
+    expect(box.width).toBeLessThanOrEqual(Math.min(640, 0.9 * 1280));
     expect(Math.round(box.x + box.width)).toBe(1280);
     expect(box.x).toBeLessThan(after.x + after.width);
     expect(box.height).toBeLessThanOrEqual(900);
@@ -221,6 +221,7 @@ test.describe('the inspector is an overlay', () => {
     await expect(page.locator('.insp.closed')).toHaveCount(1);
   });
 
+  // req:web/graph-in-the-browser@3a6ebaea
   test('selecting the selected component again clears the selection, and the × button closes', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -232,6 +233,7 @@ test.describe('the inspector is an overlay', () => {
     await expect(page.locator('.insp.closed')).toHaveCount(1);
     await expect(page.locator('.n.sel')).toHaveCount(0);
     await expect(page.locator('.e.ein, .e.eout')).toHaveCount(0);
+    await expect(page.locator('.insp.closed')).toHaveText('Select a component to see its contract, changes, work and backlog.');
     // With the drawer closed the card is tappable again; with it open, a click on the card still reaches it.
     await page.locator('.n[data-node=b]').click();
     await expect(page.locator('.insp:not(.closed)')).toBeVisible();

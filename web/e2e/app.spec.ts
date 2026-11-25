@@ -449,11 +449,13 @@ test("a file not in the review: the page says it isn't changed in the branch", a
   await expect(page.locator('.main')).toContainText("README.md isn't changed in spec/c.");
 });
 
-// req:web/graph-in-the-browser@1d6b4828
 test.describe('graph', () => {
+  // req:web/graph-in-the-browser@3a6ebaea
   test('queue states: once the implementation state arrives, b is ringed amber and named claimed, a rose and blocked', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/graph');
+    // The crumb names the snapshot's repo.
+    await expect(page.locator('.main .crumb')).toHaveText('o/a');
     const b = page.locator('.n[data-node=b]');
     const a = page.locator('.n[data-node=a]');
     await expect(b).toHaveClass(/\bq-claimed\b/);
@@ -479,6 +481,7 @@ test.describe('graph', () => {
     expect(colours.a).toEqual(['solid', colours.rose]);
   });
 
+  // req:web/graph-in-the-browser@3a6ebaea
   test('a long node ID gives way to the state word, which stays inside the card', async ({ page, context }) => {
     const mock = await mockApi(context);
     const long = 'b-with-an-identifier-far-too-long-for-its-card';
@@ -497,6 +500,7 @@ test.describe('graph', () => {
     expect(w.x + w.width).toBeLessThanOrEqual(c.x + c.width);
   });
 
+  // req:web/graph-in-the-browser@3a6ebaea
   test('a graph drawn with the implementation state already held is ringed at once', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.goto('/app/#/o/a/build');
@@ -508,6 +512,7 @@ test.describe('graph', () => {
     await expect(page.locator('.n[data-node=a] .q')).toHaveText('blocked');
   });
 
+  // req:web/graph-in-the-browser@3a6ebaea
   test("a PR's Graph tab marks only the nodes it touches", async ({ page, context }) => {
     await mockApi(context, reviewOfB());
     await page.goto('/app/#/o/a/prs/spec%2Fc/graph');
@@ -516,6 +521,7 @@ test.describe('graph', () => {
     await expect(page.locator('path.e.eh[data-from=b][data-to=a]')).toHaveCount(1);
   });
 
+  // req:web/graph-in-the-browser@3a6ebaea
   test("a selected node's inspector lists the open PRs that change it", async ({ page, context }) => {
     await mockApi(context, reviewOfB());
     await page.goto('/app/#/o/a/graph');
@@ -663,7 +669,7 @@ test('one request, then approved: two quick taps send one approve, and the butto
   expect(mock.posts).toHaveLength(1);
 });
 
-// req:web/backlog-in-the-browser@5eb37285
+// req:web/backlog-in-the-browser@5ad99bbe
 test('the backlog is drawn before the implementation state, and takes its marks when it arrives', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.routes['GET /api/repos/o/a/implementation'] = implementation({ taken: { changes: [{ id: 'x', state: 'main', items: ['crash'], nodes: ['a'] }], claims: [{ item: 'later', nodes: [] }] } });
@@ -677,7 +683,7 @@ test('the backlog is drawn before the implementation state, and takes its marks 
   await expect(page.locator('.bi[data-slug=setup] .taken')).toHaveCount(0);
 });
 
-// req:web/graph-in-the-browser@1d6b4828
+// req:web/graph-in-the-browser@3a6ebaea
 test("an oversized node's card is outlined amber, unless a queue ring colours it", async ({ page, context }) => {
   const snap = snapshot();
   snap.spec.nodes = snap.spec.nodes.map((n) => (n.parent ? { ...n, oversized: true } : n));
@@ -703,8 +709,8 @@ test("an oversized node's card is outlined amber, unless a queue ring colours it
   await expect.poll(() => outline('a')).toBe(await colour('--rose'));
 });
 
-// req:web/push-in-the-browser@bf36ad5a
 test.describe('Notify me', () => {
+  // req:web/push-in-the-browser@06ad4e4a
   test('no key: a Worker answering 404 for the push key shows no switch', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -714,6 +720,7 @@ test.describe('Notify me', () => {
     await expect(page.locator('.sidebar .notify')).toBeHidden();
   });
 
+  // req:web/push-in-the-browser@06ad4e4a
   test('with a key, the sidebar shows the switch under the repo picker, off without a subscription', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/push/key'] = { key: 'BKey' };
@@ -725,8 +732,44 @@ test.describe('Notify me', () => {
     await expect(toggle).toBeEnabled();
     // No subscription in this browser: its state needs no request.
     expect(mock.requests.filter((r) => r.startsWith('GET /api/repos/o/a/push'))).toEqual([]);
+    // On a phone the switch sits in the top bar, beside the repo switcher.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const top = page.locator('.mtop .notify input[type=checkbox]');
+    await expect(top).toBeVisible();
+    await expect(top).not.toBeChecked();
+    await expect(top).toBeEnabled();
+    await expect(page.locator('.mtop > *')).toHaveCount(3);
+    await expect(page.locator('.mtop > select.repo + .notify')).toHaveCount(1);
+    expect(mock.requests.filter((r) => r.startsWith('GET /api/repos/o/a/push'))).toEqual([]);
   });
 
+  // req:web/push-in-the-browser@06ad4e4a
+  test('no Web Push: without a PushManager, or with a service worker that fails to register, no switch and no key asked', async ({ browser }) => {
+    for (const lacking of [
+      () => void delete (window as unknown as { PushManager?: unknown }).PushManager,
+      () => void (ServiceWorkerContainer.prototype.register = () => Promise.reject(new Error('refused'))),
+    ]) {
+      const context = await browser.newContext({ serviceWorkers: 'allow', viewport: { width: 1280, height: 800 } });
+      try {
+        const page = await context.newPage();
+        await page.addInitScript(lacking);
+        const mock = await mockApi(context);
+        mock.routes['GET /api/push/key'] = { key: 'k' };
+        mock.routes['GET /api/repos/o/a/push'] = { subscribed: true };
+        await page.goto('/app/#/o/a/graph');
+        await expect(page.locator('.n[data-node=b]')).toBeVisible();
+        // Settled: the implementation state has ringed the graph, and a moment more has passed.
+        await expect(page.locator('.n[data-node=b]')).toHaveClass(/\bq-claimed\b/);
+        await page.waitForTimeout(500);
+        await expect(page.locator('.sidebar .notify')).toBeHidden();
+        expect(mock.requests.filter((r) => r === 'GET /api/push/key' || r.startsWith('GET /api/repos/o/a/push'))).toEqual([]);
+      } finally {
+        await context.close();
+      }
+    }
+  });
+
+  // req:web/push-in-the-browser@06ad4e4a
   test('turn on: subscribes with the key, posts the subscription, then reads its state from the push route', async ({ page, context }) => {
     const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
     // The browser's push service, faked: permission granted, and a subscription once asked.
@@ -759,9 +802,63 @@ test.describe('Notify me', () => {
     await expect.poll(() => mock.urls).toContain(`GET /api/repos/o/a/push?endpoint=${encodeURIComponent(endpoint)}`);
     await expect(page.locator('.sidebar .notify input[type=checkbox]')).toBeChecked();
   });
+
+  // req:web/push-in-the-browser@06ad4e4a
+  test('signed out on a turn-on: a 401 to the push route shows the sign-in page', async ({ page, context }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(Notification, 'permission', { get: () => 'granted' });
+      const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
+      let sub: unknown = null;
+      PushManager.prototype.getSubscription = async () => sub as PushSubscription;
+      PushManager.prototype.subscribe = async () =>
+        (sub = { endpoint, toJSON: () => ({ endpoint, keys: { p256dh: 'p', auth: 'a' } }), unsubscribe: async () => true }) as unknown as PushSubscription;
+    });
+    const mock = await mockApi(context);
+    mock.routes['GET /api/push/key'] = { key: 'k' };
+    mock.fail('POST /api/repos/o/a/push', 401);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/app/#/o/a/graph');
+    const toggle = page.locator('.sidebar .notify input[type=checkbox]');
+    await expect(toggle).toBeEnabled();
+    await toggle.click();
+    await expect(page.locator('.signin a', { hasText: 'Sign in with GitHub' })).toHaveAttribute('href', '/auth/login');
+    // A 401 is tried once more (an expired session another request refreshed), and nothing else is written.
+    expect([...new Set(mock.posts.map((p) => p.key))]).toEqual(['POST /api/repos/o/a/push']);
+  });
+
+  // req:web/push-in-the-browser@06ad4e4a
+  test('storage that throws: drawn on from the push route, and turned off with one DELETE and no unsubscribe', async ({ page, context }) => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
+    await page.addInitScript((endpoint) => {
+      const fail = () => {
+        throw new DOMException('denied', 'SecurityError');
+      };
+      Object.defineProperty(window, 'localStorage', { configurable: true, get: () => ({ getItem: fail, setItem: fail, removeItem: fail, clear: fail, key: fail, length: 0 }) });
+      Object.defineProperty(Notification, 'permission', { get: () => 'granted' });
+      const w = window as unknown as { unsubscribed: number };
+      w.unsubscribed = 0;
+      // A subscription the browser holds from page load.
+      const sub = { endpoint, toJSON: () => ({ endpoint, keys: { p256dh: 'p', auth: 'a' } }), unsubscribe: async () => ((w.unsubscribed += 1), true) };
+      PushManager.prototype.getSubscription = async () => sub as unknown as PushSubscription;
+    }, endpoint);
+    const mock = await mockApi(context);
+    mock.routes['GET /api/push/key'] = { key: 'k' };
+    mock.routes['GET /api/repos/o/a/push'] = { subscribed: true };
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/app/#/o/a/graph');
+    const toggle = page.locator('.sidebar .notify input[type=checkbox]');
+    await expect(toggle).toBeChecked();
+    await expect(toggle).toBeEnabled();
+    mock.onPost = () => (mock.routes['GET /api/repos/o/a/push'] = { subscribed: false });
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
+    await expect(toggle).toBeEnabled();
+    expect(mock.posts.map((p) => p.key)).toEqual(['DELETE /api/repos/o/a/push']);
+    expect(await page.evaluate(() => (window as unknown as { unsubscribed: number }).unsubscribed)).toBe(0);
+  });
 });
 
-// req:web/push-in-the-browser@bf36ad5a
+// req:web/push-in-the-browser@06ad4e4a
 test('the service worker imports the push handlers and shows a push', async ({ page, context, baseURL }) => {
   await mockApi(context);
   // The worker, not a view: drawing one (the graph's layout above all) is the slowest step of a
@@ -1062,11 +1159,11 @@ test.describe('Request changes', () => {
   });
 });
 
-// req:web/backlog-in-the-browser@5eb37285
 test.describe('proposals', () => {
   const IMPL = 'GET /api/repos/o/a/implementation';
   const proposal = (over = {}) => ({ id: 'p1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', slug: 'export-csv', title: 'Export CSV', body: 'Let me export.', nodes: ['a'], mine: true, ...over });
 
+  // req:web/backlog-in-the-browser@5ad99bbe
   test('proposed: two quick submits post once, the form closes, and Proposed lists it by alice with the note', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.onPost = () => (mock.routes[IMPL] = implementation({ proposals: [proposal()] }));
@@ -1090,6 +1187,7 @@ test.describe('proposals', () => {
     expect(mock.requests.filter((r) => r === IMPL).length).toBeGreaterThanOrEqual(2);
   });
 
+  // req:web/backlog-in-the-browser@5ad99bbe
   test('title taken: a 409 keeps the form open, saying so', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(PROPOSALS, 409, { error: 'taken' });
@@ -1101,6 +1199,7 @@ test.describe('proposals', () => {
     await expect(page.locator('.fbform.proposal input[name=title]')).toHaveValue('Export CSV');
   });
 
+  // req:web/backlog-in-the-browser@5ad99bbe
   test("a 422 names the Worker's field and keeps the form", async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(PROPOSALS, 422, { error: 'nodes' });
@@ -1109,8 +1208,21 @@ test.describe('proposals', () => {
     await page.locator('.fbform.proposal input[name=title]').fill('Export CSV');
     await page.locator('.fbform.proposal button.send').click();
     await expect(page.locator('.fbform.proposal .err')).toHaveText('Not proposed: the Worker refused the nodes.');
+    // A 422 naming no field refuses the request, and any other status is named; each keeps the form.
+    for (const [status, body, says] of [
+      [422, {}, 'Not proposed: the Worker refused the request.'],
+      [500, undefined, 'Not proposed (500).'],
+    ] as const) {
+      mock.fail(PROPOSALS, status, body);
+      await page.locator('.fbform.proposal button.send').click();
+      await expect(page.locator('.fbform.proposal .err')).toHaveText(says);
+      await expect(page.locator('.fbform.proposal input[name=title]')).toHaveValue('Export CSV');
+      await expect(page.locator('.fbform.proposal button.send')).toBeEnabled();
+    }
+    expect(mock.requests.filter((r) => r === IMPL)).toHaveLength(1);
   });
 
+  // req:web/backlog-in-the-browser@5ad99bbe
   test('withdraw: only p1 carries Withdraw, one DELETE goes to its id, and the implementation state is asked again', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes[IMPL] = implementation({ proposals: [proposal(), proposal({ id: 'p2', writer: 'bob/web', mine: false, title: 'Other', slug: 'other' })] });
@@ -1123,6 +1235,23 @@ test.describe('proposals', () => {
     await expect(page.locator('.prop[data-id=p1]')).toHaveCount(0);
     expect(mock.posts).toEqual([{ key: 'DELETE /api/repos/o/a/proposals/p1', body: null }]);
     expect(mock.requests.filter((r) => r === IMPL).length).toBe(before + 1);
+  });
+
+  // req:web/backlog-in-the-browser@5ad99bbe
+  test('a withdrawal refused: the status shows under p1, which stays, and nothing is asked again', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes[IMPL] = implementation({ proposals: [proposal()] });
+    mock.fail('DELETE /api/repos/o/a/proposals/p1', 409);
+    await page.goto('/app/#/o/a/backlog');
+    const row = page.locator('.prop[data-id=p1]');
+    await expect(row.locator('button.withdraw')).toBeEnabled();
+    await row.locator('button.withdraw').click();
+    await expect(row.locator('.err')).toHaveText('Not withdrawn (409).');
+    await expect(row).toContainText('Export CSV');
+    await expect(row.locator('button.withdraw')).toBeEnabled();
+    expect(mock.posts).toEqual([{ key: 'DELETE /api/repos/o/a/proposals/p1', body: null }]);
+    const after = mock.requests.slice(mock.requests.indexOf('DELETE /api/repos/o/a/proposals/p1') + 1);
+    expect(after.filter((r) => r.startsWith(IMPL))).toEqual([]);
   });
 });
 
@@ -1212,8 +1341,8 @@ test('the sign-in page says CLM works without the web app and links to early acc
   await expect(card.locator('a', { hasText: 'Install the GitHub App' })).toHaveAttribute('href', 'https://github.com/apps/clm-spec-review/installations/new');
 });
 
-// req:web/backlog-in-the-browser@5eb37285
 test.describe('a backlog item opens its page', () => {
+  // req:web/backlog-in-the-browser@5ad99bbe
   test('tapping an item in the Backlog and in the inspector shows its page', async ({ page, context }) => {
     await mockApi(context);
     await page.goto('/app/#/o/a/backlog');

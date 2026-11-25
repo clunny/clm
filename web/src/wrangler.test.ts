@@ -1,14 +1,19 @@
 // @vitest-environment node
-// `web/wrangler.toml` binds `web.live`'s Durable Object class (specs/web/SPEC.md, Deploy),
-// read with wrangler's own config reader so the test sees what the deploy sees.
+// The app's Worker as `wrangler` reads its configuration in `web/` (specs/web/SPEC.md,
+// Deploy): wrangler finds the file and reads it itself, so the test sees what a deploy run
+// there sees.
 import { fileURLToPath } from 'node:url';
-import { experimental_readRawConfig } from 'wrangler';
+import { experimental_readRawConfig, unstable_readConfig } from 'wrangler';
 import { describe, expect, it } from 'vitest';
 
-const WRANGLER = fileURLToPath(new URL('../wrangler.toml', import.meta.url));
+/** `web/`, where the deploy runs `wrangler`. */
+const WEB = fileURLToPath(new URL('..', import.meta.url));
+process.chdir(WEB);
 
 describe('wrangler.toml', () => {
-  const { rawConfig } = experimental_readRawConfig({ config: WRANGLER });
+  // The file wrangler finds from `web/`, as it is written and as wrangler reads it for a deploy.
+  const { rawConfig } = experimental_readRawConfig({});
+  const config = unstable_readConfig({}, {});
 
   it('binds the Live class as LIVE in a SQLite migration (req:web/live-binding@a60502c6)', () => {
     expect(rawConfig.durable_objects?.bindings).toContainEqual(
@@ -37,39 +42,43 @@ describe('wrangler.toml', () => {
   // How Workers assets read `run_worker_first`: a path goes to the Worker when it matches a
   // pattern and no `!` pattern, `*` standing for any run of characters.
   const toWorker = (path: string): boolean => {
-    const rules = rawConfig.assets?.run_worker_first;
+    const rules = config.assets?.run_worker_first;
     if (!Array.isArray(rules)) throw new Error('run_worker_first is not a list');
     const matches = (p: string) => new RegExp(`^${p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`).test(path);
     return rules.some((r) => !r.startsWith('!') && matches(r)) && !rules.some((r) => r.startsWith('!') && matches(r.slice(1)));
   };
 
-  it('sends only the API, sign-in, webhook, invited list and /app to the script (req:web/site-served-directly@3c4d374a)', () => {
+  it('finds the configuration in web/ (req:web/site-served-directly@7019d7fa)', () => {
+    expect(config.configPath).toBe(`${WEB}wrangler.toml`);
+  });
+
+  it('sends only the API, sign-in, webhook, invited list and /app to the script (req:web/site-served-directly@7019d7fa)', () => {
     for (const path of ['/api/repos', '/auth/login', '/webhook', '/_clm/invited.json', '/app']) {
       expect(toWorker(path), path).toBe(true);
     }
     for (const path of ['/app/', '/app/main.js', '/sw.js']) {
       expect(toWorker(path), path).toBe(false);
     }
-    expect(rawConfig.assets?.run_worker_first).toEqual(['/api/*', '/auth/*', '/webhook', '/_clm/*', '/app']);
-    expect(rawConfig.assets?.not_found_handling).toBe('none');
+    expect(config.assets?.run_worker_first).toEqual(['/api/*', '/auth/*', '/webhook', '/_clm/*', '/app']);
+    expect(config.assets?.not_found_handling).toBe('none');
   });
 
-  it('deploys the assets in ./dist as the Worker clm (req:web/site-served-directly@3c4d374a)', () => {
-    expect(rawConfig.assets?.directory).toBe('./dist');
-    expect(rawConfig.name).toBe('clm');
+  it('deploys the assets in ./dist as the Worker clm (req:web/site-served-directly@7019d7fa)', () => {
+    expect(config.assets?.directory).toBe('./dist');
+    expect(config.name).toBe('clm');
   });
 
-  it('binds the built files as ASSETS and sends the invited list to the script (req:web/invited-users@0406720d)', () => {
-    expect(rawConfig.assets?.binding).toBe('ASSETS');
+  it('binds the built files as ASSETS and sends the invited list to the script (req:web/invited-users@97e590dd)', () => {
+    expect(config.assets?.binding).toBe('ASSETS');
     expect(toWorker('/_clm/invited.json')).toBe(true);
   });
 
-  const routes: { pattern: string; zone_name?: string; custom_domain?: boolean }[] = rawConfig.routes ?? [];
+  const routes = (config.routes ?? []) as { pattern: string; zone_name?: string; custom_domain?: boolean }[];
   // A route pattern matches a request URL's host and path, `*` standing for any run of characters.
   const routed = (path: string): number =>
     routes.filter((r) => new RegExp(`^${r.pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`).test(`clm-app.dev${path}`)).length;
 
-  it('routes exactly the app\'s seven paths on clm-app.dev, with no Custom Domain (req:web/site-served-directly@3c4d374a)', () => {
+  it('routes exactly the app\'s seven paths on clm-app.dev, with no Custom Domain (req:web/site-served-directly@7019d7fa)', () => {
     expect(routes.map((r) => r.pattern).sort()).toEqual(
       ['/app', '/app/*', '/api/*', '/auth/*', '/webhook', '/_clm/*', '/sw.js'].map((p) => `clm-app.dev${p}`).sort(),
     );
@@ -79,7 +88,7 @@ describe('wrangler.toml', () => {
     }
   });
 
-  it('leaves the site\'s paths to the site\'s Worker (req:web/site-served-directly@3c4d374a)', () => {
+  it('leaves the site\'s paths to the site\'s Worker (req:web/site-served-directly@7019d7fa)', () => {
     for (const path of ['/', '/guide/quickstart', '/blog/', '/blog/feed.xml', '/privacy', '/404.html']) {
       expect(routed(path), path).toBe(0);
     }
