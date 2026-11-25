@@ -56,7 +56,7 @@ fn head(r: &Result<BranchHead, clm_approval::Error>) -> (String, Option<String>)
 
 #[test]
 fn at_origins_tip() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     let f = Fixture::new("");
     f.branch("spec/x", &[("x.txt", "x\n")]);
     let tip = rev(&f, "origin/spec/x");
@@ -67,7 +67,7 @@ fn at_origins_tip() {
 
 #[test]
 fn ahead_of_origin_either_name() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     for name in ["impl/a", "fix-x"] {
         let f = Fixture::new("");
         f.branch(name, &[("x.txt", "x\n")]);
@@ -81,7 +81,7 @@ fn ahead_of_origin_either_name() {
 
 #[test]
 fn behind_origin() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     let f = Fixture::new("");
     f.branch("spec/x", &[("x.txt", "x\n")]);
     let tip = push_from_other(&f, "spec/x", "theirs.txt");
@@ -97,7 +97,7 @@ fn behind_origin() {
 
 #[test]
 fn diverged_from_origin() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     let f = Fixture::new("");
     f.branch("spec/x", &[("x.txt", "x\n")]);
     let tip = push_from_other(&f, "spec/x", "theirs.txt");
@@ -115,7 +115,7 @@ fn diverged_from_origin() {
 
 #[test]
 fn no_local_branch() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     let f = Fixture::new("");
     let tip = push_from_other(&f, "spec/x", "theirs.txt");
     f.git(&f.work(), &["fetch", "-q", "origin"]);
@@ -126,7 +126,7 @@ fn no_local_branch() {
 
 #[test]
 fn a_branch_origin_doesnt_hold_either_name() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     for name in ["spec/y", "fix-y"] {
         let f = Fixture::new("");
         let work = f.work();
@@ -140,7 +140,7 @@ fn a_branch_origin_doesnt_hold_either_name() {
 
 #[test]
 fn a_pruned_tracking_ref() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     let f = Fixture::new("");
     f.branch("spec/x", &[("x.txt", "x\n")]);
     let local = rev(&f, "spec/x");
@@ -154,7 +154,7 @@ fn a_pruned_tracking_ref() {
 
 #[test]
 fn a_name_neither_has() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     let f = Fixture::new("");
     for r in both(&f, "nope") {
         let why = refused(r);
@@ -164,13 +164,14 @@ fn a_name_neither_has() {
 
 #[test]
 fn a_branchs_change_ids() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     let f = Fixture::new("");
     let work = f.work();
     f.commit_files(
         &[
             ("changes/a/change.md", "a\n"),
             ("changes/c/change.md", "c\n"),
+            ("changes/old/change.md", "old\n"),
         ],
         "changes on main",
     );
@@ -178,24 +179,27 @@ fn a_branchs_change_ids() {
     f.git(&work, &["fetch", "-q", "origin"]);
     f.git(&work, &["checkout", "-q", "-b", "spec/z"]);
     f.git(&work, &["rm", "-q", "changes/c/change.md"]);
+    // A whole renamed directory, which git's rename detection would list as `R`.
+    f.git(&work, &["mv", "changes/old", "changes/new"]);
     f.commit_files(
         &[
             ("changes/b/change.md", "b\n"),
             ("changes/a/change.md", "a, modified\n"),
             ("changes/archive/d/change.md", "d\n"),
             ("changes/e/notes/change.md", "e\n"),
+            ("changes/a-b/change.md", "a-b\n"),
         ],
         "spec/z",
     );
     let head = f.git(&work, &["rev-parse", "HEAD"]);
     f.git(&work, &["checkout", "-q", "main"]);
     let ids = f.with_repo(|repo| repo.changes(&head)).unwrap();
-    assert_eq!(ids, ["a", "b"]);
+    assert_eq!(ids, ["a", "a-b", "b", "new"]);
 }
 
 #[test]
 fn the_fingerprint_is_against_the_base_given() {
-    // req:land.approval/branch-head@2f5cf78c
+    // req:land.approval/branch-head@781206cc
     let f = Fixture::new("");
     f.branch("spec/x", &[("x.txt", "x\n")]);
     let fp = f.fingerprint("spec/x");
