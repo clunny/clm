@@ -101,6 +101,11 @@ pub struct Fake {
     pub refused_refresh: RefCell<BTreeSet<String>>,
     /// Changes what the fake GitHub answers, where the fake can't be told to.
     pub rewrite: RefCell<Option<Rewrite>>,
+    /// Every request forwarded to a `Live` object, as the Worker built it.
+    pub forwarded: RefCell<Vec<Request>>,
+    /// What a `Live` object answers a forwarded request, in place of the platform fake's
+    /// 101 with a socket.
+    pub live_answer: RefCell<Option<Response>>,
 }
 
 /// A change to a fake GitHub answer, given the request.
@@ -120,6 +125,8 @@ impl Default for Fake {
             failing: RefCell::default(),
             refused_refresh: RefCell::default(),
             rewrite: RefCell::default(),
+            forwarded: RefCell::default(),
+            live_answer: RefCell::default(),
         }
     }
 }
@@ -331,7 +338,14 @@ impl GitHub for Fake {
 
 impl Live for Fake {
     async fn live_forward(&self, name: &str, req: &Request) -> Option<Response> {
-        self.inner.live_forward(name, req).await
+        if self.inner.live.bound.get() {
+            self.forwarded.borrow_mut().push(req.clone());
+        }
+        let scripted = self.live_answer.borrow().clone();
+        match scripted {
+            Some(res) if self.inner.live.bound.get() => Some(res),
+            _ => self.inner.live_forward(name, req).await,
+        }
     }
     async fn live_post(&self, name: &str, path: &str, body: &str) -> Option<(u16, String)> {
         self.inner.live_post(name, path, body).await
