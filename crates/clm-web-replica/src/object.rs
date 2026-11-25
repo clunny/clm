@@ -944,7 +944,10 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let pending = !self.replica.pending_fetch().is_empty();
         let mut at: Option<u64> = None;
         if pending {
-            at = Some(now + if taken > 0 || building { 1 } else { BATCH });
+            // The next slice at once while this one took files or the budget ran out before
+            // the fetch could, as a resync can spend it; a minute on when GitHub gave nothing.
+            let next = taken > 0 || building || b.left() < 2;
+            at = Some(now + if next { 1 } else { BATCH });
         }
         if self.open(now) {
             let resync = self.meta.last_resync + RESYNC;
