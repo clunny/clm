@@ -144,7 +144,6 @@ describe('taken marks', () => {
   });
 });
 
-// req:web.views/propose-from-backlog@9531d23b
 describe('proposals', () => {
   const settle = async () => {
     for (let i = 0; i < 4; i++) await Promise.resolve();
@@ -167,6 +166,7 @@ describe('proposals', () => {
   };
   beforeEach(() => drafts.clear());
 
+  // req:web.views/propose-from-backlog@9531d23b
   it("proposed: one post of the title and intent for two quick submits, then the form closes", async () => {
     let done: (v: string | null) => void = () => undefined;
     const onPropose = vi.fn(() => new Promise<string | null>((go) => (done = go)));
@@ -184,6 +184,7 @@ describe('proposals', () => {
     expect(view.querySelector('.fbform.proposal')).toBeNull();
   });
 
+  // req:web.views/propose-from-backlog@9531d23b
   it('Proposed lists each proposal with its title, proposer, time and the note, between Waiting on you and the columns', () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ proposals: [proposal()] }));
     const row = view.querySelector<HTMLElement>('.proposed')!;
@@ -197,6 +198,7 @@ describe('proposals', () => {
     expect(order.slice(0, 3)).toEqual(['waiting', 'proposed', 'col']);
   });
 
+  // req:web.views/propose-from-backlog@9531d23b
   it('title taken: a refusal keeps the form open with its reason', async () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose: () => Promise.resolve('That title is taken: choose another.') }));
     const form = openForm(view);
@@ -207,6 +209,7 @@ describe('proposals', () => {
     expect(view.querySelector<HTMLInputElement>('.fbform.proposal input[name=title]')?.value).toBe('Export CSV');
   });
 
+  // req:web.views/propose-from-backlog@9531d23b
   it('sends nothing without a title', async () => {
     const onPropose = vi.fn(() => Promise.resolve(null));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose }));
@@ -218,6 +221,7 @@ describe('proposals', () => {
     expect(form.querySelector('.err')?.textContent).toContain('title');
   });
 
+  // req:web.views/propose-from-backlog@9531d23b
   it('what was typed survives a redraw', () => {
     fill(openForm(renderBacklog(snapshot(), null, null, () => {}, proposing())), 'Half', 'a thought');
     const form = renderBacklog(snapshot(), null, null, () => {}, proposing()).querySelector<HTMLElement>('.fbform.proposal')!;
@@ -225,6 +229,7 @@ describe('proposals', () => {
     expect(form.querySelector('textarea')?.value).toBe('a thought');
   });
 
+  // req:web.views/propose-from-backlog@9531d23b
   it('withdraw: only mine carries Withdraw, and a tap sends one withdrawal', () => {
     const onWithdraw = vi.fn(() => new Promise<string | null>(() => undefined));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onWithdraw, proposals: [proposal(), proposal({ id: 'p2', writer: 'bob/web', mine: false, title: 'Other' })] }));
@@ -236,6 +241,7 @@ describe('proposals', () => {
     expect(onWithdraw).toHaveBeenCalledWith('p1');
   });
 
+  // req:web.views/propose-from-backlog@9531d23b
   it('a refused withdrawal says so under the proposal and can be tapped again', async () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onWithdraw: () => Promise.resolve('Not withdrawn (404).'), proposals: [proposal()] }));
     const w = view.querySelector<HTMLButtonElement>('.prop[data-id=p1] button.withdraw')!;
@@ -245,12 +251,14 @@ describe('proposals', () => {
     expect(w.disabled).toBe(false);
   });
 
+  // req:web.views/propose-from-backlog@9531d23b
   it('both disabled offline', () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ offline: true, proposals: [proposal()] }));
     expect(view.querySelector<HTMLButtonElement>('button.propose')!.disabled).toBe(true);
     expect(view.querySelector<HTMLButtonElement>('button.withdraw')!.disabled).toBe(true);
   });
 
+  // req:web.views/propose-from-backlog@9531d23b
   it('no Proposed row without proposals, or before the implementation state', () => {
     expect(renderBacklog(snapshot(), null, null, () => {}, proposing()).querySelector('.proposed')).toBeNull();
     expect(renderBacklog(snapshot(), null, null, () => {}, proposing({ proposals: null })).querySelector('.proposed')).toBeNull();
