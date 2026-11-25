@@ -68,8 +68,8 @@ function nodeEntry(n: FlightNode, impl: Implementation, snap: Snapshot, o: Build
   const lines: Child[][] = [];
   if (n.claim) {
     const lastPush = n.claim.lapses_at - impl.expiry_hours * 3600;
-    const lapse = lapsesIn(n.claim.lapses_at, o.now);
-    lines.push(['Claimed on ', code(`impl/${n.node}`), ` · last push ${ago(lastPush, o.now)} · ${lapse === 'lapsed' ? lapse : `lapses in ${lapse}`}`]);
+    const lapse = n.claim.lapses_at <= o.now ? 'lapsed' : `lapses in ${lapsesIn(n.claim.lapses_at, o.now)}`;
+    lines.push(['Claimed on ', code(`impl/${n.node}`), ` · last push ${ago(lastPush, o.now)} · ${lapse}`]);
   }
   // The branch's page, and whether the ledger holds a `checked` record for its head;
   // nothing about the check while the Worker doesn't yet know.
