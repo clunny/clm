@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [unjudged-web.worker.replica-88470edf]
 ---
 
