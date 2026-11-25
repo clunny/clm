@@ -29,17 +29,6 @@ pub struct TreeEntry {
     pub sha: String,
 }
 
-/// The paths the model reads: a copy of the model's half of the replica's rule, withdrawn
-/// once its last user has moved to `clm_gate::is_spec_path` (`old-paths-removed`).
-// clm:remove-by 20261124-wave-6-worker-by-the-rule
-pub fn is_spec_path(path: &str) -> bool {
-    path == "ARCHITECTURE.md"
-        || path == "CAPABILITIES.md"
-        || ["specs/", "changes/", "backlog/", "docs/decisions/"]
-            .iter()
-            .any(|d| path.starts_with(d))
-}
-
 /// The Trees API's recursive listing of a commit's tree, with its `truncated` flag; none
 /// for any answer but a 200.
 pub async fn listing<P: GitHub>(

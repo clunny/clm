@@ -177,18 +177,6 @@ pub async fn check<P: Platform>(p: &P, token: &str, owner: &str, repo: &str) -> 
     access_of(memo, token)
 }
 
-/// [`checked_direct`] with a failed read folded into none, as a refusal is: withdrawn once
-/// its last user has moved to `checked_direct` (`old-paths-removed`).
-// clm:remove-by 20261124-wave-6-worker-by-the-rule
-pub async fn check_direct<P: GitHub>(
-    p: &P,
-    token: &str,
-    owner: &str,
-    repo: &str,
-) -> Option<Access> {
-    checked_direct(p, token, owner, repo).await.ok().flatten()
-}
-
 /// The `Access` when `token` can read `owner/repo`, asked of GitHub every time and
 /// remembered nowhere (`object-reads`): none for a name the rule refuses, which asks
 /// nothing, and for GitHub's 403 or 404; [`gh::Failed`] for any other answer, a 401

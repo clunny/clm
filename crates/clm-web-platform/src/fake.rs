@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::http::{Request, Response, Upgrade};
 use crate::platform::{
-    Assets, Auth, Cache, Clock, GhRequest, GhResponse, GitHub, Kv, Live, Log, Secrets,
+    Assets, Auth, Cache, Clock, GhRequest, GhResponse, GitHub, Live, Log, Secrets,
 };
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -938,13 +938,8 @@ pub struct Fake {
     pub live: FakeLive,
     /// Every line the Worker logged.
     pub logs: RefCell<Vec<String>>,
-    /// Workers KV, which no `Platform` needs any more (`platform-parts`).
-    // clm:remove-by 20261124-wave-6-worker-by-the-rule
-    pub kv: RefCell<BTreeMap<String, String>>,
-    // clm:remove-by 20261124-wave-6-worker-by-the-rule
-    pub kv_writes: RefCell<Vec<String>>,
     pub cache: RefCell<BTreeMap<String, (String, u64)>>,
-    /// Every value ever written to the Cache API (or KV).
+    /// Every value ever written to the Cache API.
     pub stored: RefCell<Vec<String>>,
     pub now: Cell<u64>,
     pub secrets: BTreeMap<String, String>,
@@ -970,8 +965,6 @@ impl Default for Fake {
         Fake {
             live: FakeLive::default(),
             logs: RefCell::default(),
-            kv: RefCell::default(),
-            kv_writes: RefCell::default(),
             cache: RefCell::default(),
             stored: RefCell::default(),
             now: Cell::new(NOW),
@@ -1001,18 +994,6 @@ impl Assets for Fake {
             },
             None => Response::empty(404),
         }
-    }
-}
-
-// clm:remove-by 20261124-wave-6-worker-by-the-rule
-impl Kv for Fake {
-    async fn kv_get(&self, key: &str) -> Option<String> {
-        self.kv.borrow().get(key).cloned()
-    }
-    async fn kv_put(&self, key: &str, value: &str) {
-        self.kv_writes.borrow_mut().push(key.into());
-        self.stored.borrow_mut().push(format!("{key} {value}"));
-        self.kv.borrow_mut().insert(key.into(), value.into());
     }
 }
 
