@@ -431,7 +431,7 @@ impl SpecPart<'_> {
             rev: at.merge_base,
         };
         let head = GitSide { at, rev: at.head };
-        let read = reading::read_branch(&base, &head, entries, moved, rules)?;
+        let read = reading::read_branch(&base, &head, entries, moved, rules, true)?;
         violations.extend(read.deleted_tests.iter().cloned());
         let (changes, cut) = (&read.changes, &read.cuts);
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();

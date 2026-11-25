@@ -37,6 +37,10 @@ fn commit(d: &Path, message: &str) {
     );
 }
 
+/// The architecture, whose one entry `law` component `n` serves, so a graph loaded without
+/// it doesn't load.
+const ARCH: &str = "# Arch\n\n## Constraints\n\n### Constraint: law\n**Principle.** A law SHALL hold.\n\n#### Scenario: s\n- ok\n\n#### Untested\nA judgement.\n";
+
 const ROOT: &str = "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nroot\n\n## Design\nroot design\n\n## Requirements\n";
 
 fn requirement(slug: &str, scenarios: &[&str]) -> String {
@@ -52,7 +56,7 @@ fn requirement(slug: &str, scenarios: &[&str]) -> String {
 /// Component `n` with `frontmatter` lines and `requirements`.
 fn component(frontmatter: &str, requirements: &str) -> String {
     format!(
-        "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"src/n/**\"]\n{frontmatter}---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n{requirements}"
+        "---\ntitle: N\nstatus: active\nowners: []\nserves: [architecture/law]\npaths: [\"src/n/**\"]\n{frontmatter}---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n{requirements}"
     )
 }
 
@@ -79,7 +83,7 @@ fn repo(base: &[(&str, Option<&str>)]) -> TempDir {
     git(d, &["init", "-q", "-b", "main"]);
     write(d, "specs/SPEC.md", ROOT.as_bytes());
     write(d, "specs/n/SPEC.md", component("", &r_and_s()).as_bytes());
-    write(d, "ARCHITECTURE.md", b"# Architecture\n");
+    write(d, "ARCHITECTURE.md", ARCH.as_bytes());
     write(d, "CAPABILITIES.md", b"# Capabilities\n");
     write(d, "tests/t.rs", test_file().as_bytes());
     for (rel, text) in base {
@@ -225,6 +229,7 @@ fn scenario_the_same_answer_from_files() {
     let burdened = "---\nstatus: proposed\nhuman_burdens: [a paid run]\n---\n\n## Intent\n\nx\n";
     let plain = "---\nstatus: applied\n---\n\n## Intent\n\nx\n";
     let listed = "DELETE tests/t.rs::one\n";
+    let more_arch = format!("{ARCH}\nmore\n");
     type Branch<'a> = (
         &'a str,
         Vec<(&'a str, Option<&'a str>)>,
@@ -268,7 +273,7 @@ fn scenario_the_same_answer_from_files() {
         (
             "only edits ARCHITECTURE.md",
             vec![],
-            vec![("ARCHITECTURE.md", Some(b"# Architecture\n\nmore\n"))],
+            vec![("ARCHITECTURE.md", Some(more_arch.as_bytes()))],
             &[],
             true,
         ),
@@ -306,6 +311,21 @@ fn scenario_the_same_answer_from_files() {
         assert_eq!(files.review, review, "{name}");
         assert_eq!(files.cuts, outcome.cuts, "{name}");
         assert!(files.withheld.is_empty(), "{name}: {:?}", files.withheld);
+        let lines: Vec<String> = files.cuts.iter().map(ToString::to_string).collect();
+        match name {
+            "removes n/r" => assert_eq!(
+                lines,
+                ["specs/n/SPEC.md: gate/cut: requirement n/r is gone"]
+            ),
+            // The archived list's text at the merge base is the live list's: only `two` is new.
+            "adds a line to an archived list" => assert_eq!(
+                lines,
+                [
+                    "changes/archive/c/deleted-tests.txt: gate/cut: test tests/t.rs::two is to be deleted"
+                ]
+            ),
+            _ => {}
+        }
     }
 }
 
@@ -407,6 +427,43 @@ fn scenario_what_cant_be_read() {
     assert_eq!(read.cuts, readable.cuts);
     assert_eq!(read.review, readable.review);
     assert!(read.withheld.is_empty());
+
+    // A live list on `main` gains a line: withheld at the head, its lines aren't among the
+    // cuts; withheld at both sides, the merge base is named.
+    let dir = repo(&[
+        (
+            "changes/c/change.md",
+            Some("---\nstatus: applied\n---\n\n## Intent\n\nx\n"),
+        ),
+        (list, Some("DELETE tests/t.rs::one\n")),
+    ]);
+    let d = dir.path();
+    edit(
+        d,
+        &[
+            (spec, Some(added.as_bytes())),
+            (
+                list,
+                Some(b"DELETE tests/t.rs::one\nDELETE tests/t.rs::two\n"),
+            ),
+        ],
+    );
+    let merge_base = git(d, &["merge-base", "main", "pr"]);
+    let head = git(d, &["rev-parse", "pr"]);
+    assert_eq!(
+        from_files(d, &[], &[]).cuts,
+        [Cut::Test {
+            list: list.into(),
+            file: "tests/t.rs".into(),
+            name: "two".into()
+        }]
+    );
+    let read = from_files(d, &[], &[("head", list)]);
+    assert_eq!(read.withheld, [(list.to_string(), head)]);
+    assert!(read.cuts.is_empty() && read.review, "{:?}", read.cuts);
+    let read = from_files(d, &[], &[("base", list), ("head", list)]);
+    assert_eq!(read.withheld, [(list.to_string(), merge_base)]);
+    assert!(read.cuts.is_empty() && read.review, "{:?}", read.cuts);
 
     // A branch that changes only a decision the head holds unreadably.
     let dir = repo(&[("docs/decisions/d.md", Some("# D\n"))]);

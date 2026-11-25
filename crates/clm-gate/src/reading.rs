@@ -46,7 +46,7 @@ pub fn review_from_files(
     head: &FileSide,
 ) -> FileReview {
     let moved: BTreeSet<&str> = moved.iter().copied().collect();
-    let Ok(read) = read_branch(base, head, paths, &moved, crate::RULES);
+    let Ok(read) = read_branch(base, head, paths, &moved, crate::RULES, false);
     let all: Vec<&str> = paths.iter().map(|&(_, p)| p).collect();
     let review = read.review(needs_review_of(&all, approval_changed, &read.changes));
     FileReview {
@@ -257,13 +257,15 @@ pub(crate) fn test_list(file: &str) -> Option<&str> {
 }
 
 /// Reads a spec branch from its two sides: `paths` with their statuses, `moved` the archive
-/// moves of changes, and `rules` the version whose `shortened_then` is read.
+/// moves of changes, `rules` the version whose `shortened_then` is read, and `tests` whether
+/// the `gate/deleted-tests` violations are read, which only the gate reports.
 pub(crate) fn read_branch<S: Reading>(
     base: &S,
     head: &S,
     paths: &[(char, &str)],
     moved: &BTreeSet<&str>,
     rules: u32,
+    tests: bool,
 ) -> Result<Read, S::Error> {
     let changes = change_frontmatters(head, paths, moved)?;
     let added = added_exemptions(base, head, paths)?;
@@ -325,7 +327,11 @@ pub(crate) fn read_branch<S: Reading>(
             base: base.as_deref(),
         })
         .collect();
-    let deleted_tests = deleted_tests(head, &lists)?;
+    let deleted_tests = if tests {
+        deleted_tests(head, &lists)?
+    } else {
+        Vec::new()
+    };
 
     let (base_graph, base_violations) = base.graph()?;
     let (head_graph, head_violations) = head.graph()?;
