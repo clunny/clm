@@ -24,10 +24,14 @@ Between a batch's fold and its land, a component build landed a workaround flag 
 - A new requirement, `orchestrator.loop/failed-batch-land-rebased`, and a new run name, `rebase:<batch>`, in the Contract's list of run names.
 - `plan-fold`'s rule for a failed land defers to it, and its scenario *a fold that proposes nothing* now names a batch already rebased since its approval, keeping the outcome it had.
 - The Design gains a paragraph, *A fold batch whose land fails*.
+- `loop-file` names what the loop keeps for it: whether a `rebase:<batch>` run was launched for the batch since its last approval.
 
 Edge cases the change knows it needs:
 - A land whose line holds `gate/approval` before any rebase run launches none: the approval is missing, not the branch out of date, so only the human can act.
 - A rebase that changes nothing leaves the fingerprint unchanged, and the second land lands on the human's approval.
+- A rebase run that would be rebuilt, or is dropped as an orphan, is not launched again before the next approval: a fresh run starts with no stops counted, so relaunching it could loop for ever. The batch goes back to the human's queue as for a run that ended with no closing line.
+- A rebase run doesn't hold back a fold of the fold list.
+- The `say` asking for a fresh approval is given only for a `gate/approval` refusal after a rebase run launched since the last approval; one before any rebase gets none, as `plan-fold` says.
 
 ## Constraints
 
