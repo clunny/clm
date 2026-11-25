@@ -73,7 +73,7 @@ fn one_post(fake: &Fake) -> Value {
 
 #[test]
 fn a_proposal_passed_on() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     fake.set_write(409, json!({"error": "taken"}));
     let before = fake.gh.calls.borrow().len();
@@ -93,15 +93,18 @@ fn a_proposal_passed_on() {
 
 #[test]
 fn a_decision_passed_on() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
-    fake.set_write(200, json!({"id": "d1"}));
+    // A body spaced as no serializer would, so only the bytes as given match it.
+    let given = r#"{ "id" :  "d1" }"#;
+    *fake.replicas.write.borrow_mut() = Some((200, given.into()));
     let body = json!({"version": "0123abcd", "value": "low", "decision": "cut"});
     let before = fake.gh.calls.borrow().len();
     let res = decide(&fake, &cookie, "architecture/my%20e", &body);
     only_the_access_check(&fake, before);
     assert_eq!(res.status, 200);
-    assert_eq!(body_json(&res), json!({"id": "d1"}), "the body as given");
+    assert_eq!(res.body, given.as_bytes(), "the body as given");
+    assert_eq!(res.header("content-type"), Some("application/json"));
     let post = one_post(&fake);
     assert_eq!(post["kind"], "decide");
     assert_eq!(post["id"], "architecture/my e");
@@ -114,7 +117,7 @@ fn a_decision_passed_on() {
 
 #[test]
 fn a_capability_decision_names_its_layer() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     fake.set_write(200, json!({}));
     let body = json!({"version": "0123abcd", "value": "high", "decision": "keep"});
@@ -124,13 +127,15 @@ fn a_capability_decision_names_its_layer() {
 
 #[test]
 fn a_withdrawal_passed_on() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     *fake.replicas.write.borrow_mut() = Some((404, String::new()));
     let before = fake.gh.calls.borrow().len();
     let res = withdraw(&fake, &cookie, "p1");
     only_the_access_check(&fake, before);
     assert_eq!(res.status, 404);
+    assert!(res.body.is_empty(), "no body: {res:?}");
+    assert_eq!(res.header("content-type"), None, "no body to type");
     let post = one_post(&fake);
     assert_eq!(post["kind"], "withdraw");
     assert_eq!(post["id"], "p1");
@@ -138,7 +143,7 @@ fn a_withdrawal_passed_on() {
 
 #[test]
 fn an_answer_passed_on() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     fake.set_write(404, json!({"error": "unknown"}));
     let before = fake.gh.calls.borrow().len();
@@ -161,7 +166,7 @@ fn an_answer_passed_on() {
 
 #[test]
 fn preparing() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     fake.set_write(503, json!({"preparing": 0.4}));
     let res = propose(&fake, &cookie, "a", &proposal());
@@ -171,7 +176,7 @@ fn preparing() {
 
 #[test]
 fn object_down() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     fake.replicas.bound.set(false);
     let valid = json!({"version": "0123abcd", "value": "low", "decision": "cut"});
@@ -193,7 +198,7 @@ fn object_down() {
 
 #[test]
 fn no_access() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     fake.set_write(200, json!({}));
     let res = propose(&fake, &cookie, "private", &proposal());
@@ -206,7 +211,7 @@ fn no_access() {
 
 #[test]
 fn a_failed_body_check_posts_nothing() {
-    // req:web.worker/writes-to-object@a68570e6
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     fake.set_write(200, json!({}));
     let res = propose(

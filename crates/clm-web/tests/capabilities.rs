@@ -121,6 +121,13 @@ fn records(fake: &Fake, branch: &str) -> Vec<Value> {
 
 const GIT: &str = "https://api.github.com/repos/o/a/git";
 
+/// The object's refusal as it gave it: `status` with an empty body and no content type.
+fn the_objects_refusal(res: &clm_web_platform::http::Response, status: u16) {
+    assert_eq!(res.status, status, "{res:?}");
+    assert!(res.body.is_empty(), "{res:?}");
+    assert_eq!(res.header("content-type"), None, "{res:?}");
+}
+
 #[test]
 fn the_objects_report() {
     // req:web.worker/capabilities@9e23bf9c
@@ -138,7 +145,7 @@ fn the_objects_report() {
 
 #[test]
 fn decide_appends_decided() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/decide@94ba9aa2
     let (fake, cookie) = setup_with(repo());
     let res = decide(&fake, &cookie, "x", &body(&version(), "low", "cut"));
     assert_eq!(res.status, 200, "{res:?}");
@@ -204,14 +211,14 @@ fn push(fake: &Fake, sha: &str, files: FileMap) {
 
 #[test]
 fn decide_moved_version_409() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup_with(repo());
     let seen = version();
     // `x` is reworded on main after the page was drawn.
     push(&fake, "333", reworded_files());
-    assert_eq!(
-        decide(&fake, &cookie, "x", &body(&seen, "low", "cut")).status,
-        409
+    the_objects_refusal(
+        &decide(&fake, &cookie, "x", &body(&seen, "low", "cut")),
+        409,
     );
     assert!(fake.gh.writes().is_empty());
     // The version decide compares is the reworded one, as soon as main holds it.
@@ -229,7 +236,7 @@ fn decide_moved_version_409() {
 
 #[test]
 fn decide_percent_decodes_the_slug() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/decide@94ba9aa2
     let (fake, cookie) = setup_with(repo());
     assert_eq!(
         decide(&fake, &cookie, "%78", &body(&version(), "low", "cut")).status,
@@ -239,7 +246,7 @@ fn decide_percent_decodes_the_slug() {
 
 #[test]
 fn decide_refuses_specs_that_dont_load() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup_with(repo());
     let mut broken = files_now();
     broken.insert(
@@ -249,16 +256,16 @@ fn decide_refuses_specs_that_dont_load() {
         .to_vec(),
     );
     push(&fake, "444", broken);
-    assert_eq!(
-        decide(&fake, &cookie, "x", &body(&version(), "low", "cut")).status,
-        422
+    the_objects_refusal(
+        &decide(&fake, &cookie, "x", &body(&version(), "low", "cut")),
+        422,
     );
     assert!(fake.gh.writes().is_empty());
 }
 
 #[test]
 fn github_fails_502() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup_with(repo());
     // The object has its views; GitHub then fails the read of the default branch's ref.
     fake.gh
@@ -268,16 +275,16 @@ fn github_fails_502() {
         .unwrap()
         .ref_fails
         .insert("main".into());
-    assert_eq!(
-        decide(&fake, &cookie, "x", &body(&version(), "low", "cut")).status,
-        502
+    the_objects_refusal(
+        &decide(&fake, &cookie, "x", &body(&version(), "low", "cut")),
+        502,
     );
     assert!(fake.gh.writes().is_empty());
 }
 
 #[test]
 fn decide_append_fails_502() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/writes-to-object@8db517ea
     let mut repo = repo();
     // The user's ledger branch exists but its `records.jsonl` can't be read, so no append.
     repo.branches
@@ -285,13 +292,29 @@ fn decide_append_fails_502() {
     repo.commits.insert("999".into(), FileMap::new());
     let (fake, cookie) = setup_with(repo);
     let res = decide(&fake, &cookie, "x", &body(&version(), "low", "cut"));
-    assert_eq!(res.status, 502);
+    the_objects_refusal(&res, 502);
     assert!(fake.gh.writes().is_empty());
 }
 
 #[test]
+fn decide_append_refused_502() {
+    // req:web.worker/writes-to-object@8db517ea
+    let mut repo = repo();
+    // GitHub refuses to create the user's ledger branch, so the append doesn't land.
+    repo.refused_refs.insert("clm/ledger/clunny/web".into());
+    let (fake, cookie) = setup_with(repo);
+    let res = decide(&fake, &cookie, "x", &body(&version(), "low", "cut"));
+    the_objects_refusal(&res, 502);
+    let repos = fake.gh.repos.borrow();
+    assert!(
+        !repos["o/a"].branches.contains_key("clm/ledger/clunny/web"),
+        "no record is written"
+    );
+}
+
+#[test]
 fn decide_bad_body_422_no_request() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/decide@94ba9aa2
     let (fake, cookie) = setup_with(repo());
     let v = version();
     for bad in [
@@ -322,7 +345,7 @@ fn decide_bad_body_422_no_request() {
 
 #[test]
 fn decide_signed_422() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup_with(repo());
     sign_main(&fake);
     let res = decide(&fake, &cookie, "x", &body("0123abcd", "high", "keep"));
@@ -336,10 +359,9 @@ fn decide_signed_422() {
 
 #[test]
 fn decide_unknown_capability_422() {
-    // req:web.worker/decide@fb1ef580
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup_with(repo());
     let res = decide(&fake, &cookie, "nope", &body(&version(), "high", "keep"));
-    assert_eq!(res.status, 422);
-    assert!(res.body.is_empty());
+    the_objects_refusal(&res, 422);
     assert!(fake.gh.writes().is_empty());
 }

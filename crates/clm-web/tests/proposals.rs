@@ -90,7 +90,7 @@ fn proposed(id: &str, writer: &str, at: &str, slug: &str) -> Value {
 
 #[test]
 fn a_proposal_is_appended() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/proposals@16b46232
     let (fake, cookie) = setup();
     let res = propose(
         &fake,
@@ -136,7 +136,7 @@ fn a_proposal_is_appended() {
 
 #[test]
 fn refused() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     let res = propose(
         &fake,
@@ -156,7 +156,7 @@ fn refused() {
 }
 #[test]
 fn taken_by_a_change() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/writes-to-object@8db517ea
     // A slug the replica's `resolved` holds is spent though no backlog item has it.
     let (fake, cookie) = setup_as(true, |repo| {
         repo.commits
@@ -180,7 +180,7 @@ fn taken_by_a_change() {
 
 #[test]
 fn an_open_proposal_takes_the_slug() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/writes-to-object@8db517ea
     // The replica's fold holds bob's open proposal, which takes the slug.
     let (fake, cookie) = setup_as(true, |repo| {
         let open = proposed("p0", "bob/web", "2027-01-15T07:00:00.000Z", "dark-mode");
@@ -198,7 +198,7 @@ fn an_open_proposal_takes_the_slug() {
 
 #[test]
 fn refused_before_asking_github() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/proposals@16b46232
     let (fake, cookie) = setup();
     let long_body = "x".repeat(8_001);
     let eleven: Vec<String> = (0..11).map(|i| format!("n{i}")).collect();
@@ -221,6 +221,7 @@ fn refused_before_asking_github() {
         (json!({"title": "Ok", "nodes": []}), "body"),
         (json!({"title": "Ok", "body": "", "nodes": eleven}), "nodes"),
         (json!({"title": "Ok", "body": "", "nodes": [1]}), "nodes"),
+        (json!({"title": "Ok", "body": "", "nodes": "a"}), "nodes"),
         (json!({"title": "Ok", "body": ""}), "nodes"),
         (json!({"title": "!!!", "body": "", "nodes": []}), "slug"),
     ] {
@@ -234,6 +235,20 @@ fn refused_before_asking_github() {
             "{body}: asked the object"
         );
     }
+    // A body that isn't JSON is refused as a missing title.
+    let calls = fake.gh.calls.borrow().len();
+    let res = fake.handle(post("/api/repos/o/a/proposals", &cookie, b"not json"));
+    assert_eq!(res.status, 422);
+    assert_eq!(body_json(&res), json!({"error": "title"}));
+    assert_eq!(
+        fake.gh.calls.borrow().len(),
+        calls,
+        "not json: asked GitHub"
+    );
+    assert!(
+        fake.replicas.asked("o/a").is_empty(),
+        "not json: asked the object"
+    );
     // The longest title and body are accepted, and an empty node list.
     let res = propose(
         &fake,
@@ -247,11 +262,20 @@ fn refused_before_asking_github() {
         &json!({"title": "a".repeat(120), "body": "é".repeat(8_000), "nodes": []}),
     );
     assert_eq!(res.status, 200);
+    // The Kelvin sign lowercases to an ASCII `k`, so its slug isn't empty.
+    let res = propose(
+        &fake,
+        &cookie,
+        &json!({"title": "\u{212A}elvin", "body": "", "nodes": []}),
+    );
+    assert_eq!(res.status, 200, "{res:?}");
+    let last = records(&fake, "alice/web").pop().unwrap();
+    assert_eq!(last["slug"], "kelvin");
 }
 
 #[test]
 fn no_access() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/proposals@16b46232
     let (fake, cookie) = setup();
     let body = json!({"title": "Dark mode", "body": "", "nodes": []}).to_string();
     let res = fake.handle(post(
@@ -271,7 +295,8 @@ fn no_access() {
 
 #[test]
 fn withdrawn() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/writes-to-object@8db517ea
+    // req:web.worker/proposals@16b46232
     let (fake, cookie) = setup_as(true, |repo| {
         let p1 = proposed("p1", "alice/web", "2027-01-15T07:00:00.000Z", "s1");
         ledger(repo, "alice/web", "LA", &[p1]);
@@ -280,22 +305,29 @@ fn withdrawn() {
     });
     let res = fake.handle(delete("/api/repos/o/a/proposals/p2", &cookie));
     assert_eq!(res.status, 404, "bob's");
+    assert!(res.body.is_empty(), "the object's empty body: {res:?}");
     assert!(fake.gh.writes().is_empty());
     let res = fake.handle(delete("/api/repos/o/a/proposals/p1", &cookie));
     assert_eq!(res.status, 200);
-    let records = records(&fake, "alice/web");
-    assert_eq!(records.len(), 2);
-    assert_eq!(records[1]["kind"], "withdrawn");
-    assert_eq!(records[1]["proposal"], "p1");
+    let mine = records(&fake, "alice/web");
+    assert_eq!(mine.len(), 2);
+    assert_eq!(mine[1]["kind"], "withdrawn");
+    assert_eq!(mine[1]["proposal"], "p1");
     let writes = fake.gh.writes().len();
     let res = fake.handle(delete("/api/repos/o/a/proposals/p1", &cookie));
     assert_eq!(res.status, 404, "already withdrawn");
+    assert!(res.body.is_empty(), "the object's empty body: {res:?}");
     assert_eq!(fake.gh.writes().len(), writes);
+    assert_eq!(
+        records(&fake, "bob/web").len(),
+        1,
+        "bob's ledger is untouched"
+    );
 }
 
 #[test]
 fn open_proposals() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/proposals@16b46232
     let (fake, cookie) = setup_as(false, |_| {});
     let listed = [
         proposed("p2", "bob/web", "2027-01-15T07:10:00.000Z", "s2"),
@@ -323,7 +355,7 @@ fn open_proposals() {
 
 #[test]
 fn the_slug() {
-    // req:web.worker/proposals@e608c36e
+    // req:web.worker/proposals@16b46232
     let (fake, cookie) = setup();
     let titles = [
         "  Dark mode: on/off!  ".to_string(),

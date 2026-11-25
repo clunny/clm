@@ -10,7 +10,7 @@ fn workspace() -> PathBuf {
 
 #[test]
 fn builds_for_wasm_with_the_class() {
-    // req:web.worker/replica-class-export@92f08d8b
+    // req:web.worker/replica-class-export@bc3e3b8c
     // A separate target dir, so the build doesn't wait on the outer `cargo test`'s lock.
     let root = workspace();
     let dir = root.join("target/wasm-test");

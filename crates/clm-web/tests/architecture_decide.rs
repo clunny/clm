@@ -93,9 +93,16 @@ fn records(fake: &Fake, branch: &str) -> Vec<Value> {
 
 const GIT: &str = "https://api.github.com/repos/o/a/git";
 
+/// The object's refusal as it gave it: `status` with an empty body and no content type.
+fn the_objects_refusal(res: &clm_web_platform::http::Response, status: u16) {
+    assert_eq!(res.status, status, "{res:?}");
+    assert!(res.body.is_empty(), "{res:?}");
+    assert_eq!(res.header("content-type"), None, "{res:?}");
+}
+
 #[test]
 fn decide_appends_decided() {
-    // req:web.worker/architecture-decide@296cef09
+    // req:web.worker/architecture-decide@1913f135
     let (fake, cookie) = setup();
     let res = decide(&fake, &cookie, "e", &body(&version(), "medium", "redesign"));
     assert_eq!(res.status, 200, "{res:?}");
@@ -137,7 +144,7 @@ fn decide_appends_decided() {
 
 #[test]
 fn decide_percent_decodes_the_slug() {
-    // req:web.worker/architecture-decide@296cef09
+    // req:web.worker/architecture-decide@1913f135
     let (fake, cookie) = setup();
     assert_eq!(
         decide(&fake, &cookie, "%65", &body(&version(), "low", "cut")).status,
@@ -147,24 +154,23 @@ fn decide_percent_decodes_the_slug() {
 
 #[test]
 fn not_an_entry_or_moved_version() {
-    // req:web.worker/architecture-decide@296cef09
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     let res = decide(&fake, &cookie, "nope", &body(&version(), "high", "keep"));
-    assert_eq!(res.status, 422);
-    assert!(res.body.is_empty());
+    the_objects_refusal(&res, 422);
     // A capability's slug isn't an architecture entry.
     let res = decide(&fake, &cookie, "x", &body(&version(), "high", "keep"));
-    assert_eq!(res.status, 422);
-    assert_eq!(
-        decide(&fake, &cookie, "e", &body("0123abcd", "high", "keep")).status,
-        409
+    the_objects_refusal(&res, 422);
+    the_objects_refusal(
+        &decide(&fake, &cookie, "e", &body("0123abcd", "high", "keep")),
+        409,
     );
     assert!(fake.gh.writes().is_empty());
 }
 
 #[test]
 fn bad_body_and_broken_specs_422() {
-    // req:web.worker/architecture-decide@296cef09
+    // req:web.worker/architecture-decide@1913f135
     let (fake, cookie) = setup();
     let v = version();
     for bad in [
@@ -181,19 +187,26 @@ fn bad_body_and_broken_specs_422() {
             "the object is not asked"
         );
     }
+    assert!(fake.gh.writes().is_empty());
+}
+
+#[test]
+fn broken_specs_422() {
+    // req:web.worker/writes-to-object@8db517ea
+    let (fake, cookie) = setup();
     let mut broken = files_now();
     broken.insert("specs/c/SPEC.md".into(), b"no frontmatter\n".to_vec());
     push(&fake, "444", broken);
-    assert_eq!(
-        decide(&fake, &cookie, "e", &body(&v, "low", "cut")).status,
-        422
+    the_objects_refusal(
+        &decide(&fake, &cookie, "e", &body(&version(), "low", "cut")),
+        422,
     );
     assert!(fake.gh.writes().is_empty());
 }
 
 #[test]
 fn signed_422() {
-    // req:web.worker/architecture-decide@296cef09
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     let mut signed = files_now();
     signed.insert(
@@ -212,7 +225,7 @@ fn signed_422() {
 
 #[test]
 fn github_fails_502() {
-    // req:web.worker/architecture-decide@296cef09
+    // req:web.worker/writes-to-object@8db517ea
     let (fake, cookie) = setup();
     fake.gh
         .repos
@@ -221,9 +234,9 @@ fn github_fails_502() {
         .unwrap()
         .ref_fails
         .insert("main".into());
-    assert_eq!(
-        decide(&fake, &cookie, "e", &body(&version(), "low", "cut")).status,
-        502
+    the_objects_refusal(
+        &decide(&fake, &cookie, "e", &body(&version(), "low", "cut")),
+        502,
     );
     assert!(fake.gh.writes().is_empty());
 }
