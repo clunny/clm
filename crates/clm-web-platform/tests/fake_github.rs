@@ -82,7 +82,7 @@ fn numbers(v: &Value) -> Vec<u64> {
 
 #[test]
 fn pages_of_open_pull_requests() {
-    // req:web.worker.platform/fake-github@1a1c6ebd
+    // req:web.worker.platform/fake-github@8915d6cf
     let fake = setup();
     let first = pulls_page(&fake, Value::Null).unwrap();
     assert_eq!(numbers(&first["nodes"]), (1..=100).collect::<Vec<_>>());
@@ -102,7 +102,7 @@ fn pages_of_open_pull_requests() {
 
 #[test]
 fn modes_and_a_failed_blob() {
-    // req:web.worker.platform/fake-github@1a1c6ebd
+    // req:web.worker.platform/fake-github@8915d6cf
     let fake = setup();
     let query = "query Blobs($owner: String!, $name: String!, $e0: String!, $t0: String!, $t1: String!) { repository(owner: $owner, name: $name) { f0: object(expression: $e0) { ... on Blob { text isBinary isTruncated oid } } t0: object(expression: $t0) { ... on Tree { entries { name mode } } } t1: object(expression: $t1) { ... on Tree { entries { name mode } } } } }";
     let vars = json!({"owner": "o", "name": "a", "e0": "c1:a/b.md", "t0": "c1:a", "t1": "c1:"});
@@ -141,9 +141,9 @@ fn modes_and_a_failed_blob() {
 
 #[test]
 fn the_rest_pulls_by_head() {
-    // req:web.worker.platform/fake-github@1a1c6ebd
+    // req:web.worker.platform/fake-github@8915d6cf
     let fake = setup();
-    let (status, own) = rest(&fake, "pulls?head=o:spec/c2&base=main&state=open");
+    let (status, own) = rest(&fake, "pulls?head=o:spec/c2&state=open");
     assert_eq!((status, numbers(&own)), (200, vec![7]), "not the fork's #6");
     assert_eq!(own[0]["html_url"], "https://github.com/o/a/pull/7");
     assert_eq!(own[0]["title"], "t7");
@@ -186,7 +186,7 @@ fn the_rest_pulls_by_head() {
 
 #[test]
 fn failing_paths() {
-    // req:web.worker.platform/fake-github@1a1c6ebd
+    // req:web.worker.platform/fake-github@8915d6cf
     let fake = setup();
     for failing in ["pulls", "git/matching-refs/heads/spec/"] {
         fake.gh
@@ -211,4 +211,55 @@ fn failing_paths() {
             assert_eq!(refs.0, 502);
         }
     }
+}
+
+#[test]
+fn the_base_a_listing_names() {
+    // req:web.worker.platform/fake-github@8915d6cf
+    let fake = Fake::default();
+    let mut repo = FakeRepo::new("111", clm_repo());
+    assert_eq!(repo.default_branch, "main");
+    repo.pulls = vec![
+        FakePull {
+            base_ref: "release".into(),
+            ..pull(8, "spec/c3")
+        },
+        pull(9, "spec/c3"),
+    ];
+    repo.pages
+        .push(("spec/p".into(), 10, "https://github.com/o/a/pull/10".into()));
+    fake.gh.add_repo("o/a", repo);
+    fake.gh.grant("u", "o/a");
+    let asked = |q: &str| numbers(&rest(&fake, &format!("pulls?{q}")).1);
+    assert_eq!(asked("head=o:spec/c3&base=main"), vec![9]);
+    assert_eq!(asked("head=o:spec/c3&base=release"), vec![8]);
+    assert_eq!(asked("head=o:spec/c3"), vec![8, 9]);
+    assert_eq!(asked("head=o:spec/p&base=main"), vec![10]);
+    assert!(asked("head=o:spec/p&base=release").is_empty());
+    // `<base>` is percent-decoded as `head=` is.
+    assert_eq!(asked("head=o%3Aspec%2Fc3&base=rel%65ase"), vec![8]);
+    // A page whose number is a pull request's is that pull request, with its base.
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .pages
+        .push(("spec/c3".into(), 8, "https://github.com/o/a/pull/8".into()));
+    assert_eq!(asked("head=o:spec/c3&base=main"), vec![9]);
+    assert_eq!(asked("head=o:spec/c3&base=release"), vec![8]);
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        repo.pulls[0].state = "closed".into();
+        repo.pages[1].0 = "spec/c4".into();
+    }
+    let (_, closed) = rest(&fake, "pulls?head=o:spec/c4&base=release");
+    assert_eq!(
+        numbers(&closed),
+        vec![8],
+        "its base, though not listed open"
+    );
+    assert_eq!(closed[0]["base"]["ref"], "release");
+    assert!(asked("head=o:spec/c4&base=main").is_empty());
 }

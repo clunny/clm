@@ -395,11 +395,19 @@ impl FakeGitHub {
                 ok(Value::Array(refs))
             }
             ("GET", ["pulls"]) => {
-                let head = query
-                    .split('&')
-                    .find_map(|p| p.strip_prefix("head="))
-                    .map(crate::http::percent_decode);
-                ok(Value::Array(rest_pulls(name, repo, head.as_deref())))
+                let param = |key: &str| {
+                    query
+                        .split('&')
+                        .find_map(|p| p.strip_prefix(key))
+                        .map(crate::http::percent_decode)
+                };
+                let (head, base) = (param("head="), param("base="));
+                ok(Value::Array(rest_pulls(
+                    name,
+                    repo,
+                    head.as_deref(),
+                    base.as_deref(),
+                )))
             }
             ("GET", ["git", "trees", sha]) => match commit(sha) {
                 Some(files) => {
@@ -860,8 +868,10 @@ fn first_of(query: &str, vars: &serde_json::Map<String, Value>) -> usize {
 /// The REST pulls listing of `repo` for `head=<owner>:<branch>`: each open pull request of
 /// `pulls`, then each of `pages`, whose head is that branch of the repository `<owner>`
 /// names. A pull request's head repository is `repo`, or `<fork_owner>/<repo>` when it is a
-/// fork's (`fork` when `fork_owner` is empty); its base is always `repo`.
-fn rest_pulls(name: &str, repo: &FakeRepo, head: Option<&str>) -> Vec<Value> {
+/// fork's (`fork` when `fork_owner` is empty); its base is always `repo`. With `base`, only
+/// those whose base branch is `base`: a page's is `default_branch`, or the base of the pull
+/// request of `pulls` its number is.
+fn rest_pulls(name: &str, repo: &FakeRepo, head: Option<&str>, base: Option<&str>) -> Vec<Value> {
     let (owner, short) = name.split_once('/').unwrap();
     let fork_owner = match repo.fork_owner.as_str() {
         "" => "fork",
@@ -901,9 +911,17 @@ fn rest_pulls(name: &str, repo: &FakeRepo, head: Option<&str>) -> Vec<Value> {
         .filter(|(_, number, _)| !matched.iter().any(|p| p.number == *number))
         .map(|(branch, number, url)| {
             let head = (branch.as_str(), "", name.to_string());
-            entry(*number, url.clone(), "", head, &repo.default_branch)
+            let base = repo
+                .pulls
+                .iter()
+                .find(|p| p.number == *number)
+                .map_or(&repo.default_branch, |p| &p.base_ref);
+            entry(*number, url.clone(), "", head, base)
         });
-    pulls.chain(pages).collect()
+    pulls
+        .chain(pages)
+        .filter(|p| base.is_none_or(|b| p["base"]["ref"] == b))
+        .collect()
 }
 
 /// A request that reached a `Live` object.
