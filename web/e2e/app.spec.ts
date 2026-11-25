@@ -420,7 +420,7 @@ test('wide screens get the sidebar and no tab bar', async ({ page, context }) =>
   await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
 });
 
-// req:web/review-in-the-browser@7df79f16
+// req:web/review-in-the-browser@9b9f5325
 test('opening a file in full scrolls to its first change, and j steps to the next', async ({ page, context }) => {
   const requirements = Array.from({ length: 40 }, (_, i) => `### Requirement: r${i}\nIt SHALL do ${i}.`).join('\n\n');
   const before = `# N\n\n### Design\n\nThe design.\n\n### Requirements\n\n${requirements}\n`;
@@ -436,6 +436,13 @@ test('opening a file in full scrolls to its first change, and j steps to the nex
   await expect(page.locator('.pos')).toHaveText('Change 2 of 2');
   await expect(page.locator('.chg.focus')).toContainText('It SHALL do 39 twice.');
   await expect(page.locator('.chg.focus')).toBeInViewport();
+});
+
+// req:web/review-in-the-browser@9b9f5325
+test("a file not in the review: the page says it isn't changed in the branch", async ({ page, context }) => {
+  await mockApi(context);
+  await page.goto('/app/#/o/a/prs/spec%2Fc/full/README.md');
+  await expect(page.locator('.main')).toContainText("README.md isn't changed in spec/c.");
 });
 
 // req:web/graph-in-the-browser@1d6b4828
@@ -516,8 +523,8 @@ test.describe('graph', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
 test.describe('spec branches', () => {
+  // req:web/review-in-the-browser@9b9f5325
   test("branch without a page: both listed, and spec/d's review loads from its branch route with no page link", async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos/o/a/branches/spec/d/review'] = review({ branch: 'spec/d', page: null });
@@ -535,6 +542,7 @@ test.describe('spec branches', () => {
     expect(mock.requests).toContain('GET /api/repos/o/a/branches/spec/d/review');
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test('approved by: the header names clunny/web with its time and says not checked, and no request went to /pulls', async ({ page, context }) => {
     const mock = await mockApi(context, review({ approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z' }], checked: false }));
     await page.goto('/app/#/o/a/prs/spec%2Fc');
@@ -607,7 +615,6 @@ test.describe('Approve by branch', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
 test.describe('signed repositories', () => {
   test('became signed: a 422 signed loads the review again, and the note shows clm approve', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -623,6 +630,7 @@ test.describe('signed repositories', () => {
     await expect(page.locator('button.approve')).not.toHaveText(/Approved/);
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test('on a phone the note sits in the Approve bar, above the tab bar', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes[REVIEW] = review({ signed: true, approvals: [{ writer: 'clunny/web', at: '2026-10-27T10:00:00Z', signed: false }] });
@@ -637,7 +645,7 @@ test.describe('signed repositories', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
+// req:web/review-in-the-browser@9b9f5325
 test('one request, then approved: two quick taps send one approve, and the button reads Approved, disabled', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.hold(APPROVE);
@@ -913,8 +921,8 @@ test.describe('PWA', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
 test.describe('comments', () => {
+  // req:web/review-in-the-browser@9b9f5325
   test('comment on a requirement: one post of the fingerprint, target and text, the review asked again, and the card shows the comment by alice', async ({ page, context }) => {
     const mock = await mockApi(context);
     const said = { id: 'c1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', fingerprint: 'f1', target: 'n/r', text: 'Name the rule', current: true };
@@ -930,6 +938,7 @@ test.describe('comments', () => {
     expect(mock.requests.filter((r) => r === REVIEW)).toHaveLength(2);
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test("a 422 shows the Worker's reason under the form and keeps it", async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(COMMENTS, 422, { error: 'text' });
@@ -943,10 +952,10 @@ test.describe('comments', () => {
   });
 });
 
-// req:web/review-in-the-browser@7df79f16
 test.describe('Request changes', () => {
   const requested = { id: 'q1', writer: 'alice/web', at: '2026-10-27T12:00:00Z', fingerprint: 'f1', text: 'Split it', current: true, held: true };
 
+  // req:web/review-in-the-browser@9b9f5325
   test('requested: two quick submits post once, the review is asked again, and the header says changes requested by alice', async ({ page, context }) => {
     const mock = await mockApi(context, review({ signed: true }));
     mock.onPost = () => (mock.routes[REVIEW] = review({ signed: true, change_requests: [requested] }));
@@ -966,6 +975,7 @@ test.describe('Request changes', () => {
     expect(mock.requests.filter((r) => r === REVIEW)).toHaveLength(2);
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test('branch moved: a 409 says the branch changed, draws the review with fingerprint f2 and keeps the text', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(REQUEST, 409, { error: 'moved' });
@@ -987,6 +997,7 @@ test.describe('Request changes', () => {
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
+    // req:web/review-in-the-browser@9b9f5325
     test('Request changes is in the Approve bar beside Approve, and its form stays in view', async ({ page, context }) => {
       await mockApi(context);
       await page.goto('/app/#/o/a/prs/spec%2Fc');
@@ -999,6 +1010,7 @@ test.describe('Request changes', () => {
     });
   });
 
+  // req:web/review-in-the-browser@9b9f5325
   test('a 403 says write access is needed and leaves Request changes usable', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(REQUEST, 403, { error: 'permission' });
@@ -1008,6 +1020,39 @@ test.describe('Request changes', () => {
     await page.locator('.approve-bar .fbform button.send').click();
     await expect(page.locator('.approve-bar .fbform .err')).toContainText('needs write access');
     await expect(page.locator('.approve-bar .fbform button.send')).toBeEnabled();
+  });
+
+  // req:web/review-in-the-browser@9b9f5325
+  test("a comment's 403 says read access is needed, and the form stays usable with its text", async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.fail(COMMENTS, 403, { error: 'permission' });
+    await page.goto('/app/#/o/a/prs/spec%2Fc');
+    const intent = page.locator('.review .intent');
+    await intent.locator('button.comment').click();
+    await intent.locator('textarea').fill('Why now?');
+    await intent.locator('button.send').click();
+    await expect(intent.locator('.fbform .err')).toContainText('needs read access');
+    await expect(intent.locator('textarea')).toHaveValue('Why now?');
+    await expect(intent.locator('button.send')).toBeEnabled();
+  });
+
+  // req:web/review-in-the-browser@9b9f5325
+  test('a 422 naming no field says the Worker refused the request, and a 500 says Not sent (500)', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    await page.goto('/app/#/o/a/prs/spec%2Fc');
+    await page.locator('.approve-bar button.request').click();
+    const form = page.locator('.approve-bar .fbform');
+    await form.locator('textarea').fill('Split it');
+    for (const [status, says] of [
+      [422, 'Not sent: the Worker refused the request.'],
+      [500, 'Not sent (500).'],
+    ] as const) {
+      mock.fail(REQUEST, status, status === 422 ? {} : undefined);
+      await form.locator('button.send').click();
+      await expect(form.locator('.err')).toHaveText(says);
+      await expect(form.locator('textarea')).toHaveValue('Split it');
+      await expect(form.locator('button.send')).toBeEnabled();
+    }
   });
 });
 
