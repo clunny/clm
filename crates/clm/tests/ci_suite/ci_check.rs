@@ -3437,6 +3437,102 @@ fn the_stryker_fixture_reads_a_file_of_the_repository() {
     assert!(target.is_file(), "{rel} reaches {}", target.display());
 }
 
+/// Whether git's own matcher, in the repository `dir`, takes `path` as ignored by the
+/// `.gitignore` files there (`git check-ignore --no-index`).
+fn git_ignores(dir: &Path, path: &str) -> bool {
+    let mut c = Command::new("git");
+    c.current_dir(dir)
+        .args(["check-ignore", "--no-index", "-q", path]);
+    without_git_env(&mut c);
+    match c.status().unwrap().code() {
+        Some(0) => true,
+        Some(1) => false,
+        other => panic!("git check-ignore {path}: {other:?}"),
+    }
+}
+
+#[test]
+fn stryker_copies_nothing_git_ignores() {
+    // req:ci/mutate-script@10276cb4
+    let tree = mutate_tree(WEB_BLOCK);
+    let work = tree.work();
+    // The top's rules: one anchored under another directory, one anchored under `web/`, and
+    // unanchored ones that reach any depth.
+    fs::write(
+        work.join(".gitignore"),
+        "/target/\nweb/node_modules/\n.wrangler/\ncrates/x/build/\n# a comment\n\n.clm/   \n",
+    )
+    .unwrap();
+    // The site's own, untracked, as git reads it too; and one inside an ignored directory,
+    // which git never reads.
+    fs::create_dir_all(work.join("web/site")).unwrap();
+    fs::write(
+        work.join("web/site/.gitignore"),
+        ".test-dist/\n.vitepress/cache/\n",
+    )
+    .unwrap();
+    fs::create_dir_all(work.join("web/node_modules/pkg")).unwrap();
+    fs::write(work.join("web/node_modules/pkg/.gitignore"), "clm-not-read/\n").unwrap();
+    git(&work, &["add", ".gitignore"]);
+    git(&work, &["commit", "-q", "-m", "ignores"]);
+    assert!(!work.join("web/site/.test-dist").exists());
+    tree.report("stryker-killed", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["w/y killed"]);
+    let config: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tree.dir.path().join("log.stryker")).unwrap(),
+    )
+    .unwrap();
+    let patterns: Vec<&str> = config["ignorePatterns"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{config}"))
+        .iter()
+        .map(|p| p.as_str().unwrap())
+        .collect();
+    // The script's own sandboxes, then what it carried from the `.gitignore` files, each
+    // anchored, since StrykerJS matches a rule with no slash but a trailing one only at the top.
+    let (own, carried) = patterns.split_first().unwrap_or_else(|| panic!("{config}"));
+    assert_eq!(*own, ".stryker-tmp-clm-*");
+    assert!(!carried.is_empty(), "{patterns:?}");
+    for p in carried {
+        assert!(
+            p.strip_prefix('!').unwrap_or(p).starts_with('/'),
+            "{p} in {patterns:?}"
+        );
+        assert!(!p.contains("clm-not-read"), "{patterns:?}");
+    }
+    // Read as `.gitignore` rules from `web/`, by git itself.
+    let web = TempDir::new().unwrap();
+    git(web.path(), &["init", "-q"]);
+    fs::write(web.path().join(".gitignore"), carried.join("\n") + "\n").unwrap();
+    for d in [
+        "site/.test-dist/drift-src/docs",
+        "src/deep/.wrangler",
+        ".wrangler",
+        "site/.clm",
+        "node_modules",
+        "site/.vitepress/cache",
+        "src",
+        "test",
+    ] {
+        fs::create_dir_all(web.path().join(d)).unwrap();
+    }
+    for ignored in [
+        "site/.test-dist/drift-src/docs",
+        "src/deep/.wrangler",
+        ".wrangler",
+        "site/.clm",
+        "site/.vitepress/cache",
+        "node_modules",
+    ] {
+        assert!(git_ignores(web.path(), ignored), "{ignored}: {patterns:?}");
+    }
+    for kept in ["src/app.ts", "test/app.test.ts", "target", "crates/x/build"] {
+        assert!(!git_ignores(web.path(), kept), "{kept}: {patterns:?}");
+    }
+}
+
 /// A Rust block with no diff and one test, whose file has two mutants, one on line 3 alone and
 /// one on line 30 alone, and whose tests the fake `cargo llvm-cov` reports running `run`.
 fn lines_tree(run: &str) -> Tree {

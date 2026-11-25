@@ -803,7 +803,7 @@ diff_ranges() {
 # Its configuration files and its sandbox are named for `tag`, the block or the fixture, so runs
 # of two blocks at once in one directory share neither.
 run_stryker() {
-  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= f m json k s u all
+  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= ignores f m json k s u all
   shift 2
   rm -rf "${work:?}/$report"
   mkdir -p "$work/$report"
@@ -824,6 +824,7 @@ run_stryker() {
     echo "export default { ...base, test: { ...base.test, include: [$includes] } };"
   } >"$vcfg"
   for m in "$@"; do ranges="$ranges\"$m\","; done
+  ignores=$(stryker_ignores "$dir") || return 1
   cat >"$scfg" <<EOF
 {
   "testRunner": "vitest",
@@ -832,7 +833,7 @@ run_stryker() {
   "jsonReporter": { "fileName": "$work/$report/mutation.json" },
   "tsconfigFile": "$root/$dir/node_modules/.clm-mutate/no-tsconfig.json",
   "tempDirName": ".stryker-tmp-clm-$tag",
-  "ignorePatterns": [".stryker-tmp-clm-*"],
+  "ignorePatterns": [".stryker-tmp-clm-*"${ignores:+,${ignores%,}}],
   "concurrency": 2,
   "mutate": [${ranges%,}]
 }
@@ -867,6 +868,54 @@ EOF
   caught=$((caught + k))
   missed=$((missed + s))
   untested=$((untested + u))
+}
+
+# The rules of the `.gitignore` files git reads that reach the npm directory $1, for StrykerJS's
+# `ignorePatterns`, each a JSON string and a comma: the top's first, then those under $1, tracked
+# or untracked and not ignored, shallower before deeper, so the last rule that matches wins as in
+# git. StrykerJS tries a pattern against an entry's name and its path from $1, so each is
+# re-rooted at $1 and anchored there: an unanchored rule gains `/**/` (`.test-dist/` in
+# `site/.gitignore` is `/site/**/.test-dist/`), since StrykerJS would match it only at the top,
+# and a rule with a slash before its end is joined to its own file's directory, or left out when
+# that lies outside $1. Rules, not the paths that exist, so a directory another run makes while
+# StrykerJS copies is left out too. Comments, blank lines and trailing spaces go; a `!` stays in
+# front.
+stryker_ignores() {
+  local dir=$1 files f
+  files=$(git -C "$root" -c core.quotePath=false ls-files --cached --others --exclude-standard -- "$dir" |
+    awk -F/ '$NF == ".gitignore" { print NF "\t" $0 }' | sort -n -s -k1,1 | cut -f2) || return 1
+  for f in .gitignore $files; do
+    [ -f "$root/$f" ] || continue
+    awk -v d="$(dirname "$f")" -v n="$dir" '
+      BEGIN { if (d == ".") d = "" }
+      {
+        r = $0
+        sub(/\r$/, "", r)
+        if (r == "" || substr(r, 1, 1) == "#") next
+        while (r ~ / $/ && r !~ /\\ $/) r = substr(r, 1, length(r) - 1)
+        neg = ""
+        if (substr(r, 1, 1) == "!") { neg = "!"; r = substr(r, 2) }
+        body = r
+        sub(/\/$/, "", body)
+        if (body == "" || body == "/") next
+        if (substr(r, 1, 3) == "**/") { anchored = 0; r = substr(r, 4) }
+        else anchored = index(body, "/") > 0
+        if (anchored) {
+          sub(/^\//, "", r)
+          full = (d == "" ? r : d "/" r)
+          if (index(full, n "/") != 1) next
+          out = "/" substr(full, length(n) + 2)
+        } else if (index(d "/", n "/") == 1 && d != n) {
+          out = "/" substr(d, length(n) + 2) "/**/" r
+        } else {
+          out = "/**/" r
+        }
+        out = neg out
+        gsub(/\\/, "\\\\", out)
+        gsub(/"/, "\\\"", out)
+        printf "\"%s\",", out
+      }' "$root/$f" || return 1
+  done
 }
 
 # Makes $2, the directory under the npm directory $1 that StrykerJS makes its sandbox in, afresh,
