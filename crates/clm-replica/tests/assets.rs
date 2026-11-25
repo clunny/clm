@@ -154,7 +154,9 @@ fn a_binary_asset() {
 #[test]
 fn a_store_saved_before_hashes_loads_as_it_did() {
     // req:replica/asset-hashes@f1d76b71
-    // Saved by the replica before it held hashes: `repo()` ready at `111`, at time 100.
+    // Saved by the replica before it held hashes: `repo()` ready at `111`, at time 100, with
+    // `specs/b/assets/old.png` held binary, as it held every binary file then, and a ref
+    // `impl/archive/x`, which it no longer reads.
     let old = include_bytes!("fixtures/old-store.json");
     assert!(!contains(old, b"\"hash\""));
     let mut store = MapStore::default();
@@ -163,9 +165,25 @@ fn a_store_saved_before_hashes_loads_as_it_did() {
     let mut loaded = Replica::load(&store);
     assert_ne!(loaded, Replica::default());
     assert!(loaded.pending_fetch().is_empty());
-    let fresh = ready(&repo(), "111", 200);
+    let mut f = repo();
+    f.insert(
+        "specs/b/assets/old.png".into(),
+        vec![0xff, 0x00, 0xfe, 0x01],
+    );
+    let mut fresh = given_as(&f, "specs/b/assets/old.png", as_binary);
+    fresh.recompute(200);
     loaded.recompute(200);
     for name in ["snapshot", "implementation", "capabilities", "architecture"] {
         assert_eq!(view(&loaded, name), view(&fresh, name), "{name}");
     }
+    // Its ref's deletion is taken in, though the views no longer read it.
+    loaded.apply(Change::Ref {
+        name: "impl/archive/x".into(),
+        sha: None,
+        time: 0,
+        change: None,
+    });
+    let mut saved = MapStore::default();
+    loaded.save(&mut saved);
+    assert!(!contains(&stored(&saved), b"impl/archive/x"));
 }

@@ -603,8 +603,11 @@ impl Replica {
                     s.refs.remove(&name);
                 }
             },
-            // A ref the views don't read is held by none (`replica/refs-the-views-read`).
-            Change::Ref { .. } => {}
+            // A ref the views don't read is held by none (`replica/refs-the-views-read`),
+            // and one a store saved before the rule held goes.
+            Change::Ref { name, .. } => {
+                s.refs.remove(&name);
+            }
             Change::Pull(pull) => {
                 if pull.open {
                     s.pulls.insert(pull.number, pull);

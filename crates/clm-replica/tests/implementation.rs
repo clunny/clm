@@ -626,11 +626,17 @@ fn nested_and_empty_names() {
 
     // The refused names are held by no view: given only them, the replica recomputes to
     // what it gives with no ref, and no claim lapses.
+    // An open pull request from `impl/archive/a` gets a page either way, and a held ref
+    // would give it a `checked`.
     let mut refused = scratch(&f, "111");
+    let code = Some(RefChange::Code { key: "k".into() });
     for (name, _) in names.iter().filter(|(_, read)| !read) {
-        branch_ref(&mut refused, name, "s1", now - 3600, None);
+        branch_ref(&mut refused, name, "s1", now - 3600, code.clone());
     }
     let mut none = scratch(&f, "111");
+    for r in [&mut refused, &mut none] {
+        r.apply(Change::Pull(pull(3, "impl/archive/a", "s1")));
+    }
     assert_eq!(refused.recompute(now), none.recompute(now));
     assert_eq!(none.recompute(now).next, None);
     for name in ["snapshot", "implementation", "capabilities", "architecture"] {
