@@ -1,10 +1,48 @@
 //! Only this crate talks to the Cache API, so nothing else can read it: of the workspace's
 //! crates, only it, `clm-web-live`, which holds the `Live` Durable Object, and
 //! `clm-web-replica`, which holds the `Replica` one, depend on `worker`, those two name
-//! none of the caches, and no crate uses a KV namespace.
+//! none of the caches, and no crate uses a KV namespace. What the Worker and the object
+//! keep is rebuilt from GitHub once emptied.
+
+mod common;
 
 use std::fs;
 use std::path::Path;
+
+use common::*;
+
+#[test]
+fn an_emptied_cache_shows_the_same_snapshot() {
+    // req:web.worker/cache-is-disposable@3469815b
+    let fake = Fake::default();
+    fake.gh.add_repo("o/a", FakeRepo::new("111", clm_repo()));
+    let cookie = fake.user("u", &["o/a"]);
+    fake.real_object("o/a");
+    let path = "/api/repos/o/a/snapshot";
+    let first = fake.handle(get(path, &cookie));
+    assert_eq!(first.status, 200, "{first:?}");
+    let first = body_json(&first);
+    assert_eq!(first["coverage"]["state"], "complete", "{first}");
+    assert!(!fake.cache.borrow().is_empty(), "the view was cached");
+
+    fake.cache.borrow_mut().clear();
+    fake.empty_object("o/a");
+    let mut answers = Vec::new();
+    for _ in 0..20 {
+        let res = fake.handle(get(path, &cookie));
+        answers.push(res.status);
+        if res.status == 200 {
+            let body = body_json(&res);
+            if body["coverage"]["state"] == "complete" {
+                assert_eq!(body, first, "the rebuilt snapshot differs");
+                assert_eq!(answers[0], 503, "the emptied object was rebuilt");
+                return;
+            }
+        }
+        fake.run_alarms();
+    }
+    panic!("the index never completed: {answers:?}");
+}
 
 #[test]
 fn only_the_worker_crates_depend_on_worker() {

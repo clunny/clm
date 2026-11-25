@@ -161,6 +161,20 @@ impl Fake {
     /// Replaces the scripted object with a real `Replica` object for `repo`, built from the
     /// fake GitHub through its first read and its alarms, as Cloudflare runs them.
     pub fn real_object(&self, repo: &str) {
+        self.empty_object(repo);
+        let first = block_on(self.replica(repo, "GET", "/view/snapshot?fresh=0", None));
+        assert_eq!(
+            first.map(|f| f.0),
+            Some(503),
+            "the first read starts the build"
+        );
+        self.run_alarms();
+        self.replicas.calls.borrow_mut().clear();
+    }
+
+    /// Puts a real `Replica` object for `repo` over empty storage in place of any other, as
+    /// an object whose storage was emptied comes back.
+    pub fn empty_object(&self, repo: &str) {
         let (mem, slot) = (Mem::default(), Slot::default());
         let object = Object::load(repo, mem, slot.clone());
         *self.replicas.real.borrow_mut() = Some(RealObject {
@@ -168,17 +182,14 @@ impl Fake {
             object,
             slot,
         });
-        let first = block_on(self.replica(repo, "GET", "/view/snapshot?fresh=0", None));
-        assert_eq!(
-            first.map(|f| f.0),
-            Some(503),
-            "the first read starts the build"
-        );
+    }
+
+    /// Runs the real object's alarms, moving the clock to each, until none is set.
+    pub fn run_alarms(&self) {
         let mut real = self.replicas.real.borrow_mut();
         let real = real.as_mut().unwrap();
         for _ in 0..200 {
             let Some(at) = real.slot.get() else {
-                self.replicas.calls.borrow_mut().clear();
                 return;
             };
             self.inner.now.set(self.inner.now.get().max(at));
