@@ -95,7 +95,7 @@ fn each_malformed_entry_is_reported() {
     // req:model/move-records@acfffee2
     let dir = repo(
         "changes/x",
-        "moves:\n  - requirement: a/old\n  - to: a/new\n  - requirement: A/old\n    to: a/new\n  - requirement: a/old\n    to: a/New\n  - a/old\n  - requirement: [a/old]\n    to: a/new\n  - requirement: a/old\n    to: b/new\n",
+        "moves:\n  - requirement: a/old\n  - to: a/new\n  - requirement: A/old\n    to: a/new\n  - requirement: a/old\n    to: a/New\n  - a/old\n  - requirement: [a/old]\n    to: a/new\n  - requirement: a/old\n    to: a/new\n",
         &[("a.md", DELTA_A)],
     );
     let (graph, violations) = load(dir.path());
@@ -106,6 +106,42 @@ fn each_malformed_entry_is_reported() {
         .map(|m| m.strip_prefix("entry ").unwrap().split(':').next().unwrap())
         .collect();
     assert_eq!(entries, ["1", "2", "3", "4", "5", "6", "7"], "{messages:?}");
+    let reasons = [
+        "has no `to`",
+        "has no `requirement`",
+        "`requirement` isn't `<component>/<slug>`",
+        "`to` isn't `<component>/<slug>`",
+        "isn't a mapping",
+        "`requirement` isn't a string",
+        "an earlier entry moves `a/old`",
+    ];
+    for (m, reason) in messages.iter().zip(reasons) {
+        assert!(m.ends_with(reason), "{m:?} gives no {reason:?}");
+    }
+}
+
+#[test]
+fn an_entry_reads_its_component_s_delta() {
+    // req:model/move-records@acfffee2
+    // Only `b`'s delta removes `old` and adds `new`, so entries naming `a/old` and `a/new`
+    // are reported, while `b/old` merged into `a/fresh` is one the deltas make.
+    let delta_a = "---\ncomponent: a\n---\n## ADDED Requirements\n### Requirement: fresh\nThe a SHALL x.\n#### Scenario: s\n- y\n\n## REMOVED Requirements\n### Requirement: gone <!-- base: 0123456789abcdef -->\n";
+    let delta_b = "---\ncomponent: b\n---\n## ADDED Requirements\n### Requirement: new\nThe b SHALL x.\n#### Scenario: s\n- y\n\n## REMOVED Requirements\n### Requirement: old <!-- base: 0123456789abcdef -->\n";
+    let dir = repo(
+        "changes/x",
+        "moves:\n  - requirement: a/old\n    to: a/fresh\n  - requirement: a/gone\n    to: a/new\n  - requirement: b/old\n    to: a/fresh\n",
+        &[("a.md", delta_a), ("b.md", delta_b)],
+    );
+    let (graph, violations) = load(dir.path());
+    assert!(!graph.changes.contains_key("x"));
+    let messages: Vec<&str> = violations.iter().map(|v| v.message.as_str()).collect();
+    assert_eq!(
+        messages,
+        [
+            "entry 1: the change's deltas don't remove `a/old`",
+            "entry 2: the change's deltas don't add or modify `a/new`",
+        ]
+    );
 }
 
 #[test]

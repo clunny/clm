@@ -39,17 +39,18 @@ pub(crate) fn load_moves(
             return Vec::new();
         }
     };
-    let shaped = entries.iter().map(shape);
     if archived {
-        return shaped.filter_map(Result::ok).collect();
+        return entries.iter().filter_map(|e| shape(e).ok()).collect();
     }
     let mut out = Vec::new();
     let mut named = BTreeSet::new();
-    for (i, entry) in shaped.enumerate() {
-        let checked = entry.and_then(|m| {
-            let first = named.insert(m.requirement.clone());
-            check(&m, first, deltas).map(|()| m)
-        });
+    for (i, entry) in entries.iter().enumerate() {
+        // An earlier entry names a requirement whatever else is wrong with it.
+        let first = entry
+            .get("requirement")
+            .and_then(Value::as_str)
+            .is_none_or(|r| named.insert(r.to_string()));
+        let checked = shape(entry).and_then(|m| check(&m, first, deltas).map(|()| m));
         match checked {
             Ok(m) => out.push(m),
             Err(e) => violations.push(v(path, RULE, format!("entry {}: {e}", i + 1))),
@@ -86,9 +87,10 @@ fn shape(entry: &Value) -> Result<Move, String> {
 /// Whether a live change's entry is one its deltas make; `first` is false when an earlier
 /// entry names the same `requirement`.
 fn check(m: &Move, first: bool, deltas: &[Delta]) -> Result<(), String> {
-    let (Some(from), Some(to)) = (requirement_id(&m.requirement), requirement_id(&m.to)) else {
-        return Err("`requirement` and `to` must each be `<component>/<slug>`".into());
+    let id = |key: &str, value| {
+        requirement_id(value).ok_or_else(|| format!("`{key}` isn't `<component>/<slug>`"))
     };
+    let (from, to) = (id("requirement", &m.requirement)?, id("to", &m.to)?);
     let of = |node| deltas.iter().filter(move |d: &&Delta| d.node == node);
     if !of(from.0).any(|d| d.removed.iter().any(|r| r.slug == from.1)) {
         return Err(format!(
