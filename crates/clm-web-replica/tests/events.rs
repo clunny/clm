@@ -623,7 +623,13 @@ fn a_ref_the_views_read_moves() {
     assert!(claimed_on(&now, "a"), "{now}");
 
     // The branch is deleted: nothing is fetched, and the claim goes.
-    fake.gh.repos.borrow_mut().get_mut("o/a").unwrap().claims.clear();
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .claims
+        .clear();
     let from = gh_calls(&fake);
     let mut body = push("impl/a", "c1", &"0".repeat(40));
     body["deleted"] = json!(true);

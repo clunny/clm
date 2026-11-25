@@ -215,7 +215,11 @@ fn bodies_without_a_requester_or_a_kind() {
         let got = block_on(object.write(&fake, &body));
         assert_eq!(got, clm_web_replica::Answer::empty(422), "{body}");
     }
-    assert_eq!(fake.gh.calls.borrow().len(), from, "GitHub was asked nothing");
+    assert_eq!(
+        fake.gh.calls.borrow().len(),
+        from,
+        "GitHub was asked nothing"
+    );
 }
 
 #[test]

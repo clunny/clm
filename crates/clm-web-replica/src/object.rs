@@ -581,6 +581,14 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 self.batch(now);
             }
         }
+        // Files still to fetch, as a replica a newer release loaded lists, bring the alarm
+        // forward; the read answers the views held until it recomputes
+        // (`refetches-what-a-release-forgot`).
+        if self.alarm.get().is_none_or(|at| at > now + BATCH)
+            && !self.replica.pending_fetch().is_empty()
+        {
+            self.alarm.set(now);
+        }
         let answer = match self.replica.view(name) {
             None => Answer::empty(404),
             Some(Viewed::Preparing { done }) => {
@@ -889,7 +897,8 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let mut taken = 0;
         let mut auth: Option<Auth> = None;
         let building = self.meta.tip.is_none();
-        if building || !self.replica.pending_fetch().is_empty() {
+        let pending = !self.replica.pending_fetch().is_empty();
+        if building || pending {
             auth = self.auth(p, &b).await;
             match &auth {
                 None => {
@@ -897,16 +906,15 @@ impl<S: Store, A: Alarm> Object<S, A> {
                     self.alarm.set(now + BATCH);
                     return;
                 }
-                Some(a) if building => {
-                    if !self.start(p, &b, a).await {
-                        self.alarm.set(now + BATCH);
-                        return;
-                    }
-                    taken = self.fetch_pending(p, &b, a, true).await;
+                Some(a) if building && !self.start(p, &b, a).await => {
+                    self.alarm.set(now + BATCH);
+                    return;
                 }
-                Some(a) => taken = self.fetch_pending(p, &b, a, false).await,
+                _ => {}
             }
         }
+        // A resync due goes before the files still to fetch: only the fetch stops at the
+        // budget, so it takes what the resync leaves.
         if self.open(now) && now >= self.meta.last_resync + RESYNC {
             if auth.is_none() {
                 auth = self.auth(p, &b).await;
@@ -915,6 +923,11 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 self.resync(p, &b, a, true).await;
             }
             self.meta.last_resync = now;
+        }
+        if (building || pending)
+            && let Some(a) = &auth
+        {
+            taken = self.fetch_pending(p, &b, a, building).await;
         }
         let lapsed = self.meta.next.is_some_and(|t| t <= now);
         let mut recomputed = false;

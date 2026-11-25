@@ -18,7 +18,10 @@ fn an_installation_token_is_minted_once() {
     let (mut object, _mem, slot) = object();
     assert_eq!(block_on(object.view(&fake, "snapshot", false)).status, 503);
     let alarms = run_alarms(&fake, &mut object, &slot);
-    assert!(alarms.len() > 2, "the build takes several alarms: {alarms:?}");
+    assert!(
+        alarms.len() > 2,
+        "the build takes several alarms: {alarms:?}"
+    );
     let mints = urls(&fake, 0)
         .iter()
         .filter(|u| u.ends_with("/access_tokens"))
