@@ -248,7 +248,7 @@ fn scenario_no_capability_component() {
 #[test]
 fn scenario_removed_capability_still_cited_in_progress_and_status() {
     // req:check.coverage/change-progress@e4335c5a
-    // req:check.coverage/status-report@8aad5594
+    // req:check.coverage/status-report@476f39dd
     let dir = repo(KEPT);
     let d = dir.path();
     change(d, "20260101-c", "applied", "gone");

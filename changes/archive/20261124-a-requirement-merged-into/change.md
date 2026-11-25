@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-requirement-merged-into-one-of-another-slug-leaves-its]
 ---
 

@@ -98,7 +98,7 @@ fn in_test(s: &str) -> String {
 
 #[test]
 fn scenario_blocked_by_a_need() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = needs_repo();
     let d = dir.path();
     write(
@@ -113,7 +113,7 @@ fn scenario_blocked_by_a_need() {
 
 #[test]
 fn scenario_nothing_pending() {
-    // req:check.coverage/pending-report@8d05b446
+    // req:check.coverage/pending-report@f3f35088
     let dir = repo();
     let d = dir.path();
     let cite = |id: &str| format!("// {REQ}{id}@{}\n", version(d, id));
