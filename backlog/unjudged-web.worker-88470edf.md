@@ -1,7 +1,7 @@
 ---
 title: The mutation pass can't judge requirements of web.worker
 kind: bug
-components: [web.worker]
+components: [ci]
 ---
 
 Each of the mutation passes after the lands named left these requirements of `web.worker` unjudged, having stopped, reached its limit or failed before its verdict:
@@ -14,3 +14,5 @@ Each of the mutation passes after the lands named left these requirements of `we
 - `web.worker/writes-to-object`: `bf0d9028`, `88470edf`
 
 Each pass after the first tried them first, so one that left them was stopped, reached `mutate_minutes`, or met a mutation command that fails on their code: `clm verify`'s stderr for those passes says which. Mend what keeps the pass from its verdict, then delete this item.
+
+The pass after `88470edf` left them because `mutate.sh` stopped at five `web` blocks whose StrykerJS run executed no test ("Vitest failed to find test files related to mutated files"), so it started no further block: the fix lies in `ci`'s `.github/scripts/mutate.sh`, not in `web.worker`'s code (see `backlog/one-block-s-strykerjs-failure-leaves-every-other-component-s.md`).
