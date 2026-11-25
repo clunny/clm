@@ -7,8 +7,8 @@ use std::cell::Cell;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use clm_ledger::unix_time;
 use clm_replica::{Entry, Event, File, Pull, RefChange};
-use clm_web_platform::install::unix_time;
 use clm_web_platform::platform::Auth;
 
 use crate::Host;
@@ -265,10 +265,12 @@ pub(crate) async fn tips<P: Host>(
         let refs = &data["repository"]["refs"];
         tips.extend(refs["nodes"].as_array()?.iter().filter_map(|n| {
             let name = n["name"].as_str().filter(|n| !n.contains('/'))?;
+            // A commit time that can't be read holds the ref at the time it is listed.
+            let time = n["target"]["committedDate"].as_str().and_then(unix_time);
             Some(Tip {
                 name: name.into(),
                 sha: n["target"]["oid"].as_str()?.into(),
-                time: unix_time(n["target"]["committedDate"].as_str()?)?,
+                time: time.unwrap_or_else(|| p.now()),
             })
         }));
         match refs["pageInfo"]["endCursor"].as_str() {

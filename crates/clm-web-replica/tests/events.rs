@@ -259,7 +259,7 @@ fn a_truncated_compare() {
 
 #[test]
 fn a_burst_of_pushes() {
-    // req:web.worker.replica/alarm-batches@7c4c8c7a
+    // req:web.worker.replica/alarm-batches@9c14a20a
     let fake = fake_with("111", repo_files(&[("t.rs", "fn t() {}")]));
     let (mut object, _mem, slot) = built(&fake);
     let described = view(&fake, &mut object, "snapshot");
@@ -310,8 +310,105 @@ fn notices(fake: &clm_web_platform::fake::Fake) -> Vec<String> {
 }
 
 #[test]
+fn an_idle_alarm_pulled_in() {
+    // req:web.worker.replica/alarm-batches@9c14a20a
+    let fake = fake_with("111", repo_files(&[("t.rs", "fn t() {}")]));
+    let (mut object, _mem, slot) = built(&fake);
+    // Read a minute ago; the alarm is set ten minutes ahead for a resync.
+    view(&fake, &mut object, "snapshot");
+    fake.now.set(fake.now.get() + 60);
+    let now = fake.now.get();
+    slot.0.set(Some(now + 600));
+    commit(&fake, "222", repo_files(&[("t.rs", "fn t2() {}")]));
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    assert_eq!(slot.0.get(), Some(now + 60), "one minute after the push");
+    // An alarm due within that minute is kept.
+    slot.0.set(Some(now + 30));
+    commit(&fake, "333", repo_files(&[("t.rs", "fn t3() {}")]));
+    block_on(object.event(&fake, &event("push", "d2", push("main", "222", "333"))));
+    assert_eq!(slot.0.get(), Some(now + 30));
+}
+
+#[test]
+fn a_claim_lapses_while_a_page_is_open() {
+    // req:web.worker.replica/alarm-batches@9c14a20a
+    let fake = fake_with("111", repo_files(&[]));
+    let (mut object, _mem, slot) = built(&fake);
+    // A claim on `a` whose tip was made so that it lapses four hours on, at `lapse`.
+    let lapse = fake.now.get() + 200;
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        repo.commits
+            .insert("c1".into(), repo_files(&[("x.rs", "fn x() {}")]));
+        // GitHub lists the claim too, so a resync keeps it.
+        repo.claims
+            .push(("a".into(), "c1".into(), lapse - 4 * 3600));
+    }
+    let mut body = push("impl/a", "0", "c1");
+    body["created"] = json!(true);
+    body["head_commit"] = json!({"timestamp": clm_web_platform::fake::iso(lapse - 4 * 3600)});
+    block_on(object.event(&fake, &event("push", "d1", body)));
+    fake.now.set(slot.0.get().unwrap());
+    block_on(object.on_alarm(&fake));
+    let claimed = |v: &serde_json::Value| {
+        v["view"]["flight"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["node"] == "a" && n["state"] == "claimed")
+    };
+    // Read at 13:58, as it were.
+    fake.now.set(lapse - 120);
+    let before = view(&fake, &mut object, "implementation");
+    assert!(claimed(&before), "{before}");
+    let earlier = notices(&fake);
+    // A tag's push applies nothing: its delivery is no event the next notice may name.
+    let alarm = slot.0.get();
+    let mut tag = push("main", "0", "c1");
+    tag["ref"] = json!("refs/tags/v1");
+    block_on(object.event(&fake, &event("push", "dt", tag)));
+    assert_eq!(slot.0.get(), alarm, "nothing applied sets no alarm");
+    let mut fired = Vec::new();
+    // `replica`'s `recompute` names the lapse as the time the view next changes, but the
+    // claim reads live at that instant and lapsed a second on, so the alarms run to that
+    // second (`backlog/a-claim-reads-live-at-the-instant-recompute-says-it-lapses`).
+    while let Some(at) = slot.0.get().filter(|at| *at <= lapse + 1) {
+        fake.now.set(at);
+        block_on(object.on_alarm(&fake));
+        fired.push(at);
+    }
+    assert!(
+        fired.contains(&lapse),
+        "an alarm fired at {lapse}: {fired:?}"
+    );
+    let after = view(&fake, &mut object, "implementation");
+    assert!(!claimed(&after), "{after}");
+    let posted = notices(&fake).split_off(earlier.len());
+    assert!(!posted.is_empty(), "a notice was posted");
+    for body in &posted {
+        let notice: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert_eq!(notice.as_object().unwrap().len(), 1, "{notice}");
+        let delivery = notice["delivery"].as_str().unwrap();
+        assert_eq!(delivery.len(), 32, "{delivery}");
+        assert!(
+            delivery
+                .chars()
+                .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)),
+            "{delivery}"
+        );
+        // It names no event: neither the push's delivery nor an earlier notice's.
+        assert!(delivery != "d1" && delivery != "dt", "{delivery}");
+        assert!(
+            !earlier.iter().any(|e| e.contains(delivery)),
+            "{delivery} named before"
+        );
+    }
+}
+
+#[test]
 fn a_question_lands_through_the_alarm() {
-    // req:web.worker.replica/push-waiting@8e710ff8
+    // req:web.worker.replica/push-waiting@e5643acc
     let mut fake = fake_with("111", repo_files(&[]));
     fake.secrets
         .insert("VAPID_PUBLIC_KEY".into(), "BPublicKey".into());
@@ -326,20 +423,148 @@ fn a_question_lands_through_the_alarm() {
     }
     let (mut object, _mem, slot) = built(&fake);
     slot.0.set(None);
-    let sends = |fake: &clm_web_platform::fake::Fake| {
-        fake.live
-            .calls
-            .borrow()
-            .iter()
-            .filter(|c| c.path == "/send")
-            .count()
-    };
-    assert_eq!(sends(&fake), 0);
-    let item = "---\ntitle: Which region?\nkind: question\ncomponents: [a]\n---\nBody.\n";
-    commit(&fake, "222", repo_files(&[("backlog/region.md", item)]));
+    assert!(sent(&fake).is_empty());
+    commit(&fake, "222", questions(&["Which region?"]));
     block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
     run_alarms(&fake, &mut object, &slot);
-    assert_eq!(sends(&fake), 1);
+    let sent = sent(&fake);
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    let messages = sent[0]["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert_eq!(
+        messages[0]["subscription"]["endpoint"],
+        "https://fcm.googleapis.com/fcm/send/alice"
+    );
+    assert_eq!(messages[0]["payload"]["body"], "Which region?");
+}
+
+/// The bodies posted to the `Live` object's `/send`.
+fn sent(fake: &clm_web_platform::fake::Fake) -> Vec<serde_json::Value> {
+    fake.live
+        .calls
+        .borrow()
+        .iter()
+        .filter(|c| c.path == "/send")
+        .map(|c| serde_json::from_str(&c.body).unwrap())
+        .collect()
+}
+
+/// The repo with a `question` item titled each of `titles`.
+fn questions(titles: &[&str]) -> clm_web_platform::fake::FileMap {
+    let items: Vec<(String, String)> = titles
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            (
+                format!("backlog/q{i}.md"),
+                format!("---\ntitle: {t}\nkind: question\ncomponents: [a]\n---\nBody.\n"),
+            )
+        })
+        .collect();
+    let pairs: Vec<(&str, &str)> = items
+        .iter()
+        .map(|(p, t)| (p.as_str(), t.as_str()))
+        .collect();
+    repo_files(&pairs)
+}
+
+/// A `subscribed` record `id` of `alice/web`'s, for `endpoint` with key `p256dh`.
+fn alices(id: &str, endpoint: &str, p256dh: &str) -> serde_json::Value {
+    json!({"id": id, "writer": "alice/web", "at": "2027-01-15T07:00:00.000Z",
+        "kind": "subscribed", "endpoint": endpoint, "p256dh": p256dh, "auth": "AuthSecret"})
+}
+
+/// `o/a` at `111`, with alice's subscriptions and her `read` permission.
+fn subscribed_repo(records: &[serde_json::Value]) -> clm_web_platform::fake::Fake {
+    let mut fake = fake_with("111", repo_files(&[]));
+    fake.secrets
+        .insert("VAPID_PUBLIC_KEY".into(), "BPublicKey".into());
+    {
+        let mut repos = fake.gh.repos.borrow_mut();
+        let repo = repos.get_mut("o/a").unwrap();
+        ledger(repo, "alice/web", "LA", records);
+        repo.permissions.insert("alice".into(), "read".into());
+    }
+    fake
+}
+
+#[test]
+fn nothing_to_send() {
+    // req:web.worker.replica/push-waiting@e5643acc
+    let sub = alices("s1", "https://fcm.googleapis.com/fcm/send/alice", "BKey");
+    // No VAPID key set.
+    let mut fake = subscribed_repo(std::slice::from_ref(&sub));
+    fake.secrets.remove("VAPID_PUBLIC_KEY");
+    let (mut object, _mem, slot) = built(&fake);
+    commit(&fake, "222", questions(&["Which region?"]));
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    run_alarms(&fake, &mut object, &slot);
+    assert_eq!(view(&fake, &mut object, "snapshot")["sha"], "222");
+    assert!(sent(&fake).is_empty(), "no send without a VAPID key");
+
+    // A VAPID key, and no recompute before `222`'s: the push reaches an object that holds
+    // nothing, and its first build is the first recompute.
+    let fake = subscribed_repo(&[sub]);
+    commit(&fake, "222", questions(&["Which region?"]));
+    let (mut object, _mem, slot) = common::object();
+    block_on(object.event(&fake, &event("push", "d1", push("main", "111", "222"))));
+    run_alarms(&fake, &mut object, &slot);
+    assert_eq!(view(&fake, &mut object, "snapshot")["sha"], "222");
+    assert!(
+        sent(&fake).is_empty(),
+        "no send without a previous recompute"
+    );
+}
+
+#[test]
+fn a_gone_endpoint() {
+    // req:web.worker.replica/push-waiting@e5643acc
+    let (e1, e2) = (
+        "https://fcm.googleapis.com/fcm/send/one",
+        "https://fcm.googleapis.com/fcm/send/two",
+    );
+    let fake = subscribed_repo(&[alices("s1", e1, "K1"), alices("s2", e2, "K2")]);
+    let (mut object, _mem, slot) = built(&fake);
+    let over = Over::new(&fake);
+    *over.send.borrow_mut() = Some(json!({"gone": [e1]}).to_string());
+    let keys = |body: &serde_json::Value| -> Vec<String> {
+        let mut keys: Vec<String> = body["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["subscription"]["p256dh"].as_str().unwrap().to_string())
+            .collect();
+        keys.sort();
+        keys
+    };
+    let titles = ["One?", "Two?", "Three?"];
+    let mut tip = "111".to_string();
+    for (n, round) in ["222", "333", "444"].iter().enumerate() {
+        if n == 2 {
+            // Alice subscribes again as `s3`, with `s1`'s endpoint.
+            let records = [
+                alices("s1", e1, "K1"),
+                alices("s2", e2, "K2"),
+                alices("s3", e1, "K3"),
+            ];
+            ledger(
+                fake.gh.repos.borrow_mut().get_mut("o/a").unwrap(),
+                "alice/web",
+                "LA3",
+                &records,
+            );
+        }
+        commit(&fake, round, questions(&titles[..=n]));
+        let body = push("main", &tip, round);
+        block_on(object.event(&over, &event("push", &format!("d{n}"), body)));
+        run_alarms_on(&over, &fake, &mut object, &slot);
+        tip = round.to_string();
+    }
+    let sent = sent(&fake);
+    assert_eq!(sent.len(), 3, "{sent:?}");
+    assert_eq!(keys(&sent[0]), ["K1", "K2"]);
+    assert_eq!(keys(&sent[1]), ["K2"]);
+    assert_eq!(keys(&sent[2]), ["K2", "K3"]);
 }
 
 #[test]
@@ -370,7 +595,7 @@ fn a_ref_the_views_read_moves() {
 
 #[test]
 fn a_pull_request_and_an_uninstall() {
-    // req:web.worker.replica/push-review@0b5b98e1
+    // req:web.worker.replica/push-review@692d328c
     let mut fake = fake_with("111", repo_files(&[]));
     fake.secrets
         .insert("VAPID_PUBLIC_KEY".into(), "BPublicKey".into());
@@ -389,20 +614,38 @@ fn a_pull_request_and_an_uninstall() {
         "head": {"ref": "spec/x", "sha": "s1", "repo": {"full_name": "o/a"}},
         "base": {"ref": "main", "repo": {"full_name": "o/a"}}}});
     block_on(object.event(&fake, &event("pull_request", "d1", pr)));
-    let sends = fake
+    let sends: Vec<serde_json::Value> = fake
         .live
         .calls
         .borrow()
         .iter()
         .filter(|c| c.path == "/send")
-        .count();
-    assert_eq!(sends, 1);
-    // An uninstall deletes what the object holds.
+        .map(|c| serde_json::from_str(&c.body).unwrap())
+        .collect();
+    assert_eq!(sends.len(), 1);
+    let messages = sends[0]["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert_eq!(
+        messages[0]["subscription"]["endpoint"],
+        "https://fcm.googleapis.com/fcm/send/alice"
+    );
+    assert_eq!(messages[0]["payload"]["body"], "spec/x: Add x");
+
+    // An uninstall that removes `o/a` deletes what its object holds, and not `o/b`'s.
+    // req:web.worker.replica/uninstall-deletes@5353d3fd
+    let other = fake_with("111", repo_files(&[]));
+    let (_built, b_mem, _b_slot) = built(&other);
+    let b_held = b_mem.0.borrow().clone();
+    let mut b = clm_web_replica::Object::load("o/b", b_mem.clone(), Slot::default());
     assert!(!mem.0.borrow().is_empty());
     let removed = json!({"action": "removed", "repositories_removed": [{"full_name": "o/a"}]});
-    let answer = block_on(object.event(&fake, &event("installation_repositories", "d2", removed)));
+    let uninstall = event("installation_repositories", "d2", removed);
+    let answer = block_on(object.event(&fake, &uninstall));
     assert_eq!(answer.status, 202);
     assert!(mem.0.borrow().is_empty());
     assert_eq!(block_on(object.view(&fake, "snapshot", false)).status, 503);
+    assert_eq!(block_on(b.event(&other, &uninstall)).status, 202);
+    assert!(!b.removed());
+    assert_eq!(*b_mem.0.borrow(), b_held, "o/b's object is unchanged");
     fake.secrets.remove("VAPID_PUBLIC_KEY");
 }

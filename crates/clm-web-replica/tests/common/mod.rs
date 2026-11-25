@@ -9,7 +9,9 @@ use std::rc::Rc;
 
 use clm_replica::Store;
 use clm_web_platform::fake::{Fake, FakeRepo, FileMap, clm_repo, files};
-use clm_web_replica::{Alarm, Object};
+use clm_web_platform::http::{Request, Response};
+use clm_web_platform::platform::{Clock, GhRequest, GhResponse, GitHub, Live, Log, Secrets};
+use clm_web_replica::{Alarm, Host, Object};
 use futures::executor::block_on;
 use serde_json::{Value, json};
 
@@ -92,6 +94,17 @@ pub fn event(name: &str, delivery: &str, body: Value) -> Value {
 /// Runs the alarm, as Cloudflare does at the time it was set, until it re-arms no more.
 /// Answers the subrequests each invocation made.
 pub fn run_alarms(fake: &Fake, object: &mut Obj, slot: &Slot) -> Vec<usize> {
+    run_alarms_on(fake, fake, object, slot)
+}
+
+/// [`run_alarms`], the object running on `platform`, which answers as `fake` does but where
+/// it scripts otherwise.
+pub fn run_alarms_on<P: Host>(
+    platform: &P,
+    fake: &Fake,
+    object: &mut Obj,
+    slot: &Slot,
+) -> Vec<usize> {
     let mut invocations = Vec::new();
     for _ in 0..200 {
         let Some(at) = slot.0.get() else {
@@ -100,7 +113,7 @@ pub fn run_alarms(fake: &Fake, object: &mut Obj, slot: &Slot) -> Vec<usize> {
         // The pages stay open: a read keeps them so until the test says otherwise.
         fake.now.set(fake.now.get().max(at));
         let before = fake.gh.calls.borrow().len();
-        block_on(object.on_alarm(fake));
+        block_on(object.on_alarm(platform));
         invocations.push(fake.gh.calls.borrow().len() - before);
     }
     panic!("the alarm never stopped");
@@ -128,6 +141,86 @@ pub fn graphql_calls(fake: &Fake, from: usize) -> Vec<String> {
         .filter(|c| c.url.ends_with("/graphql"))
         .map(|c| c.body.clone().unwrap_or_default())
         .collect()
+}
+
+/// What GitHub answers in the fake's place: a response for a request it scripts, none for
+/// the fake to answer.
+pub type Script<'a> = Box<dyn Fn(&GhRequest) -> Option<GhResponse> + 'a>;
+
+/// The fake, but GitHub answers some requests as `github` scripts them and the `Live`
+/// object answers `/send` with `send`: the answers the fake itself never gives.
+pub struct Over<'a> {
+    pub fake: &'a Fake,
+    pub github: RefCell<Script<'a>>,
+    pub send: RefCell<Option<String>>,
+}
+
+impl<'a> Over<'a> {
+    pub fn new(fake: &'a Fake) -> Over<'a> {
+        Over {
+            fake,
+            github: RefCell::new(Box::new(|_| None)),
+            send: RefCell::default(),
+        }
+    }
+}
+
+impl GitHub for Over<'_> {
+    async fn send(&self, req: GhRequest) -> GhResponse {
+        let scripted = (self.github.borrow())(&req);
+        match scripted {
+            Some(res) => {
+                self.fake.gh.calls.borrow_mut().push(req);
+                res
+            }
+            None => self.fake.send(req).await,
+        }
+    }
+}
+
+impl Clock for Over<'_> {
+    fn now(&self) -> u64 {
+        self.fake.now()
+    }
+}
+
+impl Secrets for Over<'_> {
+    fn secret(&self, name: &str) -> Option<String> {
+        self.fake.secret(name)
+    }
+    fn random(&self, buf: &mut [u8]) {
+        self.fake.random(buf)
+    }
+    async fn sign_rs256(&self, data: &[u8]) -> Option<Vec<u8>> {
+        self.fake.sign_rs256(data).await
+    }
+}
+
+impl Live for Over<'_> {
+    async fn live_forward(&self, name: &str, req: &Request) -> Option<Response> {
+        self.fake.live_forward(name, req).await
+    }
+    async fn live_post(&self, name: &str, path: &str, body: &str) -> Option<(u16, String)> {
+        let answer = self.fake.live_post(name, path, body).await;
+        match self.send.borrow().as_ref() {
+            Some(gone) if path == "/send" => Some((200, gone.clone())),
+            _ => answer,
+        }
+    }
+}
+
+impl Log for Over<'_> {
+    fn log(&self, line: &str) {
+        self.fake.log(line)
+    }
+}
+
+/// A response with `status` and no body.
+pub fn status(status: u16) -> GhResponse {
+    GhResponse {
+        status,
+        body: String::new(),
+    }
 }
 
 pub fn urls(fake: &Fake, from: usize) -> Vec<String> {

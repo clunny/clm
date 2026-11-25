@@ -4,14 +4,15 @@
 //! tells the open pages. Everything it reads from GitHub goes through `source`, within the
 //! Free plan's subrequests per invocation.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use clm_ledger::unix_time;
 use clm_replica::{
     Answer as Viewed, Change, Entry, Event, File, Pull, Refusal, Replica, Store, Validated, Write,
 };
 use clm_web_live::Item;
 use clm_web_platform::access::{self, Access};
-use clm_web_platform::install::{self, unix_time};
+use clm_web_platform::install;
 use clm_web_platform::platform::Auth;
 
 use crate::Host;
@@ -19,7 +20,7 @@ use clm_web_platform::{files, ledger};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::notify::Permissions;
+use crate::notify::{Gone, Permissions};
 use crate::removal::{Storage, on_removal};
 use crate::source::{self, Budget};
 
@@ -69,8 +70,9 @@ impl Answer {
 }
 
 /// What the object keeps beside the replica: what the source tells it and what the replica
-/// doesn't expose.
+/// doesn't expose. A field it lacks, as one an older object wrote does, reads as its default.
 #[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 struct Meta {
     installation: Option<u64>,
     default_branch: Option<String>,
@@ -78,6 +80,8 @@ struct Meta {
     tip: Option<String>,
     /// The refs the replica holds, by name, with their tips.
     refs: BTreeMap<String, String>,
+    /// The held refs whose change files or code key couldn't be read, to read again.
+    unread: BTreeSet<String>,
     /// The ledger branches it holds, with their tips.
     ledgers: BTreeMap<String, String>,
     pulls: BTreeMap<u64, Pull>,
@@ -90,6 +94,8 @@ struct Meta {
     /// The backlog items, and the commit, of the last recompute a notice looked at.
     items: Option<Vec<(String, String, String)>>,
     items_sha: Option<String>,
+    /// The subscriptions whose endpoint a send answered as gone (`push-waiting`).
+    gone: Gone,
 }
 
 /// Deletes everything an object stores.
@@ -219,30 +225,35 @@ impl<S: Store, A: Alarm> Object<S, A> {
         if let Some(id) = req["installation"].as_u64() {
             self.meta.installation = Some(id);
         }
-        self.meta.delivery = req["delivery"].as_str().map(String::from);
         if self.meta.tip.is_none() {
-            // Nothing is held: the first build reads the repo as it is now.
+            // Nothing is held: the first build reads the repo as it is now, and nothing of
+            // the event is applied, its delivery included.
             if self.alarm.get().is_none() {
                 self.alarm.set(now);
             }
         } else {
-            match event {
+            let applied = match event {
                 "push" => self.push(p, &b, body).await,
                 "pull_request" => self.pull_request(p, &b, body).await,
-                _ => {}
+                _ => false,
+            };
+            // Only an event applied names the next notice's delivery and sets the alarm.
+            if applied {
+                self.meta.delivery = req["delivery"].as_str().map(String::from);
+                self.batch(now);
             }
-            self.batch(now);
         }
         self.save();
         Answer::empty(202)
     }
 
-    async fn push<P: Host>(&mut self, p: &P, b: &Budget, body: &Value) {
+    /// Applies a push; answers whether it applied anything, which a tag's push doesn't.
+    async fn push<P: Host>(&mut self, p: &P, b: &Budget, body: &Value) -> bool {
         let Some(branch) = body["ref"]
             .as_str()
             .and_then(|r| r.strip_prefix("refs/heads/"))
         else {
-            return;
+            return false;
         };
         let now = p.now();
         let after = body["after"].as_str().unwrap_or_default();
@@ -283,10 +294,11 @@ impl<S: Store, A: Alarm> Object<S, A> {
         } else if branch.starts_with("clm/ledger/") {
             self.move_ledger(p, b, branch, (!deleted).then_some(after))
                 .await;
-        } else if is_read_ref(branch) {
+        } else if clm_replica::reads_ref(branch) {
             self.move_ref(p, b, branch, (!deleted).then_some(after), at)
                 .await;
         }
+        true
     }
 
     /// The default branch is at `after`: fetches what the compare lists when it is a
@@ -432,6 +444,18 @@ impl<S: Store, A: Alarm> Object<S, A> {
         });
     }
 
+    /// Holds `name` at `sha` as applied to the replica, and, when its change files or code
+    /// key weren't `read` (a `propose/*` ref has none to read), apart as still to read, so a
+    /// resync reads it again without taking it for a new ref.
+    fn hold_ref(&mut self, name: &str, sha: &str, read: bool) {
+        self.meta.refs.insert(name.into(), sha.into());
+        if read || name.starts_with("propose/") {
+            self.meta.unread.remove(name);
+        } else {
+            self.meta.unread.insert(name.into());
+        }
+    }
+
     /// A ref the views read moved, was created or was deleted (`tip` is none).
     async fn move_ref<P: Host>(
         &mut self,
@@ -443,6 +467,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
     ) {
         let Some(sha) = tip else {
             self.meta.refs.remove(name);
+            self.meta.unread.remove(name);
             self.replica.apply(Change::Ref {
                 name: name.into(),
                 sha: None,
@@ -455,11 +480,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
             return;
         };
         let change = self.ref_change(p, b, &auth, name, sha).await;
-        // A ref whose change files or code key couldn't be read isn't held as read, so the
-        // next resync reads it again.
-        if change.is_some() || name.starts_with("propose/") {
-            self.meta.refs.insert(name.into(), sha.into());
-        }
+        self.hold_ref(name, sha, change.is_some());
         self.replica.apply(Change::Ref {
             name: name.into(),
             sha: Some(sha.into()),
@@ -490,8 +511,11 @@ impl<S: Store, A: Alarm> Object<S, A> {
         }
     }
 
-    async fn pull_request<P: Host>(&mut self, p: &P, b: &Budget, body: &Value) {
+    /// Applies a `pull_request` event and sends the review notice it calls for; answers
+    /// whether it applied anything, which an event naming no pull request doesn't.
+    async fn pull_request<P: Host>(&mut self, p: &P, b: &Budget, body: &Value) -> bool {
         let pr = &body["pull_request"];
+        let mut applied = false;
         if let (Some(number), Some(head), Some(base)) = (
             pr["number"].as_u64(),
             pr["head"]["ref"].as_str(),
@@ -514,13 +538,23 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 self.meta.pulls.remove(&number);
             }
             self.replica.apply(Change::Pull(pull));
+            applied = true;
         }
         if clm_web_live::review_notice(&self.name, body).is_some()
             && p.secret("VAPID_PUBLIC_KEY").is_some()
             && let Some(auth) = self.auth(p, b).await
         {
-            crate::notify::review(p, &auth, &mut self.permissions, &self.name, body).await;
+            crate::notify::review(
+                p,
+                &auth,
+                &mut self.permissions,
+                &mut self.meta.gone,
+                &self.name,
+                body,
+            )
+            .await;
         }
+        applied
     }
 
     // ---- GET /view/<name>
@@ -881,7 +915,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 auth = self.auth(p, &b).await;
             }
             if let Some(a) = &auth {
-                self.resync(p, &b, a).await;
+                self.resync(p, &b, a, true).await;
             }
             self.meta.last_resync = now;
         }
@@ -946,7 +980,9 @@ impl<S: Store, A: Alarm> Object<S, A> {
         });
         self.meta.tip = Some(tip);
         self.meta.last_resync = p.now();
-        self.resync(p, b, auth).await;
+        // Every ref listed now is one the object hadn't looked for, not one just created:
+        // the creations are those GitHub's events listing gives.
+        self.resync(p, b, auth, false).await;
         if let Some(events) = source::events(p, auth, &repo, b).await {
             for event in events.into_iter().rev() {
                 self.replica.apply(Change::Event(event));
@@ -957,15 +993,16 @@ impl<S: Store, A: Alarm> Object<S, A> {
 
     /// Lists the refs and the open pull requests and applies any difference from what the
     /// object holds: refs created, moved or deleted, ledger branches, the default branch's
-    /// tip and the pull requests.
-    async fn resync<P: Host>(&mut self, p: &P, b: &Budget, auth: &Auth) {
+    /// tip and the pull requests. With `creations`, a ref it didn't hold reaches the activity
+    /// feed as created, its webhook having been lost.
+    async fn resync<P: Host>(&mut self, p: &P, b: &Budget, auth: &Auth, creations: bool) {
         let repo = self.name.clone();
         if let Some(branch) = self.meta.default_branch.clone()
             && let Some(tip) = source::branch_tip(p, auth, &repo, &branch, b).await
         {
             self.move_tip(p, b, &tip).await;
         }
-        for prefix in ["impl/", "spec/", "autosync/spec/", "propose/"] {
+        for prefix in clm_replica::REF_PREFIXES {
             let Some(tips) = source::tips(p, auth, &repo, prefix, b).await else {
                 continue;
             };
@@ -978,8 +1015,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 .refs
                 .keys()
                 .filter(|n| {
-                    n.strip_prefix(prefix).is_some_and(|r| !r.contains('/'))
-                        && !listed.contains_key(*n)
+                    n.starts_with(prefix) && clm_replica::reads_ref(n) && !listed.contains_key(*n)
                 })
                 .cloned()
                 .collect();
@@ -988,7 +1024,9 @@ impl<S: Store, A: Alarm> Object<S, A> {
             }
             let moved: Vec<(String, &source::Tip)> = listed
                 .into_iter()
-                .filter(|(n, t)| self.meta.refs.get(n) != Some(&t.sha))
+                .filter(|(n, t)| {
+                    self.meta.refs.get(n) != Some(&t.sha) || self.meta.unread.contains(n)
+                })
                 .collect();
             let spec: Vec<(String, String)> = moved
                 .iter()
@@ -1007,17 +1045,19 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 } else {
                     None
                 };
-                let created = !self.meta.refs.contains_key(&name);
-                if created {
+                let held = self.meta.refs.get(&name);
+                if held == Some(&tip.sha) && change.is_none() {
+                    // Still unread at the tip it was held at: nothing to apply again.
+                    continue;
+                }
+                if creations && held.is_none() {
                     self.replica.apply(Change::Event(Event::Create {
                         branch: name.clone(),
                         at: tip.time,
                         actor: String::new(),
                     }));
                 }
-                if change.is_some() || prefix == "propose/" {
-                    self.meta.refs.insert(name.clone(), tip.sha.clone());
-                }
+                self.hold_ref(&name, &tip.sha, change.is_some());
                 self.replica.apply(Change::Ref {
                     name,
                     sha: Some(tip.sha.clone()),
@@ -1123,6 +1163,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
                         p,
                         a,
                         &mut self.permissions,
+                        &mut self.meta.gone,
                         &self.name,
                         Some(&previous),
                         &new,
@@ -1150,18 +1191,6 @@ impl<S: Store, A: Alarm> Object<S, A> {
             p.log(&format!("replica {}: the pages weren't told", self.name));
         }
     }
-}
-
-/// A branch whose ref the views read: `impl/*`, `spec/*`, `autosync/spec/*`, `propose/*`,
-/// not nested.
-fn is_read_ref(branch: &str) -> bool {
-    ["impl/", "spec/", "autosync/spec/", "propose/"]
-        .iter()
-        .any(|prefix| {
-            branch
-                .strip_prefix(prefix)
-                .is_some_and(|rest| !rest.is_empty() && !rest.contains('/'))
-        })
 }
 
 /// A push's head commit time: the instant its RFC 3339 timestamp names, offset counted.

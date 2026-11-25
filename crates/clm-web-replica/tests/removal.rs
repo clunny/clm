@@ -1,7 +1,41 @@
 //! An uninstall deletes the storage of each repo's object.
 
+mod common;
+
 use clm_web_replica::{Storage, on_removal};
+use common::*;
+use futures::executor::block_on;
 use serde_json::json;
+
+#[test]
+fn an_installation_deleted_through_the_object() {
+    // req:web.worker.replica/uninstall-deletes@5353d3fd
+    let fake = fake_with("111", repo_files(&[]));
+    let deleted = |action: &str| {
+        json!({"action": action, "repositories": [{"full_name": "o/a"}],
+            "installation": {"id": 9}})
+    };
+
+    // A suspension changes nothing the object holds.
+    let (mut object, mem, _slot) = built(&fake);
+    let held = mem.0.borrow().clone();
+    let answer = block_on(object.event(&fake, &event("installation", "d1", deleted("suspend"))));
+    assert_eq!(answer.status, 202);
+    assert!(!object.removed());
+    assert_eq!(*mem.0.borrow(), held, "it holds what it held");
+    assert_eq!(view(&fake, &mut object, "snapshot")["sha"], "111");
+
+    // A deletion empties it, and a read then answers as an object that holds nothing.
+    let answer = block_on(object.event(&fake, &event("installation", "d2", deleted("deleted"))));
+    assert_eq!(answer.status, 202);
+    assert!(object.removed());
+    assert!(mem.0.borrow().is_empty(), "the object holds nothing");
+    let read = block_on(object.view(&fake, "snapshot", false));
+    assert_eq!(
+        (read.status, read.body.as_str()),
+        (503, r#"{"preparing":0}"#)
+    );
+}
 
 /// An object's storage, which holds `name`'s data until it is deleted.
 struct Object(Option<&'static str>);
@@ -14,7 +48,7 @@ impl Storage for Object {
 
 #[test]
 fn a_repo_removed() {
-    // req:web.worker.replica/uninstall-deletes@b0ac190f
+    // req:web.worker.replica/uninstall-deletes@5353d3fd
     let event = json!({
         "action": "removed",
         "repositories_removed": [{"full_name": "o/a"}],
@@ -39,7 +73,7 @@ fn a_repo_removed() {
 
 #[test]
 fn an_installation_deleted() {
-    // req:web.worker.replica/uninstall-deletes@b0ac190f
+    // req:web.worker.replica/uninstall-deletes@5353d3fd
     let event = json!({
         "action": "deleted",
         "repositories": [{"full_name": "o/a"}, {"full_name": "o/b"}],
@@ -53,7 +87,7 @@ fn an_installation_deleted() {
 
 #[test]
 fn other_actions_delete_nothing() {
-    // req:web.worker.replica/uninstall-deletes@b0ac190f
+    // req:web.worker.replica/uninstall-deletes@5353d3fd
     let mut a = Object(Some("data a"));
     let added = json!({"action": "added", "repositories_removed": [{"full_name": "o/a"}]});
     assert!(!on_removal(

@@ -3,6 +3,7 @@
 
 mod common;
 
+use clm_web_platform::fake::{self, Fake, FakeRepo, FileMap};
 use common::*;
 use futures::executor::block_on;
 use serde_json::{Value, json};
@@ -195,4 +196,300 @@ fn an_answer_read_back() {
     assert_eq!(answers[0]["item"], "q");
     assert_eq!(answers[0]["answer"], "yes");
     assert_eq!(answers[0]["id"], id);
+}
+
+// ---- the refusals (`write-refusals`)
+
+const ARCHITECTURE: &str = "## Constraints\n\n### Constraint: e\nGit SHALL hold it.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- c/r\n";
+
+/// A built object over `o/a` holding `files`, with `tok` able to read the repo.
+fn built_over(files: FileMap) -> (Fake, Obj) {
+    built_from(FakeRepo::new("111", files))
+}
+
+fn built_from(repo: FakeRepo) -> (Fake, Obj) {
+    let fake = Fake::default();
+    fake.gh.add_repo("o/a", repo);
+    fake.gh.grant("tok", "o/a");
+    let (object, _mem, _slot) = built(&fake);
+    (fake, object)
+}
+
+/// A decision by `carol` on `id`.
+fn decision(id: &str, version: &str, value: &str) -> Value {
+    json!({"login": "carol", "token": "tok", "kind": "decide", "id": id,
+        "version": version, "value": value, "decision": "keep"})
+}
+
+fn proposal(title: &str, nodes: &[&str]) -> Value {
+    json!({"login": "carol", "token": "tok", "kind": "propose",
+        "title": title, "body": "", "nodes": nodes})
+}
+
+/// The answer's status and body, the body parsed (null for none).
+fn sent(fake: &Fake, object: &mut Obj, write: &Value) -> (u16, Value) {
+    let answer = block_on(object.write(fake, write));
+    let body = if answer.body.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_str(&answer.body).unwrap()
+    };
+    (answer.status, body)
+}
+
+fn x_version(fake: &Fake, object: &mut Obj) -> String {
+    entry(fake, object)["version"].as_str().unwrap().to_string()
+}
+
+#[test]
+fn signed() {
+    // req:web.worker.replica/write-refusals@ad7750a1
+    let mut files = repo(CAPABILITIES);
+    files.extend(fake::files(&[
+        ("ARCHITECTURE.md", ARCHITECTURE),
+        (
+            "docs/allowed_signers",
+            "carol@example.com ssh-ed25519 AAAA\n",
+        ),
+    ]));
+    let (fake, mut object) = built_over(files);
+    let capability = sent(
+        &fake,
+        &mut object,
+        &decision("capability/x", "stale", "high"),
+    );
+    assert_eq!(
+        capability,
+        (
+            422,
+            json!({"error": "signed",
+                "command": "clm capabilities decide x --value high --decision keep"})
+        )
+    );
+    let architecture = sent(
+        &fake,
+        &mut object,
+        &decision("architecture/e", "stale", "high"),
+    );
+    assert_eq!(
+        architecture,
+        (
+            422,
+            json!({"error": "signed",
+                "command": "clm architecture decide e --value high --decision keep"})
+        )
+    );
+    // An entry the tip doesn't hold is refused before the signing is.
+    let nope = sent(
+        &fake,
+        &mut object,
+        &decision("capability/nope", "v1", "high"),
+    );
+    assert_eq!(nope, (422, Value::Null));
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
+#[test]
+fn reworded_since() {
+    // req:web.worker.replica/write-refusals@ad7750a1
+    let (fake, mut object) = built_over(repo(CAPABILITIES));
+    let now = x_version(&fake, &mut object);
+    let old = "00000000";
+    assert_ne!(old, now);
+    let answer = sent(&fake, &mut object, &decision("capability/x", old, "high"));
+    assert_eq!(answer, (409, Value::Null));
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
+#[test]
+fn unknown_capability() {
+    // req:web.worker.replica/write-refusals@ad7750a1
+    let (fake, mut object) = built_over(repo(CAPABILITIES));
+    let version = x_version(&fake, &mut object);
+    let nope = sent(
+        &fake,
+        &mut object,
+        &decision("capability/nope", "v1", "high"),
+    );
+    assert_eq!(nope, (422, Value::Null));
+    let huge = sent(
+        &fake,
+        &mut object,
+        &decision("capability/x", &version, "huge"),
+    );
+    assert_eq!(huge, (422, Value::Null));
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+
+    // A second run: `specs/c/SPEC.md` doesn't parse.
+    let mut files = repo(CAPABILITIES);
+    files.extend(fake::files(&[(
+        "specs/c/SPEC.md",
+        "---\ntitle: [C\n---\n\n## Contract\nc\n",
+    )]));
+    let (fake, mut object) = built_over(files);
+    let broken = sent(
+        &fake,
+        &mut object,
+        &decision("capability/x", &version, "high"),
+    );
+    assert_eq!(broken, (422, Value::Null));
+    // A proposal against specs that don't load is refused alike.
+    let proposed = sent(&fake, &mut object, &proposal("Dark mode", &[]));
+    assert_eq!(proposed, (422, Value::Null));
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
+#[test]
+fn not_an_entry() {
+    // req:web.worker.replica/write-refusals@ad7750a1
+    let mut files = repo(CAPABILITIES);
+    files.extend(fake::files(&[("ARCHITECTURE.md", ARCHITECTURE)]));
+    let (fake, mut object) = built_over(files);
+    let nope = sent(
+        &fake,
+        &mut object,
+        &decision("architecture/nope", "v1", "high"),
+    );
+    assert_eq!(nope, (422, Value::Null));
+    let stale = sent(
+        &fake,
+        &mut object,
+        &decision("architecture/e", "v1", "high"),
+    );
+    assert_eq!(stale, (409, Value::Null));
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
+#[test]
+fn refused() {
+    // req:web.worker.replica/write-refusals@ad7750a1
+    let mut files = repo(CAPABILITIES);
+    files.extend(fake::files(&[(
+        "backlog/export-csv.md",
+        "---\ntitle: Export CSV\nkind: idea\n---\n\nLet me export.\n",
+    )]));
+    let (fake, mut object) = built_over(files);
+    let taken = sent(&fake, &mut object, &proposal("Export CSV", &["a"]));
+    assert_eq!(taken, (409, json!({"error": "taken"})));
+    let nodes = sent(&fake, &mut object, &proposal("Dark mode", &["nope"]));
+    assert_eq!(nodes, (422, json!({"error": "nodes"})));
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
+#[test]
+fn taken_by_a_change() {
+    // req:web.worker.replica/write-refusals@ad7750a1
+    let mut files = repo(CAPABILITIES);
+    files.extend(fake::files(&[(
+        "changes/20270101-x/change.md",
+        "---\nstatus: applied\nresolves:\n  - export-csv\n---\n\n# X\n",
+    )]));
+    let (fake, mut object) = built_over(files);
+    assert_eq!(
+        view(&fake, &mut object, "snapshot")["view"]["resolved"],
+        json!(["export-csv"])
+    );
+    let taken = sent(&fake, &mut object, &proposal("Export CSV", &[]));
+    assert_eq!(taken, (409, json!({"error": "taken"})));
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+
+    // A second run: bob's open proposal holds the slug.
+    let mut held = FakeRepo::new("111", repo(CAPABILITIES));
+    let open = json!({"id": "p0", "writer": "bob/web", "at": "2027-01-15T07:00:00.000Z",
+        "kind": "proposed", "slug": "export-csv", "title": "Export CSV", "body": "",
+        "nodes": []});
+    fake::ledger(&mut held, "bob/web", "LB", &[open]);
+    let (fake, mut object) = built_from(held);
+    let taken = sent(&fake, &mut object, &proposal("Export CSV", &[]));
+    assert_eq!(taken, (409, json!({"error": "taken"})));
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
+#[test]
+fn withdrawn() {
+    // req:web.worker.replica/write-refusals@ad7750a1
+    let proposed = |id: &str, writer: &str, slug: &str| {
+        json!({"id": id, "writer": writer, "at": "2027-01-15T07:00:00.000Z",
+            "kind": "proposed", "slug": slug, "title": slug, "body": "", "nodes": []})
+    };
+    let mut held = FakeRepo::new("111", repo(CAPABILITIES));
+    fake::ledger(
+        &mut held,
+        "alice/web",
+        "LA",
+        &[proposed("p1", "alice/web", "s1")],
+    );
+    fake::ledger(
+        &mut held,
+        "bob/web",
+        "LB",
+        &[proposed("p2", "bob/web", "s2")],
+    );
+    let (fake, mut object) = built_from(held);
+    let withdraw =
+        |id: &str| json!({"login": "alice", "token": "tok", "kind": "withdraw", "id": id});
+    assert_eq!(
+        sent(&fake, &mut object, &withdraw("p2")),
+        (404, Value::Null),
+        "bob's"
+    );
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+    assert_eq!(
+        sent(&fake, &mut object, &withdraw("p1")),
+        (200, Value::Null)
+    );
+    let records: Vec<Value> = {
+        let repos = fake.gh.repos.borrow();
+        let repo = &repos["o/a"];
+        let tip = &repo.branches["clm/ledger/alice/web"];
+        std::str::from_utf8(&repo.commits[tip]["records.jsonl"])
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    };
+    assert_eq!(records.len(), 2, "{records:?}");
+    assert_eq!(records[1]["kind"], "withdrawn");
+    assert_eq!(records[1]["proposal"], "p1");
+    let writes = fake.gh.writes().len();
+    assert_eq!(
+        sent(&fake, &mut object, &withdraw("p1")),
+        (404, Value::Null),
+        "already withdrawn"
+    );
+    assert_eq!(fake.gh.writes().len(), writes, "nothing more was appended");
+}
+
+#[test]
+fn bodies_of_the_wrong_shape() {
+    // req:web.worker.replica/write-refusals@ad7750a1
+    let (fake, mut object) = built_over(repo(CAPABILITIES));
+    let version = x_version(&fake, &mut object);
+    let who = |mut v: Value| {
+        v["login"] = json!("carol");
+        v["token"] = json!("tok");
+        v
+    };
+    for body in [
+        json!({"kind": "decide", "version": version, "value": "high", "decision": "keep"}),
+        json!({"kind": "decide", "id": "capability/x", "value": "high", "decision": "keep"}),
+        json!({"kind": "decide", "id": "capability/x", "version": version, "decision": "keep"}),
+        json!({"kind": "decide", "id": "capability/x", "version": version, "value": "high"}),
+        json!({"kind": "decide", "id": "capability/x", "version": version, "value": "high",
+            "decision": "maybe"}),
+        json!({"kind": "decide", "id": 3, "version": version, "value": "high",
+            "decision": "keep"}),
+        json!({"kind": "propose", "body": "", "nodes": []}),
+        json!({"kind": "propose", "title": "Dark mode", "nodes": []}),
+        json!({"kind": "withdraw"}),
+        json!({"kind": "withdraw", "id": 1}),
+    ] {
+        let body = who(body);
+        assert_eq!(
+            sent(&fake, &mut object, &body),
+            (422, Value::Null),
+            "{body}"
+        );
+    }
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
 }
