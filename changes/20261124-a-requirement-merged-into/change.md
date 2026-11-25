@@ -5,7 +5,7 @@ resolves: [a-requirement-merged-into-one-of-another-slug-leaves-its]
 
 ## Intent
 
-A change can record in `change.md`'s new key `moves` that a requirement it removes was merged into another of a different slug, on the same component or another. The recorded pair is a move like a same-slug move to another component: the removed requirement's obsolete markers wait on the requirement it merged into (`moved-markers-wait`), a change's progress follows it (`progress-follows-moves`), and `moved_to` returns it, so `check/obsolete-tests-elsewhere` and the build prompt treat it as they treat a move already. It answers `backlog/a-requirement-merged-into-one-of-another-slug-leaves-its`.
+A change can record in `change.md`'s new key `moves` that a requirement it removes was merged into another of a different slug, on the same component or another. The recorded pair is a move like a same-slug move to another component: the removed requirement's obsolete markers wait on the requirement it merged into (`moved-markers-wait`), a change's progress follows it (`progress-follows-moves`), and `moved_to` returns it, so `check/obsolete-tests-elsewhere` and the build prompt's handling of another component's obsolete markers treat it as they treat a move already. (For a merge on the same component, the build prompt keeps its own wording, to re-cite each test to the requirement that now states what it proves, and doesn't name the target.) It answers `backlog/a-requirement-merged-into-one-of-another-slug-leaves-its`.
 
 ## Problem
 
@@ -26,10 +26,14 @@ A change can record in `change.md`'s new key `moves` that a requirement it remov
 - `check.coverage/status-report`: a change also moves `<a>/<x>` to `<b>/<y>` when its `moves` records it; scenario *merged later* added.
 - `check.coverage/pending-report`: unchanged text; scenario *a merge into a requirement of the same component* added, showing the obsolete line blocked by its blocked target and released once the target's own blocker is current (the existing rule that leaves out a same-component blocker nothing blocks).
 - `check.coverage`'s Design, **Moves**: names the two ways a move is made.
-- `docs/spec-format.md` and the glossary name the key.
+- Decision `merges-are-recorded-moves`, amending `progress-follows-moves`, `moved-markers-wait` and `a-question-holds-a-removed-requirement-s-unlisted-test` (a "Changed on" note on each).
+- The glossary names the key (`clm/glossary-covers-terms`). `docs/spec-format.md`, which `clm guide spec-format` is built from, waits for the key to load (`checks-relax-before-use`): the propose skill's deferred item carries that docs edit.
 - Two `kind: deferred` items, for the propose skill (`plugin`) and the draft prompt (`orchestrator.triage`), add the instruction to record a merge, once the key loads: prompt text, which no requirement states (`prompt-text-is-source`).
 
 ## Constraints and edge cases
+
+- `model`'s build adds `moves` to `CHANGE_KEYS` (`model/term-lists`' test pins it to the frontmatter's fields) and re-exports the entry type beside `Rename`; `check.coverage`'s build rewrites the doc comment on `moves` in `crates/clm-coverage/src/status.rs`, which names only same-slug moves. Each is in its own component.
+- `move-records` is checked after the change's deltas load, so a delta that fails to load also makes the entries naming its requirements report. An entry is reported once, by position, however many of its rules it breaks, as `renames` does. An entry whose `to` has the same slug on another component is accepted: it repeats the move the deltas make.
 
 - One target per removed requirement. A requirement split into several of other slugs records one of them; a same-slug split across components is still followed to each as today.
 - `to` must be added or modified by the same change, so its build is pending and is the one that re-cites the tests. A merge into a requirement the change leaves untouched isn't a merge.

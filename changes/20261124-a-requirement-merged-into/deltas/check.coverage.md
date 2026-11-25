@@ -268,5 +268,6 @@ Crate `clm-coverage` holds the modules `coverage`, `pending`, `status`, `lists`,
 - model/parse-backlog
 - model/human-layers
 - model/reserved-ids
+- model/parse-changes
 - model/move-records
 
