@@ -266,6 +266,18 @@ pub fn wanted(path: &str) -> bool {
     keeps_text(path) || scannable(path)
 }
 
+/// The prefixes of the refs the views read (`replica/refs-the-views-read`).
+pub const REF_PREFIXES: [&str; 4] = ["impl/", "spec/", "autosync/spec/", "propose/"];
+
+/// Whether the views read a ref: one of `REF_PREFIXES` followed by a non-empty name with no
+/// `/` (`replica/refs-the-views-read`).
+pub fn reads_ref(name: &str) -> bool {
+    REF_PREFIXES.iter().any(|prefix| {
+        name.strip_prefix(prefix)
+            .is_some_and(|rest| !rest.is_empty() && !rest.contains('/'))
+    })
+}
+
 /// Whether the replica keeps a binary file's hash for the snapshot's `assets`: a path under
 /// `specs/` with an `assets` directory in it, as the model reads a component's assets
 /// (`replica/asset-hashes`).
@@ -583,7 +595,7 @@ impl Replica {
                 sha,
                 time,
                 change,
-            } => match sha {
+            } if reads_ref(&name) => match sha {
                 Some(sha) => {
                     s.refs.insert(name, RefState { sha, time, change });
                 }
@@ -591,6 +603,8 @@ impl Replica {
                     s.refs.remove(&name);
                 }
             },
+            // A ref the views don't read is held by none (`replica/refs-the-views-read`).
+            Change::Ref { .. } => {}
             Change::Pull(pull) => {
                 if pull.open {
                     s.pulls.insert(pull.number, pull);

@@ -15,10 +15,11 @@ use crate::{Event, RefChange, State, Views};
 /// The feed's length at most.
 const ACTIVITY: usize = crate::EVENTS;
 
-/// The name of a branch under `prefix`, `None` for another prefix or a nested name such as
-/// `impl/archive/<id>`, which names no component (`orchestrator/nested-branches-not-claims`).
+/// The name of a branch under `prefix`, `None` for another prefix or a ref the views don't
+/// read, such as the nested `impl/archive/<id>` or the empty `impl/`
+/// (`replica/refs-the-views-read`).
 pub(crate) fn branch<'a>(name: &'a str, prefix: &str) -> Option<&'a str> {
-    name.strip_prefix(prefix).filter(|n| !n.contains('/'))
+    name.strip_prefix(prefix).filter(|_| crate::reads_ref(name))
 }
 
 /// The fold of every ledger branch the state holds.
