@@ -40,7 +40,7 @@ button{font:inherit}
 .logo i{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#8b9cff,#5cc8ff);display:grid;place-items:center;font-style:normal;color:#0b0e14;font-size:13px}
 .repo{border:1px solid var(--border);background:var(--surface2);border-radius:10px;padding:6px 8px;font-size:13px;width:100%;color:var(--text)}
 .repo-meta{display:block;color:var(--muted);font-size:11px;margin:4px 2px 0}
-/* Notify me, for the repo on screen (web/notify-switch). */
+/* Notify me, for the repo on screen (web.client-live/notify-switch). */
 .notify{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:8px 2px 0}
 .notify label{display:flex;align-items:center;gap:6px;cursor:pointer}
 .notify[hidden]{display:none}
@@ -174,10 +174,10 @@ ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border
 .dec{padding:8px 10px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);margin-top:8px;font-size:13px}
 .dec code{color:var(--accent)}
 .approve-bar{display:contents}
-/* Request changes sits under Approve (web/request-changes). */
+/* Request changes sits under Approve (web.views/request-changes). */
 .prhead > .approve-bar > .fbw.request{grid-column:2;margin-top:0}
 .fbw.request textarea{min-width:260px}
-/* A signed repository: Approve is off, and the note says how to approve (web/signed-approvals). */
+/* A signed repository: Approve is off, and the note says how to approve (web.views/signed-approvals). */
 .signed-note{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--muted)}
 .signed-note code{color:var(--accent)}
 /* Comments and change requests, and the forms that send them and proposals. */
@@ -284,7 +284,7 @@ ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border
 .signin p{color:var(--muted)}
 
 /* Capabilities: a table from 900 px, cards below, and a capability's page with its decision
-   (web/capabilities-list, web/capability-page, web/decide-buttons). */
+   (web.views/capabilities-list, web.views/capability-page, web.views/decide-buttons). */
 .flag-only.on{background:var(--rose-bg);color:var(--rose);border-color:transparent}
 table.caps{width:100%;border-collapse:collapse;font-size:13.5px}
 table.caps th{text-align:left;color:var(--muted);font-weight:550;font-size:12px;padding:6px 10px;border-bottom:1px solid var(--border2)}
@@ -310,7 +310,7 @@ table.caps td a{color:var(--text);text-decoration:none}
 .decide-bar .values,.decide-bar .decides{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .btn.value.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
 .decide-note code{color:var(--accent)}
-/* The Architecture view (web/architecture-list, web/architecture-page): a proof short of
+/* The Architecture view (web.views/architecture-list, web.views/architecture-page): a proof short of
    its rules in amber, as behind is. */
 .proof{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12.5px;white-space:nowrap}
 .proof.short{color:var(--amber)}

@@ -476,7 +476,7 @@ async function prPage(route: Route, base: string, snap: Snapshot, first: Review,
         return `Not sent (${res.status}).`;
       } catch (e) {
         if (e instanceof SignedOut) showSignIn();
-        return notSent(e);
+        return notSent();
       }
     });
   const act = async () => {
@@ -569,10 +569,8 @@ async function refusedField(res: Response): Promise<string> {
   return typeof field === 'string' ? field : 'request';
 }
 
-/** Why a write that threw wasn't sent. */
-function notSent(e: unknown): string {
-  return e instanceof SignedOut ? 'Signed out. Sign in again to send it.' : 'Not sent: offline.';
-}
+/** Why a write that threw wasn't sent: signed out shows the sign-in page in its place. */
+const notSent = () => 'Not sent: offline.';
 
 /** Asks the Worker for the implementation state again, never the copy kept for offline use,
  * and draws the view on screen anew; a failure leaves the state for the next refresh. */
@@ -603,7 +601,7 @@ function propose(base: string, title: string, body: string): Promise<string | nu
       return `Not proposed (${res.status}).`;
     } catch (e) {
       if (e instanceof SignedOut) showSignIn();
-      return notSent(e);
+      return notSent();
     }
   });
 }
@@ -617,7 +615,7 @@ function withdraw(base: string, id: string): Promise<string | null> {
       if (!res.ok) return `Not withdrawn (${res.status}).`;
     } catch (e) {
       if (e instanceof SignedOut) showSignIn();
-      return e instanceof SignedOut ? 'Signed out.' : 'Not withdrawn: offline.';
+      return 'Not withdrawn: offline.';
     }
     await reloadImpl(base);
     return null;
@@ -639,7 +637,7 @@ function answerItem(base: string, slug: string, answer: string): Promise<string 
       return `The answer wasn't recorded (${res.status}).`;
     } catch (e) {
       if (e instanceof SignedOut) showSignIn();
-      return notSent(e);
+      return notSent();
     }
   });
 }

@@ -37,7 +37,7 @@ const WRITES: Write[] = [
     route: '/app/#/o/a/prs/spec%2Fc',
     make: (page) => page.locator('button.approve').click(),
     usable: (page) => page.locator('button.approve'),
-    said: (page) => page.locator('.review'),
+    said: (page) => page.locator('.review > .note'),
   },
   {
     name: 'a request for changes',
@@ -178,3 +178,34 @@ for (const w of WRITES) {
     });
   }
 }
+
+// req:web/app-writes@d1c16934
+test("signed out: a 401 to a Notify me switch's POST shows the sign-in page, and a refresh draws nothing over it", async ({ page, context }) => {
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
+  // The browser's push service, faked: permission granted, and a subscription once asked.
+  await page.addInitScript((endpoint) => {
+    Object.defineProperty(Notification, 'permission', { get: () => 'granted' });
+    let sub: unknown = null;
+    PushManager.prototype.getSubscription = async () => sub as PushSubscription;
+    PushManager.prototype.subscribe = async () => {
+      sub = { endpoint, toJSON: () => ({ endpoint, keys: { p256dh: 'p', auth: 'a' } }), unsubscribe: async () => true };
+      return sub as PushSubscription;
+    };
+  }, endpoint);
+  await page.clock.install();
+  const mock = await mockApi(context);
+  mock.routes['GET /api/push/key'] = { key: 'k' };
+  mock.routes['GET /api/repos/o/a/push'] = { subscribed: false };
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/app/#/o/a/graph');
+  const toggle = page.locator('.sidebar .notify input[type=checkbox]');
+  await expect(toggle).toBeEnabled();
+  mock.fail('POST /api/repos/o/a/push', 401);
+  mock.routes[SNAPSHOT] = { ...snapshot(), sha: 'f'.repeat(40) };
+  await toggle.click();
+  await expect(page.locator('.signin')).toBeVisible();
+  await page.clock.runFor(60_000);
+  await page.waitForTimeout(200);
+  await expect(page.locator('.signin')).toBeVisible();
+  await expect(page.locator('.main')).toHaveCount(0);
+});

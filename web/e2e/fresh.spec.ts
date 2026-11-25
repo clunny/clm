@@ -18,6 +18,9 @@ test.describe('fresh after write', () => {
   test('approve: the review is requested again with a UUID, and the offline copy has no fresh', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.goto('/app/#/o/a/prs/spec%2Fc');
+    await expect(page.locator('button.approve')).toBeEnabled();
+    // The first load's copy goes, so what is kept next is the write's reload.
+    await page.evaluate(async () => void (await caches.open('clm-api')).delete('/api/repos/o/a/branches/spec/c/review'));
     await page.locator('button.approve').click();
     await expect.poll(() => freshOf(mock.urls, REVIEW).length).toBeGreaterThanOrEqual(2);
     const [first, again] = freshOf(mock.urls, REVIEW);

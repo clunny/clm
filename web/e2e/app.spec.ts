@@ -400,6 +400,10 @@ test.describe('deciding a capability', () => {
       // taken, the Worker answers the report with 502.
       mock.onPost = (k) => k === key && mock.fail(route, 502);
       await page.goto(`/app/#/o/a/${layer}/${slug}`);
+      // A copy of the report is kept for offline use.
+      await expect
+        .poll(() => page.evaluate(async (p) => !!(await (await caches.open('clm-api')).match(p)), `/api/repos/o/a/${layer}`))
+        .toBe(true);
       await page.locator('button.value', { hasText: 'low' }).click();
       await page.locator('button.decide', { hasText: 'Cut' }).click();
       await expect(page.locator('.decide-note')).toContainText('Its report could not be loaded again');
@@ -871,6 +875,7 @@ test.describe('PWA', () => {
     for (const route of ['capabilities/a', 'architecture/e']) {
       await offlineAt(route);
       // With a value chosen, only being offline keeps the decision buttons off.
+      await expect(page.locator('section[data-sec=entry]')).toContainText(route.startsWith('capabilities') ? 'Without a, nothing works.' : 'Partly judgement.');
       await page.locator('button.value', { hasText: 'low' }).click();
       for (const b of await page.locator('button.decide').all()) {
         await expect(b).toBeDisabled();
@@ -949,6 +954,7 @@ test.describe('comments', () => {
     await intent.locator('button.send').click();
     await expect(intent.locator('.fbform .err')).toHaveText('Not sent: the Worker refused the text.');
     await expect(intent.locator('textarea')).toHaveValue('Why now?');
+    await expect(intent.locator('button.send')).toBeEnabled();
   });
 });
 
