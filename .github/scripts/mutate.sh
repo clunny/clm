@@ -1225,18 +1225,25 @@ run_block() {
 }
 
 # Appends block $1's `failed` line, in one write: the text of its `mutate.sh: ` line, or how it
-# exited, $2, when it printed none.
+# exited, $2, when it printed none. Then removes what it may have left part-made for a later
+# block or run: job $3's copy of the tree, which may hold a mutant it never put back, and its
+# StrykerJS sandboxes and configuration, whose links `coverage.sh`'s vitest would find.
 fail_block() {
-  local b=${blocks[$1]} why
+  local b=${blocks[$1]} why d
   b=${b%%"$nl"*}
   why="exited with status $2"
   [ ! -s "$pass_work/why-$1" ] || why=$(cat "$pass_work/why-$1")
   printf '%s\n' "${b#requirement } failed $why" >>"$result"
+  rm -rf "${pass_work:?}/copy-$3"
+  for d in $ts_dirs; do
+    rm -rf "${root:?}/$d/.stryker-tmp-clm-$1" "${root:?}/$d/node_modules/.clm-mutate/$1"
+  done
 }
 
 # Starts the blocks in the plan's order, each in a job number no running block holds. A block
 # that fails is that block's alone: the others still start, and their lines are written as they
-# are judged. One that `SIGTERM` or `SIGINT` ended writes no line.
+# are judged. A block the pass's own `SIGTERM` or `SIGINT` ended writes no line: `on_term` ends
+# the script before any is reaped here.
 count=${#blocks[@]}
 [ "$jobs_max" -le "$count" ] || jobs_max=$((count > 0 ? count : 1))
 pid_of=()
@@ -1252,7 +1259,7 @@ while :; do
       wait "$p" || status=$?
       if [ "$status" -ne 0 ]; then
         failed=true
-        case $status in 130 | 143) ;; *) fail_block "${block_of[j]}" "$status" ;; esac
+        fail_block "${block_of[j]}" "$status" "$j"
       fi
       pid_of[j]=
       running=$((running - 1))

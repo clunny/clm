@@ -2130,7 +2130,8 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// block, until that block has failed so and a second more; waits until `$CI_LOG.gate` exists
 /// when `bin/gate-<x>` exists; writes its pid to `$CI_LOG.sleeper` and becomes a long sleep
 /// when `bin/sleep-<x>` exists; and, when `bin/vanish-<x>` exists, kills the block's process
-/// with `SIGKILL`, so the block ends without printing a line.
+/// with `SIGKILL`, so the block ends without printing a line. A `nextest run` for a block does
+/// the same, once, when `bin/nextest-vanish` exists, removing it.
 const CARGO_MUTANTS: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$CI_LOG"
 bin=$(dirname "$0")
@@ -2141,6 +2142,20 @@ arg_after() {
     [ "$prev" != "$want" ] || { echo "$a"; return; }
     prev=$a
   done
+}
+# Kills the block that runs this call with `SIGKILL`, so it ends without printing a line: of its
+# `mutate.sh` ancestors, nearest first, the last is the script and the one before it the block's
+# subshell.
+vanish() {
+  local chain=() p=$$ pp
+  while pp=$(ps -ww -o ppid= -p "$p" | tr -d ' ') && [ -n "$pp" ] &&
+    [[ $(ps -ww -o args= -p "$pp") == *mutate.sh* ]]; do
+    chain+=("$pp")
+    p=$pp
+  done
+  if [ "${#chain[@]}" -lt 2 ]; then echo "vanish: no block found" >&2; exit 99; fi
+  kill -KILL "${chain[${#chain[@]}-2]}"
+  exit 0
 }
 # Waits until the file $1 exists, for at most $2 tenths of a second.
 wait_for() {
@@ -2219,6 +2234,7 @@ if [ "$1" = nextest ] && [ "$2" = run ]; then
     echo "git status failed" >> "$CI_LOG.nextest-status"
   t=$(sed -n 's/^test //p' "$CLM_MUTATE" | head -n 1 | cut -f1)
   [ ! -f "$t" ] || cp "$t" "$CI_LOG.nextest-file"
+  if [ -e "$bin/nextest-vanish" ]; then rm -f "$bin/nextest-vanish"; vanish; fi
   exit "$(cat "$bin/nextest-exit" 2>/dev/null || echo 0)"
 fi
 case " $* " in *" --version "*) ;; *)
@@ -2354,18 +2370,7 @@ case $mode in
     fi
     [ ! -e "$bin/gate-$x" ] || wait_for "$CI_LOG.gate" 600
     if [ -e "$bin/sleep-$x" ]; then echo $$ > "$CI_LOG.sleeper"; exec sleep 600; fi
-    if [ -e "$bin/vanish-$x" ]; then
-      # Its `mutate.sh` ancestors, nearest first: the last is the script, the one before it the
-      # block's subshell.
-      chain=() p=$$
-      while pp=$(ps -o ppid= -p "$p" | tr -d ' ') && [ -n "$pp" ] &&
-        [[ $(ps -o args= -p "$pp") == *mutate.sh* ]]; do
-        chain+=("$pp")
-        p=$pp
-      done
-      kill -KILL "${chain[${#chain[@]}-2]}"
-      exit 0
-    fi
+    [ ! -e "$bin/vanish-$x" ] || vanish
     [ ! -e "$bin/mutants-exit" ] || exit "$(cat "$bin/mutants-exit")"
     if [ -e "$bin/$mode-caught" ] || [ -e "$bin/$mode-missed" ]; then
       caught=$(cat "$bin/$mode-caught" 2>/dev/null || echo 0)
@@ -5218,7 +5223,11 @@ fn a_failing_block_lets_the_running_ones_finish_and_starts_no_more() {
     tree.report("further-caught", "1");
     tree.report("exit-a", "4");
     tree.report("after-fail-b", "a");
-    let (ok, log, result, stderr) = tree.mutate(&[("CLM_MUTATE_JOBS", "2")]);
+    let land = tempfile::tempdir().unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[
+        ("CLM_MUTATE_JOBS", "2"),
+        ("CLM_LAND_DIR", land.path().to_str().unwrap()),
+    ]);
     assert!(!ok, "{log:?}");
     let why = stderr
         .lines()
@@ -5245,6 +5254,11 @@ fn a_failing_block_lets_the_running_ones_finish_and_starts_no_more() {
         log.last().map(String::as_str),
         Some("coverage.sh"),
         "{log:?}"
+    );
+    // Its tracefile is copied as when none failed.
+    assert_eq!(
+        fs::read_to_string(land.path().join("lcov.info")).unwrap(),
+        "SF:x\n"
     );
 }
 
@@ -5292,6 +5306,35 @@ exec "$real" "$@"
     assert_failed(&result[..1], "a/x", "a copy of the tree", &stderr);
     // The job's next block makes its copy again, and is judged in it.
     assert_eq!(result[1..], ["a/y killed"], "{stderr}");
+}
+
+#[test]
+fn a_block_killed_with_a_mutant_written_leaves_its_job_no_mutant() {
+    // req:ci/mutate-script@73e16745
+    let tree = test_file_tree();
+    let block =
+        "code crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n";
+    fs::write(
+        tree.dir.path().join("plan"),
+        format!("requirement a/x\n{block}requirement a/y\n{block}"),
+    )
+    .unwrap();
+    let file = tree.work().join("crates/clm-check/tests/it.rs");
+    let original = fs::read_to_string(&file).unwrap();
+    tree.report("nextest-vanish", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert_eq!(
+        result,
+        ["a/x failed exited with status 137", "a/y killed"],
+        "{stderr}"
+    );
+    // The job's next block runs on its own mutant alone, not on the one a/x left written.
+    let mutated = fs::read_to_string(tree.dir.path().join("log.nextest-file")).unwrap();
+    assert_eq!(
+        mutated,
+        original.replace("// line 6\n", "// line 6 /* mutant 6 */\n")
+    );
 }
 
 #[test]
