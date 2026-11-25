@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [unjudged-check.coverage-88470edf, unjudged-web.views-88470edf, unjudged-web.worker-88470edf]
 ---
 
