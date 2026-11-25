@@ -53,11 +53,14 @@ fn only_the_worker_crates_depend_on_worker() {
         let Ok(manifest) = fs::read_to_string(entry.path().join("Cargo.toml")) else {
             continue;
         };
-        // `worker = ...`, `worker.workspace = true`, `worker={ ... }`.
+        // `worker = ...`, `worker.workspace = true`, `worker={ ... }`, a
+        // `[dependencies.worker]` table, or another name with `package = "worker"`.
         let depends = manifest.lines().any(|l| {
-            l.trim_start()
-                .strip_prefix("worker")
+            let l = l.trim_start();
+            l.strip_prefix("worker")
                 .is_some_and(|rest| rest.starts_with([' ', '=', '.']))
+                || (l.starts_with('[') && l.trim_end().ends_with(".worker]"))
+                || l.replace(' ', "").contains("package=\"worker\"")
         });
         if depends {
             users.push(entry.file_name().to_string_lossy().into_owned());
@@ -79,18 +82,15 @@ fn identifiers(text: &str) -> impl Iterator<Item = &str> {
 #[test]
 fn the_objects_name_no_cache() {
     // req:web.worker/cache-is-disposable@3469815b
-    // `clm-web-replica`'s sources are read once the crate exists.
     let mut dirs = Vec::new();
     for name in ["clm-web-live", "clm-web-replica"] {
         let src = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join(name)
             .join("src");
-        if src.is_dir() {
-            dirs.push(src);
-        }
+        assert!(src.is_dir(), "no sources of {name}");
+        dirs.push(src);
     }
-    assert!(!dirs.is_empty(), "no sources of clm-web-live");
     let mut found = Vec::new();
     let mut read = 0;
     let mut paths = Vec::new();
