@@ -39,7 +39,7 @@ fn change(root: &Path, dir: &str, status: &str, keys: &str) {
 
 #[test]
 fn declared_frontmatter_keys_are_parsed() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo("");
     change(
         dir.path(),
@@ -63,7 +63,7 @@ fn declared_frontmatter_keys_are_parsed() {
 
 #[test]
 fn removed_capabilities_are_parsed() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo("");
     change(
         dir.path(),
@@ -107,7 +107,7 @@ fn removed_capabilities_are_parsed() {
 
 #[test]
 fn malformed_capability_slugs_are_rejected() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     for bad in ["[Watch]", "[\"\"]", "[a_b]", "[a.b]", "watch", "[[a]]"] {
         let dir = repo("");
         change(
@@ -124,7 +124,7 @@ fn malformed_capability_slugs_are_rejected() {
 
 #[test]
 fn a_capability_still_in_the_file_is_accepted() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo("");
     write(
         dir.path(),
@@ -147,7 +147,7 @@ fn a_capability_still_in_the_file_is_accepted() {
 
 #[test]
 fn malformed_key_names_are_rejected() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     for bad in [
         "[1st]", "[_x]", "[a-b]", "[\"\"]", "[a.b]", "colour", "[[a]]",
     ] {
@@ -298,7 +298,7 @@ fn errors_point_at_the_file_lines() {
 
 #[test]
 fn bare_frontmatter_keys_declare_none() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo("");
     change(dir.path(), "x", "proposed", "frontmatter_keys:\n");
     let (graph, violations) = load(dir.path());

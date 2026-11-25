@@ -7,6 +7,7 @@ use serde::Deserialize;
 use serde::de::IgnoredAny;
 
 use crate::files::{Files, children, subdirs, text, under};
+use crate::moves::{Move, load_moves};
 use crate::outline::{
     SectionSpan, asset_entry, fence_mask, join, requirement_heading, requirement_spans,
     section_spans, yaml_fence,
@@ -54,6 +55,7 @@ pub const CHANGE_KEYS: &[&str] = &[
     "priority",
     "frontmatter_keys",
     "renames",
+    "moves",
     "removes_capabilities",
 ];
 
@@ -89,6 +91,9 @@ pub struct ChangeFrontmatter {
     /// The raw `renames`, checked by `load_change` into `Change::renames`
     /// (`rename-records`).
     renames: Option<serde_yaml::Value>,
+    /// The raw `moves`, checked by `load_change` against the change's deltas into
+    /// `Change::moves` (`move-records`).
+    moves: Option<serde_yaml::Value>,
 }
 
 /// A `change.md`'s frontmatter as written: what it reads, before `human_burdens` and its
@@ -129,6 +134,8 @@ struct RawChangeFrontmatter {
     removes_capabilities: Vec<String>,
     #[serde(default)]
     renames: Option<serde_yaml::Value>,
+    #[serde(default)]
+    moves: Option<serde_yaml::Value>,
 }
 
 impl TryFrom<RawChangeFrontmatter> for ChangeFrontmatter {
@@ -155,6 +162,7 @@ impl TryFrom<RawChangeFrontmatter> for ChangeFrontmatter {
             frontmatter_keys: raw.frontmatter_keys,
             removes_capabilities: raw.removes_capabilities,
             renames: raw.renames,
+            moves: raw.moves,
         })
     }
 }
@@ -227,6 +235,9 @@ pub struct Change {
     pub assets: BTreeMap<String, BTreeMap<String, Vec<u8>>>,
     /// The renames the change records, in file order (`rename-records`).
     pub renames: Vec<Rename>,
+    /// The requirements the change removes that it merged into others, in file order
+    /// (`move-records`).
+    pub moves: Vec<Move>,
     /// Lives under `changes/archive/`.
     pub archived: bool,
 }
@@ -407,6 +418,17 @@ fn load_change(
             }
         })
         .collect();
+    let before = violations.len();
+    let moves = load_moves(
+        frontmatter.moves.as_ref(),
+        &path,
+        archived,
+        &deltas,
+        violations,
+    );
+    if violations.len() > before {
+        return None;
+    }
     let assets = load_assets(files, dir, &deltas, violations);
     Some(Change {
         id: dir.file_name()?.to_string_lossy().into(),
@@ -416,6 +438,7 @@ fn load_change(
         deltas,
         assets,
         renames,
+        moves,
         archived,
     })
 }

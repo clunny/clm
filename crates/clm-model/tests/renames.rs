@@ -42,7 +42,7 @@ fn problems(renames: &str) -> Vec<String> {
 #[test]
 fn valid_entries_load_in_order() {
     // req:model/rename-records@7aa84f3d
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(
         "changes",
         "renames:\n  - component: check.coverage\n    to: check.markers\n  - requirement: apply/stale-base\n    to: base-moved\n  - term: sprocket\n    to: cogs\n",

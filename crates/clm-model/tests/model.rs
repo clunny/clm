@@ -110,7 +110,7 @@ fn missing_required_field_is_rejected() {
 
 #[test]
 fn a_change_without_its_change_md() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     for place in ["changes/x/deltas", "changes/archive/w/deltas"] {
         fs::create_dir_all(dir.path().join(place)).unwrap();
@@ -430,7 +430,7 @@ const CHANGE: &str = "---\nstatus: proposed\nauthor: \"@a\"\n---\n\n# Intent\n";
 
 #[test]
 fn change_and_deltas_are_parsed() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let delta = "---\ncomponent: clm\nbase: { contract: \"abc\" }\n---\n## MODIFIED Contract\nnew\n\n## ADDED Requirements\n### Requirement: r\nx\n#### Scenario: s\n- y\n\n## REMOVED Requirements\n### Requirement: old <!-- base: def -->\n";
     let dir = with_change(CHANGE, &[("clm.md", delta)]);
     let graph = assert_clean(dir.path());
@@ -447,7 +447,7 @@ fn change_and_deltas_are_parsed() {
 
 #[test]
 fn unknown_delta_section_is_rejected() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let delta = "---\ncomponent: clm\n---\n## RENAMED Requirements\nx\n";
     let dir = with_change(CHANGE, &[("clm.md", delta)]);
     let (_, violations) = load(dir.path());
@@ -458,7 +458,7 @@ fn unknown_delta_section_is_rejected() {
 
 #[test]
 fn bad_change_status_and_missing_node_are_rejected() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = with_change(
         &CHANGE.replace("proposed", "merged"),
         &[("x.md", "---\ncreate: true\n---\n")],
@@ -476,7 +476,7 @@ fn bad_change_status_and_missing_node_are_rejected() {
 
 #[test]
 fn live_change_may_resolve_deleted_item() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let change = CHANGE.replace("author", "resolves: [gone]\nauthor");
     let dir = with_change(&change, &[]);
     let graph = assert_clean(dir.path());
@@ -486,7 +486,7 @@ fn live_change_may_resolve_deleted_item() {
 
 #[test]
 fn change_priority() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     for (id, priority) in [("x", "priority: P2\n"), ("y", ""), ("z", "priority: P0\n")] {
         let c = dir.path().join("changes").join(id);
@@ -508,7 +508,7 @@ fn change_priority() {
 
 #[test]
 fn priority_order_display_and_caps() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let all = [
         Priority::P1,
         Priority::P2,
@@ -527,7 +527,7 @@ fn priority_order_display_and_caps() {
 
 #[test]
 fn archived_changes_may_resolve_deleted_items() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     let c = dir.path().join("changes/archive/c");
     fs::create_dir_all(&c).unwrap();
@@ -544,7 +544,7 @@ const ASSET_DELTA: &str = "---\ncomponent: clm\nbase: { assets: { \"m.html\": \"
 
 #[test]
 fn change_assets() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = with_change(CHANGE, &[("clm.md", ASSET_DELTA)]);
     write(dir.path(), "changes/c/assets/clm/m.html", "<p>new</p>");
     write(dir.path(), "changes/c/assets/clm/sub/n.svg", "<svg/>");
@@ -563,7 +563,7 @@ fn change_assets() {
 
 #[test]
 fn removed_asset_without_a_base() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let delta = "---\ncomponent: clm\n---\n## REMOVED Assets\n- `old.png`\n";
     let dir = with_change(CHANGE, &[("clm.md", delta)]);
     let (_, violations) = load(dir.path());
@@ -577,7 +577,7 @@ fn removed_asset_without_a_base() {
 
 #[test]
 fn removed_asset_outside_the_assets_dir() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     for path in ["../SPEC.md", "/etc/x", "", "a/./b", "a//b"] {
         let delta = format!(
             "---\ncomponent: clm\n---\n## REMOVED Assets\n- `{path}` <!-- base: 0123456789abcdef -->\n"
@@ -590,7 +590,7 @@ fn removed_asset_outside_the_assets_dir() {
 
 #[test]
 fn change_asset_without_a_delta() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = with_change(CHANGE, &[]);
     write(dir.path(), "changes/c/assets/zzz/m.html", "x");
     write(dir.path(), "changes/c/assets/loose.png", "x");
@@ -607,7 +607,7 @@ const REMOVAL: &str = "---\ncomponent: clm\nremove: true\nbase: { contract: \"ab
 
 #[test]
 fn removal_delta_is_parsed() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let delta = format!(
         "{REMOVAL}## REMOVED Requirements\n### Requirement: old <!-- base: def -->\n\n## REMOVED Assets\n- `old.png` <!-- base: 0123456789abcdef -->\n"
     );
@@ -625,7 +625,7 @@ fn removal_delta_is_parsed() {
 
 #[test]
 fn create_and_remove_is_rejected() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let delta = "---\ncomponent: clm\ncreate: true\nremove: true\n---\n";
     let dir = with_change(CHANGE, &[("clm.md", delta)]);
     let (graph, violations) = load(dir.path());
@@ -638,7 +638,7 @@ fn create_and_remove_is_rejected() {
 
 #[test]
 fn removal_with_a_modified_section() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     for section in ["MODIFIED Design", "ADDED Requirements", "Contract"] {
         let delta = format!("{REMOVAL}## {section}\nx\n");
         let dir = with_change(CHANGE, &[("clm.md", &delta)]);
@@ -655,7 +655,7 @@ fn removal_with_a_modified_section() {
 
 #[test]
 fn removal_with_change_assets() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = with_change(CHANGE, &[("clm.md", REMOVAL)]);
     write(dir.path(), "changes/c/assets/clm/m.html", "<p>x</p>");
     let (_, violations) = load(dir.path());
@@ -675,7 +675,7 @@ fn removal_with_change_assets() {
 
 #[test]
 fn removal_with_an_unknown_section() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let delta = format!("{REMOVAL}## REMOVED Requirement\nx\n");
     let dir = with_change(CHANGE, &[("clm.md", &delta)]);
     let (_, violations) = load(dir.path());
@@ -695,7 +695,7 @@ fn write(root: &Path, rel: &str, text: &str) {
 
 #[test]
 fn order_keys_are_accepted_and_ignored() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     write(
         dir.path(),
@@ -714,7 +714,7 @@ fn order_keys_are_accepted_and_ignored() {
 
 #[test]
 fn archived_changes_may_name_unknown_changes() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     write(
         dir.path(),
@@ -726,7 +726,7 @@ fn archived_changes_may_name_unknown_changes() {
 
 #[test]
 fn live_change_may_hold_a_plan() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     write(
         dir.path(),
@@ -760,7 +760,7 @@ fn change_at(root: &Path, dir: &str, fm: &str) {
 
 #[test]
 fn burdens_parsed() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     change_at(
         dir.path(),
@@ -776,7 +776,7 @@ fn burdens_parsed() {
 
 #[test]
 fn burdens_default_empty() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     change_at(dir.path(), "y", "status: proposed\n");
     let graph = assert_clean(dir.path());
@@ -785,7 +785,7 @@ fn burdens_default_empty() {
 
 #[test]
 fn live_gate_rejected() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     change_at(dir.path(), "x", "gate: HARD\nstatus: proposed\n");
     let (graph, violations) = load(dir.path());
@@ -800,7 +800,7 @@ fn live_gate_rejected() {
 
 #[test]
 fn archived_gate_ignored() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let dir = repo(&[("SPEC.md", node(""))]);
     change_at(dir.path(), "archive/w", "gate: HARD\nstatus: done\n");
     let graph = assert_clean(dir.path());
@@ -809,7 +809,7 @@ fn archived_gate_ignored() {
 
 #[test]
 fn one_change_md_alone() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let gated = parse_change_frontmatter("---\nstatus: proposed\ngate: HARD\n---\n# Intent\n")
         .expect("`gate` is accepted wherever the change lies");
     assert_eq!(gated.status, ChangeStatus::Proposed);
@@ -832,7 +832,7 @@ fn one_change_md_alone() {
 
 #[test]
 fn a_frontmatter_section_with_no_fence() {
-    // req:model/parse-changes@e4c8b4b0
+    // req:model/parse-changes@374972bb
     let create =
         "---\ncomponent: b\ncreate: true\n---\n## Frontmatter\ntitle: B\n\n## Contract\nB.\n";
     let modify = "---\ncomponent: clm\n---\n## MODIFIED Frontmatter\ntitle: B\n";

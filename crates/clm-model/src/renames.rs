@@ -163,7 +163,7 @@ fn check(r: &Rename) -> Result<(), String> {
 }
 
 /// Lowercase letters, digits and `-`, in non-empty dot-separated segments.
-fn node_id(s: &str) -> bool {
+pub(crate) fn node_id(s: &str) -> bool {
     s.split('.').all(|seg| {
         !seg.is_empty()
             && seg
@@ -173,7 +173,7 @@ fn node_id(s: &str) -> bool {
 }
 
 /// `[a-z0-9]+(-[a-z0-9]+)*`.
-fn slug(s: &str) -> bool {
+pub(crate) fn slug(s: &str) -> bool {
     s.split('-').all(|p| {
         !p.is_empty()
             && p.chars()
