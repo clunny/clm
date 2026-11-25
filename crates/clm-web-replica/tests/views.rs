@@ -75,7 +75,11 @@ fn a_view_read() {
     let answer = block_on(half.view(&fake, "snapshot", false));
     assert_eq!(answer.status, 503);
     assert_eq!(parsed(&answer.body), json!({"preparing": 0.5}));
-    assert_eq!(slot.0.get(), Some(fake.now.get()), "the alarm is set to now");
+    assert_eq!(
+        slot.0.get(),
+        Some(fake.now.get()),
+        "the alarm is set to now"
+    );
 
     // An object that holds nothing answers 503 `{"preparing": 0}` for any name.
     let (mut empty, _mem, slot) = common::object();

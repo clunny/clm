@@ -220,13 +220,14 @@ impl<S: Store, A: Alarm> Object<S, A> {
         if let Some(id) = req["installation"].as_u64() {
             self.meta.installation = Some(id);
         }
-        self.meta.delivery = req["delivery"].as_str().map(String::from);
         if self.meta.tip.is_none() {
-            // Nothing is held: the first build reads the repo as it is now.
+            // Nothing is held: the first build reads the repo as it is now, and nothing of
+            // the event is applied, its delivery included.
             if self.alarm.get().is_none() {
                 self.alarm.set(now);
             }
         } else {
+            self.meta.delivery = req["delivery"].as_str().map(String::from);
             match event {
                 "push" => self.push(p, &b, body).await,
                 "pull_request" => self.pull_request(p, &b, body).await,
@@ -882,7 +883,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 auth = self.auth(p, &b).await;
             }
             if let Some(a) = &auth {
-                self.resync(p, &b, a).await;
+                self.resync(p, &b, a, true).await;
             }
             self.meta.last_resync = now;
         }
@@ -947,7 +948,9 @@ impl<S: Store, A: Alarm> Object<S, A> {
         });
         self.meta.tip = Some(tip);
         self.meta.last_resync = p.now();
-        self.resync(p, b, auth).await;
+        // Every ref listed now is one the object hadn't looked for, not one just created:
+        // the creations are those GitHub's events listing gives.
+        self.resync(p, b, auth, false).await;
         if let Some(events) = source::events(p, auth, &repo, b).await {
             for event in events.into_iter().rev() {
                 self.replica.apply(Change::Event(event));
@@ -958,8 +961,9 @@ impl<S: Store, A: Alarm> Object<S, A> {
 
     /// Lists the refs and the open pull requests and applies any difference from what the
     /// object holds: refs created, moved or deleted, ledger branches, the default branch's
-    /// tip and the pull requests.
-    async fn resync<P: Host>(&mut self, p: &P, b: &Budget, auth: &Auth) {
+    /// tip and the pull requests. With `creations`, a ref it didn't hold reaches the activity
+    /// feed as created, its webhook having been lost.
+    async fn resync<P: Host>(&mut self, p: &P, b: &Budget, auth: &Auth, creations: bool) {
         let repo = self.name.clone();
         if let Some(branch) = self.meta.default_branch.clone()
             && let Some(tip) = source::branch_tip(p, auth, &repo, &branch, b).await
@@ -1008,8 +1012,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
                 } else {
                     None
                 };
-                let created = !self.meta.refs.contains_key(&name);
-                if created {
+                if creations && !self.meta.refs.contains_key(&name) {
                     self.replica.apply(Change::Event(Event::Create {
                         branch: name.clone(),
                         at: tip.time,

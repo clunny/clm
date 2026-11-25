@@ -247,10 +247,17 @@ fn signed() {
     let mut files = repo(CAPABILITIES);
     files.extend(fake::files(&[
         ("ARCHITECTURE.md", ARCHITECTURE),
-        ("docs/allowed_signers", "carol@example.com ssh-ed25519 AAAA\n"),
+        (
+            "docs/allowed_signers",
+            "carol@example.com ssh-ed25519 AAAA\n",
+        ),
     ]));
     let (fake, mut object) = built_over(files);
-    let capability = sent(&fake, &mut object, &decision("capability/x", "stale", "high"));
+    let capability = sent(
+        &fake,
+        &mut object,
+        &decision("capability/x", "stale", "high"),
+    );
     assert_eq!(
         capability,
         (
@@ -292,9 +299,17 @@ fn unknown_capability() {
     // req:web.worker.replica/write-refusals@ad7750a1
     let (fake, mut object) = built_over(repo(CAPABILITIES));
     let version = x_version(&fake, &mut object);
-    let nope = sent(&fake, &mut object, &decision("capability/nope", "v1", "high"));
+    let nope = sent(
+        &fake,
+        &mut object,
+        &decision("capability/nope", "v1", "high"),
+    );
     assert_eq!(nope, (422, Value::Null));
-    let huge = sent(&fake, &mut object, &decision("capability/x", &version, "huge"));
+    let huge = sent(
+        &fake,
+        &mut object,
+        &decision("capability/x", &version, "huge"),
+    );
     assert_eq!(huge, (422, Value::Null));
     assert!(fake.gh.writes().is_empty(), "nothing was appended");
 
@@ -305,7 +320,11 @@ fn unknown_capability() {
         "---\ntitle: [C\n---\n\n## Contract\nc\n",
     )]));
     let (fake, mut object) = built_over(files);
-    let broken = sent(&fake, &mut object, &decision("capability/x", &version, "high"));
+    let broken = sent(
+        &fake,
+        &mut object,
+        &decision("capability/x", &version, "high"),
+    );
     assert_eq!(broken, (422, Value::Null));
     // A proposal against specs that don't load is refused alike.
     let proposed = sent(&fake, &mut object, &proposal("Dark mode", &[]));
@@ -325,7 +344,11 @@ fn not_an_entry() {
         &decision("architecture/nope", "v1", "high"),
     );
     assert_eq!(nope, (422, Value::Null));
-    let stale = sent(&fake, &mut object, &decision("architecture/e", "v1", "high"));
+    let stale = sent(
+        &fake,
+        &mut object,
+        &decision("architecture/e", "v1", "high"),
+    );
     assert_eq!(stale, (409, Value::Null));
     assert!(fake.gh.writes().is_empty(), "nothing was appended");
 }
@@ -389,7 +412,12 @@ fn withdrawn() {
         "LA",
         &[proposed("p1", "alice/web", "s1")],
     );
-    fake::ledger(&mut held, "bob/web", "LB", &[proposed("p2", "bob/web", "s2")]);
+    fake::ledger(
+        &mut held,
+        "bob/web",
+        "LB",
+        &[proposed("p2", "bob/web", "s2")],
+    );
     let (fake, mut object) = built_from(held);
     let withdraw =
         |id: &str| json!({"login": "alice", "token": "tok", "kind": "withdraw", "id": id});

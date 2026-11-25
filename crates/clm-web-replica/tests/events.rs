@@ -372,7 +372,10 @@ fn a_claim_lapses_while_a_page_is_open() {
         block_on(object.on_alarm(&fake));
         fired.push(at);
     }
-    assert!(fired.contains(&lapse), "an alarm fired at {lapse}: {fired:?}");
+    assert!(
+        fired.contains(&lapse),
+        "an alarm fired at {lapse}: {fired:?}"
+    );
     let after = view(&fake, &mut object, "implementation");
     assert!(!claimed(&after), "{after}");
     let posted = notices(&fake).split_off(earlier.len());
