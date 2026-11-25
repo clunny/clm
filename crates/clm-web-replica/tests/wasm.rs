@@ -10,7 +10,7 @@ fn workspace() -> PathBuf {
 
 #[test]
 fn builds_for_wasm_on_its_own() {
-    // req:web.worker.replica/object-class@2ce37c07
+    // req:web.worker.replica/object-class@2f468bf7
     // A separate target dir, so the build doesn't wait on the outer `cargo test`'s lock.
     let dir = workspace().join("target/wasm-test");
     let out = Command::new(env!("CARGO"))
