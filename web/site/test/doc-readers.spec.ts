@@ -41,7 +41,7 @@ const readsGuide = (text: string) =>
   buildCalls(text).some((call) => !call.includes('GUIDE_DIR'))
 
 test('a test that builds the site from the repository guide holds a marker for its pages', () => {
-  // req:web.site/doc-readers-marked@730bb707
+  // req:web.site/doc-readers-marked@2116f5f9
   const dir = join(siteDir, 'test')
   // This file names what it looks for, and builds and opens nothing.
   const specs = readdirSync(dir).filter((f) => f.endsWith('.spec.ts') && f !== 'doc-readers.spec.ts')

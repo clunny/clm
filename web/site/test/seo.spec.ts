@@ -187,8 +187,26 @@ test("the FAQ's structured data follows its file", () => {
     'A tool for building software with AI.',
     'Yes, see the licence.',
   ])
-  // A guide with no `faq.md` has no FAQ data, and still builds.
   expect(ldJson(read(out, 'guide/index.html'))).toEqual([])
+})
+
+test('a guide with no FAQ, or an FAQ with no question, builds with no FAQPage anywhere', () => {
+  test.setTimeout(180_000)
+  // req:web.site/structured-data@7aab789a
+  const guides = {
+    'no faq.md': fixture('nofaq', { 'README.md': '# Guide\n\nThe guide.\n' }),
+    'no ## heading': fixture('noquestions', {
+      'README.md': '# Guide\n\nThe guide.\n\n1. [FAQ](faq.md)\n',
+      'faq.md': '# FAQ\n\nNo questions yet.\n\n### Not a question\n\nText.\n',
+    }),
+  }
+  for (const [label, dir] of Object.entries(guides)) {
+    const { out, error } = build('noquestions', { GUIDE_DIR: dir })
+    expect(error, label).toBeUndefined()
+    const pages = filesUnder(out).filter((f) => f.endsWith('.html'))
+    expect(pages, label).toContain('guide/index.html')
+    expect(pages.filter((f) => read(out, f).includes('FAQPage')), label).toEqual([])
+  }
 })
 
 /** A line with each inline link's target, outside code spans, made `<>`: what a copy may change. */
@@ -333,7 +351,7 @@ test.describe('with script disabled', () => {
   test.use({ javaScriptEnabled: false })
 
   test('the static HTML holds the homepage and the quickstart', async ({ page }) => {
-    // req:web.site/readable-without-script@5e50e6d9
+    // req:web.site/readable-without-script@315b4c02
     await page.goto('/')
     await expect(page.locator('h1')).toContainText('Declare the intent.')
     await expect(page.locator('h1')).toContainText('CLM keeps it matching.')
@@ -348,15 +366,28 @@ test.describe('with script disabled', () => {
     await expect(page.locator('.cmd')).toContainText('/plugin marketplace add ' + 'clunny' + '/clm')
     await expect(page.locator('a[href="https://github.com/' + 'clunny' + '/clm"]').first()).toBeVisible()
     await page.goto('/guide/quickstart')
-    await expect(page.locator('h1')).toContainText('Quickstart')
-    await expect(page.locator('.vp-doc')).toContainText('/plugin marketplace add ' + 'clunny' + '/clm')
+    const file = join(repoDocs, 'guide/quickstart.md')
+    await expect(page.locator('h1')).toContainText(titleAndFirstParagraph(file).heading)
+    // The text of the file's first code block.
+    const lines = readFileSync(file, 'utf8').split('\n')
+    const open = lines.findIndex((l) => /^\s*(```|~~~)/.test(l))
+    const close = lines.findIndex((l, i) => i > open && /^\s*(```|~~~)/.test(l))
+    const code = lines.slice(open + 1, close).filter((l) => l.trim() !== '')
+    expect(code.length).toBeGreaterThan(0)
+    const shown = await page.locator('.vp-doc div[class*="language-"] pre').first().innerText()
+    expect(shown.split('\n').map((l) => l.trimEnd()).filter((l) => l.trim() !== '')).toEqual(
+      code.map((l) => l.trimEnd()),
+    )
   })
 })
 
 test('the footer of the homepage and of a guide page leads to the privacy page', async ({ page }) => {
-  // req:web.site/privacy-page@7d20639a
+  // req:web.site/privacy-page@a765e60a
   for (const path of ['/', '/guide/quickstart']) {
     await page.goto(path)
+    await expect(page.locator('.VPNav a[href="/privacy"]'), path).toHaveCount(0)
+    await expect(page.locator('.VPSidebar a[href="/privacy"]'), path).toHaveCount(0)
+    if (path !== '/') await expect(page.locator('.VPSidebar a').first()).toBeVisible()
     await page.locator('footer a[href="/privacy"]').click()
     await expect(page).toHaveURL(/\/privacy$/)
     for (const word of ['cookies', 'Umami', 'Do Not Track', 'IP address', '/app/']) {
