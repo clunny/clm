@@ -27,7 +27,7 @@ const BASE = '/app/';
 
 /** Emits the PNG icons, and `sw.js` (served at `/app/sw.js`) with the build's files to
  * precache and the push handlers it imports from `src/live/push-sw.ts` inlined
- * (web/push-shown). Beside the app's output it writes the retiring worker `/sw.js`
+ * (web.client-live/push-shown). Beside the app's output it writes the retiring worker `/sw.js`
  * (web/retire-root-service-worker). */
 function pwa(): Plugin {
   return {

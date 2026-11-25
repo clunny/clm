@@ -48,7 +48,7 @@ new_sqlite_classes = ["Replica"]
 
 # Nothing runs on a schedule (the `Replica` objects use their own alarms). The key stays,
 # empty: `wrangler deploy` leaves the deployed triggers alone when `crons` is absent
-# (web/no-cron-trigger).
+# (web/worker-deploy).
 [triggers]
 crons = []
 
