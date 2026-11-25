@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [an-unjudged-item-doesn-t-say-which-failure-ended-the-pass-that]
 ---
 
