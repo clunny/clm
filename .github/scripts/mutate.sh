@@ -718,7 +718,8 @@ ts_tools() {
 
 # Judges a fixture with StrykerJS in the npm directory $1, with that directory's own vitest and
 # TypeScript: a source file whose first function a test notices a change to and whose second
-# function no test does. It goes on only when the first function's mutants are caught and the
+# function no test does, and which fails when a directory the fixture's `.gitignore` names reaches
+# StrykerJS's sandbox. It goes on only when the first function's mutants are caught and the
 # second's missed. The files sit inside the directory, which a vitest configuration reaches, and
 # are removed afterwards.
 ts_fixture() {
@@ -732,17 +733,26 @@ ts_fixture() {
 export const double = (x: number): number => x * 2;
 export const triple = (x: number): number => x * 3;
 EOF
+  # A directory one level below the files, which a `.gitignore` beside them names by a rule with
+  # no slash but a trailing one, the shape StrykerJS matches only at the top unless it is carried
+  # anchored. It holds a file, since a copy may make no empty directory.
+  mkdir -p "$root/$dir/$fix/nested/clm-ignored"
+  : >"$root/$dir/$fix/nested/clm-ignored/x"
+  printf 'clm-ignored/\n' >"$root/$dir/$fix/.gitignore"
   # The test that notices also reads this script, a file of the repository outside the npm
   # directory, by a path relative to its own file, so a sandbox from which the repository's
-  # files can't be reached fails the fixture. It reads it with `fs`, in node's environment.
+  # files can't be reached fails the fixture. It reads it with `fs`, in node's environment. It
+  # also fails when it finds the ignored directory, so a StrykerJS that copies what git ignores
+  # fails the fixture.
   cat >"$root/$dir/$fix/fixture.test.ts" <<EOF
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { double, triple } from './fixture';
 
 test('fixture_notices', () => {
   expect(readFileSync(new URL('$up/.github/scripts/mutate.sh', import.meta.url), 'utf8')).toContain('mutate');
+  expect(existsSync(new URL('./nested/clm-ignored', import.meta.url))).toBe(false);
   expect(double(3)).toBe(6);
 });
 
@@ -803,7 +813,7 @@ diff_ranges() {
 # Its configuration files and its sandbox are named for `tag`, the block or the fixture, so runs
 # of two blocks at once in one directory share neither.
 run_stryker() {
-  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= f m json k s u all
+  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= ignores f m json k s u all
   shift 2
   rm -rf "${work:?}/$report"
   mkdir -p "$work/$report"
@@ -824,6 +834,7 @@ run_stryker() {
     echo "export default { ...base, test: { ...base.test, include: [$includes] } };"
   } >"$vcfg"
   for m in "$@"; do ranges="$ranges\"$m\","; done
+  ignores=$(stryker_ignores "$dir") || return 1
   cat >"$scfg" <<EOF
 {
   "testRunner": "vitest",
@@ -832,7 +843,7 @@ run_stryker() {
   "jsonReporter": { "fileName": "$work/$report/mutation.json" },
   "tsconfigFile": "$root/$dir/node_modules/.clm-mutate/no-tsconfig.json",
   "tempDirName": ".stryker-tmp-clm-$tag",
-  "ignorePatterns": [".stryker-tmp-clm-*"],
+  "ignorePatterns": [".stryker-tmp-clm-*"${ignores:+,${ignores%,}}],
   "concurrency": 2,
   "mutate": [${ranges%,}]
 }
@@ -867,6 +878,93 @@ EOF
   caught=$((caught + k))
   missed=$((missed + s))
   untested=$((untested + u))
+}
+
+# The rules of the `.gitignore` files git reads that reach the npm directory $1, for StrykerJS's
+# `ignorePatterns`, each a JSON string and a comma: the top's and those of the directories down
+# to $1 first, then those under $1, tracked or untracked and not ignored, but none in a StrykerJS
+# sandbox of this script's, shallower before deeper, so the last rule that matches wins as in git.
+# StrykerJS tries a pattern against an entry's name and its path from $1, so each is re-rooted at
+# $1 and anchored there: an unanchored rule gains `/**/` (`.test-dist/` in `site/.gitignore` is
+# `/site/**/.test-dist/`), since StrykerJS would match it only at the top, and a rule with a
+# slash before its end is joined to its own file's directory, its leading parts matched, as
+# globs, against $1's, and left out when they don't match. Rules, not the paths that exist, so a
+# directory another run makes while StrykerJS copies is left out too. Comments, blank lines and
+# trailing spaces go; a `!` stays in front. A file that is gone by the time it is read, as one in
+# another run's sandbox may be, is skipped.
+stryker_ignores() {
+  local dir=$1 up= part f files=()
+  files+=(.gitignore)
+  while IFS= read -r -d / part; do
+    up=$up$part/
+    [ "$up" = "$dir/" ] || files+=("${up}.gitignore")
+  done <<<"$dir/"
+  while IFS= read -r -d '' f; do
+    files+=("$f")
+  done < <(git -C "$root" ls-files -z --cached --others --exclude-standard -- "$dir" |
+    awk -v RS='\0' -v ORS='\0' -F/ '
+      $NF == ".gitignore" && $0 !~ /(^|\/)\.stryker-tmp-clm-[^\/]*\// { print NF "\t" $0 }' |
+    sort -z -n -s -k1,1 | cut -z -f2)
+  for f in "${files[@]}"; do
+    [ -f "$root/$f" ] || continue
+    awk -v d="$(dirname "$f")" -v n="$dir" '
+      # A regular expression matching the glob $1, one part of a path.
+      function globre(g,   re, i, c, j) {
+        re = "^"
+        for (i = 1; i <= length(g); i++) {
+          c = substr(g, i, 1)
+          if (c == "*") re = re "[^/]*"
+          else if (c == "?") re = re "[^/]"
+          else if (c == "[" && (j = index(substr(g, i + 2), "]")) > 0) {
+            c = substr(g, i + 1, j)
+            if (substr(c, 1, 1) == "!") c = "^" substr(c, 2)
+            re = re "[" c "]"
+            i += j + 1
+          } else {
+            if (c == "\\" && i < length(g)) c = substr(g, ++i, 1)
+            if (c ~ /[A-Za-z0-9]/) re = re c
+            else if (c == "\\" || c == "^") re = re "\\" c
+            else re = re "[" c "]"
+          }
+        }
+        return re "$"
+      }
+      BEGIN { if (d == ".") d = ""; k = split(n, np, "/") }
+      {
+        r = $0
+        sub(/\r$/, "", r)
+        if (r == "" || substr(r, 1, 1) == "#") next
+        while (r ~ / $/ && r !~ /\\ $/) r = substr(r, 1, length(r) - 1)
+        neg = ""
+        if (substr(r, 1, 1) == "!") { neg = "!"; r = substr(r, 2) }
+        body = r
+        sub(/\/$/, "", body)
+        if (body == "" || body == "/") next
+        if (substr(r, 1, 3) == "**/") { anchored = 0; r = substr(r, 4) }
+        else anchored = index(body, "/") > 0
+        if (anchored) {
+          sub(/^\//, "", r)
+          m = split(d == "" ? r : d "/" r, fp, "/")
+          out = ""
+          for (i = 1; i <= k; i++) {
+            if (fp[i] == "**") { out = "/**"; i++; break }
+            # The rule names $1 itself or a directory above it, or misses it.
+            if (i >= m || fp[i] == "" || np[i] !~ globre(fp[i])) next
+          }
+          for (; i <= m; i++) out = out "/" fp[i]
+          # Nothing left below $1: the rule names $1 itself.
+          if (out ~ /^[\/*]*$/) next
+        } else if (index(d "/", n "/") == 1 && d != n) {
+          out = "/" substr(d, length(n) + 2) "/**/" r
+        } else {
+          out = "/**/" r
+        }
+        out = neg out
+        gsub(/\\/, "\\\\", out)
+        gsub(/"/, "\\\"", out)
+        printf "\"%s\",", out
+      }' "$root/$f" || [ ! -e "$root/$f" ] || return 1
+  done
 }
 
 # Makes $2, the directory under the npm directory $1 that StrykerJS makes its sandbox in, afresh,
