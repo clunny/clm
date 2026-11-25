@@ -77,6 +77,10 @@ After any sequence of changes, a replica's state and views SHALL equal those of 
 ### Requirement: batched-recompute
 `apply` SHALL never recompute, and `view` SHALL answer the last computed views however many changes have been applied since, until `recompute` runs. `stale()` SHALL be true from any `apply` until a `recompute` that computes, and false after one. Before any `Tree` change, and while a regular file of the listing that `keeps_text` accepts has still to be fetched (given with its text or marked binary), `recompute` SHALL compute nothing, leaving every view and `stale()` as they were, and return none. `view` SHALL answer nothing for a name other than `snapshot`, `implementation`, `capabilities` and `architecture`. `recompute` SHALL return the time the implementation view next changes without a change: of the live `impl/<component>` and `propose/<item>` claims, the earliest time one lapses, the first second at which `orchestrator`'s rule reads it lapsed (its tip older than the 4-hour expiry), one second past 4 hours after its tip's time; or none when no claim is live.
 
+#### Needs
+- web.worker.replica/alarm-batches
+- web.worker.replica/times-as-instants
+
 #### Scenario: three pushes, one recompute
 - GIVEN a replica whose views describe `111`
 - WHEN pushes to `222`, `333` and `444` are applied, then `view("snapshot")` is read, then `recompute` runs and `view("snapshot")` is read again
