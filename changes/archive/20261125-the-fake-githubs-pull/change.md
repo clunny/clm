@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-fake-githubs-pull-listing-ignores-its-base]
 ---
 

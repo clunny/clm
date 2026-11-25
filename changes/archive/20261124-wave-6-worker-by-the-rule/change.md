@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-rule-for-which-files-the-web-replica-fetches-is-held-three-times, the-replica-s-snapshot-leaves-out-a-component-s-binary-assets]
 ---
 
