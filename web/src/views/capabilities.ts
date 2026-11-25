@@ -1,6 +1,6 @@
-// The Capabilities view: every capability's cost, ranked, as a table from 900 px and cards
-// below (web/capabilities-list), a capability's page in `clm capabilities <slug>`'s order
-// (web/capability-page), and its decision (web/decide-buttons). The Worker's report has no
+// The Capabilities view: every capability's cost, ranked, drawn both as a table and as cards,
+// the stylesheet picking one (web.views/capabilities-list), a capability's page in `clm capabilities <slug>`'s order
+// (web.views/capability-page), and its decision (web.views/decide-buttons). The Worker's report has no
 // history, so the numbers only git gives are left to `clm capabilities <slug>`. The
 // Architecture view (architecture.ts) draws its pages with the same pieces.
 
@@ -199,8 +199,8 @@ export function decisionsSection(decisions: Decided[]): HTMLElement {
  * asks: `clm capabilities decide` or `clm architecture decide`. */
 export const decideCommand = (layer: Layer, slug: string) => `clm ${layer} decide ${slug} --value high|medium|low --decision keep|cut|redesign|accept`;
 
-/** The value and decision buttons, in a 2×2 grid below 900 px (web/decide-buttons,
- * web/architecture-decide-buttons), for `slug` of `layer`. */
+/** The value and decision buttons (web.views/decide-buttons,
+ * web.views/architecture-decide-buttons), for `slug` of `layer`. */
 export function decideBar(o: PageOptions, signed: boolean, layer: Layer, slug: string): HTMLElement {
   const command = decideCommand(layer, slug);
   const why = o.busy ? 'Deciding…' : !o.value ? 'Choose a value first' : o.offline ? 'Offline' : signed ? `This repository counts only signed records: decide with clm ${layer} decide` : null;

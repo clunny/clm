@@ -1,7 +1,8 @@
 // The Architecture view: every architectural constraint, whether it is held and what it
-// costs, ranked, as a table from 900 px and cards below (web/architecture-list), an entry's
-// page (web/architecture-page) and its decision (web/architecture-decide-buttons), drawn
-// with the Capabilities view's pieces. Its cost is a second split, apart from the capabilities'.
+// costs, ranked, drawn both as a table and as cards, the stylesheet picking one
+// (web.views/architecture-list), an entry's page (web.views/architecture-page) and its decision
+// (web.views/architecture-decide-buttons), drawn with the Capabilities view's pieces. Its cost
+// is a second split, apart from the capabilities'.
 
 import { ListOptions, PageOptions, decideBar, decisionsSection, latest, section, tokens, unsettled, usd, without, withoutSection, workarounds } from './capabilities';
 import { chip, code, div, el } from './dom';
@@ -35,7 +36,7 @@ export function renderArchitecture(data: Architecture, o: ListOptions): HTMLElem
   const table = el(
     'table',
     { class: 'caps' },
-    el('thead', {}, el('tr', {}, ...['Requirement', 'Proof', 'Cost', 'Workarounds', 'Live without?', 'Decided'].map((h) => el('th', {}, h)))),
+    el('thead', {}, el('tr', {}, ...['Constraint', 'Proof', 'Cost', 'Workarounds', 'Live without?', 'Decided'].map((h) => el('th', {}, h)))),
     el(
       'tbody',
       {},
@@ -116,7 +117,7 @@ export function renderConstraint(data: Architecture, slug: string, o: PageOption
         el('li', {}, `${c.changes} changes · ${c.approvals} approvals · ${c.flags_settled} flags settled`),
         el('li', {}, `Declared burdens: ${c.burdens.length ? c.burdens.join(', ') : 'none'}`),
       ),
-      div('note', "An estimate: its enforcing rules' share of their components' cost, counted apart from the capabilities'. For more, run ", code(`clm architecture ${c.slug}`), '.'),
+      div('note', "An estimate: a component's cost is split by its rules' share, and this is its enforcing rules' share, counted apart from the capabilities'. For more, run ", code(`clm architecture ${c.slug}`), '.'),
     ),
     workarounds(c.flags),
     withoutSection(c),

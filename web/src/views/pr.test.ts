@@ -1,21 +1,35 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { drafts } from './forms';
 import { cannotAct, renderPrList, renderReview, specPath } from './pr';
+import type { ReviewOptions } from './pr';
 import { branches, review } from './fixtures';
 import type { Target } from './route';
 import type { BranchReview } from './types';
 
-const opts = (over = {}) => ({ offline: false, accepted: false, onAct: vi.fn(), fullHref: (p: string) => `#full/${p}`, ...over });
+const opts = (over: Partial<ReviewOptions> = {}): ReviewOptions => ({
+  offline: false,
+  accepted: false,
+  onAct: vi.fn(),
+  fullHref: (p: string) => `#full/${p}`,
+  onComment: vi.fn(async () => null),
+  onRequest: vi.fn(async () => null),
+  ...over,
+});
 const link = (t: Target) => `#b/${t.branch}`;
 
-// req:web.views/pr-document@0e70b0ab
 describe('Document tab', () => {
+  // req:web.views/pr-document@3b6150b3
   it('modified requirement, asset and decision: n/r modified with quickly inserted, m.html added in an empty sandbox, d added with its text', () => {
     const view = renderReview(review(), opts());
     const r = view.querySelector<HTMLElement>('.req[data-el="n/r"]')!;
     expect(r.querySelector('.chip')?.textContent).toBe('Modified');
     expect(r.querySelector('ins')?.textContent).toContain('quickly');
     expect(r.textContent).toContain('It SHALL do r');
+    expect(r.querySelector('ins')?.textContent).not.toContain('It SHALL do r');
+    // Without what was inserted, the marked text reads as the old text.
+    const marked = r.querySelector<HTMLElement>('.rb')!.cloneNode(true) as HTMLElement;
+    marked.querySelectorAll('ins, .ctx').forEach((e) => e.remove());
+    expect(marked.textContent!.replace(/\s+/g, ' ').replace(' .', '.').trim()).toBe('It SHALL do r.');
 
     const asset = view.querySelector<HTMLElement>('.req[data-el="m.html"]')!;
     expect(asset.querySelector('.chip')?.textContent).toBe('Added');
@@ -28,6 +42,7 @@ describe('Document tab', () => {
     expect(dec.textContent).toContain('We decided.');
   });
 
+  // req:web.views/pr-document@3b6150b3
   it('gives each changed element a couple of dimmed lines of context from its file', () => {
     const after = '### Design\n\nSome design.\n\n### Requirement: r\nIt SHALL do r quickly.\n\n### Requirement: s\nIt SHALL do s.\n';
     const view = renderReview(review({ documents: [{ path: 'specs/n/SPEC.md', before: null, after }] }), opts());
@@ -35,6 +50,7 @@ describe('Document tab', () => {
     expect(ctx).toEqual(['Some design.\n### Requirement: r', '### Requirement: s\nIt SHALL do s.']);
   });
 
+  // req:web.views/pr-document@3b6150b3
   it('links to the files: clm, n and m.n open their own SPEC.md in full', () => {
     const r = review({
       documents: [
@@ -51,6 +67,7 @@ describe('Document tab', () => {
     expect(links).toEqual(['#full/specs/SPEC.md', '#full/specs/n/SPEC.md', '#full/specs/m/n/SPEC.md']);
   });
 
+  // req:web.views/pr-document@3b6150b3
   it('shows Contract, Design and frontmatter changes, and the backlog edits', () => {
     const r = review({ backlog: [{ slug: 'crash', status: 'removed', before: 'It crashes.', after: null }] });
     r.nodes = [{ ...r.nodes[0], contract: { before: 'Old.', after: 'New.' }, design: { before: null, after: 'D.' }, frontmatter: { before: 'a', after: 'b' } }];
@@ -60,10 +77,48 @@ describe('Document tab', () => {
     expect(view.querySelector('.req[data-el="n:frontmatter"]')).not.toBeNull();
     expect(view.querySelector('.dec[data-slug=crash]')?.textContent).toContain('removed');
   });
+
+  // req:web.views/pr-document@3b6150b3
+  it('impact: components touched, requirements added and removed, Contracts and Designs, the files each linking in full; none for a review that changes no requirement', () => {
+    const r = review({
+      documents: [
+        { path: 'specs/n/SPEC.md', before: 'a', after: 'b' },
+        { path: 'specs/m/SPEC.md', before: 'a', after: 'b' },
+      ],
+    });
+    const none = { added: [], modified: [], removed: [] };
+    r.nodes = [
+      {
+        ...r.nodes[0],
+        id: 'n',
+        contract: { before: 'Old.', after: 'New.' },
+        requirements: {
+          added: [
+            { id: 'n/p', before: null, after: 'P.' },
+            { id: 'n/q', before: null, after: 'Q.' },
+          ],
+          modified: [],
+          removed: [{ id: 'n/old', before: 'Old.', after: null }],
+        },
+        assets: none,
+      },
+      { ...r.nodes[0], id: 'm', frontmatter: { before: 'a', after: 'b' }, requirements: none, assets: none },
+    ];
+    const impact = (v: HTMLElement) => Object.fromEntries([...v.querySelectorAll('.aside .kv')].filter((k) => k.querySelector('b')).map((k) => [k.firstChild!.textContent, k.querySelector('b')!.textContent]));
+    const view = renderReview(r, opts());
+    expect(impact(view)).toEqual({ 'Components touched': '2', Requirements: '2 added, 1 removed', Contracts: '1', Designs: '0' });
+    expect([...view.querySelectorAll('.aside a.mono')].map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['specs/n/SPEC.md', '#full/specs/n/SPEC.md'],
+      ['specs/m/SPEC.md', '#full/specs/m/SPEC.md'],
+    ]);
+    const plain = review();
+    plain.nodes = [{ ...plain.nodes[0], requirements: none }];
+    expect(impact(renderReview(plain, opts())).Requirements).toBe('none');
+  });
 });
 
-// req:web.views/review-intent-first@563a463a
 describe('Intent first', () => {
+  // req:web.views/review-intent-first@26efd199
   it('intent first: the Intent section comes before the node changes, beside Approve', () => {
     const view = renderReview(review(), opts());
     document.body.replaceChildren(view);
@@ -77,6 +132,7 @@ describe('Intent first', () => {
     expect(view.textContent).not.toContain('Significant');
   });
 
+  // req:web.views/review-intent-first@26efd199
   it('intent first without an Intent section: the whole intent, before the node changes', () => {
     for (const intent_section of [null, '']) {
       const change = { ...review().change!, intent: 'Just prose.', intent_section };
@@ -87,6 +143,16 @@ describe('Intent first', () => {
       const all = [...view.querySelectorAll('.intent, .node-changes')];
       expect(all.map((e) => e.className.split(' ').at(-1))).toEqual(['intent', 'node-changes']);
     }
+  });
+
+  // req:web.views/review-intent-first@26efd199
+  it('no change: a branch with no change says so where the intent goes, beside Approve', () => {
+    const view = renderReview(review({ change: null }), opts());
+    const head = view.querySelector<HTMLElement>('.prhead')!;
+    expect(head.querySelector('.intent .note')?.textContent).toBe('This change has no change.md.');
+    expect(head.querySelector(':scope > .approve-bar button.approve')).not.toBeNull();
+    const intent = view.querySelector('.intent')!;
+    expect(intent.compareDocumentPosition(view.querySelector('.node-changes')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -165,8 +231,8 @@ describe('spec branches', () => {
   });
 });
 
-// req:web.views/approve-button@17d4c422
 describe('Approve intent', () => {
+  // req:web.views/approve-button@e2f53fdc
   it('one request, then approved: a second tap while the first is in flight sends nothing', () => {
     const o = opts();
     const button = renderReview(review(), o).querySelector<HTMLButtonElement>('button.approve')!;
@@ -179,6 +245,7 @@ describe('Approve intent', () => {
     expect(after.disabled).toBe(true);
   });
 
+  // req:web.views/approve-button@e2f53fdc
   it('disabled: without a fingerprint, once an approval shows, and offline; the approved one reads Approved', () => {
     const approve = (r: BranchReview, o: ReturnType<typeof opts>) => renderReview(r, o).querySelector<HTMLButtonElement>('button.approve')!;
     const noFingerprint = approve(review({ fingerprint: null }), opts());
@@ -192,13 +259,14 @@ describe('Approve intent', () => {
   });
 });
 
-// req:web.views/approve-button@17d4c422
 describe('what Approve may send', () => {
+  // req:web.views/approve-button@e2f53fdc
   it('no fingerprint: Approve is disabled', () => {
     expect(cannotAct(review({ fingerprint: null }), false, false)).not.toBeNull();
     expect(renderReview(review({ fingerprint: null }), opts()).querySelector<HTMLButtonElement>('button.approve')!.disabled).toBe(true);
   });
 
+  // req:web.views/approve-button@e2f53fdc
   it('an approval on screen comes from the review, not from a label', () => {
     expect(cannotAct(review(), false, false)).toBeNull();
     expect(cannotAct(review({ approvals: [{ writer: 'a/web', at: 'x' }] }), false, false)).toBe('Approved');

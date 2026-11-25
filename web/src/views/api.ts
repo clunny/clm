@@ -47,7 +47,7 @@ export interface GetOptions {
   /** A background refresh (web/live-refresh): when the network fails, fail rather than fall
    * back to the kept copy, so the view on screen is left as it is. */
   live?: boolean;
-  /** The delivery of the live notice that asked for this refresh (web/live-updates): sent as
+  /** The delivery of the live notice that asked for this refresh (web.client-live/live-updates): sent as
    * `?fresh=`, so the Worker answers from live state fetched anew. The copy kept for offline
    * use stays under `path` without it. */
   fresh?: string;

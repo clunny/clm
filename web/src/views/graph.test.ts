@@ -29,7 +29,7 @@ const inside = (inner: ReturnType<typeof box>, outer: ReturnType<typeof box>) =>
   inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
 
 describe('graph view', () => {
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('touched node: draws b -> a and marks only b', async () => {
     const snap = snapshot();
     const layout = await layoutGraph(snap.spec);
@@ -47,7 +47,7 @@ describe('graph view', () => {
     expect(g.querySelector('path.e')?.classList.contains('eh')).toBe(true);
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('shows each node status, requirements current and owners, as the spec model gives them', async () => {
     const snap = snapshot();
     snap.spec.nodes.find((n) => n.node === 'a')!.owners = ['@clunny'];
@@ -62,7 +62,7 @@ describe('graph view', () => {
     expect(g.querySelector('.n.hit')).toBeNull();
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it("nested node with owners: check.drift's card is inside check's box and shows @a", async () => {
     const snap = nestedSnapshot();
     const layout = await layoutGraph(snap.spec);
@@ -89,7 +89,7 @@ describe('graph view', () => {
     expect(g.querySelector('.root')?.textContent).toContain('clm');
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('says coverage is indexing instead of partial counts', async () => {
     const snap = snapshot({ coverage: { state: 'indexing', done: 0.4 } });
     for (const n of snap.nodes) for (const r of n.requirements) r.markers = null;
@@ -100,7 +100,7 @@ describe('graph view', () => {
     expect(g.querySelectorAll('.p i')).toHaveLength(0);
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('selecting a node reports it, a nested group too', async () => {
     const snap = nestedSnapshot();
     let picked = '';
@@ -111,7 +111,7 @@ describe('graph view', () => {
     expect(picked).toBe('check');
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('keeps the pan and zoom it is given', async () => {
     const snap = snapshot();
     const view = { x: 40, y: 12, scale: 0.8 };
@@ -119,7 +119,7 @@ describe('graph view', () => {
     expect(g.querySelector<HTMLElement>('.stage')!.style.transform).toBe('translate(40px,12px) scale(0.8)');
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it("a node behind its spec: a's card shows 2/3, a green and an amber segment and no sky one", async () => {
     const snap = threeNodes();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
@@ -138,7 +138,7 @@ describe('graph view', () => {
     expect(b.querySelector<HTMLElement>('.p i.spd')!.getAttribute('style')).toContain('var(--sky)');
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('shows the obsolete count when there is one, and none otherwise', async () => {
     const snap = threeNodes();
     snap.spec.nodes.find((n) => n.node === 'a')!.obsolete = 2;
@@ -148,7 +148,7 @@ describe('graph view', () => {
     expect(g.querySelector('.n[data-node=c]')!.textContent).not.toContain('✕');
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('a node with no requirements draws an empty bar and 0/0', async () => {
     const nodes = [node('root', { parent: null }), node('e')];
     const snap = snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
@@ -158,7 +158,7 @@ describe('graph view', () => {
     expect(e.textContent).toContain('0/0');
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it("queue states: a's card carries the amber claimed ring, b's the rose blocked one, c's none", async () => {
     const snap = threeNodes();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {}, undefined, undefined, undefined, queueStates(queued()));
@@ -175,7 +175,7 @@ describe('graph view', () => {
     expect(card('a').getAttribute('aria-label')).toContain('claimed');
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('a bar with a requirement in each state fills its track exactly', async () => {
     const nodes = [node('root', { parent: null }), node('t', { requirements: [req('t/x', 'current'), req('t/y', 'behind'), req('t/z', 'unbuilt')] })];
     const snap = snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
@@ -185,13 +185,13 @@ describe('graph view', () => {
     expect(widths.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('queueStates passes every state through, one the app does not know too', () => {
     const states = queueStates(queued(['ready', 'claimed', 'waiting', 'blocked', 'parked'].map((s, i) => pending(`n${i}`, s))));
     expect([...states.values()]).toEqual(['ready', 'claimed', 'waiting', 'blocked', 'parked']);
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('rings colour by meaning: ready sky, claimed amber, blocked rose, others muted', async () => {
     const nodes = [node('root', { parent: null }), ...['r', 'cl', 'w', 'bl', 'x'].map((id) => node(id))];
     const snap = snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
@@ -216,7 +216,7 @@ describe('graph view', () => {
   });
 
   it('no waiting state: the graph rings `waiting` as any state it does not know', async () => {
-    // req:web.views/queue-states@340afeed
+    // req:web.views/queue-states@06e60952
     const nodes = [node('root', { parent: null }), node('w'), node('x')];
     const snap = snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
     const states = queueStates(queued([pending('w', 'waiting'), pending('x', 'parked')]));
@@ -226,7 +226,7 @@ describe('graph view', () => {
     expect(ring('w')).toBe(ring('x'));
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('gives no rings before the implementation state arrives, or while its coverage is indexing', () => {
     expect(queueStates(null).size).toBe(0);
     expect(queueStates(implementation({ coverage: { state: 'indexing', done: 0.5 }, flight: flight({ nodes: [pending('a', 'claimed')] }) })).size).toBe(0);
@@ -234,7 +234,7 @@ describe('graph view', () => {
     expect(queueStates(queued([pending('a', 'converged')])).size).toBe(0);
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('rings a drawn graph in place when the implementation state arrives, boxes too', async () => {
     const snap = nestedSnapshot();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
@@ -257,6 +257,7 @@ describe('graph view', () => {
     expect(check.querySelector('.q')).toBeNull();
   });
 
+  // req:web.views/graph-view@71cbc9c5
   it('the legend names every colour the graph uses with its meanings', async () => {
     const snap = snapshot();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
@@ -270,9 +271,56 @@ describe('graph view', () => {
       ['', '→ depends on'],
     ]);
   });
+
+  // req:web.views/graph-view@71cbc9c5
+  it('rings arrive and change: none while indexing, then amber and muted with the legend naming the other state, then rose and the legend without it', async () => {
+    const snap = threeNodes();
+    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
+    const ring = (id: string) => g.querySelector<HTMLElement>(`.n[data-node=${id}]`)!.style.getPropertyValue('--ring');
+    const other = () => g.querySelector<HTMLElement>('.legend .other')!;
+    ringGraph(g, queueStates(implementation({ coverage: { state: 'indexing', done: 0.5 }, flight: flight({ nodes: [pending('a', 'claimed')] }) })));
+    expect(g.querySelectorAll('.ring')).toHaveLength(0);
+    ringGraph(g, queueStates(queued([pending('a', 'claimed'), pending('b', 'converged'), pending('c', 'parked')])));
+    expect([ring('a'), ring('b'), ring('c')]).toEqual(['var(--amber)', '', 'var(--muted)']);
+    expect(g.querySelector('.n[data-node=c] .q')!.textContent).toBe('parked');
+    expect(other().hidden).toBe(false);
+    ringGraph(g, queueStates(queued([pending('a', 'blocked')])));
+    expect([ring('a'), ring('c')]).toEqual(['var(--rose)', '']);
+    expect(other().hidden).toBe(true);
+  });
+
+  // req:web.views/graph-view@71cbc9c5
+  it('root and missing ends: the canvas reads clm · root, no card or box for clm, and the only edge is a to b', async () => {
+    const nodes = [node('clm', { parent: null }), node('a', { parent: 'clm', depends_on: ['b', 'x'] }), node('b', { parent: 'clm' })];
+    const snap = snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
+    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
+    expect(g.querySelector('.root')!.textContent).toBe('clm · root');
+    expect(g.querySelector('[data-node=clm]')).toBeNull();
+    expect([...g.querySelectorAll('path.e')].map((p) => `${p.getAttribute('data-from')}->${p.getAttribute('data-to')}`)).toEqual(['a->b']);
+  });
+
+  // req:web.views/graph-view@71cbc9c5
+  it('selection and viewport: drawn at the pan and zoom given, the selected box reports none, a card reports itself, and a pan is reported', async () => {
+    const snap = nestedSnapshot();
+    const picks: (string | null)[] = [];
+    const views: { x: number; y: number; scale: number }[] = [];
+    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), (id) => picks.push(id), 'check', { x: 10, y: 20, scale: 1.5 }, (v) => views.push(v));
+    expect(g.querySelector<HTMLElement>('.stage')!.style.transform).toBe('translate(10px,20px) scale(1.5)');
+    g.querySelector<HTMLElement>('.grp[data-node=check] .gh')!.click();
+    g.querySelector<HTMLElement>('.n[data-node="check.drift"]')!.click();
+    expect(picks).toEqual([null, 'check.drift']);
+    views.length = 0;
+    const ev = (type: string, x: number) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: 100, bubbles: true }) as MouseEvent & { pointerId: number };
+      Object.defineProperty(e, 'pointerId', { value: 1 });
+      return e;
+    };
+    g.dispatchEvent(ev('pointerdown', 100));
+    g.dispatchEvent(ev('pointermove', 130));
+    expect(views).toEqual([{ x: 40, y: 20, scale: 1.5 }]);
+  });
 });
 
-// req:web.views/oversized-component@550a1fc1
 describe('oversized nodes', () => {
   /** `a` oversized, `b` not, `c` with no size report. */
   const sized = () => {
@@ -282,7 +330,7 @@ describe('oversized nodes', () => {
   };
   const amber = (g: HTMLElement) => [...g.querySelectorAll<HTMLElement>('.legend > span')].find((s) => s.querySelector<HTMLElement>('.dot')?.style.background === 'var(--amber)')!.textContent;
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/oversized-component@550a1fc1
   it("oversized and not: a's card shows ⚠ with the amber outline and the legend names oversized; b's and c's show neither", async () => {
     const snap = sized();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
@@ -299,6 +347,7 @@ describe('oversized nodes', () => {
     expect(amber(renderGraph(plain, new Set(), await layoutGraph(plain.spec), () => {}))).toBe('behind · claimed');
   });
 
+  // req:web.views/oversized-component@550a1fc1
   it("queue ring wins the outline: a, oversized and blocked, shows ⚠ and the rose blocked ring", async () => {
     const snap = sized();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {}, undefined, undefined, undefined, queueStates(queued([pending('a', 'blocked')])));
@@ -309,7 +358,6 @@ describe('oversized nodes', () => {
   });
 });
 
-// req:web.views/zoom-at-pointer@7f4f9eca
 describe('zoom at the pointer', () => {
   /** A graph with a known view, whose canvas sits at (100, 50) and is 800 x 600. */
   async function zoomable() {
@@ -324,7 +372,7 @@ describe('zoom at the pointer', () => {
   /** The stage point at a screen point, which zooming must leave where it is. */
   const under = (v: { x: number; y: number; scale: number }, sx: number, sy: number) => ({ x: (sx - 100 - v.x) / v.scale, y: (sy - 50 - v.y) / v.scale });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/zoom-at-pointer@f45d3bf7
   it('wheel over a card keeps the point under the pointer', async () => {
     const { g, view } = await zoomable();
     const before = under(view(), 420, 300);
@@ -335,7 +383,7 @@ describe('zoom at the pointer', () => {
     expect(Math.abs(after.y - before.y)).toBeLessThan(1);
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/zoom-at-pointer@f45d3bf7
   it('the buttons zoom around the canvas centre', async () => {
     const { g, view } = await zoomable();
     const before = under(view(), 500, 350);
@@ -351,7 +399,7 @@ describe('zoom at the pointer', () => {
     expect(Math.abs(out.y - before.y)).toBeLessThan(1);
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/zoom-at-pointer@f45d3bf7
   it('a pinch zooms around the midpoint of the pointers', async () => {
     const { g, view } = await zoomable();
     const ev = (type: string, id: number, x: number, y: number) => {
@@ -371,6 +419,7 @@ describe('zoom at the pointer', () => {
     expect(Math.abs(after.y - before.y)).toBeLessThan(1);
   });
 
+  // req:web.views/zoom-at-pointer@f45d3bf7
   it('keeps the zoom limits', async () => {
     const { g, view } = await zoomable();
     for (let i = 0; i < 60; i++) g.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 420, clientY: 300, cancelable: true }));
@@ -378,9 +427,43 @@ describe('zoom at the pointer', () => {
     for (let i = 0; i < 200; i++) g.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 420, clientY: 300, cancelable: true }));
     expect(view().scale).toBe(0.3);
   });
+
+  // req:web.views/zoom-at-pointer@f45d3bf7
+  it('fit and pan: no pan and zoom given opens fitted, the zoom stops at 3 and 0.3, Fit comes back, a drag pans, and a narrow stage opens at 1 centred', async () => {
+    const opened = async (stageWidth: number) => {
+      const snap = threeNodes();
+      const views: { x: number; y: number; scale: number }[] = [];
+      const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {}, undefined, undefined, (v) => views.push(v));
+      g.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON: () => ({}) });
+      Object.defineProperty(g, 'clientWidth', { value: 800 });
+      Object.defineProperty(g.querySelector('.stage')!, 'offsetWidth', { value: stageWidth });
+      await new Promise((r) => requestAnimationFrame(r));
+      return { g, last: () => views[views.length - 1] };
+    };
+    const wide = await opened(1600);
+    expect(wide.last().scale).toBe(0.5);
+    const wheel = (deltaY: number) => wide.g.dispatchEvent(new WheelEvent('wheel', { deltaY, clientX: 400, clientY: 300, cancelable: true }));
+    for (let i = 0; i < 60; i++) wheel(-100);
+    expect(wide.last().scale).toBe(3);
+    for (let i = 0; i < 200; i++) wheel(100);
+    expect(wide.last().scale).toBe(0.3);
+    wide.g.querySelector<HTMLElement>('button[aria-label="Fit"]')!.click();
+    expect(wide.last().scale).toBe(0.5);
+    const fitted = wide.last();
+    const ev = (type: string, x: number) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: 100, bubbles: true }) as MouseEvent & { pointerId: number };
+      Object.defineProperty(e, 'pointerId', { value: 7 });
+      return e;
+    };
+    wide.g.dispatchEvent(ev('pointerdown', 100));
+    wide.g.dispatchEvent(ev('pointermove', 130));
+    expect(wide.last()).toEqual({ ...fitted, x: fitted.x + 30 });
+    const narrow = await opened(400);
+    expect(narrow.last().scale).toBe(1);
+    expect(narrow.last().x).toBe(200);
+  });
 });
 
-// req:web.views/edge-direction@f5c19585
 describe('edge direction', () => {
   /** `b` depends on `a`, `a` on `c`, and `d` on `c`. */
   function chain() {
@@ -399,7 +482,7 @@ describe('edge direction', () => {
   };
   const legend = (g: HTMLElement) => [...g.querySelectorAll('.legend .edge-in, .legend .edge-out')].filter((e) => !(e as HTMLElement).hidden).map((e) => e.textContent);
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/edge-direction@f5c19585
   it('traced: a selected component draws its dependents incoming, its dependencies outgoing, the rest dimmed, and the legend names both', async () => {
     const snap = chain();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {}, 'a');
@@ -410,7 +493,7 @@ describe('edge direction', () => {
     expect(g.querySelector('path[data-from=b][data-to=a]')!.getAttribute('marker-end')).toBe('url(#arr-in)');
   });
 
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/edge-direction@f5c19585
   it('nothing selected: no edge is in either colour or dimmed, and the legend names neither', async () => {
     const snap = chain();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
@@ -418,6 +501,7 @@ describe('edge direction', () => {
     expect(legend(g)).toEqual([]);
   });
 
+  // req:web.views/edge-direction@f5c19585
   it('selecting and deselecting in place retraces the edges', async () => {
     const snap = chain();
     const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
@@ -431,9 +515,8 @@ describe('edge direction', () => {
   });
 });
 
-// req:web.views/inspector-overlay@ca741eb0 (selecting the selected component again)
 describe('selecting the selected component again', () => {
-  // req:web.views/graph-view@7bdf4eb6
+  // req:web.views/graph-view@71cbc9c5
   it('asks to clear the selection, and a different component selects it', async () => {
     const snap = chain3();
     const picks: (string | null)[] = [];

@@ -1,5 +1,7 @@
-// The Worker's response shapes (crates/clm-web/src/{repos,snapshot,branches,review,implementation,taken,live,capabilities}.rs)
-// and the `view` and `effort` nodes' models it carries (crates/clm-view/src/{spec,flight,blockers}.rs, crates/clm-effort/src/report.rs).
+// The Worker's response shapes, served by crates/clm-web/src/ (repos.rs, views.rs, capabilities.rs)
+// and crates/clm-web-review/src/ (the branch list and review), the snapshot and the implementation
+// state built in crates/clm-replica/src/ (snapshot.rs, compute.rs), and the `view` and `effort`
+// components' models they carry (crates/clm-view/src/{spec,flight,blockers}.rs, crates/clm-effort/src/report.rs).
 
 export interface Repo {
   owner: string;
@@ -196,10 +198,10 @@ export interface BranchReview {
   /** The default branch's tip holds `docs/allowed_signers`: `clm land` counts only signed
    * approvals. Absent in a review kept from before the Worker sent it, read as false. */
   signed?: boolean;
-  /** The `commented` records for the branch, oldest first (web/comment-on-review). Absent in
+  /** The `commented` records for the branch, oldest first (web.views/comment-on-review). Absent in
    * a review kept from before the Worker sent it, read as none. */
   comments?: ReviewComment[];
-  /** The `changes_requested` records for the branch, oldest first (web/request-changes).
+  /** The `changes_requested` records for the branch, oldest first (web.views/request-changes).
    * Absent as `comments` may be. */
   change_requests?: ChangeRequest[];
   /** The `gate/cut` lines `clm gate` prints for what the branch cuts, in its order. Absent
@@ -372,7 +374,7 @@ export interface Implementation {
   pages: Record<string, ImplPage>;
   activity: Activity[];
   taken: Taken;
-  /** The open proposals, by `at` then `id` (web/propose-from-backlog). Absent in a state
+  /** The open proposals, by `at` then `id` (web.views/propose-from-backlog). Absent in a state
    * kept from before the Worker sent it, read as none. */
   proposals?: Proposal[];
   /** The open answers to backlog items, by `at` then `id`. Absent in a state kept from before

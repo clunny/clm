@@ -1,16 +1,18 @@
-// What a selected node shows: its contract, dependencies, changes in open PRs, work in
-// flight with its pending requirements, and backlog items. A bottom sheet on narrow screens.
+// What a selected component shows (web.views/inspector): its contract, dependencies, changes
+// in open PRs, work in flight with its pending requirements, and backlog items.
 
 import { chip, div, el } from './dom';
 import { proven } from './graph';
 import { md } from './markdown';
+import { status } from './pr';
 import type { Implementation, NodeChanges, Review, Snapshot } from './types';
 
 function prChanges(changed: NodeChanges): HTMLElement[] {
   return [
-    ...(['contract', 'design', 'frontmatter'] as const)
-      .filter((k) => changed[k])
-      .map((k) => div('mini', el('b', {}, k, chip('modified', 'modified')))),
+    ...(['contract', 'design', 'frontmatter'] as const).flatMap((k) => {
+      const t = changed[k];
+      return t ? [div('mini', el('b', {}, k, chip(status(t), status(t))))] : [];
+    }),
     ...(['added', 'modified', 'removed'] as const).flatMap((k) =>
       [...changed.requirements[k], ...changed.assets[k]].map((r) => div('mini', el('b', {}, r.id ?? `assets/${r.path}`, chip(k, k)))),
     ),
@@ -104,13 +106,13 @@ function closeOnEscape(aside: HTMLElement, onClose: () => void) {
 
 /** Node `id`'s queue state and pending count as the `flight` model gives them, and each
  * pending requirement with its state, an obsolete one with the markers that still cite it
- * (web/inspector-pending). While coverage is indexing every requirement would read
+ * (web.views/inspector-pending). While coverage is indexing every requirement would read
  * `unbuilt`, so none is listed. */
 function work(impl: Implementation | null, id: string): HTMLElement {
   if (impl === null) return div('note', 'Loading work in flight…');
   if (impl.coverage.state === 'indexing') return div('note', 'Coverage is indexing: pending requirements show once it completes.');
   const f = impl.flight.nodes.find((x) => x.node === id);
-  if (!f || f.pending.length === 0) return div('note', 'Nothing pending.');
+  if (!f) return div('note', 'Nothing pending.');
   return div(
     '',
     div('mini', el('b', {}, f.node, chip('mute', f.state)), `${f.pending.length} pending`),

@@ -20,10 +20,10 @@ export function ago(at: number, now: number): string {
   return s < 60 ? 'just now' : `${span(s)} ago`;
 }
 
-/** How long until a claim lapses: "3 h", "3 h 22 m" or "12 min". */
+/** How long until a claim lapses: "3 h", "3 h 22 m" or "12 min"; "lapsed" once it has. */
 export function lapsesIn(lapsesAt: number, now: number): string {
   const s = lapsesAt - now;
-  if (s <= 0) return 'now';
+  if (s <= 0) return 'lapsed';
   const min = Math.floor(s / 60);
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);

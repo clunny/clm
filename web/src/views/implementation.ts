@@ -3,6 +3,7 @@
 // and the activity feed (web.views/implementation-view, web.views/blockers-view,
 // web.views/activity-feed).
 
+import { WAITING } from './backlog';
 import { Child, chip, code, div, el } from './dom';
 import { ago, lapsesIn } from './time';
 import type { Activity, FlightChange, FlightNode, Implementation, Root, Snapshot } from './types';
@@ -27,8 +28,6 @@ const STATE_CHIP: Record<string, [string, string]> = {
  * `needs-alone-order`). */
 const STATE_ORDER = ['claimed', 'ready', 'blocked'];
 const PENDING_ORDER = ['behind', 'unbuilt', 'obsolete'];
-/** Backlog kinds that wait on a person (`requirement-blocks`). */
-const HUMAN = new Set(['question', 'human-task']);
 
 /** `<n> <state>` for each state with a count, known ones first in their order. */
 function byState(counts: Record<string, number>, order: string[]): string {
@@ -69,7 +68,8 @@ function nodeEntry(n: FlightNode, impl: Implementation, snap: Snapshot, o: Build
   const lines: Child[][] = [];
   if (n.claim) {
     const lastPush = n.claim.lapses_at - impl.expiry_hours * 3600;
-    lines.push(['Claimed on ', code(`impl/${n.node}`), ` · last push ${ago(lastPush, o.now)} · lapses in ${lapsesIn(n.claim.lapses_at, o.now)}`]);
+    const lapse = n.claim.lapses_at <= o.now ? 'lapsed' : `lapses in ${lapsesIn(n.claim.lapses_at, o.now)}`;
+    lines.push(['Claimed on ', code(`impl/${n.node}`), ` · last push ${ago(lastPush, o.now)} · ${lapse}`]);
   }
   // The branch's page, and whether the ledger holds a `checked` record for its head;
   // nothing about the check while the Worker doesn't yet know.
@@ -86,7 +86,7 @@ function nodeEntry(n: FlightNode, impl: Implementation, snap: Snapshot, o: Build
     const item = snap.backlog.find((x) => `backlog/${x.slug}` === b.item);
     const on = b.requirement && b.components?.length ? [' on ', ...b.components.flatMap((c, i) => (i ? [', ', nodeLink(c, o)] : [nodeLink(c, o)]))] : [];
     const name = code(b.requirement ?? b.item ?? '');
-    lines.push(['Blocked by ', name, ...on, item && HUMAN.has(item.kind) ? chip('wait', 'waits on you') : '', ` · ${b.requirements.join(', ')}`]);
+    lines.push(['Blocked by ', name, ...on, item && WAITING.includes(item.kind) ? chip('wait', 'waits on you') : '', ` · ${b.requirements.join(', ')}`]);
   }
   const lease = n.claim
     ? [div('lease', el('i', { style: `width:${Math.max(0, Math.min(100, ((n.claim.lapses_at - o.now) / (impl.expiry_hours * 3600)) * 100))}%` }))]

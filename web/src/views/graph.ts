@@ -2,8 +2,8 @@
 // with the `depends_on` edges, laid out by ELK (layered, hierarchical, edges from dependent
 // to dependency). Each card shows the status, requirements by coverage state and owners
 // the `view` node's `spec` model gives it, and, once the implementation state arrives, a
-// ring in its queue state's colour (web/graph-view), and `⚠` with an amber outline on a node
-// over its size budget (web/oversized-node).
+// ring in its queue state's colour (web.views/graph-view), and `⚠` with an amber outline on a node
+// over its size budget (web.views/oversized-component).
 
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk.bundled.js';
 import { div, el, svg } from './dom';
@@ -193,7 +193,7 @@ function path(points: Point[]): string {
 }
 
 /** The card's label: the node's ID, after `⚠` when the `spec` model marks it oversized
- * (web/oversized-node). */
+ * (web.views/oversized-component). */
 function cardName(n: SpecNode): string {
   return n.oversized === true ? `⚠ ${n.node}` : n.node;
 }

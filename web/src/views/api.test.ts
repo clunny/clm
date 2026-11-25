@@ -38,7 +38,7 @@ afterEach(() => {
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
 describe('api.get', () => {
-  // req:web.views/worker-requests@936c9e88
+  // req:web.views/worker-requests@1a1729dd
   it('retries once on 401, since a parallel request may have refreshed the session', async () => {
     const fetch = vi
       .fn()
@@ -50,7 +50,7 @@ describe('api.get', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  // req:web.views/worker-requests@936c9e88
+  // req:web.views/worker-requests@1a1729dd
   it('is signed out after two 401s, and forgets the kept data', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 1 })));
     await get('/api/repos/o/a/snapshot');
@@ -60,7 +60,7 @@ describe('api.get', () => {
     expect(caches.store.size).toBe(0);
   });
 
-  // req:web.views/worker-requests@936c9e88
+  // req:web.views/worker-requests@1a1729dd
   it('offline: returns the last response with the time it was fetched', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 'old' })));
     vi.setSystemTime(new Date(1_000_000));
@@ -71,13 +71,13 @@ describe('api.get', () => {
     expect(res).toEqual({ data: { v: 'old' }, cachedAt: 1_000_000 });
   });
 
-  // req:web.views/worker-requests@936c9e88
+  // req:web.views/worker-requests@1a1729dd
   it('offline with nothing kept: says so', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     await expect(get('/api/repos/o/b/snapshot')).rejects.toBeInstanceOf(Offline);
   });
 
-  // req:web.views/worker-requests@936c9e88
+  // req:web.views/worker-requests@1a1729dd
   it('keeps no failed response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('', { status: 404 })));
     const failed = await get('/api/repos/o/c/snapshot').catch((e: unknown) => e);
@@ -86,14 +86,14 @@ describe('api.get', () => {
     expect(caches.store.size).toBe(0);
   });
 
-  // req:web.views/worker-requests@936c9e88
+  // req:web.views/worker-requests@1a1729dd
   it('keeps no answer its caller asked not to keep', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 1 })));
     expect(await get('/api/repos/o/a/push?endpoint=e', { keep: false })).toEqual({ data: { v: 1 }, cachedAt: null });
     expect(caches.store.size).toBe(0);
   });
 
-  // req:web.views/worker-requests@936c9e88
+  // req:web.views/worker-requests@1a1729dd
   it('a background refresh fails offline rather than return the kept answer', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 'old' })));
     await get('/api/repos/o/a/snapshot');
@@ -103,8 +103,8 @@ describe('api.get', () => {
   });
 });
 
-// req:web.views/worker-requests@936c9e88
 describe('api.post', () => {
+  // req:web.views/worker-requests@1a1729dd
   it('sends a body as JSON', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
     vi.stubGlobal('fetch', fetch);
@@ -117,8 +117,8 @@ describe('api.post', () => {
   });
 });
 
-// req:web.views/worker-requests@936c9e88
 describe('a refresh a notice asked for', () => {
+  // req:web.views/worker-requests@1a1729dd
   it('carries fresh, and keeps the offline copy under the path without it', async () => {
     const fetch = vi.fn().mockImplementation(async () => ok({ v: 1 }));
     vi.stubGlobal('fetch', fetch);
@@ -129,8 +129,20 @@ describe('a refresh a notice asked for', () => {
   });
 });
 
-// req:web.views/worker-requests@936c9e88
 describe('api.send', () => {
+  // req:web.views/worker-requests@1a1729dd
+  it('a post answered 401 is sent once more, and a second 401 reports the person signed out', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 401 })).mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    expect((await post('/api/repos/o/a/branches/spec/x/approve', { fingerprint: 'f1' })).status).toBe(200);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const denied = vi.fn().mockResolvedValue(new Response('', { status: 401 }));
+    vi.stubGlobal('fetch', denied);
+    await expect(send('DELETE', '/api/repos/o/a/push', { endpoint: 'e' })).rejects.toBeInstanceOf(SignedOut);
+    expect(denied).toHaveBeenCalledTimes(2);
+  });
+
+  // req:web.views/worker-requests@1a1729dd
   it('deletes with a JSON body, and a failed get carries its status', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 200 }));
     vi.stubGlobal('fetch', fetch);
@@ -142,5 +154,40 @@ describe('api.send', () => {
     const failed = await get('/api/push/key').catch((e: unknown) => e);
     expect(failed).toBeInstanceOf(HttpError);
     expect((failed as HttpError).status).toBe(404);
+  });
+});
+
+describe('api.get on a 5xx', () => {
+  // req:web.views/worker-requests@1a1729dd
+  it('falls back to the kept copy, but not for a live refresh or a preparing 503', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('{"v":1}', { status: 200 })));
+    await get('/p');
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('{"error":"unavailable"}', { status: 502 })));
+    expect((await get<{ v: number }>('/p')).data).toEqual({ v: 1 });
+    const background = get('/p', { live: true });
+    await expect(background).rejects.toBeInstanceOf(HttpError);
+    await expect(background).rejects.toMatchObject({ status: 502 });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('{"preparing":0.4}', { status: 503 })));
+    await expect(get('/p')).rejects.toMatchObject({ status: 503, preparing: 0.4 });
+  });
+
+  // req:web.views/worker-requests@1a1729dd
+  it('busy Worker: a 502 returns the kept answer with its time, a background refresh fails with 502, a preparing 503 gives its share, and fresh joins an existing query', async () => {
+    vi.setSystemTime(new Date(2_000_000));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 1 })));
+    await get('/p');
+    vi.useRealTimers();
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('', { status: 502 })));
+    expect(await get('/p')).toEqual({ data: { v: 1 }, cachedAt: 2_000_000 });
+    await expect(get('/p', { live: true })).rejects.toMatchObject({ status: 502, preparing: null });
+    // With nothing kept, a 502 fails carrying its status.
+    await expect(get('/none')).rejects.toMatchObject({ status: 502 });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('{"preparing":0.4}', { status: 503 })));
+    await expect(get('/p')).rejects.toMatchObject({ status: 503, preparing: 0.4 });
+    const fetch = vi.fn().mockImplementation(async () => ok({ q: 1 }));
+    vi.stubGlobal('fetch', fetch);
+    await get('/q?x=1', { fresh: 'd1' });
+    expect(fetch.mock.calls[0][0]).toBe('/q?x=1&fresh=d1');
+    expect([...caches.store.keys()]).toContain('/q?x=1');
   });
 });
