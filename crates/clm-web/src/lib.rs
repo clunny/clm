@@ -6,7 +6,7 @@
 
 mod answers;
 pub mod assets;
-pub mod auth;
+mod auth;
 mod capabilities;
 mod invited;
 mod proposals;
