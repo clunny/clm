@@ -312,8 +312,9 @@ pub(crate) async fn compare<P: Platform>(
     let repo = access.full_name();
     let auth = access.auth();
     // Named anew when the comparison changes shape or meaning, so none an earlier build
-    // kept is served: `compare8:` since `review` and `cuts` come from the gate's one call
-    // (`gate-answer`, `approval-setting-branch`).
+    // kept is served: `compare8:` since `documents` hold every spec path and `review` and
+    // `cuts` come from the gate's one call (`gate-answer`, `approval-setting-branch`). No
+    // release served `compare8:` before `documents` came from the listings.
     let key = format!("compare8:{repo}@{base_sha}:{head_sha}");
     if let Some(c) = p
         .cache_get(&key)

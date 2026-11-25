@@ -319,9 +319,10 @@ fn what_the_branch_changes_whole() {
             ("specs/n/SPEC.md", &before),
             ("CAPABILITIES.md", caps),
             ("CLAUDE.md", "Read me.\n"),
+            ("docs/old.md", "Gone.\n"),
             (".gitattributes", "*.lock linguist-generated\n"),
         ],
-        &[],
+        &["docs/old.md"],
         &[
             ("specs/n/SPEC.md", &after),
             ("CAPABILITIES.md", &wider),
@@ -343,6 +344,7 @@ fn what_the_branch_changes_whole() {
             {"path": "CLAUDE.md", "before": "Read me.\n", "after": "Read me first.\n"},
             {"path": "docs/allowed_signers", "before": null, "after": "alice ssh-ed25519 AAAA\n"},
             {"path": "docs/img.png", "before": null, "after": ""},
+            {"path": "docs/old.md", "before": "Gone.\n", "after": null},
             {"path": "specs/n/SPEC.md", "before": before, "after": after},
         ]),
         "no .gitattributes"
@@ -1259,18 +1261,22 @@ fn change_with_empty_sections() {
 fn comparison_cached_with_a_patch_id() {
     // req:web.worker.review/gate-answer@d38075fd
     // A comparison the Cache API kept from when fingerprints were patch-ids isn't served:
-    // its fingerprint would match no approval made since.
+    // its fingerprint would match no approval made since. It holds every field today's
+    // comparison does, so only its key keeps it from being served.
     let fake = Fake::default();
     let repo = spec_pr();
     let expected = fingerprint(&repo);
     fake.gh.add_repo("o/a", repo);
     let cookie = fake.user("u", &["o/a"]);
     let old = json!({"change": null, "nodes": [], "decisions": [], "backlog": [],
-                     "documents": [], "fingerprint": "f0f0", "code_key": null});
+                     "documents": [], "fingerprint": "f0f0", "code_key": null,
+                     "review": false, "cuts": []});
     block_on(async {
         use clm_web_platform::platform::Cache;
-        fake.cache_put("compare:o/a@111:222", &old.to_string(), 86_400)
-            .await;
+        for key in ["compare:", "compare2:"] {
+            fake.cache_put(&format!("{key}o/a@111:222"), &old.to_string(), 86_400)
+                .await;
+        }
     });
     let v = body_json(&fake.handle(get(URL, &cookie)));
     assert_eq!(v["fingerprint"], expected.as_str());
