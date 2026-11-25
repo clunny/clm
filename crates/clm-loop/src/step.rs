@@ -14,17 +14,19 @@ use crate::plan::{BacklogRow, Disk, Group, Launch, Snapshot, plan_of};
 use crate::state::{self, Kind, LoopFile, Run, RunState, StopMode};
 use crate::stops;
 
-/// The prompt file of a run: `.clm/prompts/loop/<name>.md`, with `:` written `-`.
-fn prompt_path(options: &Options, name: &str) -> Result<PathBuf, Failure> {
+/// A run's file `<dir>/<name>.md` under the directory that holds the loop's prompt files,
+/// `.clm/prompts/loop/`, with `:` written `-`, creating `<dir>`.
+fn run_file(options: &Options, dir: &str, name: &str) -> Result<PathBuf, Failure> {
     let root = std::path::absolute(&options.root)
         .map_err(|e| Failure::Git(format!("{}: {e}", options.root.display())))?;
-    let dir = root.join(".clm/prompts/loop");
+    let dir = root.join(".clm/prompts/loop").join(dir);
     fs::create_dir_all(&dir).map_err(|e| Failure::Git(format!("{}: {e}", dir.display())))?;
     Ok(dir.join(format!("{}.md", name.replace(':', "-"))))
 }
 
 /// Writes a run's prompt file: the line `loop run <name>`, then the launcher as its command
-/// printed it, then the human's notes for the loop when they hold more than white space
+/// printed it, then, when the human's notes for the loop hold more than white space, a section
+/// naming the run's copy of them, `notes/<name>.md`, which it writes first
 /// (`notes-reach-every-launch`).
 fn write_prompt(
     options: &Options,
@@ -32,7 +34,7 @@ fn write_prompt(
     launcher: &str,
     notes: &str,
 ) -> Result<String, Failure> {
-    let path = prompt_path(options, name)?;
+    let path = run_file(options, "", name)?;
     let abilities = clm_agent_harness::abilities(options.agent_harness);
     let mut text = format!("loop run {name}\n{launcher}");
     if !text.ends_with('\n') {
@@ -51,8 +53,12 @@ fn write_prompt(
         ));
     }
     if !notes.trim().is_empty() {
-        text.push_str("\n## The human's notes for this loop\n\n");
-        text.push_str(notes);
+        let copy = run_file(options, "notes", name)?;
+        fs::write(&copy, notes).map_err(|e| Failure::Git(format!("{}: {e}", copy.display())))?;
+        text.push_str(&format!(
+            "\n## The human's notes for this loop\n\nRead `{}` with the Read tool, all of it, before you start: it holds the human's notes for this loop, which you follow beside the prompt above.\n",
+            copy.display()
+        ));
     }
     fs::write(&path, text).map_err(|e| Failure::Git(format!("{}: {e}", path.display())))?;
     Ok(path.display().to_string())
