@@ -1028,7 +1028,8 @@ async function show(nav = true) {
       showSignIn();
     } else {
       const f = classify(e);
-      app.replaceChildren(div('main', errorView(e)));
+      // Offline with nothing kept for the view: the banner says so (web/installable).
+      app.replaceChildren(div('main', navigator.onLine ? '' : div('offline', 'Offline'), errorView(e)));
       if (f.kind === 'preparing') retryTimer = setTimeout(() => void show(false), PREPARING_MS);
       else if (f.kind === 'retry') retryTimer = setTimeout(() => void show(false), retryDelay(attempts++));
     }

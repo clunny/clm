@@ -768,8 +768,8 @@ test('the service worker imports the push handlers and shows a push', async ({ p
   expect(opened).toEqual([`${baseURL}/app/#/o/a/backlog`]);
 });
 
-// req:web/installable@e711892d
 test.describe('PWA', () => {
+  // req:web/installable@9f13442c
   test('it has a manifest with icons, which installs it', async ({ page, request }) => {
     await page.goto('/app/');
     const link = await page.locator('link[rel=manifest]').getAttribute('href');
@@ -787,8 +787,12 @@ test.describe('PWA', () => {
     }
   });
 
-  test('offline launch: shows the last data with its age, and Approve is disabled', async ({ page, context }) => {
-    await mockApi(context);
+  // req:web/installable@9f13442c
+  test('offline launch: each view viewed once online shows its last data with its age, every write disabled', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    const mine = { id: 'p1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', slug: 'export-csv', title: 'Export CSV', body: 'Let me export.', nodes: ['a'], mine: true };
+    mock.routes['GET /api/repos/o/a/implementation'] = implementation({ proposals: [mine] });
     await page.goto('/app/#/o/a/prs/spec%2Fc');
     await expect(page.locator('button.approve')).toBeEnabled();
     // The service worker has installed and controls the page.
@@ -798,14 +802,67 @@ test.describe('PWA', () => {
         await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
       }
     });
-    // Visited once online; then the network goes.
+    // Each view visited once online.
+    const views = ['backlog/q', 'backlog', 'capabilities/a', 'architecture/e'];
+    for (const v of views) {
+      await page.goto(`/app/#/o/a/${v}`);
+      await expect(page.locator('.main')).toBeVisible();
+      await expect(page.locator('#loadbar')).toBeHidden();
+    }
+    await expect(page.locator('.capage')).toBeVisible();
+    // Then the network goes.
     await context.unroute('**/api/**');
     await context.setOffline(true);
-    await page.reload();
-    await expect(page.locator('.offline')).toHaveText(/^Offline · showing data from (just now|\d+ min ago)$/);
+    const banner = /^Offline · showing data from (just now|\d+ min ago)$/;
+    const offlineAt = async (route: string) => {
+      await page.goto(`/app/#/o/a/${route}`);
+      await page.reload();
+      await expect(page.locator('.offline')).toHaveText(banner);
+    };
+    await offlineAt('prs/spec%2Fc');
     await expect(page.locator('.review > .head h1')).toHaveText('spec/c');
     await expect(page.locator('.repo-meta')).toContainText('3 components');
     await expect(page.locator('button.approve')).toBeDisabled();
+    await expect(page.locator('.approve-bar button.request')).toBeDisabled();
+    await expect(page.locator('.review .intent button.comment')).toBeDisabled();
+    await offlineAt('backlog/q');
+    await expect(page.locator('h1')).toContainText('Ship it?');
+    await expect(page.locator('button.answer[data-answer=yes]')).toBeDisabled();
+    await offlineAt('backlog');
+    await expect(page.locator('.prop[data-id=p1]')).toContainText('Export CSV');
+    await expect(page.locator('button.propose')).toBeDisabled();
+    await expect(page.locator('.prop[data-id=p1] button.withdraw')).toBeDisabled();
+    for (const route of ['capabilities/a', 'architecture/e']) {
+      await offlineAt(route);
+      // With a value chosen, only being offline keeps the decision buttons off.
+      await page.locator('button.value', { hasText: 'low' }).click();
+      for (const b of await page.locator('button.decide').all()) {
+        await expect(b).toBeDisabled();
+        await expect(b).toHaveAttribute('title', 'Offline');
+      }
+    }
+  });
+
+  // req:web/installable@9f13442c
+  test('nothing kept: a repo never opened on this device, opened offline, reads Offline', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos'] = [
+      { owner: 'o', name: 'a', default_branch: 'main' },
+      { owner: 'o', name: 'b', default_branch: 'main' },
+    ];
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      if (!navigator.serviceWorker.controller) {
+        await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
+      }
+    });
+    await context.unroute('**/api/**');
+    await context.setOffline(true);
+    await page.goto('/app/#/o/b/graph');
+    await page.reload();
+    await expect(page.locator('.offline')).toHaveText('Offline');
   });
 
   // req:web/answer-from-app@074f7d4c

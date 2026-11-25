@@ -115,8 +115,8 @@ test('the build holds the invited list under _clm/, beside the app: the logins o
   expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(logins);
 });
 
-// req:web/installable@e711892d
 test.describe('installed app scope', () => {
+  // req:web/installable@9f13442c
   test('manifest and service worker are the app only: id, start_url and scope /app/, no cache of /guide/', async ({ browser }) => {
     const site = await serve();
     const context = await browser.newContext({ serviceWorkers: 'allow' });
@@ -159,11 +159,11 @@ test.describe('installed app scope', () => {
   });
 });
 
-// req:web/retire-root-service-worker@df279fd8
 test.describe('the old root service worker', () => {
   const rootScopes = (page: import('@playwright/test').Page) =>
     page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((r) => new URL(r.scope).pathname));
 
+  // req:web/retire-root-service-worker@cb6ba717
   test('/sw.js unregisters the old registration and drops its caches, and / is answered by the network', async ({ browser }) => {
     const site = await serve();
     const context = await browser.newContext({ serviceWorkers: 'allow' });
@@ -197,6 +197,7 @@ test.describe('the old root service worker', () => {
     }
   });
 
+  // req:web/retire-root-service-worker@cb6ba717
   test('the app at /app/ unregisters a registration at scope / and keeps its own', async ({ browser }) => {
     const site = await serve();
     const context = await browser.newContext({ serviceWorkers: 'allow' });

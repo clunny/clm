@@ -13,8 +13,8 @@ const freshOf = (urls: string[], key: string) =>
     .filter((u) => u.startsWith(`${key}?`) || u === key)
     .map((u) => new URL(`http://x${u.slice(u.indexOf(' ') + 1)}`).searchParams.get('fresh'));
 
-// req:web/fresh-after-write@8dea8909
 test.describe('fresh after write', () => {
+  // req:web/fresh-after-write@2c84d826
   test('approve: the review is requested again with a UUID, and the offline copy has no fresh', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.goto('/app/#/o/a/prs/spec%2Fc');
@@ -28,6 +28,7 @@ test.describe('fresh after write', () => {
     expect(kept.filter((k) => k.includes('fresh'))).toEqual([]);
   });
 
+  // req:web/fresh-after-write@2c84d826
   test('an answer to a backlog item: the implementation state is requested again with a UUID', async ({ page, context }) => {
     const mock = await mockApi(context);
     const snap = snapshot();
@@ -39,6 +40,7 @@ test.describe('fresh after write', () => {
     expect(freshOf(mock.urls, IMPL).filter((f) => f !== null)[0]).toMatch(UUID);
   });
 
+  // req:web/fresh-after-write@2c84d826
   test('a new delivery per write: two proposals, two different values', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.goto('/app/#/o/a/backlog');
@@ -58,6 +60,7 @@ test.describe('fresh after write', () => {
     expect(fresh[0]).not.toEqual(fresh[1]);
   });
 
+  // req:web/fresh-after-write@2c84d826
   test('a refused write: a 409 still requests the review again with fresh', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 409);

@@ -214,8 +214,8 @@ test.describe('held data', () => {
   });
 });
 
-// req:web/live-refresh@28e7b29d
 test.describe('live refresh', () => {
+  // req:web/live-refresh@996f02f7
   test('new PR appears: listed without a reload, with the scroll position unchanged', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -238,6 +238,7 @@ test.describe('live refresh', () => {
     expect(await page.evaluate(() => (window as unknown as { keep: number }).keep)).toBe(1);
   });
 
+  // req:web/live-refresh@996f02f7
   test("graph keeps its place: pan, zoom and the selected node stay, and b's card shows the new count", async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -273,6 +274,7 @@ test.describe('live refresh', () => {
     await expect(page.locator('.insp.closed')).toHaveCount(1);
   });
 
+  // req:web/live-refresh@996f02f7
   test('hidden tab: no refresh requests while hidden, and it asks again at once when visible', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -293,6 +295,7 @@ test.describe('live refresh', () => {
     await expect.poll(() => count(mock.requests, SNAPSHOT)).toBeGreaterThan(snapshots);
   });
 
+  // req:web/live-refresh@996f02f7
   test("nothing changed: the view's elements are not replaced, whatever the implementation state's now", async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -307,6 +310,7 @@ test.describe('live refresh', () => {
     await expect(page.locator('.impl[data-keep]')).toHaveCount(1);
   });
 
+  // req:web/live-refresh@996f02f7
   test('the backlog filter and the full document’s place survive a refresh', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -354,6 +358,7 @@ test.describe('live refresh', () => {
     await expect.poll(() => count(mock.requests, SNAPSHOT)).toBe(before + 1);
   });
 
+  // req:web/live-refresh@996f02f7
   test('Build keeps its switch: Blockers stays chosen while the state changes', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
@@ -379,6 +384,7 @@ test.describe('live refresh', () => {
     await expect(page.locator('.fn[data-node=b]')).toBeInViewport();
   });
 
+  // req:web/live-refresh@996f02f7
   test('refresh fails: the graph is unchanged and no offline banner shows', async ({ page, context }) => {
     await page.clock.install();
     const mock = await mockApi(context);
