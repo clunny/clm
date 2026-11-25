@@ -3,15 +3,6 @@
 
 use crate::http::{Request, Response};
 
-/// Workers KV: durable, but the Free plan allows 1,000 writes a day. No longer a part of
-/// [`Platform`] (`platform-parts`); withdrawn once `clm-web` drops its adapter.
-// clm:remove-by 20261124-wave-6-worker-by-the-rule
-#[allow(async_fn_in_trait)]
-pub trait Kv {
-    async fn kv_get(&self, key: &str) -> Option<String>;
-    async fn kv_put(&self, key: &str, value: &str);
-}
-
 /// The Workers Cache API: short-lived, per data centre, and free to write.
 #[allow(async_fn_in_trait)]
 pub trait Cache {

@@ -69,10 +69,3 @@ async fn mint<P: GitHub + Clock + Secrets>(p: &P, id: u64) -> Option<(String, u6
     let ttl = expires.saturating_sub(p.now()).saturating_sub(TOKEN_MARGIN);
     Some((token, ttl))
 }
-
-/// Unix seconds of the instant an RFC 3339 date-time names, as `ledger/record-times` reads
-/// it: withdrawn once its last user calls `clm_ledger::unix_time` (`old-paths-removed`).
-// clm:remove-by 20261124-wave-6-worker-by-the-rule
-pub fn unix_time(iso: &str) -> Option<u64> {
-    clm_ledger::unix_time(iso)
-}
