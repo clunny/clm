@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [fake-github-pulls-head-breaks-a-review-test, workaround-web.worker.platform-fake-github-1]
 ---
 
