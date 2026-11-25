@@ -56,6 +56,8 @@ pub struct FakeRepo {
     pub compare_base: BTreeMap<String, String>,
     /// Open PRs' web pages: (head branch, number, URL).
     pub pages: Vec<(String, u64, String)>,
+    /// The owner of the fork a `fork` pull request's head is in; `fork` when empty.
+    pub fork_owner: String,
     /// Commits whose Trees API listing GitHub reports as truncated.
     pub truncated_trees: BTreeSet<String>,
     /// Each path's mode in tree listings, when it isn't `100644`: `120000` for a symlink,
@@ -396,7 +398,7 @@ impl FakeGitHub {
                 let head = query
                     .split('&')
                     .find_map(|p| p.strip_prefix("head="))
-                    .map(|h| h.replace("%2F", "/").replace("%3A", ":"));
+                    .map(crate::http::percent_decode);
                 ok(Value::Array(rest_pulls(name, repo, head.as_deref())))
             }
             ("GET", ["git", "trees", sha]) => match commit(sha) {
@@ -855,23 +857,48 @@ fn first_of(query: &str, vars: &serde_json::Map<String, Value>) -> usize {
     first
 }
 
-/// The REST pulls listing of `repo` for `head=<owner>:<branch>`: each of `pages` whose head
-/// is that branch of `repo`'s owner, its head and base repository `repo`.
+/// The REST pulls listing of `repo` for `head=<owner>:<branch>`: each open pull request of
+/// `pulls`, then each of `pages`, whose head is that branch of the repository `<owner>`
+/// names. A pull request's head repository is `repo`, or `<fork_owner>/<repo>` when it is a
+/// fork's (`fork` when `fork_owner` is empty); its base is always `repo`.
 fn rest_pulls(name: &str, repo: &FakeRepo, head: Option<&str>) -> Vec<Value> {
-    let owner = name.split_once('/').unwrap().0;
-    repo.pages
+    let (owner, short) = name.split_once('/').unwrap();
+    let fork_owner = match repo.fork_owner.as_str() {
+        "" => "fork",
+        o => o,
+    };
+    let entry = |number: u64, url: String, title: &str, head: (&str, &str, String), base: &str| {
+        let (head_ref, sha, head_repo) = head;
+        json!({
+            "number": number,
+            "html_url": url,
+            "title": title,
+            "head": {"ref": head_ref, "sha": sha, "repo": {"full_name": head_repo}},
+            "base": {"ref": base, "repo": {"full_name": name}},
+        })
+    };
+    let pulls = repo
+        .pulls
+        .iter()
+        .filter(|p| p.state == "open")
+        .filter_map(|p| {
+            let head_owner = if p.fork { fork_owner } else { owner };
+            (head == Some(format!("{head_owner}:{}", p.head_ref).as_str())).then(|| {
+                let url = format!("https://github.com/{name}/pull/{}", p.number);
+                let head_repo = format!("{head_owner}/{short}");
+                let head = (p.head_ref.as_str(), p.head_sha.as_str(), head_repo);
+                entry(p.number, url, &p.title, head, &p.base_ref)
+            })
+        });
+    let pages = repo
+        .pages
         .iter()
         .filter(|(branch, _, _)| head == Some(format!("{owner}:{branch}").as_str()))
         .map(|(branch, number, url)| {
-            json!({
-                "number": number,
-                "html_url": url,
-                "title": "",
-                "head": {"ref": branch, "sha": "", "repo": {"full_name": name}},
-                "base": {"ref": repo.default_branch, "repo": {"full_name": name}},
-            })
-        })
-        .collect()
+            let head = (branch.as_str(), "", name.to_string());
+            entry(*number, url.clone(), "", head, &repo.default_branch)
+        });
+    pulls.chain(pages).collect()
 }
 
 /// A request that reached a `Live` object.

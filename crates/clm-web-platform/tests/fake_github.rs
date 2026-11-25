@@ -1,6 +1,4 @@
 //! The fake GitHub answers as GitHub does where the Worker's crates' tests depend on it.
-//! These tests cite no requirement: `fake-github` also states that `pulls?head=` lists
-//! `FakeRepo.pulls`, which waits on `backlog/fake-github-pulls-head-breaks-a-review-test`.
 
 use clm_web_platform::fake::*;
 use clm_web_platform::gh;
@@ -23,9 +21,25 @@ fn setup() -> Fake {
     let fake = Fake::default();
     let mut repo = FakeRepo::new("111", clm_repo());
     repo.pulls = (1..=150).map(|n| pull(n, &format!("spec/p{n}"))).collect();
-    repo.pulls.insert(3, FakePull::default());
-    repo.pages
-        .push(("spec/c".into(), 5, "https://github.com/o/a/pull/5".into()));
+    repo.pulls[4].head_ref = "spec/c".into();
+    repo.pulls[5] = FakePull {
+        fork: true,
+        ..pull(6, "spec/c2")
+    };
+    repo.pulls[6].head_ref = "spec/c2".into();
+    // A closed pull request from `spec/c`, which no listing gives.
+    repo.pulls.insert(
+        3,
+        FakePull {
+            state: "closed".into(),
+            ..pull(151, "spec/c")
+        },
+    );
+    repo.pages.push((
+        "spec/page".into(),
+        200,
+        "https://github.com/o/a/pull/200".into(),
+    ));
     let commit = files(&[
         ("a/link", "b.md"),
         ("a/b.md", "bee"),
@@ -67,6 +81,7 @@ fn numbers(v: &Value) -> Vec<u64> {
 
 #[test]
 fn pages_of_open_pull_requests() {
+    // req:web.worker.platform/fake-github@1a1c6ebd
     let fake = setup();
     let first = pulls_page(&fake, Value::Null).unwrap();
     assert_eq!(numbers(&first["nodes"]), (1..=100).collect::<Vec<_>>());
@@ -78,6 +93,7 @@ fn pages_of_open_pull_requests() {
 
 #[test]
 fn modes_and_a_failed_blob() {
+    // req:web.worker.platform/fake-github@1a1c6ebd
     let fake = setup();
     let query = "query Blobs($owner: String!, $name: String!, $e0: String!, $t0: String!, $t1: String!) { repository(owner: $owner, name: $name) { f0: object(expression: $e0) { ... on Blob { text isBinary isTruncated oid } } t0: object(expression: $t0) { ... on Tree { entries { name mode } } } t1: object(expression: $t1) { ... on Tree { entries { name mode } } } } }";
     let vars = json!({"owner": "o", "name": "a", "e0": "c1:a/b.md", "t0": "c1:a", "t1": "c1:"});
@@ -112,13 +128,45 @@ fn modes_and_a_failed_blob() {
 }
 
 #[test]
-fn a_page_and_failing_paths() {
+fn the_rest_pulls_by_head() {
+    // req:web.worker.platform/fake-github@1a1c6ebd
     let fake = setup();
-    let (status, page) = rest(&fake, "pulls?head=o:spec/c");
-    assert_eq!((status, numbers(&page)), (200, vec![5]));
-    assert_eq!(page[0]["html_url"], "https://github.com/o/a/pull/5");
+    let (status, own) = rest(&fake, "pulls?head=o:spec/c2&base=main&state=open");
+    assert_eq!((status, numbers(&own)), (200, vec![7]), "not the fork's #6");
+    assert_eq!(own[0]["html_url"], "https://github.com/o/a/pull/7");
+    assert_eq!(own[0]["title"], "t7");
+    assert_eq!(own[0]["head"]["ref"], "spec/c2");
+    assert_eq!(own[0]["head"]["sha"], "h7");
+    assert_eq!(own[0]["head"]["repo"]["full_name"], "o/a");
+    assert_eq!(own[0]["base"]["ref"], "main");
+    assert_eq!(own[0]["base"]["repo"]["full_name"], "o/a");
+    let (_, c) = rest(&fake, "pulls?head=o%3Aspec%2Fc");
+    assert_eq!(numbers(&c), vec![5], "not the closed #151");
+    let (_, forked) = rest(&fake, "pulls?head=fork:spec/c2");
+    assert_eq!(numbers(&forked), vec![6]);
+    assert_eq!(forked[0]["head"]["repo"]["full_name"], "fork/a");
+    assert_eq!(forked[0]["base"]["repo"]["full_name"], "o/a");
+    let (_, page) = rest(&fake, "pulls?head=o:spec/page");
+    assert_eq!(numbers(&page), vec![200], "a page of `pages`");
+    assert_eq!(page[0]["html_url"], "https://github.com/o/a/pull/200");
     assert_eq!(page[0]["head"]["repo"]["full_name"], "o/a");
     assert_eq!(page[0]["base"]["repo"]["full_name"], "o/a");
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .fork_owner = "f".into();
+    let (_, forked) = rest(&fake, "pulls?head=f:spec/c2");
+    assert_eq!(numbers(&forked), vec![6]);
+    assert_eq!(forked[0]["head"]["repo"]["full_name"], "f/a");
+    assert!(numbers(&rest(&fake, "pulls?head=fork:spec/c2").1).is_empty());
+}
+
+#[test]
+fn failing_paths() {
+    // req:web.worker.platform/fake-github@1a1c6ebd
+    let fake = setup();
     for failing in ["pulls", "git/matching-refs/heads/spec/"] {
         fake.gh
             .repos
