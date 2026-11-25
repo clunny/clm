@@ -19,12 +19,25 @@ The web app's replica counts each file's markers once, when it fetches the file,
 
 ## Outcome
 
-- `replica` gains `markers-of-this-release`; its Contract's `load`/`save` line and its Design's "Marker index" say what the saved version means and why.
-- `web.worker.replica` changes nothing: its alarm already fetches `pending_fetch` whenever it is non-empty (`alarm-batches`, `first-build`), and a read of an object with no alarm set already arms one. The backlog item names it, but nothing of it changes.
+- `replica` gains `markers-of-this-release`; its Contract's `load`/`save` line and its Design's "Marker index" say what the saved version means and why. `stores-in-chunks` and `asset-hashes` defer to it for a store another release, or none, saved.
+- `web.worker.replica` gains `refetches-what-a-release-forgot`: an object that wakes with files to fetch again arms its alarm on the first read or event and fetches them in slices, open pages or not. Its code mostly does this already (`on_alarm` fetches whenever `pending_fetch` is non-empty), but no requirement stated it outside a first build or a recovery, and a read arms only the idle resync today.
+- The decision `web-repo-replica` names the per-release refetch beside the first build and a recovery as the times the whole tree is read.
+
+## What the requirements no longer state
+
+- `replica/stores-in-chunks`: "`load` from what `save` wrote SHALL give the same state" now holds save for the markers another release counted.
+- `replica/asset-hashes`: "A store written before hashes were held SHALL load as it did" now holds save for the markers counted again; its scenario *a binary asset*'s outcome "the old store loads the replica it held" gains "its scannable files that aren't spec files to fetch again".
 
 ## Edge cases and workarounds
 
 - A store saved before this requirement is built names no version, so the first release that has it rescans every store once. That is the case the item reports (stores counted before `20261124-a-marker-above-a`'s release).
-- `asset-hashes` says a store written before hashes were held loads as it did. Such a store also names no release, so it loads with its source files forgotten; its tree, spec text, binary files and views stay as saved, which is what that scenario compares. Its build should draw the old store's fixture from spec files and assets, or compare what `markers-of-this-release` leaves as saved.
 - Between a release and the object's next recompute, a read that isn't `fresh` answers the views the older release computed. A `fresh` read recomputes at once, since `load` leaves the replica stale.
 - A rollback to an earlier release also differs from the saved version, and rescans.
+- An object no one reads and no event reaches stays as the older release left it; nobody sees it until a read, which starts the refetch.
+- Once `web.worker.replica/fetches-binary-assets` is built, an object whose own record names no version drops its whole store and builds again, so a store from before both is rebuilt rather than rescanned. Either way its markers are this release's.
+- Where the release is recorded is the build's choice, as long as a state that names none still reads (as a rescan, not as `Replica::default()`) and an in-memory replica equals the one it was saved from.
+
+## Decisions
+
+- The release that saved the state is the scanner's identity: exact without anyone bumping a version, at one refetch of the non-Markdown files per release.
+- `web-repo-replica` is amended to name that refetch.

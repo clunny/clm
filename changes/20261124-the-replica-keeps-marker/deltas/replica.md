@@ -39,10 +39,37 @@ Computation is whole-state: nothing is recomputed per component until a reposito
 
 **Writes.** `validate` answers what the Worker's routes checked before: a decision's entry, its version against the entry's version now, and whether the tip is signed; a proposal's slug against the backlog, `resolved` and the open proposals. Since the replica holds the ledgers and the tip, the check needs no request. The runtime first brings the replica up to the tip, so "now" means the tip, as `decide` requires.
 
+## MODIFIED Requirements
+
+### Requirement: stores-in-chunks <!-- base: 548edbd9f85ec3af -->
+`save` SHALL write no value over 1 MiB and leave in the store only what it wrote, and `load` from what `save` wrote SHALL give the same state, save for the markers another release counted (`markers-of-this-release`). `load` from a store that holds no replica, whose chunk count names a chunk it lacks, or whose chunks don't read as a saved replica, SHALL give a new replica, the same as `Replica::default()`.
+
+#### Scenario: a large repository
+- GIVEN a replica whose serialised state is 5 MiB
+- WHEN it is saved to a fake store, then loaded from it, and then a replica of a few KiB is saved to the same store
+- THEN every value the store holds is at most 1 MiB, the loaded replica's views equal the original's, and after the second save the store holds only that save's values
+
+#### Scenario: an empty or unreadable store
+- GIVEN an empty store, a store whose count is 2 holding only chunk 0, and a store whose count is 1 and whose chunk 0 holds `{`
+- WHEN a replica is loaded from each
+- THEN each gives `Replica::default()`
+
+### Requirement: asset-hashes <!-- base: f1d76b7178ece696 -->
+`keeps_hash(path)` SHALL be true exactly for a path under `specs/` with an `assets` directory in it, as the model reads a component's assets. A `File` made by `File::asset(entry, bytes)` for such a path SHALL be held as binary with the hash the model gives those bytes as an asset, keeping no bytes, and the snapshot SHALL list it in its component's `assets` with that hash; one made by `File::binary(entry)` for such a path SHALL be held as binary and left out of `assets`, and `pending_fetch` SHALL list neither. The model SHALL be given the path of every binary file `keeps_hash` accepts that the replica holds, so the snapshot's `violations` hold what `model/node-assets` gives for it, as `clm check` prints. A store written before hashes were held SHALL load as it did, save for the markers `markers-of-this-release` counts again, since such a store names no release.
+
+#### Scenario: a binary asset
+- GIVEN the paths `specs/b/assets/logo.png`, `specs/b/x/assets/y.bin`, `changes/c/assets/b/logo.png`, `src/assets/z.bin` and `specs/b/SPEC.md`; a replica given `specs/b/assets/logo.png` by `File::asset` with 3,000 bytes holding a NUL; a second replica given it by `File::binary`; a replica given `specs/assets/x.png`, an asset of the root component, by `File::asset`; and a store a replica saved before this requirement was built
+- WHEN `keeps_hash` is asked of each path, the snapshot of each replica is read, the first is saved and loaded again, and the old store is loaded
+- THEN `keeps_hash` is true for the first two only; the first snapshot's `b` lists `logo.png` in `assets` with the hash `clm` gives that file, and so does the loaded one, whose saved state holds none of the 3,000 bytes; the second lists no `logo.png`; neither replica's `pending_fetch` lists it; the root asset's replica's `violations` hold the `model/node-assets` line `clm check` prints for `specs/assets/x.png` on a checkout; and the old store loads the replica it held, its scannable files that aren't spec files to fetch again (`markers-of-this-release`)
+
+#### Serves
+- capability/follow-from-browser
+- capability/see-project-state
+
 ## ADDED Requirements
 
 ### Requirement: markers-of-this-release
-`save` SHALL record, with the state, the version of the `clm-replica` crate that saved it. `load` from a store whose state another version saved, or names none, a store saved before this requirement was built included, SHALL give the replica it held with each held file's markers counted by this release's `clm_coverage::markers_in`: a file whose text it keeps scanned again from that text, and a file `wanted` accepts that is neither held as binary nor kept as text no longer held, so `pending_fetch` lists it again and, once a `recompute` computes, the snapshot reports coverage as indexing until it is given again; its tree, spec files' text, binary files, ledgers, refs, pull requests, events and last views SHALL stay as saved, and `stale()` SHALL be true. `load` from a store this version saved SHALL give the state as saved, as `stores-in-chunks` states.
+`save` SHALL record, with the state, the version of the `clm-replica` crate that saved it. `load` from a store whose state another version saved, or names none, a store saved before this requirement was built included, SHALL give the replica it held with each held file's markers counted by this release's `clm_coverage::markers_in`: a file whose text it keeps scanned again from that text when `File::text` would scan it (`files-a-source-gives`: not Markdown, not held as binary), and a file `wanted` accepts that is neither held as binary nor kept as text no longer held, so `pending_fetch` lists it again and, once a `recompute` computes, the snapshot reports coverage as indexing until it is given again; its tree, spec files' text, binary files, ledgers, refs, pull requests, events and last views SHALL stay as saved, and `stale()` SHALL be true. `load` from a store this version saved SHALL give the state as saved, as `stores-in-chunks` states.
 
 #### Scenario: another release saved it
 - GIVEN a ready replica, its index complete, holding `specs/b/SPEC.md`, `src/a.rs` with a test citing `b/x` at its current version, `specs/b/assets/check.ts` with a test citing `b/y`, `src/b.bin` held as binary, and `README.md` listed; saved to a store whose recorded version is then changed to `0.0.0`, and saved to a second store whose state is then written with no version
