@@ -99,7 +99,12 @@ pub struct Fake {
     pub failing: RefCell<Vec<(String, String)>>,
     /// Refresh tokens GitHub's token endpoint refuses.
     pub refused_refresh: RefCell<BTreeSet<String>>,
+    /// Changes what the fake GitHub answers, where the fake can't be told to.
+    pub rewrite: RefCell<Option<Rewrite>>,
 }
+
+/// A change to a fake GitHub answer, given the request.
+pub type Rewrite = Box<dyn Fn(&GhRequest, GhResponse) -> GhResponse>;
 
 impl Default for Fake {
     fn default() -> Fake {
@@ -114,6 +119,7 @@ impl Default for Fake {
             },
             failing: RefCell::default(),
             refused_refresh: RefCell::default(),
+            rewrite: RefCell::default(),
         }
     }
 }
@@ -311,7 +317,14 @@ impl GitHub for Fake {
                 self.gh.calls.borrow_mut().push(req);
                 res
             }
-            None => self.inner.send(req).await,
+            None => {
+                let asked = req.clone();
+                let res = self.inner.send(req).await;
+                match self.rewrite.borrow().as_ref() {
+                    Some(f) => f(&asked, res),
+                    None => res,
+                }
+            }
         }
     }
 }
