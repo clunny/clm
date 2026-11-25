@@ -93,12 +93,14 @@ pub(crate) async fn snapshot<P: Platform + Replicas>(
     fresh: bool,
 ) -> Response {
     match fetch(p, access, "snapshot", fresh).await {
-        Ok(mut view) => {
-            if let Some(fields) = view.as_object_mut() {
+        Ok(mut view) => match view.as_object_mut() {
+            Some(fields) => {
                 fields.insert("repo".into(), Value::String(access.full_name()));
+                Response::json(&view)
             }
-            Response::json(&view)
-        }
+            // A snapshot that isn't an object can't carry `repo`, so none is answered.
+            None => unavailable(),
+        },
         Err(res) => res,
     }
 }
