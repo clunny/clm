@@ -30,20 +30,17 @@ describe('wrangler.toml', () => {
   const migrations: { new_sqlite_classes?: string[] }[] = rawConfig.migrations ?? [];
   const migrationOf = (cls: string) => migrations.findIndex((m) => m.new_sqlite_classes?.includes(cls));
 
-  // req:web/worker-deploy@4d72cb08
-  it('binds the Live class as LIVE in a SQLite migration', () => {
+  it('binds the Live class as LIVE in a SQLite migration (req:web/worker-deploy@4d72cb08)', () => {
     expect(bindings.LIVE).toEqual({ type: 'durable_object_namespace', class_name: 'Live' });
     expect(migrationOf('Live')).toBeGreaterThanOrEqual(0);
   });
 
-  // req:web/worker-deploy@4d72cb08
-  it('binds the Replica class as REPLICA, declared in a SQLite migration after the Live one', () => {
+  it('binds the Replica class as REPLICA, declared in a SQLite migration after the Live one (req:web/worker-deploy@4d72cb08)', () => {
     expect(bindings.REPLICA).toEqual({ type: 'durable_object_namespace', class_name: 'Replica' });
     expect(migrationOf('Replica')).toBeGreaterThan(migrationOf('Live'));
   });
 
-  // req:web/worker-deploy@4d72cb08
-  it('keeps an empty crons list, so a deploy clears the Cron Trigger', () => {
+  it('keeps an empty crons list, so a deploy clears the Cron Trigger (req:web/worker-deploy@4d72cb08)', () => {
     expect(rawConfig.triggers?.crons).toEqual([]);
   });
 
