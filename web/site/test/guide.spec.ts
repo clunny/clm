@@ -59,6 +59,21 @@ test('a file added to the guide gets a page with no edit under web/site', async 
   } finally {
     await server.close()
   }
+  // Pages the README doesn't link come in file-name order, each labelled with its `#` title.
+  const two = fixture('unlinked', {
+    'README.md': '# Guide\n\nThe guide.\n',
+    'b-file.md': '# Alpha title\n\nSecond by file name.\n',
+    'a-file.md': '# Zeta title\n\nFirst by file name.\n',
+  })
+  const unlinked = build('unlinked', { GUIDE_DIR: two })
+  expect(unlinked.error).toBeUndefined()
+  const second = await serve(unlinked.out)
+  try {
+    await page.goto(`${second.url}/guide/a-file`)
+    expect(await page.locator('.VPSidebar a').allInnerTexts()).toEqual(['Overview', 'Zeta title', 'Alpha title', 'Spec format'])
+  } finally {
+    await second.close()
+  }
 })
 
 test('links between guide files lead to their pages', () => {

@@ -267,7 +267,7 @@ test('links into the repository name the file on GitHub in the copies and on the
       '[not a link](../spec-format.md)',
       '```',
       '',
-      'And `[x](../y.md)` as code.',
+      'And `[x](../y.md)` as code, and a linked image [![diagram](arch.png)](../../ARCHITECTURE.md).',
       '',
     ].join('\n'),
   })
@@ -292,6 +292,7 @@ test('links into the repository name the file on GitHub in the copies and on the
     '[elsewhere](https://example.com/a.md)',
     '[not a link](../spec-format.md)',
     '`[x](../y.md)`',
+    `[![diagram](arch.png)](https://github.com/${repo}/blob/main/ARCHITECTURE.md)`,
   ]) {
     expect(copy).toContain(want)
   }

@@ -92,6 +92,7 @@ test('a post that is missing a field or has a bad one fails the build, naming it
   const bad: Record<string, string> = {
     'soon.md': post({ ...good, date: 'soon' }, 'x'),
     'impossible.md': post({ ...good, date: '2026-02-30' }, 'x'),
+    'month13.md': post({ ...good, date: '2026-13-01' }, 'x'),
     'untitled.md': post({ summary: 's', date: '2026-11-05', draft: false }, 'x'),
     'blanksummary.md': post({ ...good, summary: '  ' }, 'x'),
     'nodate.md': post({ title: 't', summary: 's', draft: false }, 'x'),
@@ -370,6 +371,7 @@ test('an updated date shows on the page and in the head, and a bad one fails the
     'early.md': post({ ...good, updated: '2026-11-01' }, 'x'),
     'later.md': post({ ...good, updated: 'later' }, 'x'),
     'impossible.md': post({ ...good, updated: '2026-02-30' }, 'x'),
+    'month13.md': post({ ...good, updated: '2026-13-01' }, 'x'),
   }
   for (const [file, text] of Object.entries(bad)) {
     const { error } = build('badupdated', { BLOG_DIR: blogFixture('badupdated', { [file]: text }) })

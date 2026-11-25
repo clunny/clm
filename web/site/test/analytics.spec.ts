@@ -37,8 +37,12 @@ test('a released build loads the analytics script on every page', () => {
 
 test('a build with no website ID names the service nowhere', () => {
   // req:web.site/analytics-script@d3f71ebe
-  const named = filesUnder(mainDist).filter((f) => read(mainDist, f).includes(service))
-  expect(named).toEqual([])
+  // The main build sets the ID empty; this one leaves it unset.
+  const unset = build('analytics-unset')
+  expect(unset.error).toBeUndefined()
+  for (const out of [mainDist, unset.out]) {
+    expect(filesUnder(out).filter((f) => read(out, f).includes(service)), out).toEqual([])
+  }
 })
 
 test('Get started reports a click and still goes on', async ({ page }) => {

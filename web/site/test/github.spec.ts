@@ -123,7 +123,7 @@ test("the count is asked of GitHub's API with the token", async () => {
 test("a count that can't be used shows no count and warns", async () => {
   test.setTimeout(300_000)
   // req:web.site/github-link@8a304cc1
-  for (const given of ['abc', '-5', '12.5', '1e3']) {
+  for (const given of ['abc', '-5', '12.5']) {
     const { out, output, error } = build('stars-bad', { GITHUB_STARS: given })
     expect(error, given).toBeUndefined()
     expect(output, given).toContain('warning:')

@@ -77,7 +77,7 @@ export function repoLink(inRepo: string, endsWithSlash: boolean, anchor: string,
 }
 
 // A code span: a run of backticks, up to the next run of as many.
-const CODE_SPAN = /(`+)[\s\S]*?(?<!`)\1(?!`)/g
+const CODE_SPAN = /(?<!`)(`+)[\s\S]*?(?<!`)\1(?!`)/g
 
 /** `text` with `f` applied to each piece of it outside fenced code and code spans, so a link
  * written as code is never rewritten (`agent-markdown`). */
@@ -135,7 +135,7 @@ export function rewriteLinks(
   // The file's place in the repository, whatever directory `GUIDE_DIR` reads it from.
   const here = page.name === 'spec-format' ? 'docs' : 'docs/guide'
   return outsideCode(text, (piece) =>
-    (mode.kind === 'page' ? pageImages(piece, here, repo) : piece).replace(/(?<!!)(\[[^\]]*\]\()([^)\s]+)/g, (whole, open: string, target: string) => {
+    (mode.kind === 'page' ? pageImages(piece, here, repo) : piece).replace(/(?<!!)(\[(?:!\[[^\]]*\]\([^)]*\)|[^\]])*\]\()([^)\s]+)/g, (whole, open: string, target: string) => {
       const rel = relativeTarget(target)
       if (!rel || rel.path === '') return whole
       const { path, anchor } = rel

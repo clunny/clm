@@ -40,6 +40,7 @@ export const readingMinutes = (body: string): number =>
 const isDate = (s: unknown): s is string =>
   typeof s === 'string' &&
   /^\d{4}-\d{2}-\d{2}$/.test(s) &&
+  !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) &&
   new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s
 
 /** Every post of the blog, drafts included, each checked; throws, naming the file, on a bad one
@@ -173,7 +174,7 @@ export function resolvePostLinks(
   mode: { kind: 'page' } | { kind: 'copy'; siteUrl: string },
 ): string {
   return outsideCode(post.body, (piece) =>
-    (mode.kind === 'page' ? pageImages(piece, BLOG_IN_REPO, repo) : piece).replace(/(?<!!)\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (whole, label: string, target: string) => {
+    (mode.kind === 'page' ? pageImages(piece, BLOG_IN_REPO, repo) : piece).replace(/(?<!!)\[((?:!\[[^\]]*\]\([^)]*\)|[^\]])*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g, (whole, label: string, target: string) => {
       const rel = relativeTarget(target)
       if (!rel || rel.path === '') return whole
       const { path, anchor } = rel

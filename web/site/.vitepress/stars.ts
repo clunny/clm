@@ -10,7 +10,7 @@ export function formatStars(n: number): string {
 export async function readStars(repo: string): Promise<string | undefined> {
   const given = process.env.GITHUB_STARS
   if (given !== undefined && given !== '') {
-    if (/^\d+$/.test(given.trim())) return formatStars(Number(given.trim()))
+    if (/^\d+$/.test(given.trim()) && Number.isSafeInteger(Number(given.trim()))) return formatStars(Number(given.trim()))
     console.warn(`warning: GITHUB_STARS=${given} isn't a whole number of 0 or more; the GitHub link shows without a count`)
     return undefined
   }
