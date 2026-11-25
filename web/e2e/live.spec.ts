@@ -151,8 +151,8 @@ test.describe('live updates', () => {
 });
 
 // What a navigation draws from what the app already holds; the bar itself is in layout.spec.ts.
-// req:web/loading-indicator@bc3e841a
 test.describe('held data', () => {
+  // req:web/loading-indicator@bbcae7bd
   test("between views of a repo: the backlog is drawn from the snapshot already held when the Worker stops answering", async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -166,6 +166,7 @@ test.describe('held data', () => {
     mock.release();
   });
 
+  // req:web/loading-indicator@bbcae7bd
   test('the capabilities and architecture reports already held draw their views when the Worker stops answering', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -182,6 +183,7 @@ test.describe('held data', () => {
     mock.release();
   });
 
+  // req:web/loading-indicator@bbcae7bd
   test('graph before implementation: the graph is drawn while the implementation state is pending', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.hold(IMPL);
@@ -194,6 +196,7 @@ test.describe('held data', () => {
     await expect(page.locator('.insp .work')).toContainText('claimed');
   });
 
+  // req:web/loading-indicator@bbcae7bd
   test('a navigation asks for the repo list again while drawing from the held one', async ({ page, context }) => {
     const mock = await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 800 });

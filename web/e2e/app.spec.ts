@@ -990,8 +990,8 @@ test.describe('proposals', () => {
   });
 });
 
-// req:web/latest-navigation-wins@d93cb8bd
 test.describe('latest navigation wins', () => {
+  // req:web/latest-navigation-wins@ed849c57
   test('opened at the app root: the route becomes the first repo graph', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.routes['GET /api/repos'] = [
@@ -1003,6 +1003,7 @@ test.describe('latest navigation wins', () => {
     expect(new URL(page.url()).hash).toBe('#/o/a/graph');
   });
 
+  // req:web/latest-navigation-wins@ed849c57
   test('a navigation made while the repo list is pending is not undone by its answer', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.hold('GET /api/repos');
@@ -1014,10 +1015,20 @@ test.describe('latest navigation wins', () => {
     expect(new URL(page.url()).hash).toBe('#/o/a/prs/spec%2Fc');
     await expect(page.locator('button.approve')).toBeVisible();
   });
+
+  // req:web/latest-navigation-wins@ed849c57
+  test('no repos: the page says No CLM repos yet and links to installing the App, the route unchanged', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos'] = [];
+    await page.goto('/app/');
+    await expect(page.locator('h1')).toHaveText('No CLM repos yet');
+    await expect(page.locator('a', { hasText: 'Install the GitHub App' })).toHaveAttribute('href', 'https://github.com/apps/clm-spec-review/installations/new');
+    expect(new URL(page.url()).hash).toBe('');
+  });
 });
 
-// req:web/links-to-site@110ad07e
 test.describe('links to the site', () => {
+  // req:web/links-to-site@110ad07e
   test('desktop sidebar: the logo links to / and Guide sits beside Add repos', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -1035,6 +1046,7 @@ test.describe('links to the site', () => {
     expect(sameFoot).toBe(true);
   });
 
+  // req:web/links-to-site@110ad07e
   test('phone top bar: begins with a homepage link before the repo switcher', async ({ page, context }) => {
     await mockApi(context);
     await page.setViewportSize({ width: 390, height: 844 });
