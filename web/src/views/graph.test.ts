@@ -216,7 +216,7 @@ describe('graph view', () => {
   });
 
   it('no waiting state: the graph rings `waiting` as any state it does not know', async () => {
-    // req:web.views/queue-states@340afeed
+    // req:web.views/queue-states@06e60952
     const nodes = [node('root', { parent: null }), node('w'), node('x')];
     const snap = snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
     const states = queueStates(queued([pending('w', 'waiting'), pending('x', 'parked')]));

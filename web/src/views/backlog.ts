@@ -10,7 +10,8 @@ import { md } from './markdown';
 import { when } from './time';
 import type { BacklogView, Proposal, Snapshot, Taken } from './types';
 
-const WAITING = ['question', 'human-task'];
+/** The backlog kinds that wait on a person (`requirement-blocks`). */
+export const WAITING: readonly string[] = ['question', 'human-task'];
 const COLUMNS: [string, string, string][] = [
   ['bug', 'Bugs', 'var(--rose)'],
   ['deferred', 'Deferred', 'var(--amber)'],
