@@ -138,13 +138,13 @@ impl<S: Store, A: Alarm> Object<S, A> {
             .get(META)
             .and_then(|b| serde_json::from_slice(&b).ok());
         let meta = match stored {
-            Some(meta) if meta.version == VERSION => meta,
-            // Written by an object that didn't hash binary assets: built again from nothing.
-            Some(_) => {
+            Some(meta) if meta.version >= VERSION => meta,
+            // Written by an object that didn't hash binary assets, or no record that reads:
+            // built again from nothing.
+            _ => {
                 Wipe(&mut store).delete_all();
                 Meta::default()
             }
-            None => Meta::default(),
         };
         Object {
             name: name.into(),
@@ -428,10 +428,10 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let (kept, rest): (Vec<Entry>, Vec<Entry>) = entries
             .into_iter()
             .partition(|e| clm_replica::keeps_text(&e.path));
+        // The rest takes what budget the kept text leaves: a kept file that can't be read
+        // holds nothing else back.
         let mut files = source::fetch(p, auth, &self.name, &tip, &kept, b).await;
-        if files.len() == kept.len() {
-            files.extend(source::fetch(p, auth, &self.name, &tip, &rest, b).await);
-        }
+        files.extend(source::fetch(p, auth, &self.name, &tip, &rest, b).await);
         let taken = files.len();
         if taken > 0 {
             self.replica.apply(Change::Tip {

@@ -3,8 +3,7 @@
 
 mod common;
 
-use clm_replica::{Answer as Viewed, Change, Entry, File, Replica};
-use clm_web_platform::fake::{FileMap, blob_sha};
+use clm_web_platform::fake::blob_sha;
 use common::*;
 use futures::executor::block_on;
 use serde_json::Value;
@@ -13,57 +12,9 @@ const LOGO: &[u8] = &[0x89, b'P', b'N', b'G', 0, 0xff, 0xfe, 1];
 const LOST: &[u8] = &[0x89, b'P', b'N', b'G', 0, 0xff, 0xfe, 2];
 const BLOB: &[u8] = &[0, 0xff, 0xfe, 3];
 
-/// The hash a replica given `bytes` as `path`'s asset keeps for it.
-fn hash_of(path: &str, bytes: &[u8]) -> Value {
-    let entry = Entry {
-        path: path.into(),
-        sha: blob_sha(bytes),
-        size: bytes.len() as u64,
-        mode: "100644".into(),
-    };
-    let mut files: FileMap = repo_files(&[]);
-    files.insert(path.into(), bytes.to_vec());
-    let mut replica = Replica::default();
-    replica.apply(Change::Tree {
-        sha: "111".into(),
-        entries: files
-            .iter()
-            .map(|(p, b)| Entry {
-                path: p.clone(),
-                sha: blob_sha(b),
-                size: b.len() as u64,
-                mode: "100644".into(),
-            })
-            .collect(),
-    });
-    let given = files
-        .iter()
-        .filter(|(p, _)| *p != path)
-        .map(|(p, b)| {
-            File::text(
-                Entry {
-                    path: p.clone(),
-                    sha: blob_sha(b),
-                    size: b.len() as u64,
-                    mode: "100644".into(),
-                },
-                String::from_utf8(b.clone()).unwrap(),
-            )
-        })
-        .chain([File::asset(entry, bytes.to_vec())])
-        .collect();
-    replica.apply(Change::Tip {
-        sha: "111".into(),
-        files: given,
-        removed: Vec::new(),
-    });
-    replica.recompute(0);
-    let Some(Viewed::Ready { value, .. }) = replica.view("snapshot") else {
-        panic!("no snapshot");
-    };
-    let name = path.rsplit('/').next().unwrap();
-    node_b(&value)["assets"][name].clone()
-}
+/// The hash `clm` gives `LOGO` as an asset: a binary file's is the first 8 bytes of its
+/// SHA-256, in hex (`clm_model::asset_hash`).
+const LOGO_HASH: &str = "223b3be326427335";
 
 fn node_b(snapshot: &Value) -> &Value {
     snapshot["nodes"]
@@ -114,8 +65,7 @@ fn a_logo() {
         ["logo.png"],
         "{b}"
     );
-    assert_eq!(assets["logo.png"], hash_of("specs/b/assets/logo.png", LOGO));
-    assert!(assets["logo.png"].is_string());
+    assert_eq!(assets["logo.png"], LOGO_HASH);
 
     // A second object, whose storage an object that didn't hash binary assets wrote: the
     // replica as saved, beside a record that names no version.

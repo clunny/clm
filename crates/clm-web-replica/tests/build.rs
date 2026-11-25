@@ -348,17 +348,28 @@ fn what_a_resync_cant_list() {
     let fake = fake_with("111", repo_files(&[]));
     let at = fake.now.get();
     claims_mut(&fake, |c| {
-        for name in ["x", "z"] {
+        for name in ["a", "z"] {
             c.push((name.into(), format!("c{name}"), at));
         }
     });
     let (mut object, mem, slot) = built(&fake);
-    assert_eq!(held_refs(&mem, "impl/"), ["impl/x", "impl/z"]);
+    assert_eq!(held_refs(&mem, "impl/"), ["impl/a", "impl/z"]);
+    let claimed_a = |object: &mut Obj| -> bool {
+        let seen = view(&fake, object, "implementation");
+        seen["view"]["flight"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["node"] == "a" && n["state"] == "claimed")
+    };
+    assert!(claimed_a(&mut object));
 
-    // `impl/x` deleted with its webhook lost: the resync drops it.
-    claims_mut(&fake, |c| c.retain(|c| c.0 != "x"));
+    // `impl/a` deleted with its webhook lost: the resync drops it, and its claim goes.
+    claims_mut(&fake, |c| c.retain(|c| c.0 != "a"));
     resync(&fake, &mut object, &slot);
     assert_eq!(held_refs(&mem, "impl/"), ["impl/z"]);
+    recompute(&fake, &mut object, &slot);
+    assert!(!claimed_a(&mut object), "the claim on `a` goes");
 
     // `impl/` comes to hold 301 refs, `z` not among them: nothing under `impl/` changes.
     let at = fake.now.get();

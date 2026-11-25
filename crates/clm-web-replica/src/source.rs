@@ -25,9 +25,7 @@ const PER_SPEC_QUERY: usize = 50;
 const COMPARE_FILES: usize = 300;
 /// The largest binary asset read whole: a blob over 10 MiB is held without its bytes.
 const MAX_ASSET: u64 = 10 << 20;
-/// The pull requests a page of `live::pulls_direct` holds, and the pages it reads at most
-/// (`web.worker.platform/open-pulls`).
-const PULLS_PER_PAGE: usize = 100;
+/// The pages `live::pulls_direct` reads at most (`web.worker.platform/open-pulls`).
 const PULL_PAGES: usize = 3;
 
 /// The subrequests an invocation has made.
@@ -218,7 +216,12 @@ pub(crate) async fn fetch<P: Host>(
             if entry.mode.is_empty() {
                 let (dir, file) = parent(&entry.path);
                 let j = dirs.binary_search(&dir).unwrap_or_default();
-                entry.mode = mode_in(&repository[format!("t{j}")], file);
+                // A mode the tree doesn't give leaves the file unfetched: the listing that
+                // fetches it later gives its mode.
+                let Some(mode) = mode_in(&repository[format!("t{j}")], file) else {
+                    continue;
+                };
+                entry.mode = mode;
             }
             if entry.size == 0 {
                 entry.size = object["byteSize"].as_u64().unwrap_or_default();
@@ -228,7 +231,10 @@ pub(crate) async fn fetch<P: Host>(
             } else {
                 entry.sha.clone()
             };
-            if object["isBinary"] == true && clm_replica::keeps_hash(&entry.path) {
+            // GitHub gives `isBinary` null when it can't tell: no text is binary too.
+            let binary = object["isBinary"] == true
+                || (!object.is_null() && object["isBinary"] != false && object["text"].is_null());
+            if binary && clm_replica::keeps_hash(&entry.path) {
                 // A binary asset is read whole, one call each, and given with its bytes;
                 // one too big, or one the blob API fails, is held without them
                 // (`fetches-binary-assets`).
@@ -279,15 +285,14 @@ fn parent(path: &str) -> (&str, &str) {
 }
 
 /// The mode a tree's `entries` give `name`, as the octal text a tree listing writes, from
-/// GraphQL's integer (33188 is `100644`, 40960 `120000`); `100644` when it gives none.
-fn mode_in(tree: &Value, name: &str) -> String {
+/// GraphQL's integer (33188 is `100644`, 40960 `120000`); none when it gives none.
+fn mode_in(tree: &Value, name: &str) -> Option<String> {
     tree["entries"]
-        .as_array()
-        .into_iter()
-        .flatten()
+        .as_array()?
+        .iter()
         .find(|e| e["name"] == name)
         .and_then(|e| e["mode"].as_u64())
-        .map_or_else(|| "100644".into(), |m| format!("{m:o}"))
+        .map(|m| format!("{m:o}"))
 }
 
 async fn blob_bytes<P: Host>(p: &P, auth: &Auth, repo: &str, sha: &str) -> Option<Vec<u8>> {
@@ -358,14 +363,13 @@ pub(crate) async fn pulls<P: Host>(
     repo: &str,
     b: &Budget,
 ) -> Option<(Vec<Pull>, bool)> {
-    let listed = live::pulls_direct(p, auth, repo).await;
-    // One query a page: a listing read to its end took one for each 100 it holds, and one
-    // cut short, or a failed one, is counted at the most it can take.
-    b.spend(match &listed {
-        Some((pulls, true)) => pulls.len().div_ceil(PULLS_PER_PAGE).max(1),
-        _ => PULL_PAGES,
-    });
-    let (pulls, complete) = listed?;
+    // One query a page, counted at the most it can take, and asked only while the budget
+    // affords that.
+    if b.left() < PULL_PAGES {
+        return None;
+    }
+    b.spend(PULL_PAGES);
+    let (pulls, complete) = live::pulls_direct(p, auth, repo).await?;
     let pulls = pulls
         .into_iter()
         .map(|v| Pull {
